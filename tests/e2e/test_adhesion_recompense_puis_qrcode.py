@@ -182,14 +182,23 @@ def _solde_depensable(django_shell, email):
     `use_cache=False` est indispensable : c'est le versement qui vient d'avoir
     lieu qu'on veut observer, pas la valeur memorisee avant lui.
     / Read ON THE FEDOW without cache.
+
+    Le portefeuille de l'adherent neuf est cree par la tache Celery de recompense,
+    juste avant le versement. Tant qu'elle n'a pas tourne, il n'existe pas : rien n'a
+    encore ete verse, le solde est nul.
+    / The new member's wallet is created by the Celery reward task, right before the
+    transfer. Until it runs there is no wallet: nothing paid in yet, balance is zero.
     """
     sortie = django_shell(
         "from AuthBillet.models import TibilletUser\n"
         "from fedow_connect.fedow_api import FedowAPI\n"
         f"user = TibilletUser.objects.get(email='{email}')\n"
-        "print('SOLDE=' + str(\n"
-        "    FedowAPI().wallet.get_total_fiducial_and_all_federated_token(\n"
-        "        user, use_cache=False)))"
+        "if user.wallet is None:\n"
+        "    print('SOLDE=0')\n"
+        "else:\n"
+        "    print('SOLDE=' + str(\n"
+        "        FedowAPI().wallet.get_total_fiducial_and_all_federated_token(\n"
+        "            user, use_cache=False)))"
     )
     trouve = re.search(r"SOLDE=(\d+)", sortie)
     if not trouve:
@@ -309,8 +318,9 @@ def _verifier_que_la_recompense_est_versee(django_shell, email, tarif):
     assert solde_apres_cotisation == tarif["montant_en_centimes"], (
         f"Le Fedow n'a pas verse la recompense d'adhesion : 0 → "
         f"{solde_apres_cotisation}, attendu {tarif['montant_en_centimes']}.\n"
-        "Si le solde n'a pas bouge du tout : Celery arrete, Fedow injoignable, ou "
-        "refus du Fedow — que le trigger et la tache avalent tous deux en silence. "
+        "Si le solde n'a pas bouge du tout : Celery arrete, Fedow injoignable, "
+        "refus du Fedow, ou portefeuille jamais cree (`TibilletUser.wallet is None`) "
+        "— que le trigger et la tache avalent tous deux en silence. "
         "Les logs de `lespass_celery` portent la raison."
     )
     return solde_apres_cotisation

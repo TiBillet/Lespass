@@ -35,7 +35,7 @@ Une fois, sur un nouveau serveur (`scripts/fabriquer_env_prod.sh`, modèle `env_
    chiffrées en base.
 2. Création des dossiers montés qui manquent (`database/`, `backup/`, `ssh/` en 700, `logs/`, `www/`).
 3. Contrôles, sans rien modifier : valeurs `A_REMPLIR` restantes, `TEST`/`DEBUG`/`DEMO`/`STRIPE_TEST`
-   à 0, réseau `frontend` (Traefik), `MIGRATE=0`, `docker compose`, `at`, ligne `saveDb.sh` dans la
+   à 0, réseau `frontend` (Traefik), `docker compose`, `at`, ligne `saveDb.sh` dans la
    crontab, clé borg dans `ssh/`.
 
 Relançable à volonté : après le premier passage, il ne fait plus que les contrôles.
@@ -73,8 +73,8 @@ système et venv reconstruits. Réservé aux grosses mises à jour : sinon chaqu
 fait retélécharger tout le venv (~690 Mo).
 
 Le script ne fait plus `git checkout main && git pull` : il construit HEAD, tel quel.
-`MIGRATE` doit rester à `0` dans `VERSION` : sinon, chaque recréation du conteneur lancerait
-`migrate_schemas` au démarrage (`start.sh`), donc une longue coupure.
+`start.sh` ne migre jamais : une migration au démarrage empêcherait supervisord de partir,
+donc le site de répondre, jusqu'à sa fin. Le fichier `VERSION` ne porte que le numéro de version.
 
 ### 2. `make update` (prod) — `scripts/mise_a_jour_prod.sh`
 

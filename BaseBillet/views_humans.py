@@ -26,7 +26,6 @@ def _read_version_info() -> tuple[str, str]:
     Le fichier VERSION (a la racine du projet) contient des lignes au format
     cle=valeur, par exemple :
         VERSION=1.7.16
-        MIGRATE=0
 
     La date de modification du fichier reflete le dernier bump de version,
     elle sert donc de "Last update" pour humans.txt.

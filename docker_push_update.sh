@@ -45,14 +45,6 @@ else
   exit 1
 fi
 
-# MIGRATE=1 ferait lancer migrate_schemas par start.sh a chaque demarrage du conteneur :
-# une recreation du conteneur de prod deviendrait une coupure de plusieurs minutes.
-# / MIGRATE=1 would run migrate_schemas at every container start: a long outage.
-if [[ "${MIGRATE:-0}" != "0" ]]; then
-  echo "MIGRATE=${MIGRATE} dans VERSION : remettre MIGRATE=0 (make update migre lui-meme)." >&2
-  exit 1
-fi
-
 # 1. Aucune modification non commitee. Les fichiers non suivis ne comptent pas :
 # git archive ne les met pas dans l'image.
 # / 1. No uncommitted change. Untracked files do not count: git archive ignores them.

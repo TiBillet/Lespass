@@ -88,10 +88,32 @@ def reponses_du_booking(django_shell, email, pk_de_la_ressource):
     return json.loads(sortie.strip().splitlines()[-1])
 
 
-def ouvrir_le_formulaire_du_premier_creneau(page, ressource):
-    """Ouvre la page de la ressource, clique le premier créneau libre, coche le tarif.
-    / Opens the resource page, clicks the first free slot, ticks the price."""
-    page.goto(f"/booking/{ressource['ressource']}/resource/")
+def lundi_prochain_au_lieu(django_shell):
+    """
+    Le lundi de la semaine prochaine, dans le fuseau du lieu (texte AAAA-MM-JJ).
+    / Next week's Monday, in the venue's time zone (YYYY-MM-DD text).
+
+    La page d'une ressource ne montre qu'une semaine, la semaine en cours par défaut.
+    Un dimanche soir, la semaine en cours n'a plus aucun créneau libre : on ouvre donc
+    la semaine prochaine, qui en a toujours.
+    / The resource page shows one week, the current one by default. On a Sunday evening
+    the current week has no free slot left: we open next week, which always has some.
+    """
+    return django_shell(
+        "import datetime\n"
+        "from django.utils import timezone\n"
+        "from BaseBillet.models import Configuration\n"
+        "aujourd_hui = timezone.now().astimezone(Configuration.get_solo().get_tzinfo()).date()\n"
+        "print(aujourd_hui - datetime.timedelta(days=aujourd_hui.weekday()) + datetime.timedelta(days=7))\n"
+    ).strip().splitlines()[-1]
+
+
+def ouvrir_le_formulaire_du_premier_creneau(page, ressource, django_shell):
+    """Ouvre la semaine prochaine de la ressource, clique le premier créneau libre,
+    coche le tarif.
+    / Opens next week of the resource page, clicks the first free slot, ticks the price."""
+    lundi_prochain = lundi_prochain_au_lieu(django_shell)
+    page.goto(f"/booking/{ressource['ressource']}/resource/?semaine={lundi_prochain}")
     page.wait_for_load_state("networkidle")
     page.locator('[data-testid="booking-calendar-slot-free"]').first.click()
     formulaire = page.locator('[data-testid="booking-confirm-form"]')
@@ -115,7 +137,7 @@ def test_reservation_directe_les_reponses_sont_enregistrees_et_visibles_dans_le_
     email = creer_un_acheteur(django_shell)
     login_as(page, email)
 
-    formulaire = ouvrir_le_formulaire_du_premier_creneau(page, ressource)
+    formulaire = ouvrir_le_formulaire_du_premier_creneau(page, ressource, django_shell)
     formulaire.locator(
         f'[data-testid="resource-booking-form-field-{ressource["groupe"]}"]'
     ).fill("Les Ours")
@@ -159,7 +181,7 @@ def test_panier_les_reponses_arrivent_sur_le_booking_et_dans_l_admin(
     email = creer_un_acheteur(django_shell)
     login_as(page, email)
 
-    formulaire = ouvrir_le_formulaire_du_premier_creneau(page, ressource)
+    formulaire = ouvrir_le_formulaire_du_premier_creneau(page, ressource, django_shell)
     formulaire.locator(
         f'[data-testid="resource-booking-form-field-{ressource["groupe"]}"]'
     ).fill("Les Ours")

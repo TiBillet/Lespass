@@ -25,6 +25,7 @@ served folder untouched during the migration.
 |---|---|
 | `env_prod_example`, `scripts/fabriquer_env_prod.sh` | `make env` : `.env` de prod depuis un modèle (secrets générés, `A_REMPLIR`), dossiers montés, contrôles du serveur ; ne remplace jamais un `.env` existant |
 | `docker_push_update.sh` | Release : refuse un arbre sale ou un commit non poussé, build depuis `git archive` extrait, label `org.opencontainers.image.revision`, tags `latest` + `$VERSION` |
+| `start.sh`, `VERSION` | Plus de migration au démarrage du conteneur : la variable `MIGRATE` disparaît, les migrations passent par `make update` |
 | `dockerfile` | Dépendances avant le code (cache de la couche venv), Poetry épinglé 2.4.3, dossier `logs/` créé |
 | `docker-compose.prod.yml` | `lespass_django` en `image: tibillet/lespass:latest` ; nouveau service `lespass_maj` (profil `maj`, aucun volume) |
 | `scripts/mise_a_jour_prod.sh` | Nouveau : `make update` |
@@ -50,7 +51,7 @@ Un gunicorn jetable sur 127.0.0.1:8099 dans `lespass_django`, 3 workers, une req
 2. Rien n'a bougé : `git status` identique, pas de fetch.
 
 ### Test 2 — première release et grosse mise à jour
-1. Machine du mainteneur, tout commité et poussé, `MIGRATE=0` dans `VERSION` : `./docker_push_update.sh`.
+1. Machine du mainteneur, tout commité et poussé, `VERSION` incrémenté : `./docker_push_update.sh`.
 2. `docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' tibillet/lespass:latest`
    = `git rev-parse HEAD`.
 3. Prod : geste 3 de `SPEC.md` (merge, pull, `up -d --no-deps lespass_django`), puis

@@ -5,12 +5,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Charger les variables (VERSION, MIGRATE) depuis le fichier VERSION si disponible
-if [[ -f VERSION ]]; then
-  # shellcheck disable=SC1091
-  source VERSION
-fi
-
 #curl -sSL https://install.python-poetry.org | python3
 export PATH="/home/tibillet/.local/bin:$PATH"
 poetry install
@@ -26,14 +20,12 @@ poetry run python /DjangoFiles/manage.py collectstatic --no-input
 #  poetry run python manage.py demo_data
 #fi
 
-# Migration conditionnelle
-# Peut être qu'on pourra utilise ./manage.py showmigrations | grep '\[ \]' a terme ?
-if [[ "${MIGRATE:-0}" = "1" ]]; then
-  echo "Migrate"
-  poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing
-else
-  echo "Skip migrate (MIGRATE=${MIGRATE:-0})"
-fi
+# Pas de migration au demarrage : tant qu'elle tournerait, supervisord ne serait pas lance
+# et le site ne repondrait pas (15 min a plusieurs heures pour 500 lieux). Les migrations
+# passent par make update (conteneur lespass_maj, pendant que l'ancien code sert).
+# Voir TECH_DOC/SESSIONS/DEPLOIEMENT/SPEC.md.
+# / No migration at startup: the site would not answer until it ends. Migrations go
+# through make update.
 
 # Dossiers de logs pour supervisord et ses programmes
 # / Log folders for supervisord and its programs

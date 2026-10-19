@@ -14,7 +14,7 @@
 #    FERNET_KEY rendrait illisibles les donnees chiffrees en base).
 # 2. Creation des dossiers montes par docker-compose.prod.yml qui manquent.
 # 3. Controles, sans rien modifier : valeurs A_REMPLIR restantes, drapeaux de prod,
-#    reseau Docker « frontend », MIGRATE=0 dans VERSION, docker compose >= 2, `at`,
+#    reseau Docker « frontend », docker compose >= 2, `at`,
 #    crontab de sauvegarde.
 # Le script peut etre relance autant de fois que voulu : apres le premier passage, il ne
 # fait plus que les controles.
@@ -123,10 +123,6 @@ done
 # / Traefik is a separate stack: the production compose joins its network.
 if ! docker network inspect frontend >/dev/null 2>&1; then
     signaler "le reseau Docker « frontend » (Traefik) n'existe pas : lancer la pile Traefik."
-fi
-
-if ! grep -qE "^MIGRATE=0" VERSION; then
-    signaler "VERSION doit contenir MIGRATE=0 (sinon chaque redemarrage du conteneur lance migrate_schemas)."
 fi
 
 if ! docker compose version >/dev/null 2>&1; then

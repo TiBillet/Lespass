@@ -265,9 +265,20 @@ def test_e4_un_creneau_de_ressource_ajoute_au_panier_puis_envoye_au_paiement(
     pk_de_la_salle = fixture_du_panier(e2e_slugs, "salle_resource_pk")
     uuid_du_tarif_de_la_salle = fixture_du_panier(e2e_slugs, "salle_price_uuid")
     email = creer_un_acheteur(django_shell)
+    # La page de la salle ne montre qu'une semaine, la semaine en cours par défaut. Un
+    # dimanche soir, elle n'a plus aucun créneau libre : on ouvre la semaine prochaine.
+    # / The room page shows one week, the current one by default; on a Sunday evening it
+    # has no free slot left: we open next week.
+    lundi_prochain = django_shell(
+        "import datetime\n"
+        "from django.utils import timezone\n"
+        "from BaseBillet.models import Configuration\n"
+        "aujourd_hui = timezone.now().astimezone(Configuration.get_solo().get_tzinfo()).date()\n"
+        "print(aujourd_hui - datetime.timedelta(days=aujourd_hui.weekday()) + datetime.timedelta(days=7))\n"
+    ).strip().splitlines()[-1]
     try:
         login_as(page, email)
-        adresse_de_la_salle = f"/booking/{pk_de_la_salle}/resource/"
+        adresse_de_la_salle = f"/booking/{pk_de_la_salle}/resource/?semaine={lundi_prochain}"
         page.goto(adresse_de_la_salle)
         page.wait_for_load_state("networkidle")
 
