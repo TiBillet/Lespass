@@ -46,6 +46,7 @@ import logging
 
 from django import forms
 from django.contrib import admin, messages
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.db.models import Count, Max
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
@@ -479,6 +480,46 @@ class ConfigurationSiteAdmin(SingletonModelAdmin, ModelAdmin):
         return False
 
 
+class PageAdminForm(forms.ModelForm):
+    """
+    Formulaire d'une Page dans l'admin : la fiche ET chaque ligne de la liste.
+    / Page form in the admin: the change form AND each row of the list.
+
+    LOCALISATION : pages/admin.py
+
+    Page.clean() (pages/models.py) rattache ses erreurs a un champ :
+    `parent` ou `est_accueil`. Mais ces champs ne sont pas toujours dans le
+    formulaire : `est_accueil` n'est jamais dans la fiche, et une ligne de la
+    liste ne porte que `publie` (list_editable). Quand l'erreur vise un champ
+    absent, Django leve une ValueError : erreur 500, et l'utilisateur ne voit
+    pas le message.
+    Ici, une erreur sur un champ absent devient une erreur generale du
+    formulaire. Unfold l'affiche en haut de la fiche, ou au-dessus de la ligne
+    dans la liste.
+    / Page.clean() ties its errors to a field, which is not always in the form.
+    Django then raises a ValueError (500). Here, an error on a missing field
+    becomes a general form error, which Unfold displays.
+    """
+
+    def add_error(self, field, error):
+        erreur_par_champs = (
+            field is None
+            and isinstance(error, ValidationError)
+            and hasattr(error, "error_dict")
+        )
+        if erreur_par_champs:
+            erreurs_rangees = {}
+            for nom_du_champ, liste_des_erreurs in error.error_dict.items():
+                champ_dans_le_formulaire = (
+                    nom_du_champ in self.fields or nom_du_champ == NON_FIELD_ERRORS
+                )
+                if not champ_dans_le_formulaire:
+                    nom_du_champ = NON_FIELD_ERRORS
+                erreurs_rangees.setdefault(nom_du_champ, []).extend(liste_des_erreurs)
+            error = ValidationError(erreurs_rangees)
+        super().add_error(field, error)
+
+
 @admin.register(Page, site=staff_admin_site)
 class PageAdmin(ModelAdmin):
     """
@@ -490,6 +531,18 @@ class PageAdmin(ModelAdmin):
 
     compressed_fields = True
     warn_unsaved_form = True
+
+    # La fiche et les lignes de la liste passent par PageAdminForm : les
+    # erreurs de Page.clean() y restent visibles. Django ne reprend pas `form`
+    # pour la liste : get_changelist_form le passe explicitement.
+    # / The change form and the list rows use PageAdminForm, so Page.clean()
+    # errors stay visible. Django does not reuse `form` for the list:
+    # get_changelist_form passes it explicitly.
+    form = PageAdminForm
+
+    def get_changelist_form(self, request, **kwargs):
+        kwargs.setdefault("form", PageAdminForm)
+        return super().get_changelist_form(request, **kwargs)
 
     # La page RENDUE comme sur le site, sous le formulaire, dans une seule
     # iframe : chaque bloc a sa barre (↑ ↓ Modifier ✕ +). Gabarit pose HORS

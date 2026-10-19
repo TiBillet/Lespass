@@ -993,6 +993,114 @@ def test_page_accueil_reste_une_racine_sans_enfants(tenant, nettoyer_pages):
         enfant.delete()
 
 
+def test_une_page_ne_peut_pas_etre_rangee_sous_l_accueil(tenant, nettoyer_pages):
+    """
+    La regle « l'accueil n'a pas d'enfants » vaut aussi depuis l'enfant.
+
+    Choisir l'accueil comme parent d'une autre page est refuse, sur le champ
+    `parent` : c'est lui que l'utilisateur vient de remplir.
+    """
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        accueil = Page.objects.create(
+            titre="Home", slug="pytest-home-parent", est_accueil=True)
+        candidate = Page(titre="Fille", slug="pytest-fille-accueil", parent=accueil)
+        with pytest.raises(ValidationError) as erreur:
+            candidate.full_clean()
+        assert "parent" in erreur.value.message_dict
+
+
+def _accueil_avec_une_sous_page():
+    """
+    Fabrique un accueil INCOHERENT : il porte une sous-page.
+    / Builds an INCONSISTENT home page: it carries a sub-page.
+
+    `objects.create()` ne passe pas par clean() : c'est le seul moyen
+    d'obtenir l'etat qu'un formulaire refuse.
+    / objects.create() skips clean(): the only way to reach this state.
+    """
+    from pages.models import Page
+
+    accueil = Page.objects.create(
+        titre="Home", slug="pytest-home-incoherent", est_accueil=True)
+    Page.objects.create(
+        titre="Fille", slug="pytest-fille-incoherente", parent=accueil)
+    return accueil
+
+
+def _requete_admin(admin_user):
+    from django.test import RequestFactory
+
+    requete = RequestFactory().post("/admin/pages/page/")
+    requete.user = admin_user
+    return requete
+
+
+def test_liste_admin_erreur_de_l_accueil_visible_sans_500(
+        tenant, admin_user, nettoyer_pages):
+    """
+    Basculer « publiee » dans la liste ne plante pas si l'accueil est invalide.
+
+    Une ligne de la liste ne porte que `publie` : l'erreur de Page.clean(),
+    rattachee a `est_accueil`, devient une erreur generale de la ligne. Unfold
+    l'affiche au-dessus de la ligne (change_list_results.html).
+    """
+    from Administration.admin.site import staff_admin_site
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        accueil = _accueil_avec_une_sous_page()
+        page_admin = staff_admin_site._registry[Page]
+        FormSet = page_admin.get_changelist_formset(_requete_admin(admin_user))
+        donnees = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "1",
+            "form-MIN_NUM_FORMS": "0",
+            "form-MAX_NUM_FORMS": "1000",
+            "form-0-uuid": str(accueil.pk),
+            "form-0-publie": "on",
+        }
+        formset = FormSet(donnees, queryset=Page.objects.filter(pk=accueil.pk))
+
+        assert not formset.is_valid()
+        erreurs_de_la_ligne = formset.forms[0].non_field_errors()
+        assert any("sous-pages" in str(message) for message in erreurs_de_la_ligne)
+
+
+def test_fiche_admin_erreur_de_l_accueil_visible_sans_500(
+        tenant, admin_user, nettoyer_pages):
+    """
+    Enregistrer la fiche d'un accueil invalide affiche l'erreur en haut.
+
+    `est_accueil` n'est pas dans la fiche : son erreur devient une erreur
+    generale du formulaire (bandeau d'Unfold, change_form.html).
+    """
+    from Administration.admin.site import staff_admin_site
+    from pages.models import Page
+
+    with tenant_context(tenant):
+        accueil = _accueil_avec_une_sous_page()
+        page_admin = staff_admin_site._registry[Page]
+        requete = _requete_admin(admin_user)
+        Formulaire = page_admin.get_form(requete, accueil)
+
+        # On renvoie la fiche telle qu'elle est affichee.
+        # / The form is posted back as displayed.
+        formulaire_affiche = Formulaire(instance=accueil)
+        donnees = {}
+        for nom_du_champ in formulaire_affiche.fields:
+            valeur = formulaire_affiche[nom_du_champ].value()
+            if valeur is not None:
+                donnees[nom_du_champ] = valeur
+        formulaire = Formulaire(donnees, instance=accueil)
+
+        assert not formulaire.is_valid()
+        assert "est_accueil" not in formulaire.fields
+        assert any("sous-pages" in str(message)
+                   for message in formulaire.non_field_errors())
+
+
 def test_navbar_une_racine_hors_navigation_n_apparait_pas(tenant, nettoyer_pages):
     """
     `affichage_nav` decide de la place d'une racine dans la barre de navigation.

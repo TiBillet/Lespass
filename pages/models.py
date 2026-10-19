@@ -558,6 +558,18 @@ class Page(models.Model):
                 {"parent": _("Une page ne peut pas être sa propre page parente.")}
             )
 
+        # La regle 3 vue depuis l'enfant : on ne range pas une page sous la
+        # page d'accueil. Sans ce controle, l'accueil gagne des enfants sans
+        # jamais etre revalide, et toute sauvegarde suivante de l'accueil echoue.
+        # / Rule 3 seen from the child: a page is not filed under the home page.
+        # Without this check, the home page gains children without ever being
+        # revalidated, and every later save of the home page fails.
+        if self.parent.est_accueil:
+            raise ValidationError(
+                {"parent": _("La page d'accueil ne peut pas avoir de sous-pages : "
+                             "choisissez une autre page parente.")}
+            )
+
         # Remontee de la chaine : on cherche la page elle-meme parmi ses
         # ancetres, et on mesure la profondeur au passage.
         # / Walk up the chain: look for the page among its own ancestors, and
