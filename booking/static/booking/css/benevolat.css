@@ -47,6 +47,14 @@
     --bv-rayon-s: 8px;
     --bv-rayon-m: 12px;
     --bv-rayon-l: 14px;
+    /* Hauteurs fixes : une pastille, un badge, un bouton ont la même taille partout.
+     * / Fixed heights: same size everywhere. */
+    --bv-haut-pastille: 24px;
+    --bv-haut-badge: 26px;
+    --bv-haut-bouton: 38px;
+    /* Fond des pastilles de prénom. Une case « couvert » le passe au blanc (voir plus bas).
+     * / First-name pill background; a covered need switches it to white. */
+    --bv-fond-pastille: var(--bv-teinte);
 
     color: var(--bv-encre);
 }
@@ -79,7 +87,7 @@
 /* ---------- Boutons, liens et badges (DA v7.1) / Buttons, links and badges ---------- */
 .bv-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    min-height: 38px; padding: 0 18px; border-radius: 999px;
+    min-height: var(--bv-haut-bouton); padding: 0 18px; border-radius: 999px;
     font-family: inherit; font-size: .9063rem; font-weight: 700; line-height: 1.2;
     border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none;
     transition: background .15s ease, border-color .15s ease, transform .08s ease;
@@ -108,6 +116,7 @@
 
 .bv-badge {
     display: inline-flex; align-items: center; gap: 6px; font-size: .7813rem; font-weight: 700; line-height: 14px;
+    box-sizing: border-box; min-height: var(--bv-haut-badge);
     padding: 5px 12px; border-radius: 999px; border: 1px solid var(--bv-bord-champ);
     background: var(--bv-papier); color: var(--bv-encre); white-space: nowrap;
 }
@@ -160,7 +169,7 @@
     padding: 8px 12px 12px; display: grid; gap: 8px; background: var(--bv-blanc);
 }
 .bv-besoin--moi { background: var(--bv-signal-doux); border-color: transparent; box-shadow: inset 0 -3px 0 var(--bv-signal); }
-.bv-besoin--couvert { background: var(--bv-teinte); }
+.bv-besoin--couvert { background: var(--bv-teinte); --bv-fond-pastille: var(--bv-blanc); }
 .bv-besoin__tete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .bv-besoin__plage { font-weight: 700; font-size: .875rem; font-variant-numeric: tabular-nums; }
 .bv-besoin__plage--sous { font-weight: 400; }
@@ -170,11 +179,19 @@
 .bv-besoin__action { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: .8125rem; }
 .bv-ok { color: var(--bv-succes-texte); font-weight: 700; }
 
-.bv-places { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; }
-.bv-place { font-size: .75rem; padding: 2px 8px; border-radius: 999px; background: var(--bv-teinte); color: var(--bv-encre); }
+.bv-places { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; }
+/* Toutes les pastilles ont un contour de 1 px (transparent sauf « libre ») : sinon
+ * « libre » serait plus haute que les autres. / Every pill has a 1 px border, so all
+ * pills share the same height. */
+.bv-place {
+    display: inline-flex; align-items: center; box-sizing: border-box;
+    min-height: var(--bv-haut-pastille); padding: 0 8px;
+    font-size: .75rem; line-height: 1; border: 1px solid transparent; border-radius: 999px;
+    background: var(--bv-fond-pastille); color: var(--bv-encre);
+}
 .bv-place--moi { background: var(--bv-encre); color: #fff; font-weight: 700; }
 .bv-place--renfort { background: var(--bv-succes-doux); color: var(--bv-succes-texte); font-weight: 700; }
-.bv-place--libre { background: transparent; border: 1px dashed var(--bv-bord-champ); color: var(--bv-encre-pale); }
+.bv-place--libre { background: transparent; border-style: dashed; border-color: var(--bv-bord-champ); color: var(--bv-encre-pale); }
 
 /* ---------- Vue mobile / Mobile view ---------- */
 .bv-barre-jours { display: none; gap: 8px; overflow-x: auto; padding-block: 4px 12px; margin-bottom: 8px; }
@@ -218,7 +235,7 @@
      * au lieu de déborder. / Labels wrap instead of overflowing at 320 px. */
     .bv-semaines { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
     .bv-semaines__titre { grid-column: 1 / -1; grid-row: 1; font-size: 1.125rem; }
-    .bv-semaines .bv-btn { white-space: normal; text-align: center; padding: 6px 12px; }
+    .bv-semaines .bv-btn { white-space: normal; text-align: center; padding-inline: 12px; }
     .bv-semaines__precedente { grid-column: 1; grid-row: 2; }
     .bv-semaines__suivante { grid-column: 2; grid-row: 2; }
 }
@@ -229,7 +246,6 @@
     display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: .8125rem;
     color: var(--bv-encre-douce); margin-top: 16px; align-items: center;
 }
-.bv-legende .bv-place { font-size: .6875rem; }
 .bv-rappel {
     margin-top: 24px; background: var(--bv-teinte); border-radius: var(--bv-rayon-m);
     padding: 16px; font-size: .875rem; max-width: 75ch;
@@ -316,5 +332,29 @@
     pointer-events: none; border-radius: 0 var(--bv-rayon-l) var(--bv-rayon-l) 0;
     background: linear-gradient(to right, transparent, var(--bv-papier));
 }
-.bv-legende__entree { display: inline-flex; align-items: center; gap: 6px; }
+/* baseline : le texte de la pastille et son explication partagent la même ligne d'écriture.
+ * / The pill's text and its label share the same baseline. */
+.bv-legende__entree { display: inline-flex; align-items: baseline; gap: 6px; }
 .bv-note-equipe { flex-basis: 100%; font-size: .75rem; color: var(--bv-encre-douce); }
+
+/* ---------- Centrage optique du texte / Optical text centring ---------- */
+/* Luciole réserve sous la ligne d'écriture une grande zone de jambages, souvent vide.
+ * Centrer la BOÎTE du texte (align-items: center) laisse donc l'ENCRE 2 à 4 px trop haut
+ * dans une pastille ou un bouton. text-box rogne la boîte sur la hauteur des capitales :
+ * l'encre est alors centrée par construction, quelle que soit la police du skin.
+ * Le padding vertical se calcule pour retrouver la hauteur fixe (contour de 1 px compris).
+ * text-box ne s'applique pas à un conteneur flex : ces éléments passent en inline-block.
+ * Navigateur sans text-box : on garde le centrage flex ci-dessus.
+ * Même règle que .ink-center-fix (pages/static/V2/css/V2.css).
+ * / Luciole reserves a large, mostly empty descender zone, so centring the text box
+ *   leaves the ink too high. text-box trims to cap height: ink centred by design.
+ *   Not applicable to flex containers, hence inline-block. Fallback: flex centring. */
+@supports (text-box: trim-both cap alphabetic) {
+    .bv-place, .bv-badge, .bv-btn {
+        display: inline-block; text-box: trim-both cap alphabetic;
+        min-height: 0; text-align: center;
+    }
+    .bv-place { padding-block: calc((var(--bv-haut-pastille) - 2px - 1cap) / 2); }
+    .bv-badge { padding-block: calc((var(--bv-haut-badge) - 2px - 1cap) / 2); }
+    .bv-btn { padding-block: calc((var(--bv-haut-bouton) - 2px - 1cap) / 2); }
+}
