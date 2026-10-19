@@ -5,6 +5,7 @@ Enregistrements de l'administration Django pour le module booking.
 LOCALISATION : booking/admin.py
 """
 from django.contrib import admin
+from django.db import models
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from django.forms import ModelForm
@@ -26,9 +27,10 @@ from unfold.widgets import (
 )
 from import_export.admin import ExportActionModelAdmin
 from unfold.contrib.import_export.forms import ExportForm
+from unfold.contrib.forms.widgets import WysiwygWidget
 from Administration.admin.mixins import ExportCsvLisibleParExcelMixin
 from Administration.importers.resources_bookings_exporters import BookingExportResource
-from Administration.admin.site import staff_admin_site
+from Administration.admin.site import staff_admin_site, sanitize_textfields
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
@@ -295,9 +297,24 @@ class ResourceAdmin(ModelAdmin):
         "product",
     ]
 
+    # La description est du texte riche : éditeur WYSIWYG d'Unfold.
+    # / The description is rich text: Unfold WYSIWYG editor.
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
     @admin.display(description=_('Product Name'))
     def get_product_name(self, obj):
         return obj.product.name
+
+    def save_model(self, request, obj, form, change):
+        # INDISPENSABLE : la description est rendue avec |safe sur la page publique.
+        # On nettoie tous les TextField (clean_html) avant d'enregistrer, contre le XSS.
+        # / REQUIRED: the description is rendered with |safe. Sanitize against XSS.
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

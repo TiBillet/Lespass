@@ -525,7 +525,17 @@ class BookingViewSet(viewsets.ViewSet):
 
         context = get_context(request)
         context.update(contexte_de_la_semaine)
-        context['resource_choices'] = self._get_resource_choices(resource)
+        resource_choices = self._get_resource_choices(resource)
+
+        # Compte les ressources proposées dans le sélecteur.
+        # Une seule : le sélecteur est masqué, il n'y a rien à choisir.
+        # / Counts the resources in the selector. A single one: the selector is hidden.
+        nombre_de_ressources = 0
+        for group in resource_choices:
+            nombre_de_ressources += len(group['resources'])
+
+        context['resource_choices'] = resource_choices
+        context['plusieurs_ressources'] = nombre_de_ressources > 1
         return render(request, 'booking/views/resource.html', context)
 
     # ── Formulaire et création de réservation ────────────────────────────────

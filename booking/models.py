@@ -24,6 +24,7 @@ from PaiementStripe.utils import partial_refund_payment
 from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
 from stripe import InvalidRequestError
+from stdimage import StdImageField
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,26 @@ class Resource(models.Model):
         null=True,
         verbose_name=_("Long description"),
         help_text=_("Displayed only for membership/subscription products.")
+    )
+
+    # Image de la ressource : carte de /booking/ et en-tête de sa page.
+    # Mêmes variations que Product.img : commun/partials/picture.html les attend.
+    # / Resource image: /booking/ card and page header. Same variations as Product.img.
+    img = StdImageField(
+        upload_to='images/',
+        null=True,
+        blank=True,
+        variations={
+            'fhd': (1920, 1920),
+            'hdr': (720, 720),
+            'med': (480, 480),
+            'thumbnail': (150, 90),
+            'crop_hdr': (960, 540, True),
+            'crop': (480, 270, True),
+            'social_card': (1200, 630, True),
+        },
+        delete_orphans=True,
+        verbose_name=_('Image de la ressource'),
     )
 
     group = models.ForeignKey(

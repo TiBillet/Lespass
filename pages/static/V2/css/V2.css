@@ -744,7 +744,12 @@ img { max-width: 100%; display: block; }
   font-size: var(--text-md);
   color: var(--color-text-muted);
 }
+/* Le site web passe à la ligne, sous l'adresse. fit-content : seul le
+   texte est cliquable, pas toute la largeur de la carte.
+   / Website on its own line; only the text is clickable. */
 .place-id__site {
+  display: block;
+  width: fit-content;
   color: var(--color-link);
   font-weight: 700;
 }

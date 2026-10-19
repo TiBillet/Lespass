@@ -21,17 +21,17 @@ A CONSERVER : data-testid="ressource-open-<uuid>" (tests E2E adhésions).
 / Keep the ressource-open testid (ressource E2E tests).
 {% endcomment %}
 <article class="offer-card offer-card-ressource" data-testid="ressource-card-{{ ressource.uuid }}">
-    {% if ressource.product.img %}
+    {% if ressource.img %}
         <div class="offer-card__cover">
-            {% include 'commun/partials/picture.html' with img=ressource.product.img alt="" %}
+            {% include 'commun/partials/picture.html' with img=ressource.img alt="" %}
         </div>
     {% endif %}
     <div class="offer-card__content">
         <h3 class="offer-card__title">{{ ressource.name }}</h3>
-        {% if ressource.product.long_description %}
-            <div class="offer-card__desc">{{ ressource.product.long_description|safe }}</div>
-        {% elif ressource.product.short_description %}
-            <p class="offer-card__desc">{{ ressource.product.short_description }}</p>
+        {# |safe : la description est nettoyée (clean_html) à l'enregistrement dans l'admin. #}
+        {# / |safe: the description is sanitized (clean_html) on admin save. #}
+        {% if ressource.description %}
+            <div class="offer-card__desc">{{ ressource.description|safe }}</div>
         {% endif %}
 
 

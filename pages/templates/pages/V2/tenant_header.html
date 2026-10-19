@@ -45,8 +45,9 @@ pour ne pas être coupés par ce défilement.
                         {% elif config.city %}
                             {{ config.city }}
                         {% endif %}
+                        {# Le site web s'affiche sur sa propre ligne, sous l'adresse (V2.css, .place-id__site). #}
+                        {# / The website sits on its own line, below the address. #}
                         {% if config.site_web_du_lieu %}
-                            {% if config.postal_address or config.city %}·{% endif %}
                             <a class="place-id__site" href="{{ config.site_web_du_lieu }}" target="_blank" rel="noopener"
                                data-testid="tenant-header-site-web">{{ config.site_web_du_lieu|cut:"https://"|cut:"http://" }} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
                         {% endif %}
