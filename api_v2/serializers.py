@@ -15,6 +15,7 @@ from django.core.files.base import ContentFile
 
 from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, Price, PriceSold, Product, ProductFormField, Reservation, Membership
 from BaseBillet.models_vente import Vente
+from booking.models import Resource
 from BaseBillet.services_vente import (
     ajouter_article,
     ajouter_reglement,
@@ -504,7 +505,8 @@ class EventCreateSerializer(serializers.Serializer):
       - additionalProperty: [
           {"name":"optionsRadio","value":["OptionName", ...]},
           {"name":"optionsCheckbox","value":["OptionName", ...]},
-          {"name":"customConfirmationMessage","value":"..."}
+          {"name":"customConfirmationMessage","value":"..."},
+          {"name":"blockedResource","value":<booking Resource id>}  (endDate required, write-only)
         ]
     """
     # Core fields
@@ -550,6 +552,38 @@ class EventCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 "endDate": _("La fin de l'évènement doit être après son début."),
             })
+
+        # additionalProperty "blockedResource" = l'id d'une ressource du module
+        # réservation (celui de l'URL /booking/<id>/resource/). L'événement occupe
+        # la ressource : ses créneaux qui chevauchent l'événement ne sont plus
+        # réservables. Même règle que l'admin (EventForm.clean) : sans date de fin,
+        # on ne sait pas jusqu'à quand bloquer.
+        # Champ interne : on l'accepte en entrée, il ne sort jamais dans la réponse.
+        # / "blockedResource" = a booking Resource id. Same rule as the admin: end date
+        # required. Internal field: write-only, never in the response.
+        attrs["ressource_a_bloquer"] = None
+        for propriete in attrs.get("additionalProperty") or []:
+            if str(propriete.get("name")).lower() != "blockedresource":
+                continue
+
+            identifiant_de_la_ressource = propriete.get("value")
+            try:
+                ressource_a_bloquer = Resource.objects.get(pk=int(identifiant_de_la_ressource))
+            except (TypeError, ValueError, Resource.DoesNotExist):
+                raise serializers.ValidationError({
+                    "additionalProperty": _("Ressource à bloquer introuvable : %(identifiant)s.") % {
+                        "identifiant": identifiant_de_la_ressource,
+                    },
+                })
+
+            if not date_de_fin:
+                raise serializers.ValidationError({
+                    "endDate": _("Une date de fin est obligatoire pour bloquer une ressource."),
+                })
+
+            attrs["ressource_a_bloquer"] = ressource_a_bloquer
+            break
+
         return attrs
 
     def create(self, validated_data: Dict[str, Any]) -> Event:
@@ -651,6 +685,7 @@ class EventCreateSerializer(serializers.Serializer):
             "private": private,
             "categorie": cat_code,
             "parent": parent_obj,
+            "ressource_bloquee": validated_data.get("ressource_a_bloquer"),
         }
         if max_cap is not None:
             create_kwargs["jauge_max"] = max_cap

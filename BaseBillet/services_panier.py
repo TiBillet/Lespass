@@ -479,6 +479,10 @@ class PanierSession:
             raise InvalidItemError(_("Cet événement n'est plus en vente."))
         if event.complet():
             raise InvalidItemError(_("This event is full."))
+        # Le gabarit cache déjà le bouton : ce contrôle refuse aussi un POST forgé.
+        # / The template already hides the button: this also refuses a forged POST.
+        if event.panier_desactive:
+            raise InvalidItemError(_("Le panier n'est pas disponible pour cet événement."))
 
         # Validation 3 : Price existe et publié
         # Validation 3: Price exists and published

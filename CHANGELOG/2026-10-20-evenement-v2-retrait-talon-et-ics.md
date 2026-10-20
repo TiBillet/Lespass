@@ -14,7 +14,7 @@
 | Fichier / File | Changement / Change |
 |---|---|
 | `pages/templates/pages/V2/partials/reservation_declencheur.html` | Retrait du `<dl class="talon">` et du lien `download_ics()` |
-| `pages/static/V2/css/V2.css` | Retrait des règles `.talon*` devenues mortes |
+| `pages/static/V2/css/V2.css` | Retrait des règles `.talon*` devenues mortes ; bouton de réservation centré (`margin-inline: auto` sur `.reservation-declencheur`) |
 | `pages/templates/pages/V2/vues/evenement.html` | TODO sur le script ICS : la fonction `download_ics()` reste en place, sans bouton qui l'appelle |
 
 `Event.places_restantes()` (utilisée par la vue détail) et `Event.jauge_presque_pleine()` (plus utilisée par aucun gabarit) restent dans `BaseBillet/models.py`.

@@ -576,11 +576,27 @@
         login puisque le panier exige l'auth.
         `data-loading-disable` sur les submit : anti double-clic via extension
         HTMX loading-states (fix spinner merge main).
+        Si event.panier_desactive : un seul bouton, la reservation directe.
+        Aucun bouton panier, meme connecte avec un panier non vide (sinon il ne
+        resterait aucun moyen de reserver).
         / Two separate intents, both shown as real buttons with icons.
         `data-loading-disable` on submits: prevent double-click via HTMX
-        loading-states extension.
+        loading-states extension. Cart disabled: direct booking button only.
         {% endcomment %}
-        {% if user.is_authenticated %}
+        {% if event.panier_desactive %}
+            <button type="submit"
+                    class="btn btn-primary w-100 mb-2"
+                    data-loading-disable
+                    data-testid="booking-submit">
+                {% if user.is_authenticated %}
+                    <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                    {% translate "Payer maintenant" %}
+                {% else %}
+                    <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
+                    {% trans 'Send booking request' %}
+                {% endif %}
+            </button>
+        {% elif user.is_authenticated %}
             {# Utilisateur connecte : le "Payer maintenant" et "Ajouter au panier" sont accessibles. #}
             {# Si panier deja non vide, on met "Ajouter au panier" en primary pour favoriser le cumul. #}
             {# / Authenticated: both actions available. If cart not empty, promote "Add to cart". #}

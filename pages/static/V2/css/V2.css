@@ -2573,15 +2573,20 @@ img { max-width: 100%; display: block; }
    le brider à une largeur fixe : à 30rem, le libellé par défaut (~650px en
    28px) passe sur deux lignes même en desktop.
    / The block is as wide as its button (never wider than the hero). No fixed
-   width: at 30rem the default label wraps even on desktop. */
-.reservation-declencheur { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); max-width: 100%; }
-/* Le libellé traduit est long (« Je veux réserver une ou plusieurs places ») :
-   en 28px sur une seule ligne il faisait ~650px et était coupé net par le
-   bandeau (overflow: hidden) sur mobile ET tablette. Taille fluide, retour à
-   la ligne autorisé, jamais plus large que le bandeau.
-   / Long translated label: fluid size, wrapping allowed, never wider than the hero. */
-.reservation-declencheur > .btn--primary {
-  font-size: clamp(1.125rem, 0.9rem + 1.5vw, var(--text-2xl));
+   width: at 30rem the default label wraps even on desktop.
+   margin-inline: auto le centre dans .event-hero__actions (conteneur flex).
+   / margin-inline: auto centres it inside the flex .event-hero__actions. */
+.reservation-declencheur { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); max-width: 100%; margin-inline: auto; }
+/* Bouton de réservation : plus grand que les autres boutons, c'est le geste
+   principal de la page. Le libellé est long (« Je veux réserver une ou
+   plusieurs places », ou le texte du lieu) : sur une seule ligne il serait
+   coupé net par le bandeau (overflow: hidden) sur mobile. Taille fluide,
+   retour à la ligne autorisé, jamais plus large que le bandeau.
+   / Booking button: larger than other buttons. Fluid size, wrapping allowed,
+   never wider than the hero. */
+.reservation-declencheur > .reservation-declencheur__bouton {
+  padding: var(--space-4) var(--space-6);
+  font-size: clamp(var(--text-lg), 0.9rem + 1vw, var(--text-xl));
   line-height: 1.2;
   white-space: normal;
   text-align: center;
