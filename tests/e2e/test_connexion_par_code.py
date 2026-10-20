@@ -192,15 +192,19 @@ def test_connecte_sur_lespass_on_entre_sur_festival_sans_code_puis_on_sort_de_pa
     assert pages_du_guichet_avec_formulaire == [], (
         f"Le guichet a redemandé un code : {pages_du_guichet_avec_formulaire}"
     )
-    # Connectée sur festival : le menu du compte porte le lien « Me déconnecter ».
-    # / Logged in on festival: the account menu holds the logout link.
-    expect(page.locator('a[href="/deconnexion/"]').first).to_be_attached()
+    # Connectée sur festival : le menu du compte porte le bouton « Me déconnecter ».
+    # / Logged in on festival: the account menu holds the logout button.
+    bouton_de_deconnexion = page.locator('[data-testid="bouton-deconnexion"]').first
+    expect(bouton_de_deconnexion).to_be_attached()
 
     # --- Déconnexion de partout, depuis festival ---
-    # / Logout everywhere, from festival
-    page.goto(f"{ADRESSE_DE_FESTIVAL}/deconnexion/")
+    # Le bouton est dans un menu déroulant fermé : on poste son formulaire
+    # (POST + jeton CSRF), comme le ferait le clic.
+    # / The button sits in a closed dropdown: submit its form, as a click would.
+    with page.expect_navigation():
+        bouton_de_deconnexion.evaluate("bouton => bouton.form.requestSubmit(bouton)")
     page.wait_for_load_state("networkidle")
-    expect(page.locator('a[href="/deconnexion/"]')).to_have_count(0)
+    expect(page.locator('[data-testid="bouton-deconnexion"]')).to_have_count(0)
 
     # Sur lespass, la session est fermée elle aussi.
     # / On lespass, the session is closed too.

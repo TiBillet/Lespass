@@ -33,7 +33,7 @@ from django.utils.crypto import constant_time_compare
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode, url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _, ngettext, get_language
 from django.views.decorators.csrf import requires_csrf_token
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import schema_context, tenant_context
 from rest_framework import viewsets, permissions, status, serializers
@@ -580,12 +580,18 @@ class Ticket_html_view(APIView):
         # return render(request, 'ticket/qrtest.html', context=context)
 
 
+@require_POST
 def deconnexion(request):
     """
-    GET /deconnexion/ (et son alias /logout/) : déconnexion de partout.
+    POST /deconnexion/ (et son alias /logout/) : déconnexion de partout.
     / Logs the person out everywhere.
 
     LOCALISATION : BaseBillet/views.py
+
+    POST obligatoire, avec le jeton CSRF. En GET, n'importe quelle page d'un
+    autre site pourrait déconnecter la personne de partout avec une simple
+    image `<img src=".../deconnexion/">`. Un GET reçoit une erreur 405.
+    / POST only, with the CSRF token: a GET could be fired by any third-party page.
 
     `deconnecter_de_partout()` ferme toutes les sessions du compte : tous les
     lieux et le guichet (AuthBillet/models.py). `logout()` vide ensuite la

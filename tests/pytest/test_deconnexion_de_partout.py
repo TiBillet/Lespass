@@ -6,7 +6,7 @@ LOCALISATION : tests/pytest/test_deconnexion_de_partout.py
 Code testé :
 - AuthBillet/models.py : TibilletUser.jeton_de_session,
   TibilletUser._get_session_auth_hash, TibilletUser.deconnecter_de_partout ;
-- BaseBillet/views.py : deconnexion (GET /deconnexion/ sur le lieu) ;
+- BaseBillet/views.py : deconnexion (POST /deconnexion/ sur le lieu) ;
 - Administration/admin/site.py : StaffAdminSite.logout (POST /admin/logout/).
 
 COMMENT ÇA MARCHE :
@@ -178,7 +178,7 @@ def test_deconnexion_sur_le_lieu_ferme_les_autres_sessions_et_le_guichet(tenant)
     assert est_connecte_sur_le_lieu(second_navigateur)
     assert est_connecte_sur_le_guichet(navigateur_du_guichet)
 
-    reponse = premier_navigateur.get("/deconnexion/")
+    reponse = premier_navigateur.post("/deconnexion/")
 
     assert reponse.status_code == 302
     assert not est_connecte_sur_le_lieu(premier_navigateur)
@@ -194,7 +194,7 @@ def test_une_nouvelle_connexion_apres_la_deconnexion_reste_connectee(tenant):
     """
     compte = creer_un_compte(tenant)
     premier_navigateur = client_connecte(DOMAINE_DU_LIEU, compte)
-    premier_navigateur.get("/deconnexion/")
+    premier_navigateur.post("/deconnexion/")
     compte.refresh_from_db()
 
     nouveau_navigateur = client_connecte(DOMAINE_DU_LIEU, compte)
@@ -220,3 +220,61 @@ def test_deconnexion_de_l_admin_ferme_les_autres_sessions(tenant):
     assert not est_connecte_sur_le_lieu(navigateur_de_l_admin)
     assert not est_connecte_sur_le_lieu(autre_navigateur)
     assert not est_connecte_sur_le_guichet(navigateur_du_guichet)
+
+
+# =============================================================================
+# Une page d'un autre site ne peut pas déconnecter / A third-party page cannot log out
+# =============================================================================
+
+
+@pytest.mark.parametrize("adresse_de_deconnexion", ["/deconnexion/", "/logout/"])
+def test_un_get_sur_la_deconnexion_ne_deconnecte_personne(tenant, adresse_de_deconnexion):
+    """
+    Un GET (une image `<img src=".../deconnexion/">` sur un autre site) reçoit
+    une 405. Les sessions du compte restent ouvertes, sur le lieu et le guichet.
+    / A GET gets a 405; every session stays open.
+    """
+    compte = creer_un_compte(tenant)
+    navigateur = client_connecte(DOMAINE_DU_LIEU, compte)
+    navigateur_du_guichet = client_connecte(DOMAINE_DU_GUICHET, compte)
+
+    reponse = navigateur.get(adresse_de_deconnexion)
+
+    assert reponse.status_code == 405
+    assert est_connecte_sur_le_lieu(navigateur)
+    assert est_connecte_sur_le_guichet(navigateur_du_guichet)
+
+
+def test_un_post_sans_jeton_csrf_ne_deconnecte_personne(tenant):
+    """
+    Un formulaire posté depuis un autre site n'a pas le jeton CSRF : 403, et
+    la session reste ouverte.
+    / A cross-site form has no CSRF token: 403, the session stays open.
+    """
+    compte = creer_un_compte(tenant)
+    navigateur_qui_verifie_le_csrf = ClientDeTest(
+        HTTP_HOST=DOMAINE_DU_LIEU, enforce_csrf_checks=True
+    )
+    navigateur_qui_verifie_le_csrf.force_login(compte)
+
+    reponse = navigateur_qui_verifie_le_csrf.post("/deconnexion/")
+
+    assert reponse.status_code == 403
+    assert est_connecte_sur_le_lieu(navigateur_qui_verifie_le_csrf)
+
+
+def test_un_get_sur_la_deconnexion_de_l_admin_ne_deconnecte_personne(tenant):
+    """
+    Django 4.2 accepte encore le GET sur /admin/logout/. StaffAdminSite.logout
+    le refuse : 405, et les sessions restent ouvertes.
+    / Django 4.2 still accepts GET on /admin/logout/; ours refuses it with a 405.
+    """
+    administrateur = creer_un_compte(tenant, administrateur_du_lieu=True)
+    navigateur_de_l_admin = client_connecte(DOMAINE_DU_LIEU, administrateur)
+    navigateur_du_guichet = client_connecte(DOMAINE_DU_GUICHET, administrateur)
+
+    reponse = navigateur_de_l_admin.get("/admin/logout/")
+
+    assert reponse.status_code == 405
+    assert est_connecte_sur_le_lieu(navigateur_de_l_admin)
+    assert est_connecte_sur_le_guichet(navigateur_du_guichet)

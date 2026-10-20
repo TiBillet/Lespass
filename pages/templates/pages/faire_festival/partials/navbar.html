@@ -179,11 +179,16 @@
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
                                 <!-- Bouton de déconnexion -->
+                                {# Déconnexion de partout : POST + jeton CSRF (voir BaseBillet/views.py, deconnexion). #}
+                                {# / Logout everywhere: POST + CSRF token. #}
                                 <li>
-                                    <a class="dropdown-item police-mono text-danger" href="/deconnexion/">
-                                        <i class="bi bi-box-arrow-right me-2"></i>
-                                        {% translate 'Logout' %}
-                                    </a>
+                                    <form method="post" action="/deconnexion/">
+                                        {% csrf_token %}
+                                        <button type="submit" class="dropdown-item police-mono text-danger" data-testid="bouton-deconnexion">
+                                            <i class="bi bi-box-arrow-right me-2"></i>
+                                            {% translate 'Logout' %}
+                                        </button>
+                                    </form>
                                 </li>
                             </ul>
                         </div>

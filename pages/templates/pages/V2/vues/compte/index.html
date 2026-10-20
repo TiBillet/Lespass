@@ -225,9 +225,14 @@ modules (R11).
                     <a class="shortcut" href="/my_account/profile/" hx-get="/my_account/profile/" hx-target="body" hx-push-url="true">
                         <span class="shortcut__text"><span class="shortcut__name">{% translate 'My settings' %}</span></span>
                     </a>
-                    <a class="shortcut" href="/deconnexion/">
-                        <span class="shortcut__text"><span class="shortcut__name">{% translate 'Log out' %}</span></span>
-                    </a>
+                    {# Déconnexion de partout : POST + jeton CSRF (voir BaseBillet/views.py, deconnexion). #}
+                    {# / Logout everywhere: POST + CSRF token. #}
+                    <form method="post" action="/deconnexion/" class="shortcut-formulaire">
+                        {% csrf_token %}
+                        <button type="submit" class="shortcut shortcut--bouton" data-testid="bouton-deconnexion">
+                            <span class="shortcut__text"><span class="shortcut__name">{% translate 'Log out' %}</span></span>
+                        </button>
+                    </form>
                 </div>
             </nav>
 

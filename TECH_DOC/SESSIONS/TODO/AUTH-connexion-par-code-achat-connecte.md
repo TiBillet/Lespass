@@ -482,7 +482,7 @@ Le portefeuille Fedow n'est **pas** créé ici : une seule fois, au retour sur l
 | `GET /connexion/?next=<chemin>` | `connexion` (réécrite) | Déjà connecté → redirection vers `next`. Sinon : `state` et `next` dans la session, redirection vers le guichet. Pas de POST : la route ne sert plus de formulaire |
 | `GET /connexion/retour/?ticket=&state=` | `connexion_retour` (nouvelle) | Vérifie et connecte (détail ci-dessous) |
 | `GET /login/login_fullpage/?next=<url signée>` | `TiBilletLogin.login_fullpage` | Décode le `next` signé (`signing.loads`, signature fausse → pas de `next`), puis redirige vers `/connexion/?next=<chemin>`. **Son POST disparaît.** Deux appelants : `QrCodeScanPay.process_qrcode` (`views.py:2608`) et l'ancien lien de `booking` |
-| `GET /deconnexion/` | `deconnexion` (`views.py:579`) | Déconnexion de partout (§5.6) |
+| `POST /deconnexion/` | `deconnexion` (`views.py:579`) | Déconnexion de partout (§5.6) |
 
 **`next` est toujours un chemin du lieu.** `connexion` le contrôle **avant** de le garder,
 avec `url_has_allowed_host_and_scheme(next, allowed_hosts={request.get_host()})`. Refusé →
@@ -981,4 +981,4 @@ Relevées pendant la réalisation. Rien n'est changé dans le code : le maintene
 | # | Sujet | Constat | Options |
 |---|---|---|---|
 | E1 | `webhook_reservation` sans `on_commit` | `reservation_paid` (`BaseBillet/signals.py`) appelle `webhook_reservation.delay()` directement. Sous `transaction.atomic()` (API v2), la tâche peut partir avant le commit. Elle ne réessaie pas : `Reservation.objects.get` lève `DoesNotExist`, le webhook du lieu n'est pas appelé. D15 rend ce cas plus fréquent (toute réservation gratuite par l'API passe en `FA`) | Passer l'appel en `transaction.on_commit(...)`, comme `send_refund_to_laboutik` ; ou laisser tel quel |
-| E2 | `/deconnexion/` en GET | La vue `deconnexion` répond au GET. Avec D14, elle ferme **toutes** les sessions du compte. Une page tierce peut la déclencher (`<img src="https://<lieu>/deconnexion/">`) : la personne est déconnectée de partout, sans rien avoir cliqué. Pas de fuite de données, mais une gêne | Passer en POST avec jeton CSRF (les liens « Me déconnecter » des 3 skins deviennent des petits formulaires) ; ou accepter le risque |
+| E2 | `/deconnexion/` en GET | La vue `deconnexion` répond au GET. Avec D14, elle ferme **toutes** les sessions du compte. Une page tierce peut la déclencher (`<img src="https://<lieu>/deconnexion/">`) : la personne est déconnectée de partout, sans rien avoir cliqué. Pas de fuite de données, mais une gêne | **Tranché le 2026-10-20 : POST.** `deconnexion` porte `@require_POST`, `StaffAdminSite.logout` refuse le GET (Django 4.2 l'accepte encore sur `/admin/logout/`). Les liens « Me déconnecter » des 3 skins sont des petits formulaires POST avec `{% csrf_token %}` |

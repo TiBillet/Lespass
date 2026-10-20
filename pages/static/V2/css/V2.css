@@ -955,6 +955,11 @@ img { max-width: 100%; display: block; }
   transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 .shortcut:hover { border-color: var(--color-border-strong); background: var(--color-hover-soft); }
+/* Le bouton « Se déconnecter » est un <button> dans un <form> (POST obligatoire).
+   Le formulaire s'efface de la grille, le bouton prend la place d'un lien.
+   / The logout button sits in a form: the form leaves the grid, the button looks like a link. */
+.shortcut-formulaire { display: contents; }
+.shortcut--bouton { width: 100%; font: inherit; color: inherit; cursor: pointer; }
 .shortcut__logo {
   width: 34px;
   height: 34px;

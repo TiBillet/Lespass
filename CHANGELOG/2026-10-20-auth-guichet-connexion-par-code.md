@@ -40,10 +40,10 @@ Le code lit `jeton_de_session` à **chaque** requête d'une personne connectée.
 | `AuthBillet/otp_service.py` | Empreinte en `salted_hmac` ; `envoyer_email_otp` renvoie `mail.sended` |
 | `AuthBillet/otp_session.py`, `tests/pytest/test_otp_session.py` | **Supprimés** (D11) |
 | `BaseBillet/tasks.py` | Nouvelle tâche `code_de_connexion_celery_mailer` (2 essais au plus) |
-| `BaseBillet/views.py` | `connexion` (GET → guichet), `connexion_retour` (nouvelle), `deconnexion` de partout, `login_fullpage` redirige ; `EventMVT` / `MembershipMVT` : connexion exigée, email du compte injecté |
+| `BaseBillet/views.py` | `connexion` (GET → guichet), `connexion_retour` (nouvelle), `deconnexion` de partout (POST + jeton CSRF, 405 en GET), `login_fullpage` redirige ; `EventMVT` / `MembershipMVT` : connexion exigée, email du compte injecté |
 | `BaseBillet/urls.py`, `TiBillet/urls_public.py` | Routes `/connexion/retour/` et `/sso/…` |
 | `BaseBillet/validators.py` | Réservation gratuite toujours `FA` (3 endroits) |
-| `Administration/admin/site.py` | `StaffAdminSite.logout` : déconnexion de partout |
+| `Administration/admin/site.py` | `StaffAdminSite.logout` : déconnexion de partout, POST seulement (405 en GET) |
 | `Administration/admin_tenant.py` | Commentaires des boutons de la réservation remis à jour |
 | `TiBillet/settings.py`, `env_example` | `CONNEXION_CODE_PLAFOND_IP_10_MIN` (500 par défaut) |
 | `BaseBillet/templates/commun/offcanvas/connexion.html` | Panneau `#loginPanel` : texte + bouton vers le guichet (`data-next` copié) |
@@ -112,9 +112,8 @@ Le code lit `jeton_de_session` à **chaque** requête d'une personne connectée.
 ### Points d'attention
 - **Tests E2E non lancés** : ceux marqués `stripe_listen` n'ont pas tourné, faute de `stripe listen` : `test_panier_flow.py` (`test_e5_vrai_paiement_d_un_panier_adhesion_plus_billet`, `test_e6_une_adhesion_payee_par_le_panier_verse_sa_recompense_monnaie`) et le parcours en ligne de `test_adhesion_recompense_puis_qrcode.py`. À lancer avec `stripe listen`.
 - **Gabarits de connexion supprimés** (`fonctionnel/connexion/*`) alors qu'ils avaient été retouchés le 2026-10-08 (commit 4a744db8, auteur NothRen). Le prévenir.
-- **Deux décisions en attente du mainteneur** (spec §12) :
-  - `webhook_reservation` part sans `on_commit` dans `reservation_paid` : sous `transaction.atomic()` (API v2), il peut ne pas trouver la réservation ;
-  - `/deconnexion/` répond au GET : une page tierce peut déconnecter quelqu'un de partout.
+- **Décision en attente du mainteneur** (spec §12, E1) : `webhook_reservation` part sans `on_commit` dans `reservation_paid` : sous `transaction.atomic()` (API v2), il peut ne pas trouver la réservation.
+- **Déconnexion en POST** (spec §12, E2, tranché) : `/deconnexion/`, `/logout/` et `/admin/logout/` refusent le GET (405). Les liens « Me déconnecter » des skins classic, V2 et faire_festival sont devenus des petits formulaires POST avec le jeton CSRF.
 - **Chaînes à traduire** : nouvelles chaînes en français, `makemessages` à lancer par le mainteneur.
 
 ### Verifs DB / Playwright

@@ -2,7 +2,7 @@ import logging
 
 from django.contrib import messages
 from django.db import models
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from unfold.sites import UnfoldAdminSite
@@ -52,7 +52,14 @@ class StaffAdminSite(UnfoldAdminSite):
         les lieux et le guichet (AuthBillet/models.py). Même règle que la vue
         `deconnexion` du site (BaseBillet/views.py).
         / Closes every session of the account, then Django's admin logout.
+
+        POST obligatoire : Django 4.2 accepte encore le GET sur la déconnexion
+        de l'admin. En GET, une page d'un autre site pourrait déconnecter la
+        personne de partout. Le bouton d'Unfold envoie un POST avec le jeton CSRF.
+        / POST only: Django 4.2 still accepts GET here, a third-party page could fire it.
         """
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
         if request.user.is_authenticated:
             request.user.deconnecter_de_partout()
         return super().logout(request, extra_context)

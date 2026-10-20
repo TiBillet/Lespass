@@ -119,10 +119,15 @@
         </a>
     </div>
     <div class="col">
-        <a class="w-100 btn btn-lg btn-outline-secondary" href="/deconnexion/">
-            <i class="bi bi-box-arrow-right fs-1"></i>
-            <span class="d-block">{% trans 'Log out' %}</span>
-        </a>
+        {# Déconnexion de partout : POST + jeton CSRF (voir BaseBillet/views.py, deconnexion). #}
+        {# / Logout everywhere: POST + CSRF token. #}
+        <form method="post" action="/deconnexion/">
+            {% csrf_token %}
+            <button type="submit" class="w-100 btn btn-lg btn-outline-secondary" data-testid="bouton-deconnexion">
+                <i class="bi bi-box-arrow-right fs-1"></i>
+                <span class="d-block">{% trans 'Log out' %}</span>
+            </button>
+        </form>
     </div>
 </div>
 {% endblock %}
