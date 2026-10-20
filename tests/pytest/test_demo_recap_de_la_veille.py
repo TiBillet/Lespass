@@ -131,6 +131,12 @@ class TestDemoRecapDeLaVeille(FastTenantTestCase):
         # / The register singleton holds the fingerprint key.
         LaboutikConfiguration.get_solo().save()
 
+        # Marqueur du récap remis à vide : le schéma de test reste en base, et la vraie
+        # tâche horaire de Celery passe aussi sur lui et pose le marqueur du jour.
+        # / Recap marker reset: the real hourly task also visits the persistent schema.
+        Configuration.objects.update(recap_quotidien_traite_le=None)
+        Configuration.clear_cache()
+
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
