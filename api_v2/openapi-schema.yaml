@@ -96,6 +96,18 @@ paths:
                   "@type": "MusicEvent"
                   name: API v2 — Test create
                   startDate: "2025-12-20T19:00:00Z"
+              blockedResourceCreate:
+                summary: Create an event that blocks a booking resource
+                value:
+                  "@context": "https://schema.org"
+                  "@type": "Event"
+                  name: Atelier du mercredi
+                  startDate: "2026-10-21T09:00:00+02:00"
+                  endDate: "2026-10-21T12:00:00+02:00"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "blockedResource"
+                      value: 1
           multipart/form-data:
             schema:
               type: object
@@ -2379,6 +2391,12 @@ components:
                   type: integer
         additionalProperty:
           type: array
+          description: |
+            Names: optionsRadio, optionsCheckbox, customConfirmationMessage, blockedResource.
+            `blockedResource` (create only, write-only: never returned) = id of a booking
+            Resource (the <id> of /booking/<id>/resource/). The event occupies it: the
+            resource's slots overlapping the event can no longer be booked. Requires
+            endDate (400 otherwise); an unknown id returns 400.
           items:
             type: object
             properties:
@@ -2394,6 +2412,7 @@ components:
                     items:
                       type: string
                   - type: string
+                  - type: integer
     ProductCreate:
       type: object
       description: schema.org/Product input for creation (with offers and form fields)

@@ -382,6 +382,20 @@ def test_add_ticket_refuse_un_evenement_complet(lieu):
         panier.add_ticket(concert.evenement.uuid, concert.tarif.uuid, qty=1)
 
 
+def test_add_ticket_refuse_un_evenement_dont_le_panier_est_desactive(lieu):
+    """Panier désactivé sur l'événement : refusé, même par un POST forgé.
+    / Cart disabled on the event: refused, even through a forged POST."""
+    from BaseBillet.services_panier import InvalidItemError, PanierSession
+
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    concert.evenement.panier_desactive = True
+    concert.evenement.save(update_fields=["panier_desactive"])
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    with pytest.raises(InvalidItemError):
+        panier.add_ticket(concert.evenement.uuid, concert.tarif.uuid, qty=1)
+
+
 @pytest.mark.parametrize("montant_saisi", [None, "2.00", "1000000.00"])
 def test_add_ticket_prix_libre_refuse_un_montant_absent_trop_bas_ou_trop_haut(
     lieu, montant_saisi

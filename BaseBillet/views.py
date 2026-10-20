@@ -4109,19 +4109,39 @@ class EventMVT(viewsets.ViewSet):
             logger.debug("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
-        # On passe l'user resolu par le validator (via l'email saisi),
-        # pas request.user qui peut etre AnonymousUser si le visiteur n'est pas connecte.
-        # Le template choisit son message selon user.is_active : il doit refleter
-        # l'etat reel utilise par TicketCreator pour decider d'envoyer
-        # les billets immediatement (user actif) ou un mail de validation (user inactif).
-
+        # On lit le compte résolu par le validator (via l'e-mail saisi), pas request.user
+        # (AnonymousUser si le visiteur n'est pas connecté). C'est is_active de ce compte
+        # que TicketCreator utilise pour choisir : billets tout de suite (compte actif)
+        # ou mail de validation d'abord (compte inactif).
+        # Compte actif + visiteur connecté -> « Mes réservations ».
+        # Compte actif + visiteur NON connecté -> retour à l'événement : « Mes réservations »
+        # exige d'être connecté et le renverrait vers la connexion.
+        # Compte inactif -> reservation_ok.html (mail de validation).
+        # / Read the account resolved from the typed email, not request.user. Active +
+        # logged in -> my bookings. Active + anonymous -> back to the event. Inactive ->
+        # validation email page.
         if validator.reservation.user_commande.is_active:
-            messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
-            return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
+            if request.user.is_authenticated:
+                messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
+                return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
+
+            evenement_reserve = validator.reservation.event
+            messages.success(request, _("Réservation reçue ! Vos billets arrivent par e-mail."))
+            return HttpResponseClientRedirect(
+                reverse("event-detail", kwargs={"pk": evenement_reserve.slug or evenement_reserve.uuid})
+            )
 
         from BaseBillet.models import DUREE_D_UN_PAIEMENT_EN_COURS
+        # Même règle que CeleryMailerClass (BaseBillet/tasks.py) : c'est l'adresse qui
+        # enverra le mail de validation. parseaddr garde l'adresse seule si la variable
+        # a la forme « Nom <adresse> ».
+        # / Same rule as CeleryMailerClass: the address that sends the validation email.
+        from email.utils import parseaddr
+        adresse_d_expedition_brute = os.environ.get('DEFAULT_FROM_EMAIL', os.environ.get('EMAIL_HOST_USER', ''))
+        _nom_affiche, adresse_d_expedition = parseaddr(adresse_d_expedition_brute)
+
         return render(request, "fonctionnel/event/reservation_ok.html", context={
-            "user": validator.reservation.user_commande,
+            "adresse_d_expedition": adresse_d_expedition,
             "minutes_de_reservation": int(DUREE_D_UN_PAIEMENT_EN_COURS.total_seconds() // 60),
         })
 

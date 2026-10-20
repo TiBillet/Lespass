@@ -4398,6 +4398,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
                 'published',
                 'private',
                 'archived',
+                'panier_desactive',
                 # Auteur de l'event (ex : proposeur via le wizard public), en lecture seule.
                 # / Event author (e.g. public-wizard proposer), read-only.
                 'display_created_by',

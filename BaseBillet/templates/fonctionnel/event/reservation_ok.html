@@ -1,19 +1,33 @@
 {% load i18n %}
+{% comment %}
+CONFIRMATION D'UNE RESERVATION GRATUITE EN ATTENTE DE VALIDATION DE L'E-MAIL
+/ Free booking confirmation, waiting for email validation
 
-{% if user.is_active %}
-    <div>{% translate "Your booking is complete. The tickets have been sent to your email address." %}</div>
-{% else %}
+LOCALISATION : BaseBillet/templates/fonctionnel/event/reservation_ok.html
+Rendu par : BaseBillet/views.py, EventMVT.reservation
+
+Seul un compte NON actif arrive ici : un compte actif est redirigé par la vue.
+/ Only an inactive account lands here: the view redirects active ones.
+{% endcomment %}
+<div data-testid="reservation-ok-validation-email">
     <div>
-        <div>
-            {% translate "Please validate your e-mail to confirm this booking." %}
-        </div>
-        <div style="margin-top: 1rem">
-            {# Durée fournie par la vue (DUREE_D_UN_PAIEMENT_EN_COURS). / Duration from the view. #}
-            {% blocktranslate with minutes=minutes_de_reservation %}Votre réservation est bloquée {{ minutes }} minutes. Passé ce délai, les places sont remises en vente.{% endblocktranslate %}
-        </div>
-        <div style="margin-top: 1rem">
-            {% translate "Don't forget to check the spam folder!" %}
-        </div>
+        <strong>{% translate "Merci beaucoup pour votre réservation !" %}</strong>
     </div>
-{% endif %}
-
+    <div style="margin-top: 1rem">
+        {% translate "Vous allez recevoir un mail pour valider votre réservation et prouver que vous êtes un être humain :)" %}
+    </div>
+    <div style="margin-top: 1rem">
+        {# Durée fournie par la vue (DUREE_D_UN_PAIEMENT_EN_COURS). / Duration from the view. #}
+        {% blocktranslate with minutes=minutes_de_reservation %}Votre réservation est bloquée pendant {{ minutes }} min. Passé ce délai, les places sont remises en circulation.{% endblocktranslate %}
+    </div>
+    <div style="margin-top: 1rem">
+        {% translate "Pensez à vérifier dans les spams si vous n'avez pas reçu de mail." %}
+        {# Adresse fournie par la vue (même règle que l'envoi des mails). / Sender address from the view. #}
+        {% if adresse_d_expedition %}
+            {% blocktranslate with adresse=adresse_d_expedition %}L'expéditeur sera {{ adresse }}.{% endblocktranslate %}
+        {% endif %}
+    </div>
+    <div style="margin-top: 1rem">
+        {% translate "Une fois votre réservation validée, vous recevrez un second mail avec vos billets." %}
+    </div>
+</div>

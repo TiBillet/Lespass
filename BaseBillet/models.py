@@ -2450,6 +2450,16 @@ class Event(models.Model):
                                                verbose_name=_("Button name for reservation"),
                                                help_text=_("If empty : I want to reserve one or more seats."))
 
+    # Faux par défaut : le panier est proposé sur tous les événements.
+    # Vrai : les billets de cet événement se réservent seulement en direct.
+    # Le refus est aussi fait côté serveur (PanierSession.add_ticket).
+    # / False by default: the cart is offered. True: direct booking only, enforced server-side.
+    panier_desactive = models.BooleanField(
+        default=False,
+        verbose_name=_("Désactiver le panier"),
+        help_text=_("Les billets de cet événement ne peuvent pas être ajoutés au panier : réservation directe uniquement."),
+    )
+
     img = StdImageField(upload_to='images/',
                         blank=True, null=True,
                         variations={

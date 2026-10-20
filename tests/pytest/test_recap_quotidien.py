@@ -204,7 +204,12 @@ class TestLesDatesDeCreation(RecapQuotidienTestCase):
         assert membership.annulee_le is None
 
     def test_la_configuration_a_un_marqueur_de_recap_vide(self):
-        assert Configuration.get_solo().recap_quotidien_traite_le is None
+        # On lit le DÉFAUT DU CHAMP, jamais get_solo() : le schéma de test reste en base,
+        # et la vraie tâche horaire de Celery passe aussi sur lui et pose le marqueur.
+        # / Read the FIELD DEFAULT, never get_solo(): the real hourly task also visits
+        # the persistent test schema and sets the marker.
+        champ_du_marqueur = Configuration._meta.get_field("recap_quotidien_traite_le")
+        assert champ_du_marqueur.get_default() is None
 
 
 class TestAnnuleeLe(RecapQuotidienTestCase):
