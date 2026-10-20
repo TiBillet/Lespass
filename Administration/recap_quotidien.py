@@ -307,10 +307,15 @@ def _rubrique_nouvelles_reservations_de_ressources(debut, fin, domaine):
     """
     Réservations de ressources faites hier, hors statuts non aboutis ou annulés.
     / Resource bookings made yesterday, without unfinished or cancelled ones.
+
+    Une demande à valider (ADMIN_WAITING) n'est pas une réservation :
+    elle a sa propre rubrique, `_rubrique_demandes_de_reservation_en_attente`.
+    / A request awaiting validation is not a booking: it has its own section.
     """
     bookings = Booking.objects.filter(booked_at__gte=debut, booked_at__lt=fin).exclude(
         status__in=[
             Booking.WAITING_PAYMENT,
+            Booking.ADMIN_WAITING,
             Booking.ADMIN_CANCELED,
             Booking.USER_CANCELED,
         ]
@@ -324,6 +329,28 @@ def _rubrique_nouvelles_reservations_de_ressources(debut, fin, domaine):
         _ligne_d_un_booking,
         debut,
         fin,
+    )
+
+
+def _rubrique_demandes_de_reservation_en_attente(debut, fin, domaine):
+    """
+    Stock des demandes de réservation de ressources à valider.
+    / Stock of resource booking requests awaiting validation.
+
+    Le lien ouvre la liste des réservations filtrée sur ce statut.
+    / The link opens the booking list filtered on this status.
+    """
+    demandes = Booking.objects.filter(status=Booking.ADMIN_WAITING)
+    return _construire_la_rubrique(
+        "demandes_de_reservation_en_attente",
+        _("Demandes de réservation en attente"),
+        f"https://{domaine}/admin/booking/booking/?status__exact={Booking.ADMIN_WAITING}",
+        demandes.select_related("user", "resource"),
+        "booked_at",
+        _ligne_d_un_booking,
+        debut,
+        fin,
+        est_un_stock=True,
     )
 
 
@@ -763,6 +790,7 @@ def rubriques_de_la_veille(debut, fin, domaine):
         _rubrique_adhesions_en_attente,
         _rubrique_nouvelles_reservations,
         _rubrique_nouvelles_reservations_de_ressources,
+        _rubrique_demandes_de_reservation_en_attente,
         _rubrique_nouvelles_inscriptions_benevoles,
         _rubrique_nouveaux_evenements,
         _rubrique_propositions_en_attente,

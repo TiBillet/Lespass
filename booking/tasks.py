@@ -16,9 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 @app.task
-def send_booking_cancellation_user(booking_uuid: str):
+def send_booking_cancellation_user(booking_uuid: str, demande_non_payee: bool = False):
     """
     Envoie un email à l'utilisateur pour confirmer l'annulation de sa réservation booking.
+    / Emails the user to confirm the cancellation of their booking.
+
+    demande_non_payee=True : la personne a retiré une demande à validation manuelle
+    où rien n'était payé. L'appelant le lit AVANT l'annulation
+    (Booking.est_une_demande_non_payee) : après, le statut est USER_CANCELED.
+    / demande_non_payee=True: an unpaid manual validation request was withdrawn.
     """
     config = Configuration.get_solo()
     activate(config.language)
@@ -55,12 +61,19 @@ def send_booking_cancellation_user(booking_uuid: str):
     except Exception:
         refund_amount = None
 
+    # Une demande non payée : pas de remboursement, pas de montant à afficher.
+    # / An unpaid request: no refund, no amount to show.
+    cancel_text = booking.cancel_text()
+    if demande_non_payee:
+        cancel_text = _("Votre demande est annulée. Rien n'a été débité.")
+        refund_amount = None
+
     currency_symbol = "€"
     context = {
         'title': title,
         'organisation': config.organisation,
         'booking': booking,
-        'cancel_text': booking.cancel_text(),
+        'cancel_text': cancel_text,
         'refund_amount': refund_amount,
         'currency_symbol': currency_symbol,
         'now': timezone.now(),
@@ -75,6 +88,248 @@ def send_booking_cancellation_user(booking_uuid: str):
     )
     mail.send()
     return bool(mail.sended)
+
+
+# ---------------------------------------------------------------------------
+# VALIDATION MANUELLE — mails des demandes de réservation
+# / MANUAL VALIDATION — booking request emails
+# Spec : TECH_DOC/SESSIONS/BOOKING/SPEC.md (§5.7)
+# ---------------------------------------------------------------------------
+
+def _creneau_de_la_demande(booking, config):
+    """
+    « lundi 3 novembre 2026, 10:00 – 12:00 », à l'heure du lieu.
+    / The booked slot, in the venue timezone.
+    """
+    fuseau_du_lieu = config.get_tzinfo()
+    debut = timezone.localtime(booking.start_datetime, fuseau_du_lieu)
+    fin = timezone.localtime(booking.end_datetime, fuseau_du_lieu)
+    return f"{date_format(debut, 'l j F Y, H:i')} – {date_format(fin, 'H:i')}"
+
+
+@app.task
+def send_booking_request_admin(booking_pk: str):
+    """
+    Prévient les administrateurs du lieu qu'une demande de réservation attend leur décision.
+    / Tells the venue admins that a booking request awaits their decision.
+
+    LOCALISATION : booking/tasks.py
+
+    Appelée par booking/views.py (_book_post), après le commit.
+    Destinataires : les admins du lieu, sinon l'adresse du lieu (Configuration.email).
+    / Called after commit. Recipients: the venue admins, else Configuration.email.
+    """
+    from AuthBillet.models import TibilletUser
+    from BaseBillet.tasks import send_email_generique
+
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    try:
+        booking = Booking.objects.select_related("resource", "user").get(pk=booking_pk)
+    except Booking.DoesNotExist:
+        logger.error(f"send_booking_request_admin : booking {booking_pk} introuvable")
+        return False
+
+    adresses_des_admins = list(
+        TibilletUser.objects.filter(client_admin=connection.tenant).values_list("email", flat=True)
+    )
+    if not adresses_des_admins and config.email:
+        adresses_des_admins = [config.email]
+    if not adresses_des_admins:
+        logger.warning("send_booking_request_admin : aucune adresse admin")
+        return False
+
+    domaine_du_lieu, image_url_place = _adresse_du_lieu_et_logo(config)
+    nom_de_la_personne = f"{booking.first_name or ''} {booking.last_name or ''}".strip()
+
+    context = {
+        "username": _("Administrateur"),
+        "now": timezone.now(),
+        "title": f"{config.organisation} : " + _("Nouvelle demande de réservation"),
+        "image_url": image_url_place,
+        "sub_title": _("Administration"),
+        "main_text": _("Une demande de réservation attend votre validation."),
+        "table_info": {
+            _("Ressource"): booking.resource.name,
+            _("Créneau"): _creneau_de_la_demande(booking, config),
+            _("Personne"): nom_de_la_personne,
+            _("Email"): booking.user.email,
+        },
+        "button_color": "#2d76a6",
+        "button": {
+            "text": _("Ouvrir la demande"),
+            "url": f"https://{domaine_du_lieu}/admin/booking/booking/{booking.pk}/change/",
+        },
+        "end_text": _("Merci"),
+        "signature": _("Marvin, le TiBillet robot"),
+    }
+    send_email_generique(context=context, email=adresses_des_admins)
+    return True
+
+
+@app.task
+def send_booking_request_user(booking_pk: str):
+    """
+    Confirme à la personne que sa demande de réservation est bien reçue.
+    / Confirms to the person that their booking request was received.
+
+    LOCALISATION : booking/tasks.py
+
+    Appelée par booking/views.py (_book_post), après le commit.
+    / Called by booking/views.py (_book_post), after commit.
+    """
+    from BaseBillet.tasks import send_email_generique
+
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    try:
+        booking = Booking.objects.select_related("resource", "user").get(pk=booking_pk)
+    except Booking.DoesNotExist:
+        logger.error(f"send_booking_request_user : booking {booking_pk} introuvable")
+        return False
+
+    domaine_du_lieu, image_url_place = _adresse_du_lieu_et_logo(config)
+
+    context = {
+        "username": booking.first_name or booking.user.email,
+        "now": timezone.now(),
+        "title": f"{config.organisation} : " + _("Votre demande de réservation est enregistrée"),
+        "image_url": image_url_place,
+        "sub_title": _("Réservation"),
+        "main_text": _(
+            "L'équipe va étudier votre demande. "
+            "Vous recevrez une réponse par mail : une confirmation ou une invitation à payer."
+        ),
+        "table_info": {
+            _("Ressource"): booking.resource.name,
+            _("Créneau"): _creneau_de_la_demande(booking, config),
+        },
+        "button_color": "#2d76a6",
+        "button": {
+            "text": _("Voir mes réservations"),
+            "url": f"https://{domaine_du_lieu}/my_account/my_bookings/",
+        },
+        "end_text": _("Merci"),
+        "signature": _("Marvin, le TiBillet robot"),
+    }
+    send_email_generique(context=context, email=booking.user.email)
+    return True
+
+
+@app.task
+def send_booking_accepted_user(booking_pk: str):
+    """
+    Dit à la personne que sa demande est acceptée.
+    / Tells the person their request was accepted.
+
+    LOCALISATION : booking/tasks.py
+
+    Appelée par booking/views.py (admin_accept), après le commit : le statut lu ici
+    est donc celui posé par l'admin.
+    - ADMIN_VALID (il reste à payer) : bouton « Payer ma réservation » (BookingViewSet.pay).
+    - Sinon (gratuit, FREERES ou FREERES_USERACTIV) : « Votre réservation est confirmée ».
+    / Called after commit. To pay: "Pay my booking" button. Free: "confirmed".
+    """
+    from BaseBillet.tasks import send_email_generique
+
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    try:
+        booking = Booking.objects.select_related("resource", "user").get(pk=booking_pk)
+    except Booking.DoesNotExist:
+        logger.error(f"send_booking_accepted_user : booking {booking_pk} introuvable")
+        return False
+
+    domaine_du_lieu, image_url_place = _adresse_du_lieu_et_logo(config)
+
+    reste_a_payer = booking.status == Booking.ADMIN_VALID
+    if reste_a_payer:
+        titre = _("Votre demande de réservation est acceptée")
+        texte = _("Bonne nouvelle : l'équipe a accepté votre demande. Il reste à payer pour confirmer la réservation.")
+        bouton = {
+            "text": _("Payer ma réservation"),
+            "url": f"https://{domaine_du_lieu}/booking/{booking.pk}/pay/",
+        }
+    else:
+        titre = _("Votre réservation est confirmée")
+        texte = _("Bonne nouvelle : l'équipe a accepté votre demande. Votre réservation est confirmée.")
+        bouton = {
+            "text": _("Voir mes réservations"),
+            "url": f"https://{domaine_du_lieu}/my_account/my_bookings/",
+        }
+
+    table_info = {
+        _("Ressource"): booking.resource.name,
+        _("Créneau"): _creneau_de_la_demande(booking, config),
+    }
+    if reste_a_payer:
+        table_info[_("Montant")] = f"{booking.to_pay()} {config.currency_code}"
+
+    context = {
+        "username": booking.first_name or booking.user.email,
+        "now": timezone.now(),
+        "title": f"{config.organisation} : " + titre,
+        "image_url": image_url_place,
+        "sub_title": _("Réservation"),
+        "main_text": texte,
+        "table_info": table_info,
+        "button_color": "#2d76a6",
+        "button": bouton,
+        "end_text": _("Merci"),
+        "signature": _("Marvin, le TiBillet robot"),
+    }
+    send_email_generique(context=context, email=booking.user.email)
+    return True
+
+
+@app.task
+def send_booking_refused_user(booking_pk: str):
+    """
+    Dit à la personne que sa demande n'a pas pu être acceptée, avec le motif s'il existe.
+    / Tells the person their request was refused, with the reason if any.
+
+    LOCALISATION : booking/tasks.py
+
+    Appelée par booking/views.py (admin_refuse), après le commit.
+    Le motif va dans main_text_3, affiché échappé : main_text_2 est rendu avec |safe
+    (emails/email_generique.html), et le motif est un texte tapé à la main.
+    / Called after commit. The reason goes to main_text_3 (escaped), never main_text_2 (|safe).
+    """
+    from BaseBillet.tasks import send_email_generique
+
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    try:
+        booking = Booking.objects.select_related("resource", "user").get(pk=booking_pk)
+    except Booking.DoesNotExist:
+        logger.error(f"send_booking_refused_user : booking {booking_pk} introuvable")
+        return False
+
+    domaine_du_lieu, image_url_place = _adresse_du_lieu_et_logo(config)
+
+    context = {
+        "username": booking.first_name or booking.user.email,
+        "now": timezone.now(),
+        "title": f"{config.organisation} : " + _("Votre demande de réservation n'a pas pu être acceptée"),
+        "image_url": image_url_place,
+        "sub_title": _("Réservation"),
+        "main_text": _("L'équipe n'a pas pu accepter votre demande. Rien n'a été débité."),
+        "table_info": {
+            _("Ressource"): booking.resource.name,
+            _("Créneau"): _creneau_de_la_demande(booking, config),
+        },
+        "end_text": _("Merci"),
+        "signature": _("Marvin, le TiBillet robot"),
+    }
+    if booking.motif_du_refus:
+        context["main_text_3"] = _("Motif : %(motif)s") % {"motif": booking.motif_du_refus}
+
+    send_email_generique(context=context, email=booking.user.email)
+    return True
 
 
 # ---------------------------------------------------------------------------

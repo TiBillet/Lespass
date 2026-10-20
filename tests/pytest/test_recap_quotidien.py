@@ -575,6 +575,38 @@ class TestLesRubriques(RecapQuotidienTestCase):
                 self._booking(self.hier, status=statut)
                 assert self._rubrique("nouvelles_reservations_de_ressources") is None
 
+    # --- Demandes de réservation en attente (stock) ---
+
+    def test_une_demande_de_reservation_d_hier_est_dans_le_stock_et_pas_dans_les_nouvelles(self):
+        self._booking(self.hier, status=Booking.ADMIN_WAITING)
+        assert self._rubrique("nouvelles_reservations_de_ressources") is None
+        rubrique = self._rubrique("demandes_de_reservation_en_attente")
+        assert rubrique["est_un_stock"] is True
+        assert rubrique["nombre"] == 1
+        assert rubrique["nombre_de_nouveaux"] == 1
+        assert rubrique["lien"] == (
+            f"https://{self.DOMAINE}/admin/booking/booking/?status__exact=WA"
+        )
+
+    def test_demandes_de_reservation_en_attente_garde_tout_le_stock(self):
+        # Un stock garde tout ce qui attend ; seule la part « nouvelle » dépend de la fenêtre.
+        self._booking(self.hier, status=Booking.ADMIN_WAITING)
+        self._booking(self.avant_hier, status=Booking.ADMIN_WAITING)
+        self._booking(self.aujourd_hui, status=Booking.ADMIN_WAITING)
+        rubrique = self._rubrique("demandes_de_reservation_en_attente")
+        assert rubrique["nombre"] == 3
+        assert rubrique["nombre_de_nouveaux"] == 1
+
+    def test_demandes_de_reservation_en_attente_ignore_les_autres_statuts(self):
+        for statut in [
+            Booking.ADMIN_VALID,
+            Booking.PAID_BY_USER,
+            Booking.ADMIN_CANCELED,
+        ]:
+            with self.subTest(statut=statut):
+                self._booking(self.hier, status=statut)
+                assert self._rubrique("demandes_de_reservation_en_attente") is None
+
     # --- Nouvelles inscriptions de bénévoles ---
 
     def test_nouvelles_inscriptions_benevoles_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):

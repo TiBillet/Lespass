@@ -129,6 +129,7 @@ DEPENDENCIES :
                                                {% if price.out_of_stock %}disabled{% endif %}
                                                {% if forloop.first and forloop.last %}checked{% endif %}
                                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                               data-manual-validation="{% if price.manual_validation %}true{% else %}false{% endif %}"
                                                data-testid="membership-price-{{ price.uuid }}">
                                         <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                                for="price-{{ price.uuid }}">
@@ -165,6 +166,7 @@ DEPENDENCIES :
                                                {% if price.out_of_stock %}disabled{% endif %}
                                                {% if forloop.first and forloop.last %}checked{% endif %}
                                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                               data-manual-validation="{% if price.manual_validation %}true{% else %}false{% endif %}"
                                                data-testid="membership-price-{{ price.uuid }}">
                                         <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                                for="price-{{ price.uuid }}">
@@ -188,6 +190,7 @@ DEPENDENCIES :
                                        {% if price.out_of_stock %}disabled{% endif %}
                                        {% if forloop.first and forloop.last %}checked{% endif %}
                                        {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                       data-manual-validation="{% if price.manual_validation %}true{% else %}false{% endif %}"
                                        data-testid="membership-price-{{ price.uuid }}">
                                 <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                        for="price-{{ price.uuid }}">
@@ -295,12 +298,29 @@ DEPENDENCIES :
                         }
                     }
 
+                    // Tarif à validation manuelle (dataset.manualValidation vaut 'true') :
+                    // on affiche « Envoyer la demande » et on cache le paiement et le panier.
+                    // Le panier refuse ces tarifs (services_panier.py) : ses boutons mèneraient à une erreur.
+                    // / Manual validation price: show "Send the request", hide pay and cart buttons.
+                    const boutonsDeReservationDirecte = form.querySelector('.js-boutons-reservation-directe');
+                    const boutonsDeDemande = form.querySelector('.js-boutons-demande');
+
+                    function updateBoutonsDeDemande() {
+                        if (!boutonsDeReservationDirecte || !boutonsDeDemande) return;
+                        const selectedRadio = form.querySelector('input[name="price"]:checked');
+                        const estUneDemande = selectedRadio && selectedRadio.dataset.manualValidation === 'true';
+                        boutonsDeReservationDirecte.classList.toggle('d-none', estUneDemande);
+                        boutonsDeDemande.classList.toggle('d-none', !estUneDemande);
+                    }
+
                     allRadios.forEach(radio => {
                         radio.addEventListener('change', updateCustomAmounts);
+                        radio.addEventListener('change', updateBoutonsDeDemande);
                     });
 
                     // Appel initial pour régler l'affichage au chargement
                     updateCustomAmounts();
+                    updateBoutonsDeDemande();
                 })();
             </script>
 
@@ -431,6 +451,9 @@ DEPENDENCIES :
             {# autres vers l'accueil (BookingViewSet.book). #}
             {# / This form is only rendered for a logged-in person. #}
             {% if user.is_authenticated %}
+                {# Deux blocs : un seul est visible, selon le tarif coché (JS plus haut). #}
+                {# / Two blocks: only one is shown, depending on the checked price. #}
+                <div class="js-boutons-reservation-directe">
                 {% if panier.count > 0 %}
                     {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
                     {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
@@ -480,6 +503,24 @@ DEPENDENCIES :
                         {% translate "Payer maintenant" %}
                     </button>
                 {% endif %}
+                </div>
+
+                {# Tarif à validation manuelle : une demande, sans paiement ni panier. #}
+                {# Visible aussi quand le panier n'est pas vide. #}
+                {# / Manual validation price: a request, no payment, no cart. #}
+                <div class="js-boutons-demande d-none" data-testid="booking-request-block">
+                    <div class="alert alert-info mb-2" role="note">
+                        <i class="bi bi-person-check" aria-hidden="true"></i>
+                        {% translate "Cette réservation doit être acceptée par l'équipe. Vous recevrez un mail." %}
+                    </div>
+                    <button type="submit"
+                            class="btn btn-primary w-100 mb-2"
+                            data-loading-disable
+                            data-testid="booking-send-request">
+                        <i class="bi bi-send me-2" aria-hidden="true"></i>
+                        {% translate "Envoyer la demande" %}
+                    </button>
+                </div>
             {% endif %}
             <button type="button" class="btn btn-link text-muted w-100 d-block test-resource-bt-cancel" data-bs-dismiss="offcanvas" aria-label="Annuler">
                 {% translate "Annuler" %}

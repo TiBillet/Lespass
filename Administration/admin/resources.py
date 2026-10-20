@@ -5,7 +5,7 @@ Enregistrements de l'administration Django pour le module booking.
 LOCALISATION : booking/admin.py
 """
 from django.contrib import admin
-from django.db import models
+from django.db import connection, models
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from django.forms import ModelForm
@@ -179,7 +179,42 @@ class BookingAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelA
     # des autres lieux visibles par l'admin.
     # / user MUST stay read-only: users are shared across all tenants. Editable, it
     # renders a select of every account of the instance (slow, leaks other venues' emails).
-    readonly_fields = ["user"]
+    # motif_du_refus : écrit par le bouton « Refuser » du panneau, jamais à la main.
+    # / motif_du_refus: written by the panel's "Refuse" button, never by hand.
+    readonly_fields = ["user", "motif_du_refus"]
+
+    # Panneau « Valider / Refuser » d'une demande à validation manuelle, affiché AVANT
+    # le formulaire. Les boutons appellent booking/views.py (admin_accept, admin_refuse).
+    # / "Accept / Refuse" panel for a manual validation request, shown BEFORE the form.
+    change_form_before_template = "admin/booking/actions_panel.html"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """
+        Donne au panneau d'actions le booking et ce qu'il doit afficher.
+        / Gives the action panel the booking and what it must show.
+
+        LOCALISATION : Administration/admin/resources.py
+
+        Contexte du panneau (admin/booking/actions_panel.html) :
+        - booking_du_panneau : le booking, seulement si c'est une demande non payée
+          (en attente, ou validée sans paiement). Sinon le panneau ne s'affiche pas.
+        - tarif_de_la_demande : le tarif du créneau, pour l'information « adhésion ».
+        - lien_de_paiement : l'adresse envoyée par mail (BookingViewSet.pay).
+        """
+        extra_context = extra_context or {}
+        if object_id:
+            booking = Booking.objects.select_related("user", "resource").filter(pk=object_id).first()
+            if booking is not None and booking.est_une_demande_non_payee():
+                extra_context["booking_du_panneau"] = booking
+
+                ligne_du_creneau = booking.lignearticles.select_related("pricesold__price").first()
+                if ligne_du_creneau is not None:
+                    extra_context["tarif_de_la_demande"] = ligne_du_creneau.pricesold.price
+
+                domaine_du_lieu = connection.tenant.get_primary_domain().domain
+                extra_context["lien_de_paiement"] = f"https://{domaine_du_lieu}/booking/{booking.pk}/pay/"
+
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     def save_model(self, request, obj, form, change):
         """

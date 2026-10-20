@@ -1,0 +1,62 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n %}
+
+<!--
+LOCALISATION : booking/templates/booking/views/pay_info.html
+
+Page d'information du lien « Payer ma réservation », quand on n'envoie pas vers Stripe.
+/ Info page of the "Pay my booking" link, when we do not send to Stripe.
+
+Flux / Flow:
+  GET /booking/<booking_pk>/pay/ -> BookingViewSet.pay
+  Contexte / Context: booking, situation
+    - "deja_payee"        : le booking est payé ;
+    - "paiement_en_cours" : Stripe a reçu le paiement, la confirmation arrive ;
+    - "en_attente_de_validation" : l'admin n'a pas encore décidé (409) ;
+    - "lien_plus_valable" : demande refusée ou annulée (409).
+-->
+
+{% block title %}{% translate "Payer ma réservation" %}{% endblock %}
+
+{% block booking_content %}
+<div class="row justify-content-center" data-testid="booking-pay-info-{{ situation }}">
+  <div class="col-md-8 col-lg-6">
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <h1 class="card-title h4">{{ booking.resource.name }}</h1>
+        <p class="mb-0">
+          {% blocktrans with jour=booking.start_datetime|date:"l d F Y" debut=booking.start_datetime|date:"H\hi" fin=booking.end_datetime|date:"H\hi" %}<strong>{{ jour }}</strong> de {{ debut }} à {{ fin }}{% endblocktrans %}
+        </p>
+      </div>
+    </div>
+
+    {% if situation == "deja_payee" %}
+      <div class="alert alert-success" role="status">
+        <i class="bi bi-check-circle" aria-hidden="true"></i>
+        {% translate "Cette réservation est déjà payée. Merci !" %}
+      </div>
+    {% elif situation == "paiement_en_cours" %}
+      <div class="alert alert-info" role="status">
+        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+        {% translate "Votre paiement est en cours de traitement. Votre réservation sera confirmée dans quelques instants." %}
+      </div>
+    {% elif situation == "en_attente_de_validation" %}
+      <div class="alert alert-info" role="status">
+        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+        {% translate "Votre demande attend encore la décision de l'organisateur. Vous recevrez un mail avec le lien de paiement dès qu'elle sera validée." %}
+      </div>
+    {% else %}
+      <div class="alert alert-warning" role="alert">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        {% translate "Ce lien de paiement n'est plus valable : la demande a été refusée ou annulée. Si vous pensez qu'il s'agit d'une erreur, contactez l'organisateur." %}
+      </div>
+    {% endif %}
+
+    <a href="{% url 'my_account-my-bookings' %}" class="btn btn-primary" data-testid="booking-pay-info-back">
+      {% translate "Retour à mes réservations" %}
+    </a>
+
+  </div>
+</div>
+{% endblock %}

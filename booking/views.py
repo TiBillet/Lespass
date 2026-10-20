@@ -13,8 +13,10 @@ import html
 import logging
 from collections import defaultdict
 from urllib.parse import urlencode
+
+import stripe
 from django_htmx.http import HttpResponseClientRedirect
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Count, Q
 from django.http import HttpResponseBadRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -29,14 +31,19 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 from rest_framework.decorators import action
 
-from BaseBillet.models import Event, Price, PaymentMethod, ProductFormField, Ticket
+from BaseBillet.models import Configuration, Event, Paiement_stripe, Price, PaymentMethod, ProductFormField, Ticket
 from BaseBillet.views import get_context, reponses_du_formulaire_personnalise_pour_le_panier
 from booking.benevolat import lire_la_semaine_demandee, lundi_de_la_semaine, titre_de_la_semaine
-from booking.booking_engine import Interval, compute_slots, validate_new_booking
+from booking.booking_engine import Interval, compute_slots, confirmer_booking_gratuit, get_checkout_stripe, validate_new_booking
 from booking.booking_engine import annotate_slots_for_display, get_existing_bookings_for_resource
 from booking.booking_engine import validate_resource_booking_form
 from booking.models import Booking, Resource
 from booking.tasks import send_booking_cancellation_user
+from booking.tasks import send_booking_request_admin, send_booking_request_user
+from booking.tasks import send_booking_accepted_user, send_booking_refused_user
+from booking.serializers import MotifDuRefusSerializer
+from root_billet.models import RootConfiguration
+from ApiBillet.permissions import TenantAdminPermissionWithRequest
 
 
 logger = logging.getLogger(__name__)
@@ -923,6 +930,9 @@ class BookingViewSet(viewsets.ViewSet):
 
         Succès    → redirige vers /my_account/my_bookings/?new=<pk> si la réservation est gratuite.
                   → redirige vers stripe si la réservation est payante
+                  → redirige vers /my_account/my_bookings/?new=<pk> si c'est une demande
+                    à validation manuelle (tarif manual_validation), avec les deux mails
+                    « demande reçue » (admin et personne)
         Échec     → re-render du formulaire avec message d'erreur
 
         / Success → redirect to /my_account/my_bookings/?new=<pk> if booking is free
@@ -1022,7 +1032,21 @@ class BookingViewSet(viewsets.ViewSet):
             # En requete HTMX, on utilise une redirection client pour eviter le swap.
             # / For HTMX requests, use client redirect to avoid swap.
 
-            if checkout_url is None:
+            # Une demande à validation manuelle : pas de paiement maintenant.
+            # Les deux mails « demande reçue » partent après le commit : la tâche
+            # Celery doit trouver le booking en base.
+            # / A manual validation request: no payment now. Both "request received"
+            # emails are sent after commit, so the task finds the booking.
+            est_une_demande_a_valider = result.status == Booking.ADMIN_WAITING
+            if est_une_demande_a_valider:
+                pk_de_la_demande = str(result.pk)
+                transaction.on_commit(lambda: send_booking_request_admin.delay(pk_de_la_demande))
+                transaction.on_commit(lambda: send_booking_request_user.delay(pk_de_la_demande))
+                messages.success(request, _(
+                    "Votre demande de réservation a été envoyée. "
+                    "Vous recevrez une confirmation ou une invitation à payer par mail."
+                ))
+            elif checkout_url is None:
                 messages.success(request, _("Réservation créée avec succès."))
 
             if request.htmx:
@@ -1109,6 +1133,223 @@ class BookingViewSet(viewsets.ViewSet):
     # ── Mes réservations ─────────────────────────────────────────────────────
     # Déplacé dans BaseBillet.views.MyAccount pour plus de cohérence
 
+    # ── Paiement d'une demande validée ───────────────────────────────────────
+
+    @action(detail=True, methods=['get'], url_path="pay", url_name="pay")
+    def pay(self, request, pk=None):
+        """
+        Envoie la personne vers Stripe pour payer une demande validée par l'admin.
+        / Sends the person to Stripe to pay an admin-validated request.
+
+        LOCALISATION : booking/views.py
+
+        Lien du mail « demande acceptée » et du bouton « Payer » de « Mes réservations ».
+        Même logique que BaseBillet/views.py, get_checkout_for_membership.
+        / Link of the "request accepted" email and of the "Pay" button in my bookings.
+
+        FLUX :
+        1. Personne non connectée -> page de connexion, puis retour ici.
+        2. Booking d'une autre personne -> 404.
+        3. Déjà payé, ou validé sans reste à payer -> page « déjà payée ».
+        4. Pas encore validé -> page « en attente de validation » (409).
+        5. Plus validé (refusé, annulé...) -> page « lien plus valable » (409).
+        6. Une session Stripe existe encore : ouverte -> on la réutilise ;
+           terminée -> page « paiement en cours » ; sinon -> marquée EXPIRE.
+        7. Sinon : nouvelle session Stripe (get_checkout_stripe garde ADMIN_VALID).
+
+        Accès : la personne qui a fait la demande, connectée.
+        / Access: the logged-in person who made the request.
+        """
+        if not request.user.is_authenticated:
+            login_url = reverse('connexion')
+            return redirect(f'{login_url}?next={request.get_full_path()}')
+
+        booking = get_object_or_404(
+            Booking.objects.select_related('resource'),
+            pk=pk,
+            user=request.user,
+        )
+
+        context = get_context(request)
+        context['booking'] = booking
+
+        # Validée mais déjà réglée (statut changé à la main) : rien à payer.
+        # / Validated but already settled (status changed by hand): nothing to pay.
+        deja_reglee = (
+            booking.status == Booking.ADMIN_VALID and not booking.est_une_demande_non_payee()
+        )
+        if booking.status == Booking.PAID_BY_USER or deja_reglee:
+            context['situation'] = 'deja_payee'
+            return render(request, 'booking/views/pay_info.html', context)
+
+        if booking.status == Booking.ADMIN_WAITING:
+            context['situation'] = 'en_attente_de_validation'
+            return render(request, 'booking/views/pay_info.html', context, status=409)
+
+        if booking.status != Booking.ADMIN_VALID:
+            context['situation'] = 'lien_plus_valable'
+            return render(request, 'booking/views/pay_info.html', context, status=409)
+
+        # Une session Stripe déjà créée pour ce booking, pas encore encaissée.
+        # / A Stripe session already created for this booking, not yet collected.
+        paiement_stripe_existant = booking.paiements.filter(
+            status__in=[Paiement_stripe.PENDING, Paiement_stripe.OPEN],
+            checkout_session_id_stripe__isnull=False,
+        ).order_by('-order_date').first()
+
+        if paiement_stripe_existant:
+            try:
+                stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+                config = Configuration.get_solo()
+                session_stripe = stripe.checkout.Session.retrieve(
+                    paiement_stripe_existant.checkout_session_id_stripe,
+                    stripe_account=config.get_stripe_connect_account(),
+                )
+            except Exception as erreur_stripe:
+                # En cas de doute, on NE recrée PAS de session : ce pourrait être un
+                # deuxième paiement. La personne réessaiera plus tard.
+                # / When in doubt, do NOT create a new session: it could be a 2nd payment.
+                logger.warning(f"pay : session Stripe du booking {booking.pk} illisible : {erreur_stripe}")
+                context['situation'] = 'paiement_en_cours'
+                return render(request, 'booking/views/pay_info.html', context)
+
+            # Session encore ouverte : la personne n'a pas fini de payer.
+            # / Session still open: the person has not finished paying.
+            if session_stripe.status == 'open' and session_stripe.url:
+                return redirect(session_stripe.url)
+
+            # Session terminée : le paiement est fait, le retour de Stripe arrive.
+            # / Session complete: payment done, Stripe's confirmation is on its way.
+            if session_stripe.status == 'complete':
+                context['situation'] = 'paiement_en_cours'
+                return render(request, 'booking/views/pay_info.html', context)
+
+            # Session expirée chez Stripe : on la marque et on en crée une nouvelle.
+            # / Session expired at Stripe: mark it and create a new one.
+            paiement_stripe_existant.status = Paiement_stripe.EXPIRE
+            paiement_stripe_existant.save(update_fields=['status'])
+
+        # La vente de la demande, ouverte à sa création (validate_new_booking).
+        # / The request's sale, opened when it was created.
+        vente_de_la_demande = booking.lignearticles.first().vente
+        checkout_url = get_checkout_stripe(booking, vente=vente_de_la_demande)
+        return redirect(checkout_url)
+
+    # ── Décision de l'admin sur une demande ──────────────────────────────────
+
+    def _recharger_la_fiche_admin(self):
+        """
+        Recharge la fiche admin du booking après une décision.
+        / Reloads the booking admin page after a decision.
+
+        Rechargement complet, pas un simple partiel : le formulaire sous le panneau
+        montre le statut. Resté à l'ancien statut, un clic sur « Enregistrer »
+        remettrait la demande en attente.
+        / Full reload: the form below shows the status; a stale form saved again
+        would put the request back to waiting.
+        """
+        reponse = HttpResponse("")
+        reponse["HX-Refresh"] = "true"
+        return reponse
+
+    @action(detail=True, methods=['post'], url_path="admin_accept", url_name="admin-accept")
+    def admin_accept(self, request, pk=None):
+        """
+        L'admin accepte une demande de réservation, ou renvoie le lien de paiement.
+        / The admin accepts a booking request, or resends the payment link.
+
+        LOCALISATION : booking/views.py
+
+        Appelée par le panneau Administration/templates/admin/booking/actions_panel.html.
+
+        FLUX :
+        - ADMIN_WAITING, reste à payer -> ADMIN_VALID + mail « Payer ma réservation ».
+        - ADMIN_WAITING, gratuit -> confirmer_booking_gratuit (FREERES / FREERES_USERACTIV,
+          vente encaissée à 0) + mail « réservation confirmée ».
+        - ADMIN_VALID non payée, avec renvoyer_le_lien=true -> renvoie seulement le mail.
+        - Sinon -> rien, un avertissement.
+
+        Le booking est verrouillé (select_for_update) et son statut relu : un double clic,
+        ou deux admins en même temps, n'envoient qu'un mail. Le mail part après le commit :
+        la tâche lit le statut posé ici.
+        / Locked and re-read: a double click sends one email. Email sent after commit.
+
+        Accès : admin du lieu (403 sinon).
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            return HttpResponse(status=403)
+
+        demande_de_renvoi_du_lien = request.POST.get("renvoyer_le_lien") == "true"
+
+        with transaction.atomic():
+            booking = get_object_or_404(Booking.objects.select_for_update(), pk=pk)
+
+            if booking.status == Booking.ADMIN_WAITING:
+                if booking.to_pay() > 0:
+                    booking.status = Booking.ADMIN_VALID
+                    booking.save(update_fields=["status"])
+                    message_pour_l_admin = _("Demande acceptée. La personne a reçu le lien de paiement par mail.")
+                else:
+                    ligne_du_creneau = booking.lignearticles.get()
+                    confirmer_booking_gratuit(booking, ligne_du_creneau, ligne_du_creneau.vente, booking.user)
+                    message_pour_l_admin = _("Demande acceptée. La réservation gratuite est confirmée, la personne a reçu un mail.")
+
+            elif booking.status == Booking.ADMIN_VALID and demande_de_renvoi_du_lien and booking.est_une_demande_non_payee():
+                message_pour_l_admin = _("Le lien de paiement a été renvoyé par mail.")
+
+            else:
+                messages.warning(request, _("Cette réservation n'est pas en attente de validation."))
+                return self._recharger_la_fiche_admin()
+
+            pk_du_booking = str(booking.pk)
+            transaction.on_commit(lambda: send_booking_accepted_user.delay(pk_du_booking))
+
+        messages.success(request, message_pour_l_admin)
+        return self._recharger_la_fiche_admin()
+
+    @action(detail=True, methods=['post'], url_path="admin_refuse", url_name="admin-refuse")
+    def admin_refuse(self, request, pk=None):
+        """
+        L'admin refuse une demande de réservation non payée, avec un motif facultatif.
+        / The admin refuses an unpaid booking request, with an optional reason.
+
+        LOCALISATION : booking/views.py
+
+        Appelée par le panneau Administration/templates/admin/booking/actions_panel.html.
+
+        FLUX : demande en attente (ADMIN_WAITING) ou validée non payée (ADMIN_VALID)
+        -> Booking.annuler_la_demande_non_payee(ADMIN_CANCELED) : session Stripe fermée,
+        vente et lignes annulées, créneau libéré, motif enregistré.
+        Puis mail de refus, après le commit.
+        Une réservation déjà payée ne se refuse pas ici : rien ne change, un avertissement.
+        / Waiting or validated-unpaid request -> cancelled, then refusal email after commit.
+
+        Accès : admin du lieu (403 sinon).
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            return HttpResponse(status=403)
+
+        validateur_du_motif = MotifDuRefusSerializer(data=request.POST)
+        if not validateur_du_motif.is_valid():
+            messages.error(request, _("Le motif est trop long (2000 caractères au plus)."))
+            return self._recharger_la_fiche_admin()
+        motif_du_refus = validateur_du_motif.validated_data.get("motif_du_refus", "")
+
+        with transaction.atomic():
+            booking = get_object_or_404(Booking.objects.select_for_update(), pk=pk)
+
+            if not booking.est_une_demande_non_payee():
+                messages.warning(request, _("Seule une demande non payée peut être refusée."))
+                return self._recharger_la_fiche_admin()
+
+            booking.annuler_la_demande_non_payee(Booking.ADMIN_CANCELED, motif_du_refus=motif_du_refus)
+
+            pk_du_booking = str(booking.pk)
+            transaction.on_commit(lambda: send_booking_refused_user.delay(pk_du_booking))
+
+        messages.success(request, _("Demande refusée. La personne a reçu un mail."))
+        return self._recharger_la_fiche_admin()
+
     # ── Confirmation d'annulation ────────────────────────────────────────────
 
     @action(detail=True, methods=['get', 'post'], url_path="cancel", url_name="cancel")
@@ -1136,12 +1377,18 @@ class BookingViewSet(viewsets.ViewSet):
             Booking.objects.select_related('resource'),
             pk     = pk,
             user   = request.user,
-            status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
-                           Booking.FREERES_USERACTIV],
+            status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.ADMIN_WAITING,
+                           Booking.FREERES, Booking.FREERES_USERACTIV],
         )
 
+        # Une demande non payée se retire jusqu'au début du créneau, sans tenir compte
+        # du délai d'annulation (Booking.annulation_possible) : sa date limite affichée
+        # est donc le début du créneau. Le gabarit garde le nom deadline_passed.
+        # / An unpaid request can be withdrawn until the slot starts: that is its deadline.
         deadline = booking.deadline()
-        deadline_passed = booking.deadline_passed()
+        if booking.est_une_demande_non_payee():
+            deadline = booking.start_datetime
+        deadline_passed = not booking.annulation_possible()
 
         if request.method == 'GET':
             context = get_context(request)
@@ -1153,7 +1400,7 @@ class BookingViewSet(viewsets.ViewSet):
             return render(request, 'booking/views/cancel_booking.html', context)
 
         # POST — recompute deadline to guard against race condition.
-        deadline_passed = booking.deadline_passed()
+        deadline_passed = not booking.annulation_possible()
         if deadline_passed:
             context = get_context(request)
             context.update({
@@ -1164,10 +1411,16 @@ class BookingViewSet(viewsets.ViewSet):
             return render(request, 'booking/views/cancel_booking.html', context)
 
         try:
+            # Lu AVANT l'annulation : après, le statut est USER_CANCELED.
+            # / Read BEFORE cancelling: afterwards the status is USER_CANCELED.
+            etait_une_demande_non_payee = booking.est_une_demande_non_payee()
             cancel_text = booking.cancel_and_refund_booking()
 
             try:
-                send_booking_cancellation_user.delay(str(booking.pk))
+                send_booking_cancellation_user.delay(
+                    str(booking.pk),
+                    demande_non_payee=etait_une_demande_non_payee,
+                )
             except Exception as ce:
                 logger.error(f"Failed to queue cancellation email for booking {booking.pk}: {ce}")
 

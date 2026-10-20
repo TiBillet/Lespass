@@ -1502,7 +1502,7 @@ class MyAccount(viewsets.ViewSet):
             # Get booking info (only upcoming, more detail on booking specific page)
             bookings = (
                 Booking.objects
-                .filter(user=user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
+                .filter(user=user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.ADMIN_WAITING, Booking.FREERES,
                                   Booking.FREERES_USERACTIV], end_datetime__gt=now)
                 .select_related('resource')
                 .order_by('start_datetime')
@@ -1661,14 +1661,14 @@ class MyAccount(viewsets.ViewSet):
 
         upcoming_bookings = (
             Booking.objects
-            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.ADMIN_WAITING, Booking.FREERES,
                                   Booking.FREERES_USERACTIV], end_datetime__gt=now)
             .select_related('resource')
             .order_by('start_datetime')
         )
         past_bookings = (
             Booking.objects
-            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.ADMIN_WAITING, Booking.FREERES,
                                   Booking.FREERES_USERACTIV], end_datetime__lte=now)
             .select_related('resource')
             .order_by('-start_datetime')

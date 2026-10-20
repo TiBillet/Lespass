@@ -11,7 +11,7 @@ paiement, cas de test, présentation).
 
 | # | Chantier | Statut | Spec |
 |---|---|---|---|
-| 01 | Réservation à validation manuelle (demande → admin → paiement) | Fiche A faite (non commitée), B à faire | [SPEC.md](SPEC.md) |
+| 01 | Réservation à validation manuelle (demande → admin → paiement) | Fiche A commitée ; B à E faites (non commitées) | [SPEC.md](SPEC.md) |
 
 ## Ajouter un chantier
 

@@ -329,8 +329,21 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
             user.save()
 
 
-        booking.status = Booking.PAID_BY_USER
-        booking.save()
+        # Un booking refusé par l'admin ou annulé par la personne n'est jamais réactivé :
+        # son créneau a pu être redonné. Cas : un onglet Stripe resté ouvert, payé après
+        # l'annulation. L'argent est encaissé ; le remboursement se fait à la main.
+        # Même règle que les adhésions (update_membership_state_after_stripe_paiement).
+        # / A refused or user-cancelled booking is never revived: its slot may be taken.
+        # The money is collected; refund by hand.
+        booking_annule = booking.status in [Booking.ADMIN_CANCELED, Booking.USER_CANCELED]
+        if booking_annule:
+            logger.error(
+                f"TRIGGER_C : paiement reçu pour le booking {booking.pk} déjà annulé "
+                f"(statut {booking.status}). Statut inchangé : rembourser à la main."
+            )
+        else:
+            booking.status = Booking.PAID_BY_USER
+            booking.save()
 
 
         logger.info(f"        TRIGGER_C BOOKING PAID -> set ligne_article VALID (no save)")

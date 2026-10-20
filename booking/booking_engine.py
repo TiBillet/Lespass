@@ -34,6 +34,7 @@ import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+import stripe
 from django.db import connection, transaction
 from django.db.utils import OperationalError
 from django.utils import timezone
@@ -42,7 +43,8 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
-from BaseBillet.models import Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode
+from BaseBillet.models import Configuration, Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode
+from root_billet.models import RootConfiguration
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import ajouter_article, encaisser_vente, ouvrir_vente
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
@@ -961,11 +963,66 @@ def get_checkout_stripe(booking, vente=None):
     paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
 
     booking.paiement = paiement_stripe
-    booking.status = booking.WAITING_PAYMENT
+    # Une demande validée par l'admin (ADMIN_VALID) GARDE son statut. INDISPENSABLE :
+    # WAITING_PAYMENT ne retient le créneau que 30 minutes (DUREE_D_UN_PAIEMENT_EN_COURS).
+    # Une personne qui ouvre Stripe puis abandonne perdrait sa place validée.
+    # trigger_C passe le booking en PAID_BY_USER quand le paiement arrive.
+    # / An admin-validated request KEEPS its status: WAITING_PAYMENT only holds the
+    # slot for 30 minutes. trigger_C sets PAID_BY_USER on payment.
+    if booking.status != Booking.ADMIN_VALID:
+        booking.status = Booking.WAITING_PAYMENT
     booking.save()
 
     logger.debug(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
     return new_paiement_stripe.checkout_session.url
+
+
+def expirer_la_session_stripe_ouverte(booking):
+    """
+    Ferme chez Stripe les sessions de paiement encore ouvertes du booking.
+    / Closes the booking's still-open Stripe checkout sessions.
+
+    LOCALISATION : booking/booking_engine.py
+
+    Appelée quand une demande non payée est annulée (Booking.cancel_and_refund_booking)
+    ou refusée par l'admin. Sans elle, un onglet Stripe resté ouvert permettrait de
+    payer une réservation annulée.
+    / Called when an unpaid request is cancelled or refused: an open Stripe tab
+    could otherwise pay a cancelled booking.
+
+    Un paiement dont la session est bien fermée passe en EXPIRE. Si Stripe refuse de
+    la fermer (session déjà payée ou déjà expirée), le paiement garde son statut :
+    s'il arrive quand même, trigger_C ne réactive pas la réservation annulée.
+    / A closed session's payment becomes EXPIRE. If Stripe refuses (already paid or
+    expired), the payment keeps its status; trigger_C never revives a cancelled booking.
+
+    :param booking: le Booking dont on ferme les sessions
+    """
+    paiements_en_cours = booking.paiements.filter(
+        status__in=[Paiement_stripe.PENDING, Paiement_stripe.OPEN],
+        checkout_session_id_stripe__isnull=False,
+    )
+    if not paiements_en_cours.exists():
+        return
+
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    config = Configuration.get_solo()
+
+    for paiement in paiements_en_cours:
+        try:
+            stripe.checkout.Session.expire(
+                paiement.checkout_session_id_stripe,
+                stripe_account=config.get_stripe_connect_account(),
+            )
+        except stripe.error.InvalidRequestError as erreur_stripe:
+            logger.warning(
+                f"expirer_la_session_stripe_ouverte : session {paiement.checkout_session_id_stripe} "
+                f"du booking {booking.pk} non fermée par Stripe : {erreur_stripe}"
+            )
+            continue
+
+        paiement.status = Paiement_stripe.EXPIRE
+        paiement.save(update_fields=["status"])
 
 
 # ─── Affichage des créneaux / Slot display layer ─────────────────────────────

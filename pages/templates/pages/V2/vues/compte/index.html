@@ -415,7 +415,7 @@ modules (R11).
                                         <span class="service-card__logo solid-gold" aria-hidden="true"></span>
                                         <span>
                                             <span class="service-card__title">{{ booking.resource.name }}</span>
-                                            <span class="service-card__place">{{ booking.start_datetime|date:"l j F, H:i" }}</span>
+                                            <span class="service-card__place">{{ booking.start_datetime|date:"l j F, H:i" }}{% if booking.status == "WA" %} · {% translate "Demande en attente de validation" %}{% endif %}</span>
                                         </span>
                                     </div>
                                     <div class="service-card__foot">

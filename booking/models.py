@@ -19,7 +19,7 @@ from django.utils.translation import gettext_lazy as _
 from django.db.transaction import atomic
 from datetime import timedelta
 from BaseBillet.models import Product, ResourceProduct, Price, LigneArticle, Configuration, Paiement_stripe, Commande
-from BaseBillet.services_vente import ligne_sans_argent_a_rendre
+from BaseBillet.services_vente import annuler_vente, ligne_sans_argent_a_rendre
 from PaiementStripe.utils import partial_refund_payment
 from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
@@ -576,6 +576,10 @@ class Booking(models.Model):
         choices=STATUS_CHOICES,
         default=WAITING_PAYMENT,
         verbose_name=_('Status'),
+        help_text=_(
+            "Changer le statut à la main n'envoie aucun mail et ne touche pas la vente. "
+            "Pour une demande à valider, utilisez les boutons « Valider » et « Refuser » en haut de la fiche."
+        ),
     )
     booked_at = models.DateTimeField(
         auto_now_add=True,
@@ -583,6 +587,15 @@ class Booking(models.Model):
     )
     annulee_le = models.DateTimeField(
         null=True, blank=True, editable=False, verbose_name=_("Annulée le")
+    )
+
+    # Texte libre tapé par l'admin au refus d'une demande, repris dans le mail de refus.
+    # / Free text typed by the admin when refusing a request, used in the refusal email.
+    motif_du_refus = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Motif du refus"),
+        help_text=_("Envoyé à la personne dans le mail de refus."),
     )
 
     commande = models.ForeignKey(
@@ -747,6 +760,36 @@ class Booking(models.Model):
     def can_refund(self):
         return not self.deadline_passed()
 
+    def est_une_demande_non_payee(self):
+        """
+        Vrai pour une demande à validation manuelle où aucun argent n'est en jeu :
+        - en attente de l'administrateur (ADMIN_WAITING) ;
+        - ou validée mais pas encore payée (ADMIN_VALID, rien de payé).
+        / True for a manual validation request with no money involved.
+
+        Lue par annulation_possible() et cancel_and_refund_booking().
+        """
+        if self.status == Booking.ADMIN_WAITING:
+            return True
+        if self.status == Booking.ADMIN_VALID and self.total_paid() == 0:
+            return True
+        return False
+
+    def annulation_possible(self):
+        """
+        Vrai si la personne peut encore annuler.
+        - Une demande non payée se retire jusqu'au début du créneau : le délai
+          d'annulation protège un remboursement, et ici rien n'a été débité.
+        - Sinon, le délai d'annulation de la ressource s'applique.
+        / True if the person can still cancel. An unpaid request: until the slot
+        starts. Otherwise: the resource's cancellation deadline.
+
+        Lue par booking/views.py (cancel_confirm) et les gabarits « Mes réservations ».
+        """
+        if self.est_une_demande_non_payee():
+            return timezone.now() < self.start_datetime
+        return not self.deadline_passed()
+
     def cancel_text(self):
         if self.can_refund():
             return _("You will be refunded to the credit card used to make the reservation.")
@@ -754,9 +797,51 @@ class Booking(models.Model):
             return _("The deadline for getting a refund has passed.")
 
     @atomic
+    def annuler_la_demande_non_payee(self, statut_d_annulation, motif_du_refus=""):
+        """
+        Annule une demande où rien n'est payé : retrait par la personne (USER_CANCELED)
+        ou refus par l'admin (ADMIN_CANCELED, avec un motif facultatif).
+        / Cancels an unpaid request: withdrawn by the person or refused by the admin.
+
+        LOCALISATION : booking/models.py
+
+        Appelée par cancel_and_refund_booking() et booking/views.py (admin_refuse).
+        L'appelant vérifie est_une_demande_non_payee() avant.
+
+        1. Ferme la session Stripe encore ouverte (une demande validée peut en avoir une).
+        2. Annule la vente et ses lignes. INDISPENSABLE de passer les lignes en CANCELED
+           à la main : annuler_vente() ne change que la vente, pas ses lignes.
+        3. Pose le statut, la date d'annulation (récap du matin) et le motif.
+        Le créneau est libéré : un booking annulé n'occupe plus de place.
+        / Closes the open Stripe session, cancels the sale AND its lines (annuler_vente
+        does not touch lines), sets status, date and reason. The slot is freed.
+        """
+        # Import local : booking_engine importe ce module.
+        # / Local import: booking_engine imports this module.
+        from booking.booking_engine import expirer_la_session_stripe_ouverte
+
+        expirer_la_session_stripe_ouverte(self)
+        for ligne in self.lignearticles.all():
+            if ligne.vente is not None:
+                annuler_vente(ligne.vente)
+            ligne.status = LigneArticle.CANCELED
+            ligne.save()
+
+        self.annulee_le = timezone.now()
+        self.status = statut_d_annulation
+        self.motif_du_refus = motif_du_refus
+        self.save()
+
+    @atomic
     def cancel_and_refund_booking(self):
         if self.status in [Booking.USER_CANCELED, Booking.ADMIN_CANCELED]:
             raise Exception(_("This booking is already cancelled."))
+
+        # 0) Demande non payée : rien à rembourser (annuler_la_demande_non_payee).
+        # / 0) Unpaid request: nothing to refund.
+        if self.est_une_demande_non_payee():
+            self.annuler_la_demande_non_payee(Booking.USER_CANCELED)
+            return _("Votre demande est annulée. Rien n'a été débité.")
 
         # 1) Remboursement Stripe (flow existant, inchange)
         # / Stripe refund (existing flow, unchanged)

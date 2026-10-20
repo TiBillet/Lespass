@@ -92,7 +92,26 @@ Flux / Flow:
                                         - {{ booking.total_paid }} €
                                     </h3>
                                     <div class="card-text hstack flex-wrap gap-3 mb-3">
-                                        <div class="py-2">{{ booking.get_status_display }}</div>
+                                        <div class="py-2">
+                                            {% if booking.status == "WA" %}
+                                                <span class="badge text-bg-warning" data-testid="booking-badge-request-{{ booking.pk }}">
+                                                    {% translate "Demande en attente de validation" %}
+                                                </span>
+                                            {% elif booking.status == "VA" and booking.est_une_demande_non_payee %}
+                                                {# Demande validée par l'admin : la personne paie depuis ici (BookingViewSet.pay). #}
+                                                {# / Admin-validated request: the person pays from here. #}
+                                                <span class="badge text-bg-info" data-testid="booking-badge-to-pay-{{ booking.pk }}">
+                                                    {% translate "Validée — à payer" %}
+                                                </span>
+                                                <a href="{% url 'booking-pay' pk=booking.pk %}"
+                                                   class="btn btn-primary btn-sm ms-2"
+                                                   data-testid="booking-pay-{{ booking.pk }}">
+                                                    {% translate "Payer" %}
+                                                </a>
+                                            {% else %}
+                                                {{ booking.get_status_display }}
+                                            {% endif %}
+                                        </div>
                                             <div class="vr"></div>
                                             <div class="py-2">
                                                 {{ booking.slot_count }} {% translate "créneau(x)" %}
@@ -107,7 +126,8 @@ Flux / Flow:
                                         {% endif %}
 
                                         <div class="vr"></div>
-                                        {% if booking.can_refund %}
+                                        {# Une demande non payée reste annulable après le délai (Booking.annulation_possible). #}
+                                        {% if booking.annulation_possible %}
                                         <div class="py-2">
                                             <button
                                                     class="btn btn-outline-danger btn-sm"
@@ -184,7 +204,15 @@ Flux / Flow:
                                         </a>
                                     </h3>
                                     <div class="card-text hstack flex-wrap gap-3">
-                                        <div class="py-2">{{ booking.get_status_display }}</div>
+                                        <div class="py-2">
+                                            {% if booking.status == "WA" %}
+                                                <span class="badge text-bg-warning" data-testid="booking-badge-request-{{ booking.pk }}">
+                                                    {% translate "Demande en attente de validation" %}
+                                                </span>
+                                            {% else %}
+                                                {{ booking.get_status_display }}
+                                            {% endif %}
+                                        </div>
                                             <div class="vr"></div>
                                             <div class="py-2">
                                                 {{ booking.slot_count }} {% translate "créneau(x)" %}

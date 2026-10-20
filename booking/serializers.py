@@ -29,3 +29,21 @@ class BookingCreateSerializer(serializers.Serializer):
 
     """
     slot_count = serializers.IntegerField(min_value=1)
+
+
+class MotifDuRefusSerializer(serializers.Serializer):
+    """
+    Valide le motif tapé par l'admin quand il refuse une demande de réservation.
+    / Validates the reason typed by the admin when refusing a booking request.
+
+    LOCALISATION : booking/serializers.py
+
+    Lu par booking/views.py (BookingViewSet.admin_refuse). Le motif est facultatif.
+    / Read by BookingViewSet.admin_refuse. The reason is optional.
+    """
+    motif_du_refus = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=2000,
+        trim_whitespace=True,
+    )
