@@ -61,6 +61,7 @@ Spec : `TECH_DOC/SESSIONS/BOOKING/SPEC.md`. Chantier découpé en fiches A → E
 | `tests/pytest/test_recap_quotidien.py` | 3 tests de plus |
 | `tests/e2e/test_booking_validation_manuelle_stripe.py` | E2E : demande → validation admin → paiement Stripe réel → « Payé » dans le compte ; demande → refus avec motif |
 | `pytest.ini` | la famille `validation_manuelle` couvre aussi les créneaux |
+| `Administration/admin/products.py` | les tarifs d'une ressource ne proposent plus « Jauge max » ni « Nombre de créneaux max par utilisateur » : le moteur de réservation ne les lit pas (places = `Resource.capacity` + calendrier) |
 
 **Déploiement :** nouvelles tâches Celery → redémarrer Celery.
 

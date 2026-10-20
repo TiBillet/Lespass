@@ -256,6 +256,23 @@ def test_l_inline_des_tarifs_de_ressource_propose_la_validation_manuelle(tenant)
     assert "demande" in str(formulaire_de_tarif.fields["manual_validation"].help_text)
 
 
+def test_l_inline_des_tarifs_de_ressource_ne_propose_ni_jauge_ni_maximum_par_personne():
+    # Le moteur de réservation ne lit ni Price.stock ni Price.max_per_user :
+    # les proposer laisserait croire à une limite qui n'existe pas.
+    # / The booking engine ignores both fields: showing them would fake a limit.
+    from Administration.admin.products import ResourcePriceInline
+
+    champs_a_plat = []
+    for champ_ou_ligne in ResourcePriceInline.fields:
+        if isinstance(champ_ou_ligne, tuple):
+            champs_a_plat.extend(champ_ou_ligne)
+        else:
+            champs_a_plat.append(champ_ou_ligne)
+
+    assert "stock" not in champs_a_plat
+    assert "max_per_user" not in champs_a_plat
+
+
 # ---------------------------------------------------------------------------
 # Fiche B : le parcours de la personne (formulaire, réponse, compte, annulation)
 # / Card B: the person's flow (form, response, account, cancellation)

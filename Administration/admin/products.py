@@ -1210,21 +1210,6 @@ class ResourcePriceInlineForm(BasePriceInlineForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # # Labels et help_text adaptes au contexte billetterie
-        # # / Labels and help_text adapted to ticketing context
-        # if "stock" in self.fields:
-        #     self.fields["stock"].label = _("Event capacity")
-        #     self.fields["stock"].help_text = _(
-        #         "Maximum number of tickets available per event for this price. "
-        #         "Leave blank for unlimited."
-        #     )
-
-        if "max_per_user" in self.fields:
-            self.fields["max_per_user"].label = _("Nombre de créneau maximal par utilisateur")
-            self.fields["max_per_user"].help_text = _(
-                "Maximum number of slot a single user can book for this price. "
-                "Leave blank for unlimited."
-            )
         # Le texte d'aide du modèle parle d'adhésion : on le remplace ici, sans toucher
         # au modèle (un help_text changé dans le modèle fabrique une migration).
         # / The model help text talks about memberships: replaced here, not in the model.
@@ -1247,16 +1232,19 @@ class ResourcePriceInlineForm(BasePriceInlineForm):
 
 class ResourcePriceInline(BasePriceInline):
     """Inline tarifs pour les produits ressources.
-    Ajoute stock (jauge par evenement), max_per_user et adhesions_obligatoires.
-    / Price inline for ticket products.
-    Adds stock (capacity per event), max_per_user and adhesions_obligatoires."""
+    Ajoute adhesions_obligatoires et manual_validation.
+    / Price inline for resource products: adds required memberships and manual validation.
+
+    Pas de stock ni de max_per_user : le moteur de réservation ne les lit pas.
+    Les places d'un créneau viennent de Resource.capacity et du calendrier.
+    / No stock nor max_per_user: the booking engine ignores them. Slot seats come
+    from Resource.capacity and the calendar."""
 
     form = ResourcePriceInlineForm
     autocomplete_fields = ["adhesions_obligatoires"]
     fields = (
         "name",
         ("prix", "free_price"),
-        ("stock", "max_per_user"),
         "adhesions_obligatoires",
         "manual_validation",
         ("publish", "order"),
