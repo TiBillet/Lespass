@@ -337,10 +337,16 @@ def get_existing_bookings_for_resource(resource, window: Interval = None):
     # / Occupying the slot: paid, admin-validated or free bookings, and bookings waiting for
     # payment for less than DUREE_D_UN_PAIEMENT_EN_COURS. BOTH free statuses count: a booking
     # whose owner has not verified their email yet holds its slot too.
+    # Une demande en attente de l'admin (ADMIN_WAITING) retient aussi sa place, sans limite
+    # de temps, jusqu'à sa validation ou son refus. Une demande validée (ADMIN_VALID) la
+    # garde jusqu'au paiement ou à une annulation : pas d'échéance.
+    # / A request waiting for the admin holds its slot until accepted or refused; an
+    # accepted one (ADMIN_VALID) keeps it until paid or cancelled. No deadline.
     debut_des_paiements_en_cours = timezone.now() - DUREE_D_UN_PAIEMENT_EN_COURS
     requete_de_base = Booking.objects.filter(resource=resource).filter(
         Q(status__in=[
             Booking.PAID_BY_USER,
+            Booking.ADMIN_WAITING,
             Booking.ADMIN_VALID,
             Booking.FREERES,
             Booking.FREERES_USERACTIV,
@@ -605,10 +611,34 @@ def validate_new_booking(resource,
                   Un dictionnaire vide est enregistré en None.
                   / Answers already built by the caller; stored as-is, {} saved as None.
 
-    :return: (True, Booking) si créé / if created
-             (False, str)    message d'erreur / error message
+    ── Tarif à validation manuelle (price.manual_validation) ────────────────────
+
+    Le booking naît en ADMIN_WAITING : c'est une DEMANDE. La vente et la ligne sont
+    créées comme pour une réservation (la ligne garde le montant à payer plus tard),
+    mais il n'y a ni session Stripe ni encaissement. Un administrateur valide ou
+    refuse ensuite la demande. Le créneau reste occupé pendant l'attente
+    (get_existing_bookings_for_resource).
+    Le panier refuse ces tarifs (PanierSession.add_resource) : une demande ne passe
+    jamais par une commande.
+    / Manual validation price: the booking is created ADMIN_WAITING (a request), with
+    its sale and line but no Stripe session and no settlement. The cart refuses these
+    prices.
+
+    :return: (True, Booking, checkout_url) si créé ; checkout_url vaut None pour une
+             réservation gratuite ou une demande / if created
+             (False, str, None)            message d'erreur / error message
     """
     from booking.models import Booking
+
+    # Une demande à valider ne passe jamais par le panier : PanierSession.add_resource
+    # refuse ces tarifs. Arriver ici avec une commande est un bug de l'appelant.
+    # / A request never goes through the cart: reaching here with an order is a bug.
+    est_une_demande_a_valider = price.manual_validation
+    if est_une_demande_a_valider and commande is not None:
+        raise ValueError(
+            f"Le tarif {price.uuid} est à validation manuelle : il ne peut pas être "
+            f"réservé dans une commande du panier."
+        )
 
     # Refuse tout créneau dont le début est passé — sans ouvrir de transaction.
     # / Reject any past slot — without opening a transaction.
@@ -751,13 +781,19 @@ def validate_new_booking(resource,
                         'Slot starting at %(start)s is fully booked.'
                     ) % {'start': slot_start}), None
 
+            # Une demande attend l'administrateur ; sinon, le paiement.
+            # / A request waits for the admin; otherwise, for the payment.
+            statut_du_nouveau_booking = Booking.WAITING_PAYMENT
+            if est_une_demande_a_valider:
+                statut_du_nouveau_booking = Booking.ADMIN_WAITING
+
             new_booking = Booking.objects.create(
                 resource=resource,
                 user=member,
                 start_datetime=start_datetime,
                 slot_duration_minutes=slot_duration_minutes,
                 slot_count=slot_count,
-                status=Booking.WAITING_PAYMENT,
+                status=statut_du_nouveau_booking,
                 commande=commande,
                 first_name=first_name,
                 last_name=last_name,
@@ -832,7 +868,9 @@ def validate_new_booking(resource,
 
     checkout_url = None
 
-    if create_checkout:
+    # Une demande s'arrête ici : ni Stripe ni encaissement avant la décision de l'admin.
+    # / A request stops here: no Stripe, no settlement before the admin decides.
+    if create_checkout and not est_une_demande_a_valider:
         if new_booking.to_pay() > 0:
             new_booking.status = Booking.WAITING_PAYMENT
 
@@ -842,29 +880,50 @@ def validate_new_booking(resource,
 
             checkout_url = get_checkout_stripe(new_booking, vente=vente)
         else:
-            # Réservation gratuite : pas de Stripe. La ligne de vente passe directement à
-            # « validée » en « offert », comme au panier (CommandeService._finaliser_gratuit).
-            # Elle ne passe pas par « payée » : trigger_C mettrait le booking gratuit en
-            # « payé par l'utilisateur ».
-            # / Free booking: no Stripe. The line goes straight to VALID as FREE, like the
-            # cart; not through PAID (trigger_C would set the booking PAID_BY_USER).
-            # Statut gratuit, selon que la personne a validé son adresse mail ou non — même
-            # règle qu'au panier (CommandeService._finaliser_gratuit).
-            # / Free status, depending on email verification — same rule as in the cart.
-            new_booking.status = (
-                Booking.FREERES_USERACTIV if member.is_active else Booking.FREERES
-            )
-            ligne_article.payment_method = PaymentMethod.FREE
-            ligne_article.status = LigneArticle.VALID
-            new_booking.save()
-            ligne_article.save()
-
-            # La vente gratuite est encaissée à 0 après sa ligne : REGLEE, numérotée, aucun
-            # règlement (c'est une opération enregistrée).
-            # / The free sale is settled at 0 after its line: settled, numbered, no payment.
-            encaisser_vente(vente)
+            confirmer_booking_gratuit(new_booking, ligne_article, vente, member)
 
     return True, new_booking, checkout_url
+
+
+def confirmer_booking_gratuit(booking, ligne_article, vente, member):
+    """
+    Confirme une réservation gratuite : statut gratuit, ligne « offert », vente encaissée à 0.
+    / Confirms a free booking: free status, FREE line, sale settled at 0.
+
+    LOCALISATION : booking/booking_engine.py
+
+    Appelée par :
+    - validate_new_booking, pour une réservation gratuite directe ;
+    - la validation par l'admin d'une demande gratuite.
+    C'est le même geste comptable aux deux endroits : il vit ici, une seule fois.
+    / Called by the direct free booking and by the admin validating a free request.
+
+    Pas de Stripe. La ligne de vente passe directement à « validée » en « offert », comme
+    au panier (CommandeService._finaliser_gratuit). Elle ne passe pas par « payée » :
+    trigger_C mettrait le booking gratuit en « payé par l'utilisateur ».
+    / The line goes straight to VALID as FREE; not through PAID (trigger_C would set
+    the booking PAID_BY_USER).
+
+    :param booking: le Booking à confirmer
+    :param ligne_article: la LigneArticle du créneau
+    :param vente: la vente du booking, encaissée à 0
+    :param member: la personne qui réserve (son statut is_active choisit le statut gratuit)
+    """
+    from booking.models import Booking
+
+    # Statut gratuit, selon que la personne a validé son adresse mail ou non — même
+    # règle qu'au panier (CommandeService._finaliser_gratuit).
+    # / Free status, depending on email verification — same rule as in the cart.
+    booking.status = Booking.FREERES_USERACTIV if member.is_active else Booking.FREERES
+    ligne_article.payment_method = PaymentMethod.FREE
+    ligne_article.status = LigneArticle.VALID
+    booking.save()
+    ligne_article.save()
+
+    # La vente gratuite est encaissée à 0 après sa ligne : REGLEE, numérotée, aucun
+    # règlement (c'est une opération enregistrée).
+    # / The free sale is settled at 0 after its line: settled, numbered, no payment.
+    encaisser_vente(vente)
 
 def get_checkout_stripe(booking, vente=None):
     """

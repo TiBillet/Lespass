@@ -452,18 +452,27 @@ class BookingViewSet(viewsets.ViewSet):
 
         Accès : public.
         / Access: public.
+
+        Une seule ressource : il n'y a rien à choisir, on ouvre directement sa page.
+        / Only one resource: nothing to choose, open its page directly.
         """
-        context = get_context(request)
         resources_groups, ungrouped_resources = self._group_resources()
+        toutes_les_ressources = list(ungrouped_resources)
+        for group_entry in resources_groups:
+            toutes_les_ressources.extend(group_entry['resources'])
+
+        il_y_a_une_seule_ressource = len(toutes_les_ressources) == 1
+        if il_y_a_une_seule_ressource:
+            la_seule_ressource = toutes_les_ressources[0]
+            return redirect('booking-resource', pk=la_seule_ressource.pk)
+
+        context = get_context(request)
 
         # Prix « à partir de » de chaque carte (cotton/V2/ressource_card.html).
         # Les tarifs en points ou en temps se vendent à la caisse seulement :
         # ils ne comptent pas dans le prix affiché en euros. Sans tarif en euros,
         # la carte n'affiche pas de prix.
         # / "From" price of each card; points/time prices are POS-only.
-        toutes_les_ressources = list(ungrouped_resources)
-        for group_entry in resources_groups:
-            toutes_les_ressources.extend(group_entry['resources'])
         for resource in toutes_les_ressources:
             tarifs_en_euros = resource.published_prices().filter(
                 asset__isnull=True,

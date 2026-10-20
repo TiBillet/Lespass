@@ -1225,6 +1225,16 @@ class ResourcePriceInlineForm(BasePriceInlineForm):
                 "Maximum number of slot a single user can book for this price. "
                 "Leave blank for unlimited."
             )
+        # Le texte d'aide du modèle parle d'adhésion : on le remplace ici, sans toucher
+        # au modèle (un help_text changé dans le modèle fabrique une migration).
+        # / The model help text talks about memberships: replaced here, not in the model.
+        if "manual_validation" in self.fields:
+            self.fields["manual_validation"].label = _("Validation manuelle")
+            self.fields["manual_validation"].help_text = _(
+                "Si coché, un clic sur un créneau envoie une demande à l'équipe. "
+                "Le créneau est retenu jusqu'à la validation ou au refus par un administrateur. "
+                "La personne reçoit ensuite une confirmation ou un lien de paiement par mail."
+            )
         # Pas de bouton "+" pour creer un produit depuis ce champ
         # / No "add" button to create a product from this field
         if "adhesions_obligatoires" in self.fields:
@@ -1248,6 +1258,7 @@ class ResourcePriceInline(BasePriceInline):
         ("prix", "free_price"),
         ("stock", "max_per_user"),
         "adhesions_obligatoires",
+        "manual_validation",
         ("publish", "order"),
     )
 

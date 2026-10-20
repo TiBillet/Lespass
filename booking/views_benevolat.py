@@ -41,7 +41,7 @@ import logging
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, serializers, viewsets
@@ -323,9 +323,19 @@ class BenevolatViewSet(viewsets.ViewSet):
         en cartes (les mêmes que le bloc d'accueil « Coups de main »). C'est la page de
         l'entrée « Bénévolat » du menu du site (BaseBillet/views.py, get_context).
         / The upcoming plannings, as cards; target of the site menu entry.
+
+        Un seul planning à venir : il n'y a rien à choisir, on ouvre directement sa page.
+        / Only one upcoming planning: nothing to choose, open its page directly.
         """
+        plannings_a_venir = resumes_des_plannings_a_venir(50)
+
+        il_y_a_un_seul_planning = len(plannings_a_venir) == 1
+        if il_y_a_un_seul_planning:
+            le_seul_planning = plannings_a_venir[0]["planning"]
+            return redirect("benevolat-planning", slug=le_seul_planning.slug)
+
         context = get_context(request)
-        context["plannings"] = resumes_des_plannings_a_venir(50)
+        context["plannings"] = plannings_a_venir
         return render(request, "booking/benevolat/liste.html", context)
 
     def retrieve(self, request, slug=None):
