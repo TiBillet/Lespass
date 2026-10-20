@@ -1833,7 +1833,28 @@ class ResourceProductAdmin(ProductAdmin):
     # change_form_after_template + changeform_view : herites de ProductAdmin (base)
     # / change_form_after_template + changeform_view: inherited from ProductAdmin (base)
 
-    list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
+    # Seuls les champs que la réservation lit. Le nom, la description et l'image
+    # affichés au public sont ceux de la ressource (booking.Resource), pas du produit.
+    # Publié, poids, max par utilisateur, texte du bouton, lien légal : rien ne les lit.
+    # categorie_article reste dans le formulaire (champ caché) : il fixe RESOURCE.
+    # / Only the fields booking reads. Public name, description and image come from
+    # the Resource. categorie_article stays as a hidden field: it sets RESOURCE.
+    fieldsets = (
+        (
+            _("General"),
+            {
+                "fields": (
+                    "name",
+                    "categorie_article",
+                    "tva",
+                    "archive",
+                ),
+            },
+        ),
+    )
+    list_display = ("name",)
+    ordering = ("name",)
+    list_filter = [ProductArchiveFilter]  # categorie_article inutile, deja filtre
     # Pas de get_queryset : ResourceProduct.objects (ResourceProductManager) filtre deja.
     # / No get_queryset: ResourceProduct.objects (ResourceProductManager) already filters.
 

@@ -256,6 +256,18 @@ def test_l_inline_des_tarifs_de_ressource_propose_la_validation_manuelle(tenant)
     assert "demande" in str(formulaire_de_tarif.fields["manual_validation"].help_text)
 
 
+def test_la_fiche_produit_d_une_ressource_ne_montre_que_les_champs_lus():
+    # Le public voit le nom, la description et l'image de la ressource, pas du produit.
+    # / The public sees the resource's name, description and image, not the product's.
+    from Administration.admin.products import ResourceProductAdmin
+
+    champs_de_la_fiche = []
+    for _titre, options in ResourceProductAdmin.fieldsets:
+        champs_de_la_fiche.extend(options["fields"])
+
+    assert champs_de_la_fiche == ["name", "categorie_article", "tva", "archive"]
+
+
 def test_l_inline_des_tarifs_de_ressource_ne_propose_ni_jauge_ni_maximum_par_personne():
     # Le moteur de réservation ne lit ni Price.stock ni Price.max_per_user :
     # les proposer laisserait croire à une limite qui n'existe pas.
