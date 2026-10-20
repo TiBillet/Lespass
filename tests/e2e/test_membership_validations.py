@@ -32,9 +32,13 @@ def _slugify(value):
 class TestMembershipValidations:
     """Membership form validation errors / Erreurs de validation du formulaire adhésion."""
 
-    def test_membership_form_validation_errors(self, page, create_product):
-        """Vérifie les erreurs de validation : email mismatch, prix libre vide, champs dynamiques.
-        / Checks validation errors: email mismatch, empty free price, dynamic fields.
+    def test_membership_form_validation_errors(
+        self, page, create_product, login_as, django_shell
+    ):
+        """Vérifie les erreurs de validation : prix libre vide, champs dynamiques.
+        Adhérer exige d'être connecté : l'email est celui du compte, en lecture seule.
+        / Checks validation errors: empty free price, dynamic fields.
+        Joining requires login: the email is the account's, read-only.
         """
         random_id = _random_id()
         product_name = f"Adhesion Validation {random_id}"
@@ -62,6 +66,16 @@ class TestMembershipValidations:
         assert result["ok"], f"Création produit échouée: {result}"
         product_uuid = result["uuid"]
 
+        # --- Étape 1 bis : Se connecter. login_as exige un compte existant, activé ---
+        # / Step 1 bis: log in. login_as needs an existing, activated account.
+        django_shell(
+            "from AuthBillet.utils import get_or_create_user\n"
+            f"acheteur = get_or_create_user('{user_email}', send_mail=False)\n"
+            "acheteur.is_active = True\n"
+            "acheteur.save()\n"
+        )
+        login_as(page, user_email)
+
         # --- Étape 2 : Naviguer vers la page formulaire d'adhésion ---
         # La page standalone /memberships/<uuid>/ rend form.html avec tous les data-testid.
         page.goto(f"/memberships/{product_uuid}/")
@@ -71,13 +85,14 @@ class TestMembershipValidations:
         expect(membership_form).to_be_visible()
 
         # --- Étape 3 : Vérifier les champs requis ---
-        email_input = page.locator("#membership-email")
-        confirm_input = page.locator("#confirm-email")
+        # L'email est celui du compte, en lecture seule.
+        # / The email is the account's, read-only.
+        email_input = page.locator('[data-testid="membership-email"]')
+        expect(email_input).to_have_value(user_email)
+        expect(email_input).to_have_attribute("readonly", "")
         first_name_input = page.locator('input[name="firstname"]')
         last_name_input = page.locator('input[name="lastname"]')
 
-        expect(email_input).to_have_attribute("required", "")
-        expect(confirm_input).to_have_attribute("required", "")
         expect(first_name_input).to_have_attribute("required", "")
         expect(last_name_input).to_have_attribute("required", "")
 
@@ -85,7 +100,8 @@ class TestMembershipValidations:
         # legales : le produit de ce test n'en a pas, elle n'est donc pas concernee.
         # / The acknowledge box only exists with a legal link: not the case here.
 
-        # --- Étape 4 : Email mismatch ---
+        # --- Étape 4 : Remplir le formulaire (sans l'envoyer) ---
+        # / Step 4: fill the form (without sending it).
         submit_button = page.locator("#membership-submit")
         boolean_input = page.locator(
             f'[data-testid="membership-form-field-{boolean_field_name}"]'
@@ -106,26 +122,7 @@ class TestMembershipValidations:
         expect(multi_select_input).to_be_visible()
         multi_select_input.check()
 
-        email_input.fill(user_email)
-        confirm_input.fill(f"{user_email}.bad")
-        submit_button.click()
-
-        # L'email mismatch déclenche setCustomValidity → validity.valid = false
-        is_valid = confirm_input.evaluate("(el) => el.validity.valid")
-        assert is_valid is False, "Le champ confirm devrait être invalide"
-
-        validation_message = confirm_input.evaluate("(el) => el.validationMessage")
-        # Le message peut etre en FR ("e-mail" avec tiret) ou EN ("email") selon
-        # la langue active — piege 9.34 de tests/PIEGES.md.
-        # / Message may be FR ("e-mail" with hyphen) or EN ("email") depending
-        # on active language — see trap 9.34 in tests/PIEGES.md.
-        message_normalise = (validation_message or "").lower().replace("-", "")
-        assert "email" in message_normalise, (
-            f"Le message de validation devrait contenir 'email' ou 'e-mail', got: {validation_message}"
-        )
-
         # --- Étape 5 : Prix libre vide ---
-        confirm_input.fill(user_email)
         # Vider le montant et soumettre
         custom_amount_input.fill("")
         submit_button.click()

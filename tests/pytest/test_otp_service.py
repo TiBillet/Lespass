@@ -8,6 +8,7 @@ Pas de DB, pas de tenant — service pur.
 / No DB, no tenant — pure service.
 """
 
+import hashlib
 import re
 from unittest.mock import patch
 
@@ -56,6 +57,13 @@ class TestHashCodeOtp:
         assert len(h) == 64
         assert re.fullmatch(r"[0-9a-f]{64}", h)
 
+    def test_empreinte_differente_d_un_sha256_simple(self):
+        # L'empreinte depend de la cle secrete du projet (salted_hmac) : un
+        # SHA-256 simple du code ne la retrouve pas.
+        # / The fingerprint is keyed with SECRET_KEY: a plain SHA-256 differs.
+        sha256_simple = hashlib.sha256(b"123456").hexdigest()
+        assert hash_code_otp("123456") != sha256_simple
+
 
 class TestVerifierCodeOtp:
     def test_succes_avec_bon_code(self):
@@ -101,6 +109,13 @@ class TestEnvoyerEmailOtp:
         _args, kwargs = MockMailer.call_args
         assert kwargs["email"] == "user@example.com"
         MockMailer.return_value.send.assert_called_once()
+
+    @patch("BaseBillet.tasks.CeleryMailerClass")
+    def test_renvoie_mail_sended(self, MockMailer):
+        # L'appelant lit ce retour pour savoir si le mail est parti.
+        # / The caller reads this value to know if the email left.
+        MockMailer.return_value.sended = True
+        assert envoyer_email_otp("u@x.fr", "123456", "Connexion") is True
 
     @patch("BaseBillet.tasks.CeleryMailerClass")
     def test_inclut_le_code_dans_le_corps_texte(self, MockMailer):

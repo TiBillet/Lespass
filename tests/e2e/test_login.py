@@ -10,12 +10,12 @@ Ce test reproduit la première étape des opérations demo_data :
 2. Vérifier la navigation vers la page /my_account/
 3. Confirmer les droits admin (présence de la carte admin du tenant)
 
-Un second test vérifie que le formulaire de connexion rejette un email
-mal formé (validation HTML5 côté client).
+Un second test vérifie que le formulaire de connexion du guichet rejette un
+email mal formé.
 
 / This test reproduces the first step of demo_data operations: admin login,
-/my_account navigation, admin card presence. A second test checks the
-client-side HTML5 email validation on the login form.
+/my_account navigation, admin card presence. A second test checks that the
+login desk form rejects a malformed email.
 """
 
 import pytest
@@ -79,52 +79,51 @@ class TestLoginFlow:
         )
 
     def test_should_validate_email_format(self, page):
-        """Le formulaire de connexion rejette un email mal formé côté client.
-        / The login form rejects a malformed email client-side.
+        """Le formulaire de connexion du guichet rejette un email mal formé.
+        / The login desk form rejects a malformed email.
+
+        Le panneau de connexion du lieu ne contient plus de formulaire : un lien
+        « Se connecter » mène au guichet commun (/connexion/ puis /sso/ sur le
+        domaine du schéma public). Le formulaire garde les id loginForm / loginEmail.
+        / The venue login panel has no form: a link leads to the shared login desk.
         """
         # --- Étape 1 : Aller à l'accueil / Go home ---
         page.goto("/")
         page.wait_for_load_state("networkidle")
 
-        # --- Étape 2 : Ouvrir le panneau de connexion ---
+        # --- Étape 2 : Ouvrir le panneau de connexion, puis aller au guichet ---
         # Bouton « Connexion » de la barre utilisateur du skin V2 (data-testid,
         # indépendant de la langue et de la mise en page).
-        # / Step 2: open the login panel: V2 user bar button (data-testid,
-        # independent of language and layout).
+        # / Step 2: open the login panel, then go to the login desk.
         page.locator('[data-testid="user-bar-connexion"]').click()
+        lien_vers_le_guichet = page.locator('[data-testid="login-guichet"]')
+        expect(lien_vers_le_guichet).to_be_visible()
+        lien_vers_le_guichet.click()
+        page.wait_for_url(lambda adresse: "/sso/" in adresse, timeout=10_000)
 
         # --- Étape 3 : Remplir un email incorrect / Fill an incorrect email ---
         email_input = page.locator("#loginEmail")
         expect(email_input).to_be_visible()
         email_input.fill("not-an-email")
 
-        # La validité se lit AVANT l'envoi : si l'envoi part, HTMX remplace la page, et
-        # un nouveau champ vide (donc invalide) rendrait la lecture vraie par accident.
-        # / Validity is read BEFORE submitting: a swapped page would show a new, empty field.
+        # Le champ est de type email : le navigateur le sait invalide.
+        # / The field is of type email: the browser knows it is invalid.
         is_html_valid = email_input.evaluate("(el) => el.validity.valid")
-
-        # --- Étape 4 : Soumettre, en notant tout envoi vers /connexion/ ---
-        # Le formulaire part en hx-post vers /connexion/ (commun/formulaires/login.html).
-        # / Step 4: submit, recording any request sent to /connexion/.
-        envois_vers_la_connexion = []
-        page.on(
-            "request",
-            lambda requete: envois_vers_la_connexion.append(requete.url)
-            if "/connexion/" in requete.url else None,
-        )
-        submit_button = page.locator('#loginForm button[type="submit"]')
-        submit_button.click()
-        page.wait_for_timeout(500)
-
-        # --- Étape 5 : La validation du navigateur bloque l'envoi ---
-        # Deux preuves, toutes deux exigées : le champ est invalide (type=email), ET
-        # aucune requête n'est partie vers /connexion/. L'URL, elle, ne prouverait rien :
-        # la connexion se fait par un lien envoyé par e-mail, elle ne change jamais.
-        # / Step 5: browser validation blocks the submission. Both proofs are required:
-        # the field is invalid AND no request reached /connexion/.
         assert is_html_valid is False, (
             "Le champ e-mail accepte « not-an-email » : il a perdu type=email."
         )
-        assert envois_vers_la_connexion == [], (
-            f"Un e-mail mal formé est parti vers /connexion/ : {envois_vers_la_connexion}"
+
+        # --- Étape 4 : Soumettre ---
+        # Le formulaire du guichet porte `novalidate` : c'est le serveur qui valide
+        # (LoginEmailValidator) et réaffiche l'étape 1 avec le message sous le champ.
+        # / Step 4: submit. The desk form has `novalidate`: the server validates and
+        # shows step 1 again, with the message under the field.
+        page.locator('#loginForm button[type="submit"]').click()
+
+        # --- Étape 5 : L'étape 1 revient avec l'erreur, aucun code n'est demandé ---
+        # / Step 5: step 1 comes back with the error, no code is asked.
+        expect(page.locator('[data-testid="login-email-erreur"]')).to_be_visible(
+            timeout=5_000
         )
+        expect(page.locator("#loginEmail")).to_have_value("not-an-email")
+        expect(page.locator('[data-testid="login-code"]')).to_have_count(0)

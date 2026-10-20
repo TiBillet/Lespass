@@ -98,6 +98,9 @@ urlpatterns = [
     # path("my_account/profile/", base_view.my_account_profile, name='my_account_profile'),
 
     path('connexion/', base_view.connexion, name='connexion'),
+    # Retour du guichet de connexion commun (SSO), avec le ticket signé.
+    # / Back from the shared login desk (SSO), with the signed ticket.
+    path('connexion/retour/', base_view.connexion_retour, name='connexion_retour'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
     # Alias anglais de 'deconnexion/', pour un site servi en francais comme en
     # anglais. Meme vue : il n'y a qu'une facon de se deconnecter.

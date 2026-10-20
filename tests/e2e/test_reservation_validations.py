@@ -33,10 +33,12 @@ class TestReservationValidations:
     """Booking form validation errors / Erreurs de validation du formulaire de réservation."""
 
     def test_booking_form_validation_errors(
-        self, page, create_event, create_product, setup_test_data
+        self, page, create_event, create_product, setup_test_data, login_as, django_shell
     ):
-        """Vérifie les erreurs : email mismatch, aucun billet, prix libre, champs dynamiques, code promo.
-        / Checks errors: email mismatch, no ticket, free price, dynamic fields, promo code.
+        """Vérifie les erreurs : aucun billet, prix libre, champs dynamiques, code promo.
+        Réserver exige d'être connecté : l'email est celui du compte, en lecture seule.
+        / Checks errors: no ticket, free price, dynamic fields, promo code.
+        Booking requires login: the email is the account's, read-only.
         """
         random_id = _random_id()
         event_name = f"E2E Reservation Validation {random_id}"
@@ -87,7 +89,16 @@ class TestReservationValidations:
             f"Création code promo échouée: {promo_result}"
         )
 
-        # --- Étape 3 : Ouvrir le formulaire de réservation ---
+        # --- Étape 3 : Se connecter, puis ouvrir le formulaire de réservation ---
+        # login_as exige un compte existant : on le crée, activé.
+        # / login_as needs an existing account: create it, activated.
+        django_shell(
+            "from AuthBillet.utils import get_or_create_user\n"
+            f"acheteur = get_or_create_user('{user_email}', send_mail=False)\n"
+            "acheteur.is_active = True\n"
+            "acheteur.save()\n"
+        )
+        login_as(page, user_email)
         page.goto(f"/event/{event_slug}/")
         page.wait_for_load_state("domcontentloaded")
 
@@ -106,17 +117,14 @@ class TestReservationValidations:
         ).first
         expect(booking_form).to_be_visible()
 
-        # --- Étape 4 : Vérifier les champs requis ---
-        email_input = page.locator(
-            '[data-testid="booking-email"], #booking-email'
-        ).first
-        confirm_input = page.locator(
-            '[data-testid="booking-email-confirm"], #booking-confirm'
-        ).first
-        expect(email_input).to_have_attribute("required", "")
-        expect(confirm_input).to_have_attribute("required", "")
+        # --- Étape 4 : L'email est celui du compte, en lecture seule ---
+        # / Step 4: the email is the account's, read-only.
+        email_input = page.locator('[data-testid="booking-email"]')
+        expect(email_input).to_have_value(user_email)
+        expect(email_input).to_have_attribute("readonly", "")
 
-        # --- Étape 5 : Email mismatch ---
+        # --- Étape 5 : Remplir le formulaire (sans l'envoyer) ---
+        # / Step 5: fill the form (without sending it).
         submit_button = page.locator(
             '[data-testid="booking-submit"], #bookingPanel button[type="submit"]'
         ).first
@@ -137,9 +145,6 @@ class TestReservationValidations:
         # L'evenement (options radio et case) et le produit (prix libre, deux champs
         # obligatoires) sont crees par ce test : tous leurs champs sont ATTENDUS.
         # / The event and product are created by this test: all their fields are EXPECTED.
-        email_input.fill(user_email)
-        confirm_input.fill(f"{user_email}.bad")
-
         expect(boolean_input).to_be_visible()
         boolean_input.check()
 
@@ -164,16 +169,6 @@ class TestReservationValidations:
         expect(multi_select_input).to_be_visible()
         multi_select_input.check()
 
-        submit_button.click()
-
-        is_valid = confirm_input.evaluate("(el) => el.validity.valid")
-        assert is_valid is False, "Le champ confirm devrait être invalide"
-
-        validation_message = confirm_input.evaluate("(el) => el.validationMessage")
-        assert "emails" in (validation_message or "").lower(), (
-            f"Le message devrait contenir 'emails', got: {validation_message}"
-        )
-
         expect(boolean_input).to_be_visible()
         boolean_input.uncheck()
 
@@ -188,7 +183,6 @@ class TestReservationValidations:
             }"""
         )
 
-        confirm_input.fill(user_email)
         expect(boolean_input).to_be_visible()
         boolean_input.check()
         expect(option_radio).to_be_visible()

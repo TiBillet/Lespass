@@ -36,6 +36,7 @@ from weasyprint.text.fonts import FontConfiguration
 from Administration.utils import clean_html
 from ApiBillet.serializers import LigneArticleSerializer, MembershipSerializer
 from AuthBillet.models import TibilletUser
+from AuthBillet.otp_service import envoyer_email_otp
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
     GhostConfig, BrevoConfig, Product, Price, Paiement_stripe
 from Customers.models import Client
@@ -1614,6 +1615,50 @@ def connexion_celery_mailer(self, user_email,
     except Exception as e:
         logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
         raise Exception
+
+
+@app.task(autoretry_for=(smtplib.SMTPException, ConnectionError, TimeoutError), retry_backoff=True,
+          retry_backoff_max=60, retry_jitter=True, max_retries=2)
+def code_de_connexion_celery_mailer(email, code, langue):
+    """
+    Envoie le mail qui contient le code de connexion à 6 chiffres.
+    / Sends the email holding the 6-digit login code.
+
+    LOCALISATION : BaseBillet/tasks.py
+
+    FLUX : AuthBillet/connexion_par_code.py::envoyer_un_code_de_connexion
+    appelle `.delay()` DANS `tenant_context(lieu)`. La tâche tourne donc sur le
+    schéma du lieu (TenantAwareCeleryApp) : `Configuration.get_solo()` donne le
+    nom du lieu, qui est écrit dans le mail.
+    / Called with .delay() inside tenant_context(venue): the task runs on the
+    venue schema, so the email carries the venue name.
+
+    Nouvelles tentatives courtes (2 au plus, 60 s au plus entre deux) : le code
+    expire au bout de 10 minutes. Des tentatives plus longues livreraient un
+    code déjà mort.
+    / Short retries: the code expires after 10 minutes.
+
+    Le code n'est jamais écrit dans le journal ici.
+    / The code is never logged here.
+
+    :param email: adresse du destinataire, déjà normalisée / recipient email
+    :param code: code en clair à 6 chiffres / cleartext code
+    :param langue: langue de la personne (get_language() de la requête) / user language
+    """
+    # Celery n'a pas de LocaleMiddleware : sans activate(), le sujet part en anglais.
+    # / No LocaleMiddleware in Celery: without activate() the subject is English.
+    activate(langue)
+
+    config = Configuration.get_solo()
+    mail_est_parti = envoyer_email_otp(
+        email,
+        code,
+        libelle_action=_("Connexion"),
+        nom_organisation=config.organisation,
+    )
+
+    if not mail_est_parti:
+        logger.error(f"code_de_connexion_celery_mailer : mail du code de connexion NON envoyé à {email}")
 
 
 # NOTE 2026-05-16 : les tasks `new_tenant_mailer` et

@@ -5,7 +5,8 @@ Tests E2E : limites de réservation (stock, max par utilisateur, adhésion requi
 Conversion de tests/playwright/tests/19-reservation-limits.spec.ts
 
 Scénario couvert / Covered scenario:
-1. Stock épuisé → message "n'est plus disponible" pour un anonyme
+1. Stock épuisé → message "n'est plus disponible" pour un anonyme, qui ne voit
+   que le bouton « Se connecter pour réserver »
 2. Max par tarif atteint → message "nombre maximum de réservations" pour le user
 3. Max par événement atteint → message sur la page event
 4. Tarif réservé aux adhérents → messages anonyme ("Connectez-vous") et
@@ -362,6 +363,10 @@ class TestReservationLimits:
             "no longer available",
             "n'est plus disponible",
         )
+        # Un anonyme voit les tarifs, mais ne peut que se connecter pour réserver.
+        # / An anonymous visitor sees the prices but can only log in to book.
+        expect(page.locator('[data-testid="booking-login"]')).to_be_visible()
+        expect(page.locator('[data-testid="booking-submit"]')).to_have_count(0)
 
         # --- Étape 4 : Connecté voit le max par tarif atteint ---
         # L'API réservation crée le user avec is_active=False. force_login +

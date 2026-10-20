@@ -69,40 +69,6 @@ export const init = () => {
         }))
         .filter(({ amount }) => amount !== null )
 
-    // Email confirmation check (reservation form)
-    const reservationForm = document.getElementById('reservation_form')
-    const emailInput = document.getElementById('booking-email')
-    const confirmInput = document.getElementById('booking-confirm')
-    const errorDiv = document.getElementById('email-error')
-    const validateEmails = () => {
-        if (!emailInput || !confirmInput || !errorDiv) return true
-        const email = emailInput.value || ''
-        const confirmEmail = confirmInput.value || ''
-        if (email !== confirmEmail) {
-            confirmInput.setCustomValidity('Les emails ne correspondent pas.')
-            errorDiv.textContent = 'Les emails ne correspondent pas.'
-            return false
-        }
-        confirmInput.setCustomValidity('')
-        errorDiv.textContent = ''
-        return true
-    }
-
-    if (reservationForm && emailInput && confirmInput) {
-        emailInput.addEventListener('input', validateEmails)
-        confirmInput.addEventListener('input', validateEmails)
-        reservationForm.addEventListener('submit', (event) => {
-            if (!validateEmails()) {
-                event.preventDefault()
-            }
-        })
-        reservationForm.addEventListener('htmx:configRequest', (event) => {
-            if (!validateEmails()) {
-                event.preventDefault()
-            }
-        })
-    }
-    
     orders.forEach((order) => {
         const { amount, customPrice } = order;
         const update = updateTotal(orders, totalAmount, totalPrice)

@@ -16,10 +16,9 @@ de test Django, puis la VRAIE vue de retour de paiement du parcours (session Str
 par `mock_stripe`), et vérifie le même état final des deux côtés.
 / Each test runs the real front form, then the real payment return view, for both flows.
 
-PÉRIMÈTRE : l'acheteur est connecté, puisque le panier l'exige. Le parcours direct d'un
-visiteur ANONYME n'est couvert que par le cas du billet à 0 € ; les autres parcours anonymes
-relèvent des tests existants (tests/e2e/test_reservation_*.py, test_membership_*.py).
-/ SCOPE: logged-in buyer (the cart requires it); anonymous direct flow only for the 0 € case.
+PÉRIMÈTRE : l'acheteur est connecté. Les deux parcours l'exigent : le panier, et la
+réservation ou l'adhésion directes (tests/pytest/test_achat_reserve_aux_connectes.py).
+/ SCOPE: logged-in buyer: both flows require it.
 
 Un cas marqué `xfail(strict=True)` prouve un défaut connu, noté dans
 TECH_DOC/SESSIONS/PANIER/SPEC.md (§1 et §10, référence Cxx) et non corrigé dans ce chantier. Le test
@@ -1461,42 +1460,6 @@ def test_ressource_a_prix_libre_sous_le_minimum_stripe_est_refusee(lieu, parcour
         assert "0,50" in message_d_erreur or "0.50" in message_d_erreur
 
 
-def test_p2bis_billet_payant_a_zero_euro_pour_un_visiteur_anonyme(lieu):
-    """
-    Parcours direct d'un visiteur anonyme (le plus fréquent en billetterie), billet « payant »
-    à 0 € : pas de Stripe. Le compte créé n'est pas encore activé : la réservation attend
-    l'activation (statut gratuit « non activé »), ses billets ne sont pas encore actifs, la
-    ligne est validée en « offert ».
-    / Anonymous direct flow, paid-category ticket at 0 €: no Stripe; the new account is not
-    activated yet, so the reservation waits for activation.
-    """
-    from AuthBillet.models import TibilletUser
-    from BaseBillet.models import LigneArticle, PaymentMethod, Reservation, Ticket
-
-    client_anonyme = client_connecte()
-    concert = creer_evenement_avec_tarif(prix="0.00")
-    email_du_visiteur = f"test+chantierpanier{identifiant_unique()}@mock.test"
-
-    client_anonyme.post(
-        f"/event/{concert.evenement.slug}/reservation/",
-        {
-            "event": str(concert.evenement.uuid),
-            "email": email_du_visiteur,
-            str(concert.tarif.uuid): "1",
-        },
-        **EN_TETE_HTMX,
-    )
-
-    visiteur = TibilletUser.objects.get(email=email_du_visiteur)
-    reservation = reservation_de(visiteur, concert.evenement)
-    assert not lieu.stripe.mock_create.called
-    assert reservation.status == Reservation.FREERES
-    assert reservation.tickets.get().status == Ticket.NOT_ACTIV
-    ligne = LigneArticle.objects.get(reservation=reservation)
-    assert ligne.status == LigneArticle.VALID
-    assert ligne.payment_method == PaymentMethod.FREE
-
-
 MONTANT_SAISI_PAR_TARIF_DU_BILLET = {
     "prix_fixe": None,
     "prix_libre": "12.00",
@@ -2041,43 +2004,6 @@ def test_deux_reservations_gratuites_dans_une_commande_n_envoient_les_billets_qu
     assert taches_demandees.count("webhook_reservation") == 1
 
 
-def test_deux_reservations_gratuites_d_un_visiteur_non_active_attendent_l_activation(
-    lieu,
-):
-    """
-    Visiteur anonyme (compte pas encore activé), deux produits « réservation gratuite » dans
-    la même commande directe : aucun envoi, la réservation attend la confirmation de l'email.
-    / Anonymous visitor, two free-booking products: nothing sent, waits for email confirmation.
-    """
-    from AuthBillet.models import TibilletUser
-    from BaseBillet.models import Product, Reservation, Ticket
-
-    client_anonyme = client_connecte()
-    email_du_visiteur = f"test+chantierpanier{identifiant_unique()}@mock.test"
-    avec_repas = creer_evenement_avec_tarif(categorie=Product.FREERES)
-    produit_sans_repas = Product.objects.create(
-        name=f"TEST_panier sans repas {identifiant_unique()}",
-        categorie_article=Product.FREERES,
-    )
-    avec_repas.evenement.products.add(produit_sans_repas)
-    client_anonyme.post(
-        f"/event/{avec_repas.evenement.slug}/reservation/",
-        {
-            "event": str(avec_repas.evenement.uuid),
-            "email": email_du_visiteur,
-            str(avec_repas.tarif.uuid): "1",
-            str(produit_sans_repas.prices.get(prix=0).uuid): "1",
-        },
-        **EN_TETE_HTMX,
-    )
-
-    visiteur = TibilletUser.objects.get(email=email_du_visiteur)
-    reservation = reservation_de(visiteur, avec_repas.evenement)
-    assert reservation.status == Reservation.FREERES
-    assert not reservation.tickets.filter(status=Ticket.NOT_SCANNED).exists()
-    assert "ticket_celery_mailer" not in noms_des_taches(lieu.taches_demandees)
-
-
 # --------------------------------------------------------------------------
 # Paiement en cours : une place est retenue 30 minutes (DUREE_D_UN_PAIEMENT_EN_COURS)
 # / Payment in progress: a seat is held for 30 minutes
@@ -2240,34 +2166,32 @@ def test_la_caisse_compte_les_billets_en_cours_de_paiement_pendant_30_minutes(li
 
 def test_une_reservation_gratuite_confirmee_apres_20_minutes_reste_valide(lieu):
     """
-    Visiteur anonyme, événement gratuit à une place : il confirme son email 20 minutes
-    après sa réservation. Sa place était retenue (moins de 30 minutes) : la réservation est
-    validée, pas annulée pour « événement complet » (sa propre place ne compte pas deux fois).
-    / Anonymous visitor confirms 20 minutes later: the held seat is his, booking confirmed.
+    Une ancienne réservation gratuite en attente (`F`), sur un événement à une place : le
+    visiteur active son compte 20 minutes après sa réservation. Sa place était retenue
+    (moins de 30 minutes) : la réservation est validée, pas annulée pour « événement
+    complet » (sa propre place ne compte pas deux fois).
+    Une réservation gratuite est créée directement en `FA` (BaseBillet/validators.py) : la
+    `F` est donc posée en base, comme celles qui y restent.
+    / An old pending free reservation (F), activated 20 minutes later: the held seat is
+    his, booking confirmed. The F is set in the database, like the ones still there.
     """
     from datetime import timedelta as duree
 
-    from AuthBillet.models import TibilletUser
-    from BaseBillet.models import Product, Reservation
+    from BaseBillet.models import Product, Reservation, Ticket
 
-    client_anonyme = client_connecte()
     concert = creer_evenement_avec_tarif(categorie=Product.FREERES, jauge_max=1)
-    email_du_visiteur = f"test+chantierpanier{identifiant_unique()}@mock.test"
-    client_anonyme.post(
-        f"/event/{concert.evenement.slug}/reservation/",
-        {
-            "event": str(concert.evenement.uuid),
-            "email": email_du_visiteur,
-            str(concert.tarif.uuid): "1",
-        },
-        **EN_TETE_HTMX,
-    )
-    visiteur = TibilletUser.objects.get(email=email_du_visiteur)
+    visiteur = creer_utilisateur(actif=False)
+    creer_un_billet_deja_vendu(visiteur, concert)
     reservation = reservation_de(visiteur, concert.evenement)
-    assert reservation.status == Reservation.FREERES
+    # `update()` : ni machine à états, ni `auto_now` de `Reservation.datetime`
+    # (tests/PIEGES.md 13.19).
+    # / update(): no state machine, no auto_now.
     Reservation.objects.filter(pk=reservation.pk).update(
-        datetime=timezone.now() - duree(minutes=20)
+        status=Reservation.FREERES,
+        to_mail=True,
+        datetime=timezone.now() - duree(minutes=20),
     )
+    reservation.tickets.update(status=Ticket.NOT_ACTIV)
 
     visiteur.is_active = True
     visiteur.save()

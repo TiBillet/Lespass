@@ -1,0 +1,54 @@
+{% extends "seo/base.html" %}
+{% load i18n static %}
+
+{% comment %}
+  Page du guichet de connexion commun à tous les lieux (SSO).
+  / Page of the login desk shared by all venues (SSO).
+
+  LOCALISATION : AuthBillet/templates/sso/guichet.html
+  Vue : AuthBillet/views_sso.py::guichet (GET /sso/).
+
+  Contexte :
+    - partiel : le gabarit à inclure dans #sso-contenu (étape 1 ou erreur) ;
+    - nom_du_lieu, lieu, state, email, erreur_email : pour l'étape 1.
+
+  `seo/base.html` ne charge que Bootstrap : cette page charge htmx elle-même
+  (script bloquant, sinon les hx-* du HTML de départ ne sont pas lus), et pose
+  le jeton CSRF sur <main> par hx-headers. Les formulaires des étapes héritent
+  de cet en-tête.
+  / seo/base.html only loads Bootstrap: htmx is loaded here (blocking), and
+  the CSRF token is set on <main> through hx-headers, inherited by the forms.
+{% endcomment %}
+
+{# Une page de connexion n'a rien à faire dans un moteur de recherche. #}
+{# / A login page has nothing to do in a search engine. #}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block page_title %}{% if nom_du_lieu %}{% blocktranslate trimmed %}Connexion à {{ nom_du_lieu }}{% endblocktranslate %}{% else %}{% translate "Connexion" %}{% endif %}{% endblock %}
+
+{% block extra_head %}
+<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+{% endblock %}
+
+{% block main_wrapper %}
+<main class="container-lg my-5"
+      data-testid="sso-guichet"
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-6">
+            {% if nom_du_lieu %}
+            <h1 class="h2 mb-4" data-testid="sso-titre">
+                {% blocktranslate trimmed %}Connexion à {{ nom_du_lieu }}{% endblocktranslate %}
+            </h1>
+            {% endif %}
+
+            {# Zone remplacée par htmx à chaque étape. aria-live : le lecteur #}
+            {# d'écran annonce la nouvelle étape. #}
+            {# / Area swapped by htmx at each step, announced by screen readers. #}
+            <section id="sso-contenu" aria-live="polite" data-testid="sso-contenu">
+                {% include partiel %}
+            </section>
+        </div>
+    </div>
+</main>
+{% endblock main_wrapper %}

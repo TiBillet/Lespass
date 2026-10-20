@@ -4,24 +4,6 @@ const attachMembershipForm = (root = document) => {
   if (form.dataset.membershipValidators === '1') return;
   form.dataset.membershipValidators = '1';
 
-  const emailInput = form.querySelector('#membership-email');
-  const confirmInput = form.querySelector('#confirm-email');
-  const errorDiv = form.querySelector('#email-error');
-
-  const validateEmails = () => {
-    if (!emailInput || !confirmInput || !errorDiv) return true;
-    const email = emailInput.value || '';
-    const confirmEmail = confirmInput.value || '';
-    if (email !== confirmEmail) {
-      confirmInput.setCustomValidity('Les adresses e-mail ne correspondent pas.');
-      errorDiv.textContent = 'Les adresses e-mail ne correspondent pas.';
-      return false;
-    }
-    confirmInput.setCustomValidity('');
-    errorDiv.textContent = '';
-    return true;
-  };
-
   const validateMsRequired = () => {
     let ok = true;
     const groups = form.querySelectorAll('[data-ms-required="true"]');
@@ -74,10 +56,9 @@ const attachMembershipForm = (root = document) => {
   };
 
   const validateAll = () => {
-    const okEmails = validateEmails();
     const okMs = validateMsRequired();
     const okBl = validateBlRequired();
-    return okEmails && okMs && okBl;
+    return okMs && okBl;
   };
 
   form.addEventListener('submit', (event) => {
@@ -91,11 +72,6 @@ const attachMembershipForm = (root = document) => {
       event.preventDefault();
     }
   });
-
-  if (emailInput && confirmInput) {
-    emailInput.addEventListener('input', validateEmails);
-    confirmInput.addEventListener('input', validateEmails);
-  }
 
   form.addEventListener('change', (event) => {
     const target = event.target;

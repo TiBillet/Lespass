@@ -40,6 +40,23 @@ class StaffAdminSite(UnfoldAdminSite):
         messages.add_message(request, messages.WARNING, _("Please login to access this page."))
         return HttpResponseRedirect('/')
 
+    def logout(self, request, extra_context=None):
+        """
+        Bouton « Se déconnecter » de l'admin : déconnexion de partout.
+        / Admin logout button: logs the person out everywhere.
+
+        LOCALISATION : Administration/admin/site.py
+
+        `AdminSite.logout` ne ferme que la session de ce navigateur. Avant lui,
+        `deconnecter_de_partout()` ferme toutes les sessions du compte : tous
+        les lieux et le guichet (AuthBillet/models.py). Même règle que la vue
+        `deconnexion` du site (BaseBillet/views.py).
+        / Closes every session of the account, then Django's admin logout.
+        """
+        if request.user.is_authenticated:
+            request.user.deconnecter_de_partout()
+        return super().logout(request, extra_context)
+
     def has_permission(self, request):
         return TenantAdminPermissionWithRequest(request)
 

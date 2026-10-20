@@ -739,7 +739,17 @@ def test_adhesion_en_ligne_payee_par_stripe_credite_mon_espace_puis_se_depense_p
     # / Lower bound for the accounting reports, set before any action.
     debut_de_la_mesure = instant_serveur()
 
-    # --- 1. La personne ouvre l'adhesion sur la page publique ---
+    # --- 1. La personne se connecte, puis ouvre l'adhesion sur la page publique ---
+    # Adherer exige d'etre connecte. login_as exige un compte existant : on le cree,
+    # active, sans portefeuille (la tache de recompense le cree, comme pour un nouveau compte).
+    # / Joining requires login. login_as needs an existing account: create it, activated.
+    django_shell(
+        "from AuthBillet.utils import get_or_create_user\n"
+        f"adherent = get_or_create_user('{email}', send_mail=False)\n"
+        "adherent.is_active = True\n"
+        "adherent.save()\n"
+    )
+    login_as(page, email)
     page.goto("/memberships/")
     bouton_adherer = page.get_by_test_id(f"membership-open-{tarif['uuid_du_produit']}")
     expect(bouton_adherer).to_be_visible()
@@ -748,8 +758,8 @@ def test_adhesion_en_ligne_payee_par_stripe_credite_mon_espace_puis_se_depense_p
     page.wait_for_selector("#membership-form", state="visible", timeout=10_000)
 
     # --- 2. Elle remplit le formulaire : identite, puis le montant libre ---
-    page.locator("#membership-email").fill(email)
-    page.locator("#confirm-email").fill(email)
+    # L'email est celui du compte, en lecture seule. / The email is the account's.
+    expect(page.locator('#subscribePanel [data-testid="membership-email"]')).to_have_value(email)
     page.locator('#subscribePanel input[name="firstname"]').fill("E2E")
     page.locator('#subscribePanel input[name="lastname"]').fill("Caisse en ligne")
     champ_du_montant_libre = page.get_by_test_id(

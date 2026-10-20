@@ -1,4 +1,5 @@
 import logging
+import secrets
 from uuid import uuid4
 
 from cryptography.hazmat.backends import default_backend
@@ -10,6 +11,7 @@ from django.contrib.auth.models import AbstractUser, Group
 from django.core.signing import TimestampSigner
 from django.db import models, connection
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 
@@ -198,6 +200,63 @@ class TibilletUser(AbstractUser):
 
     last_know_ip = models.GenericIPAddressField(blank=True, null=True)
     last_know_user_agent = models.CharField(max_length=500, blank=True, null=True)
+
+    # Jeton qui entre dans l'empreinte de toutes les sessions du compte.
+    # Le changer déconnecte la personne de partout : tous les lieux et le guichet.
+    # Vide : l'empreinte est celle de Django (voir _get_session_auth_hash).
+    # / Token mixed into the hash of every session. Changing it logs the person
+    # out everywhere. Empty: Django's own hash.
+    jeton_de_session = models.CharField(max_length=64, blank=True, default="")
+
+    def _get_session_auth_hash(self, secret=None):
+        """
+        Empreinte gardée dans chaque session du compte.
+        / Hash stored in every session of the account.
+
+        LOCALISATION : AuthBillet/models.py
+
+        À chaque requête, Django compare l'empreinte de la session à celle-ci
+        (django/contrib/auth/__init__.py, get_user). Si elles diffèrent, la
+        session est vidée : la personne n'est plus connectée.
+        / On each request Django compares the session hash to this one; a
+        mismatch flushes the session.
+
+        - Jeton vide : l'empreinte de Django, sans changement. Les sessions déjà
+          ouvertes restent valides.
+        - Jeton posé : une empreinte qui dépend du mot de passe ET du jeton.
+
+        On surcharge cette méthode privée, et non get_session_auth_hash :
+        Django l'appelle aussi pour l'empreinte de secours
+        (get_session_auth_fallback_hash, avec SECRET_KEY_FALLBACKS). Sans elle,
+        une ancienne clé secrète rendrait valides les sessions fermées.
+        / Overriding the private method also covers the fallback hash
+        (SECRET_KEY_FALLBACKS).
+        """
+        if not self.jeton_de_session:
+            return super()._get_session_auth_hash(secret=secret)
+
+        return salted_hmac(
+            "AuthBillet.TibilletUser.session",
+            self.password + self.jeton_de_session,
+            secret=secret,
+            algorithm="sha256",
+        ).hexdigest()
+
+    def deconnecter_de_partout(self):
+        """
+        Ferme toutes les sessions du compte : tous les lieux et le guichet.
+        / Closes every session of the account: all venues and the desk.
+
+        LOCALISATION : AuthBillet/models.py
+
+        Un nouveau jeton change l'empreinte du compte. Chaque session devient
+        invalide à sa prochaine requête. La table des sessions n'est pas
+        parcourue. Appelée par BaseBillet/views.py (deconnexion) et
+        Administration/admin/site.py (StaffAdminSite.logout).
+        / A new token changes the hash; every session dies at its next request.
+        """
+        self.jeton_de_session = secrets.token_hex(32)
+        self.save(update_fields=["jeton_de_session"])
 
     # ou as t il acheté ?
     client_achat = models.ManyToManyField(Client,

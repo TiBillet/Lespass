@@ -73,7 +73,7 @@ class TestStripeSmokeCheckout:
     @pytest.mark.adhesion
     def test_smoke_membership_stripe_checkout(
         self, page, create_product, fill_stripe_card, soumettre_paiement_stripe,
-        admin_email, django_shell,
+        admin_email, django_shell, login_as,
     ):
         """1 adhesion payante → page liste → offcanvas → Stripe → retour → confirmation.
         / 1 paid membership → list page → offcanvas → Stripe → return → confirmation.
@@ -92,6 +92,16 @@ class TestStripeSmokeCheckout:
         )
         assert result["ok"], f"Création produit échouée: {result}"
         product_uuid = result["uuid"]
+
+        # Adhérer et réserver exigent d'être connecté. login_as exige un compte
+        # existant : on le crée, activé. / Login required; login_as needs an account.
+        django_shell(
+            "from AuthBillet.utils import get_or_create_user\n"
+            f"acheteur = get_or_create_user('{user_email}', send_mail=False)\n"
+            "acheteur.is_active = True\n"
+            "acheteur.save()\n"
+        )
+        login_as(page, user_email)
 
         # 2. Naviguer vers la page LISTE (pas /memberships/<uuid>/ !)
         # La page liste a le base template reunion/base.html qui charge HTMX.
@@ -116,9 +126,9 @@ class TestStripeSmokeCheckout:
         page.wait_for_selector("#subscribePanel.show", state="visible")
         page.wait_for_selector("#membership-form", state="visible", timeout=10_000)
 
-        # 5. Remplir le formulaire / Fill the form
-        page.locator("#membership-email").fill(user_email)
-        page.locator("#confirm-email").fill(user_email)
+        # 5. Remplir le formulaire. L'email est celui du compte, en lecture seule.
+        # / Fill the form. The email is the account's, read-only.
+        expect(page.locator('[data-testid="membership-email"]')).to_have_value(user_email)
         page.locator('input[name="firstname"]').fill("Smoke")
         page.locator('input[name="lastname"]').fill("Test")
 
@@ -209,7 +219,7 @@ class TestStripeSmokeCheckout:
     @pytest.mark.billetterie
     def test_smoke_booking_stripe_checkout(
         self, page, create_event, create_product, fill_stripe_card,
-        soumettre_paiement_stripe, django_shell,
+        soumettre_paiement_stripe, django_shell, login_as,
     ):
         """1 reservation payante → vrai checkout.stripe.com → retour → confirmation.
         / 1 paid booking → real checkout.stripe.com → return → confirmation.
@@ -235,6 +245,16 @@ class TestStripeSmokeCheckout:
         )
         assert product_result["ok"], f"Création produit échouée: {product_result}"
 
+        # Adhérer et réserver exigent d'être connecté. login_as exige un compte
+        # existant : on le crée, activé. / Login required; login_as needs an account.
+        django_shell(
+            "from AuthBillet.utils import get_or_create_user\n"
+            f"acheteur = get_or_create_user('{user_email}', send_mail=False)\n"
+            "acheteur.is_active = True\n"
+            "acheteur.save()\n"
+        )
+        login_as(page, user_email)
+
         # 2. Naviguer vers l'événement / Navigate to event
         page.goto(f"/event/{event_slug}/")
         page.wait_for_load_state("domcontentloaded")
@@ -249,17 +269,9 @@ class TestStripeSmokeCheckout:
             "#bookingPanel.show, .offcanvas.show", state="visible"
         )
 
-        # 4. Remplir email + sélectionner 1 billet / Fill email + select 1 ticket
-        email_input = page.locator(
-            '#bookingPanel input[name="email"], #booking-email'
-        ).first
-        email_input.fill(user_email)
-
-        # Visiteur anonyme : la confirmation d'e-mail est toujours affichee
-        # (commun/formulaires/reservation.html). / Anonymous: always shown.
-        confirm_input = page.locator('[data-testid="booking-email-confirm"]')
-        expect(confirm_input).to_be_visible()
-        confirm_input.fill(user_email)
+        # 4. L'email est celui du compte (lecture seule) ; sélectionner 1 billet
+        # / The email is the account's (read-only); select 1 ticket
+        expect(page.locator('[data-testid="booking-email"]')).to_have_value(user_email)
 
         # Incrémenter bs-counter / Increment bs-counter
         counter_plus = page.locator(
@@ -268,9 +280,7 @@ class TestStripeSmokeCheckout:
         counter_plus.click()
 
         # 5. Soumettre / Submit
-        submit_btn = page.locator(
-            '#bookingPanel button[type="submit"]'
-        ).first
+        submit_btn = page.locator('[data-testid="booking-submit"]')
         submit_btn.click()
 
         # 6. Attendre Stripe / Wait for Stripe
@@ -297,7 +307,6 @@ class TestStripeSmokeCheckout:
         body_text = page.locator("body").inner_text().lower()
         assert any(kw in body_text for kw in [
             "merci", "confirmée", "succès", "success",
-            "reservation ok", "valider votre email",
         ]), f"Page de confirmation non trouvée: {body_text[:200]}"
 
         # 10. Verifier que la reservation existe REELLEMENT en base

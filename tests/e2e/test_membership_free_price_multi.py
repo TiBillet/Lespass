@@ -160,23 +160,25 @@ def _ouvrir_offcanvas_adhesion(page, product_name, product_uuid):
     page.wait_for_selector("#membership-form", state="visible", timeout=10_000)
 
 
-def _remplir_formulaire_base(page, email, firstname, lastname):
-    """Remplit les champs email, confirm-email, prénom, nom dans l'offcanvas.
-    / Fills email, confirm-email, firstname, lastname fields in the offcanvas.
+def _se_connecter(page, login_as, django_shell, email):
+    """Crée un compte activé à cet email et connecte le navigateur avec.
+    Adhérer exige d'être connecté ; login_as exige un compte existant.
+    / Creates an activated account and logs the browser in with it.
     """
-    # Email : l'input peut avoir id="membership-email" ou name="email"
-    # selon les versions du template.
-    # / Email: the input may have id="membership-email" or name="email"
-    # depending on template version.
-    email_input = page.locator(
-        '#membership-email, #subscribePanel input[name="email"]'
-    ).first
-    email_input.fill(email)
+    django_shell(
+        "from AuthBillet.utils import get_or_create_user\n"
+        f"acheteur = get_or_create_user('{email}', send_mail=False)\n"
+        "acheteur.is_active = True\n"
+        "acheteur.save()\n"
+    )
+    login_as(page, email)
 
-    confirm_input = page.locator(
-        '#confirm-email, #subscribePanel input[name="confirm-email"]'
-    ).first
-    confirm_input.fill(email)
+
+def _remplir_formulaire_base(page, email, firstname, lastname):
+    """Vérifie l'email (celui du compte, en lecture seule), remplit prénom et nom.
+    / Checks the email (the account's, read-only), fills firstname and lastname.
+    """
+    expect(page.locator('#subscribePanel [data-testid="membership-email"]')).to_have_value(email)
 
     page.locator('#subscribePanel input[name="firstname"]').fill(firstname)
     page.locator('#subscribePanel input[name="lastname"]').fill(lastname)
@@ -270,7 +272,7 @@ class TestMembershipFreePriceMulti:
     # Scénario 1 : Prix libre simple — sélectionner "Prix Libre 1"
     # → vérifier le montant sur Stripe
     # ─────────────────────────────────────────────────────────────
-    def test_scenario1_prix_libre_simple(self, page):
+    def test_scenario1_prix_libre_simple(self, page, login_as, django_shell):
         """Prix libre simple : sélection Prix Libre 1 → montant correct sur Stripe.
         / Simple free price: select Prix Libre 1 → correct amount on Stripe.
         """
@@ -280,8 +282,9 @@ class TestMembershipFreePriceMulti:
 
         page.set_default_timeout(60_000)
 
-        # Étape 1 : Ouvrir la page liste et l'offcanvas du produit.
-        # / Step 1: Open the list page and the product offcanvas.
+        # Étape 1 : Se connecter, puis ouvrir la page liste et l'offcanvas du produit.
+        # / Step 1: Log in, then open the list page and the product offcanvas.
+        _se_connecter(page, login_as, django_shell, user_email)
         _ouvrir_offcanvas_adhesion(
             page,
             self._product_name,
@@ -309,7 +312,7 @@ class TestMembershipFreePriceMulti:
     # Scénario 2 : Sélection du deuxième prix libre
     # → vérifier le montant sur Stripe (= Prix Libre 2)
     # ─────────────────────────────────────────────────────────────
-    def test_scenario2_selection_deuxieme_prix_libre(self, page):
+    def test_scenario2_selection_deuxieme_prix_libre(self, page, login_as, django_shell):
         """Sélection Prix Libre 2 → montant correct sur Stripe.
         / Selecting Prix Libre 2 → correct amount on Stripe.
         """
@@ -319,8 +322,9 @@ class TestMembershipFreePriceMulti:
 
         page.set_default_timeout(60_000)
 
-        # Étape 1 : Ouvrir l'offcanvas.
-        # / Step 1: Open the offcanvas.
+        # Étape 1 : Se connecter, puis ouvrir l'offcanvas.
+        # / Step 1: Log in, then open the offcanvas.
+        _se_connecter(page, login_as, django_shell, user_email)
         _ouvrir_offcanvas_adhesion(
             page,
             self._product_name,
@@ -349,7 +353,7 @@ class TestMembershipFreePriceMulti:
     # → Stripe doit afficher le montant de Prix Libre 2
     # → L'input de Prix Libre 1 doit être vidé par le JS lors du changement
     # ─────────────────────────────────────────────────────────────
-    def test_scenario3_changer_du_premier_au_second_prix_libre(self, page):
+    def test_scenario3_changer_du_premier_au_second_prix_libre(self, page, login_as, django_shell):
         """Sélectionner Prix 1, remplir, changer vers Prix 2 → Stripe = Prix 2.
         Vérifie aussi que l'input Prix 1 est vidé par le JS.
         / Select Price 1, fill, switch to Price 2 → Stripe = Price 2.
@@ -362,8 +366,9 @@ class TestMembershipFreePriceMulti:
 
         page.set_default_timeout(60_000)
 
-        # Étape 1 : Ouvrir l'offcanvas.
-        # / Step 1: Open the offcanvas.
+        # Étape 1 : Se connecter, puis ouvrir l'offcanvas.
+        # / Step 1: Log in, then open the offcanvas.
+        _se_connecter(page, login_as, django_shell, user_email)
         _ouvrir_offcanvas_adhesion(
             page,
             self._product_name,
@@ -409,7 +414,7 @@ class TestMembershipFreePriceMulti:
     # → Stripe doit afficher le montant de Prix Libre 1
     # → L'input de Prix Libre 2 doit être vidé par le JS
     # ─────────────────────────────────────────────────────────────
-    def test_scenario4_changer_du_second_au_premier_prix_libre(self, page):
+    def test_scenario4_changer_du_second_au_premier_prix_libre(self, page, login_as, django_shell):
         """Sélectionner Prix 2, remplir, changer vers Prix 1 → Stripe = Prix 1.
         Vérifie aussi que l'input Prix 2 est vidé par le JS.
         / Select Price 2, fill, switch to Price 1 → Stripe = Price 1.
@@ -422,8 +427,9 @@ class TestMembershipFreePriceMulti:
 
         page.set_default_timeout(60_000)
 
-        # Étape 1 : Ouvrir l'offcanvas.
-        # / Step 1: Open the offcanvas.
+        # Étape 1 : Se connecter, puis ouvrir l'offcanvas.
+        # / Step 1: Log in, then open the offcanvas.
+        _se_connecter(page, login_as, django_shell, user_email)
         _ouvrir_offcanvas_adhesion(
             page,
             self._product_name,

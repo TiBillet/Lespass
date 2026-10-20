@@ -237,12 +237,22 @@ class TestMembershipDynamicFormFullCycle:
     # STEP 2 — Public: subscribe + confirmation (free price)
     # ===================================================================
 
-    def test_step2_public_subscribes_with_dynamic_form(self, page):
-        """Utilisateur public souscrit, remplit le formulaire dynamique, obtient confirmation.
+    def test_step2_public_subscribes_with_dynamic_form(self, page, login_as, django_shell):
+        """Une personne connectée souscrit, remplit le formulaire dynamique, obtient confirmation.
         Le tarif est gratuit (0€) : pas de redirection Stripe.
-        / Public user subscribes, fills the dynamic form, gets confirmation.
+        / A logged-in user subscribes, fills the dynamic form, gets confirmation.
         The price is free (0€): no Stripe redirect.
         """
+        # Adhérer exige d'être connecté. login_as exige un compte existant : on le crée, activé.
+        # / Joining requires login. login_as needs an existing account: create it, activated.
+        django_shell(
+            "from AuthBillet.utils import get_or_create_user\n"
+            f"acheteur = get_or_create_user('{self._user_email}', send_mail=False)\n"
+            "acheteur.is_active = True\n"
+            "acheteur.save()\n"
+        )
+        login_as(page, self._user_email)
+
         # Aller sur la page des adhesions publiques / Go to public memberships page
         page.goto('/memberships/')
         page.wait_for_load_state('domcontentloaded')
@@ -261,10 +271,10 @@ class TestMembershipDynamicFormFullCycle:
         # / Wait for the offcanvas panel to open
         page.wait_for_selector('#subscribePanel.show, .offcanvas.show', state='visible', timeout=10_000)
 
-        # Remplir les infos utilisateur / Fill user info
+        # Remplir les infos utilisateur. L'email est celui du compte, en lecture seule.
+        # / Fill user info. The email is the account's, read-only.
         panel = page.locator('#subscribePanel')
-        panel.locator('input[name="email"]').fill(self._user_email)
-        panel.locator('input[name="confirm-email"]').fill(self._user_email)
+        expect(panel.locator('[data-testid="membership-email"]')).to_have_value(self._user_email)
         panel.locator('input[name="firstname"]').fill('Douglas')
         panel.locator('input[name="lastname"]').fill('Adams')
 

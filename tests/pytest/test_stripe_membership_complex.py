@@ -19,6 +19,22 @@ def _random_id():
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
 
 
+def _client_connecte_pour(email):
+    """
+    Client de test connecté avec un compte activé à cet email (créé ici).
+    Adhérer exige d'être connecté (MembershipMVT.get_permissions).
+    / Test client logged in with an activated account for this email.
+    Joining requires login.
+    """
+    from django.test import Client
+    from AuthBillet.models import TibilletUser
+
+    utilisateur = TibilletUser.objects.create(email=email, username=email, is_active=True)
+    client = Client(HTTP_HOST="lespass.tibillet.localhost")
+    client.force_login(utilisateur)
+    return client
+
+
 def _create_membership_product(api_client, auth_headers, name, offers,
                                 form_fields=None):
     """Helper : cree un produit adhesion via API v2 avec plusieurs tarifs.
@@ -52,9 +68,10 @@ def _create_membership_product(api_client, auth_headers, name, offers,
     return data
 
 
-def _submit_membership(api_client, price_uuid, email, firstname="Test",
+def _submit_membership(price_uuid, email, firstname="Test",
                         lastname="User", custom_amount=None, form_data=None):
-    """POST le formulaire d'adhesion / POST the membership form."""
+    """POST le formulaire d'adhesion, connecte a cet email.
+    / POST the membership form, logged in with this email."""
     post_data = {
         "price": price_uuid,
         "email": email,
@@ -68,7 +85,7 @@ def _submit_membership(api_client, price_uuid, email, firstname="Test",
     if form_data:
         post_data.update(form_data)
 
-    return api_client.post(
+    return _client_connecte_pour(email).post(
         "/memberships/",
         data=post_data,
         HTTP_REFERER="https://lespass.tibillet.localhost/memberships/",
@@ -126,7 +143,7 @@ class TestStripeMembershipMultiFreePrice:
         email = f"test+multi1-{rid}@mock.test"
 
         resp = _submit_membership(
-            api_client, self.price1_uuid, email,
+            self.price1_uuid, email,
             custom_amount="12.00",
         )
         assert resp.status_code in (200, 302, 303)
@@ -152,7 +169,7 @@ class TestStripeMembershipMultiFreePrice:
         email = f"test+multi2-{rid}@mock.test"
 
         resp = _submit_membership(
-            api_client, self.price2_uuid, email,
+            self.price2_uuid, email,
             custom_amount="18.00",
         )
         assert resp.status_code in (200, 302, 303)
@@ -205,7 +222,7 @@ class TestStripeMembershipZeroPrice:
         email = f"test+zero{rid}@mock.test"
 
         resp = _submit_membership(
-            api_client, self.price_uuid, email,
+            self.price_uuid, email,
             custom_amount="0",
         )
         # Devrait retourner 200 (confirmation dans la page) ou 302 vers la page de confirmation
@@ -234,7 +251,7 @@ class TestStripeMembershipZeroPrice:
         email = f"test+one{rid}@mock.test"
 
         resp = _submit_membership(
-            api_client, self.price_uuid, email,
+            self.price_uuid, email,
             custom_amount="1.00",
         )
         assert resp.status_code in (200, 302, 303)
@@ -291,7 +308,7 @@ class TestDynamicFormFullCycle:
 
         # Soumettre avec les champs dynamiques + montant 0€
         resp = _submit_membership(
-            api_client, price_uuid, email,
+            price_uuid, email,
             custom_amount="0",
             form_data={
                 "form__nom-complet": "Douglas Adams",
@@ -341,7 +358,7 @@ class TestDynamicFormFullCycle:
         price_uuid = data["offers"][0]["identifier"]
 
         resp = _submit_membership(
-            api_client, price_uuid, email,
+            price_uuid, email,
             custom_amount="0",
             form_data={"form__pseudo": "ZaphodBeeblebrox"},
         )

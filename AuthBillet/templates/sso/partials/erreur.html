@@ -1,0 +1,16 @@
+{% load i18n %}
+{% comment %}
+  Guichet : le lien de connexion n'est pas valable (lieu inconnu, paramètres
+  absents, ou session non humaine). Aucun ticket n'est donné.
+  / Desk: invalid login link. No ticket is given.
+
+  LOCALISATION : AuthBillet/templates/sso/partials/erreur.html
+  Rendu par : AuthBillet/views_sso.py (dans la page, ou seul en réponse htmx).
+{% endcomment %}
+<div class="alert alert-danger" role="alert" data-testid="sso-erreur">
+    <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+    {% translate "Lien de connexion invalide." %}
+</div>
+<p class="text-body-secondary">
+    {% translate "Retournez sur le site du lieu, puis cliquez à nouveau sur « Se connecter »." %}
+</p>

@@ -2,12 +2,14 @@ import json
 import logging
 import os
 import re
+import secrets
 import uuid
 
 from Administration.utils import clean_text
 from datetime import date as date_type, timedelta, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
+from urllib.parse import urlencode
 
 import segno
 import stripe
@@ -27,7 +29,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.crypto import constant_time_compare
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode, url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _, ngettext, get_language
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET, require_http_methods
@@ -45,6 +48,7 @@ from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermi
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
+from AuthBillet.sso import domaine_du_guichet, lire_un_ticket
 from AuthBillet.utils import get_or_create_user, get_client_ip
 from fedow_core.exceptions import CarteIntrouvable
 from AuthBillet.views import activate
@@ -57,7 +61,7 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_payment_link_user
-from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
+from BaseBillet.validators import MembershipValidator, LinkQrCodeValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
     WizardEventSerializer
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_vente import (
@@ -577,38 +581,167 @@ class Ticket_html_view(APIView):
 
 
 def deconnexion(request):
-    # un logout peut-il mal se passer ?
+    """
+    GET /deconnexion/ (et son alias /logout/) : déconnexion de partout.
+    / Logs the person out everywhere.
+
+    LOCALISATION : BaseBillet/views.py
+
+    `deconnecter_de_partout()` ferme toutes les sessions du compte : tous les
+    lieux et le guichet (AuthBillet/models.py). `logout()` vide ensuite la
+    session de ce navigateur.
+    / Closes every session of the account, then empties this browser's session.
+    """
+    if request.user.is_authenticated:
+        request.user.deconnecter_de_partout()
     logout(request)
     messages.add_message(request, messages.SUCCESS, _("Logout successful"))
     return redirect('index')
 
 
+@require_GET
 def connexion(request):
-    if request.method == 'POST':
-        validator = LoginEmailValidator(data=request.POST)
-        if validator.is_valid():
-            # Création de l'user et envoie du mail de validation
-            email = validator.validated_data['email']
-            user = get_or_create_user(email=email, send_mail=True, force_mail=True)
-            if not user.wallet:
-                fedowAPI = FedowAPI()
-                fedowAPI.wallet.get_or_create_wallet(user)
-            messages.add_message(request, messages.SUCCESS, _("To access your space, please validate\n"
-                                                              "your email address. Don't forget to check your spam!"))
+    """
+    GET /connexion/?next=<chemin> : envoie la personne au guichet de connexion.
+    / GET /connexion/: sends the user to the shared login desk.
 
-            # On est sur le moteur de démonstration / test
-            # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.TEST or settings.DEBUG:
-                token = user.get_connect_token()
-                base_url = connection.tenant.get_primary_domain().domain
-                connexion_url = f"https://{base_url}/emailconfirmation/{token}"
-                messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+    LOCALISATION : BaseBillet/views.py
 
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+    Le guichet vit sur le domaine du schéma `public`. Il est commun à tous les
+    lieux : une personne connectée sur le guichet se connecte sur un autre lieu
+    d'un seul clic, sans retaper de code.
+    / The desk lives on the public domain and is shared by all venues.
 
-        logger.warning(validator.errors)
-    messages.add_message(request, messages.WARNING, "Email validation error")
-    return redirect('index')
+    FLUX :
+    1. `next` doit être une adresse de CE lieu. Sinon → `/`.
+       Il ne passe jamais par le guichet : il reste dans la session du lieu.
+    2. Déjà connecté → redirection vers `next`.
+    3. Sinon : `state` (au hasard) et `next` dans la session du lieu, puis
+       redirection vers `https://<guichet>/sso/?lieu=<domaine>&state=<state>`.
+       Au retour, connexion_retour compare le `state` reçu à celui de la
+       session : cela empêche de connecter quelqu'un au compte d'un autre
+       (« login CSRF »).
+    / next must stay on this venue. state + next go in the venue session,
+    then redirect to the desk. connexion_retour checks the state back.
+
+    Le domaine envoyé est `request.tenant.domain_url`, jamais
+    `request.get_host()` : get_host() garde le port (en dev,
+    `lespass.tibillet.localhost:8080`), qui ne correspond à aucun Domain.
+    / The domain sent is request.tenant.domain_url (no port), not get_host().
+    """
+    adresse_de_retour = request.GET.get("next", "/")
+    adresse_de_retour_est_sur_ce_lieu = url_has_allowed_host_and_scheme(
+        adresse_de_retour,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    )
+    if not adresse_de_retour_est_sur_ce_lieu:
+        adresse_de_retour = "/"
+
+    if request.user.is_authenticated:
+        return redirect(adresse_de_retour)
+
+    state = secrets.token_urlsafe(32)
+    request.session["sso_state"] = state
+    request.session["sso_next"] = adresse_de_retour
+
+    # Toujours `https://` : en dev aussi, traefik sert `https://*.tibillet.localhost`.
+    # / Always https: in dev too, traefik serves https://*.tibillet.localhost.
+    parametres_du_guichet = urlencode({"lieu": request.tenant.domain_url, "state": state})
+    url_du_guichet = f"https://{domaine_du_guichet()}/sso/?{parametres_du_guichet}"
+    return HttpResponseRedirect(url_du_guichet)
+
+
+@require_GET
+def connexion_retour(request):
+    """
+    GET /connexion/retour/?ticket=<ticket>&state=<state> : retour du guichet.
+    / GET /connexion/retour/: back from the login desk.
+
+    LOCALISATION : BaseBillet/views.py
+
+    Le guichet a vérifié l'email de la personne. Il la renvoie ici avec un
+    ticket signé (AuthBillet/sso.py). Le lieu vérifie le ticket, puis ouvre
+    SA propre session.
+    / The desk proved the email and sends a signed ticket; the venue checks
+    it and opens its own session.
+
+    FLUX (l'ordre compte) :
+    1. `sso_state` et `sso_next` sont retirés de la session TOUT DE SUITE.
+       login() vide la session quand un autre compte y était connecté : lus
+       plus tard, ils seraient perdus.
+    2. `state` reçu différent de celui de la session → refus.
+    3. Ticket faux, expiré, prévu pour un autre lieu ou déjà servi → refus.
+    4. Compte absent, non activé ou non humain → refus.
+    5. Le lieu est ajouté aux lieux du compte (client_achat). Sinon, une
+       personne venue d'un autre lieu n'apparaît pas dans l'admin de ce lieu.
+    6. Portefeuille Fedow créé s'il manque. Une panne de Fedow ne bloque pas
+       la connexion : l'erreur est écrite dans le journal.
+    7. login() sur le lieu.
+    8. Message d'avertissement du ticket (ancienne réservation annulée), puis
+       message de succès.
+    9. Redirection vers `sso_next`, ou `/`.
+    / Pop session keys first, check state, ticket and account, attach venue,
+    create wallet (non-blocking), log in, show messages, redirect.
+    """
+    # 1. Lus et retirés tout de suite. / 1. Read and removed at once.
+    state_attendu = request.session.pop("sso_state", None)
+    adresse_de_retour = request.session.pop("sso_next", "/")
+
+    message_lien_expire = _("Le lien de connexion a expiré. Reconnectez-vous.")
+
+    # 2. Le state doit être celui posé par connexion() dans CETTE session.
+    # / 2. The state must be the one set by connexion() in THIS session.
+    state_recu = request.GET.get("state", "")
+    if state_attendu is None or not constant_time_compare(state_recu, state_attendu):
+        logger.warning("connexion_retour : state absent ou différent de celui de la session.")
+        messages.add_message(request, messages.ERROR, message_lien_expire)
+        return redirect("/")
+
+    # 3. Le ticket. / 3. The ticket.
+    contenu_du_ticket = lire_un_ticket(request.GET.get("ticket", ""), request.tenant.domain_url)
+    if contenu_du_ticket is None:
+        messages.add_message(request, messages.ERROR, message_lien_expire)
+        return redirect("/")
+
+    # 4. Le compte. / 4. The account.
+    user = TibilletUser.objects.filter(pk=contenu_du_ticket["compte"]).first()
+    compte_utilisable = (
+        user is not None
+        and user.is_active
+        and user.email_valid
+        and user.espece == TibilletUser.TYPE_HUM
+    )
+    if not compte_utilisable:
+        logger.warning(f"connexion_retour : compte {contenu_du_ticket['compte']} absent, non activé ou non humain.")
+        messages.add_message(request, messages.ERROR, message_lien_expire)
+        return redirect("/")
+
+    # 5. Rattachement au lieu. / 5. Attach the venue.
+    user.client_achat.add(connection.tenant)
+
+    # 6. Portefeuille Fedow, sans bloquer la connexion.
+    # C'est le seul endroit du parcours de connexion qui le crée.
+    # / 6. Fedow wallet, without blocking the login.
+    if not user.wallet:
+        try:
+            fedow_api = FedowAPI()
+            fedow_api.wallet.get_or_create_wallet(user)
+        except Exception as erreur_fedow:
+            logger.error(f"connexion_retour : portefeuille Fedow non créé pour {user.email} : {erreur_fedow}")
+
+    # 7. Connexion sur le lieu. / 7. Log in on the venue.
+    login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+
+    # 8. Messages. / 8. Messages.
+    avertissement = contenu_du_ticket.get("avertissement")
+    if avertissement:
+        messages.add_message(request, messages.WARNING, avertissement)
+    messages.add_message(request, messages.SUCCESS, _("Connexion réussie. Bienvenue !"))
+
+    # 9. Retour à la page de départ, contrôlée par connexion().
+    # / 9. Back to the starting page, already checked by connexion().
+    return redirect(adresse_de_retour)
 
 
 def emailconfirmation(request, token):
@@ -899,34 +1032,32 @@ class SpecialAdminAction(viewsets.ViewSet):
 class TiBilletLogin(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    @action(detail=False, methods=['GET', 'POST'], permission_classes=[permissions.AllowAny])
+    @action(detail=False, methods=['GET'], permission_classes=[permissions.AllowAny])
     def login_fullpage(self, request):
-        template_context = get_context(request)
-        next_url = request.GET.get('next', None)
-        logger.info(f"login_fullpage next_url : {next_url}")
-        if request.method == 'GET':  # Render email form or confirmation page
-            # Optional next parameter sended in the email confirm button
-            if next_url:
-                template_context['next'] = next_url
-            if request.htmx:
-                return render(request, "fonctionnel/connexion/partials/fullpage_inner.html", context=template_context)
-            return render(request, "fonctionnel/connexion/fullpage.html", context=template_context)
+        """
+        GET /login/login_fullpage/?next=<adresse signée> : renvoie vers /connexion/.
+        / GET /login/login_fullpage/: redirects to /connexion/.
 
-        # POST: email submitted
-        validator = LoginEmailValidator(data=request.POST)
-        if not validator.is_valid():
-            logger.warning(validator.errors)
-            template_context['errors'] = validator.errors
-            template_context['email'] = request.POST.get('email', '')
-            if request.htmx:
-                return render(request, "fonctionnel/connexion/partials/fullpage_inner.html", context=template_context)
-            return render(request, "fonctionnel/connexion/fullpage.html", context=template_context)
+        LOCALISATION : BaseBillet/views.py
 
-        email = validator.validated_data['email']
-        user = get_or_create_user(email=email, send_mail=True, force_mail=True, next_url=next_url)
+        Appelant : QrCodeScanPay.process_qrcode, qui signe l'adresse de retour
+        (`signing.dumps`). On la décode ici. Signature fausse → pas de `next`.
+        La connexion se fait ensuite sur le guichet commun (vue `connexion`),
+        qui revérifie que `next` reste sur ce lieu.
+        / Decodes the signed next (bad signature → no next), then hands over
+        to the `connexion` view, which checks next again.
+        """
+        adresse_signee = request.GET.get('next', '')
+        if not adresse_signee:
+            return redirect('/connexion/')
 
-        # On success: swap only main content for HTMX and push URL
-        return render(request, "fonctionnel/connexion/partials/confirmation_inner.html", context=template_context)
+        try:
+            adresse_de_retour = signing.loads(adresse_signee)
+        except signing.BadSignature:
+            logger.warning("login_fullpage : adresse de retour mal signée, ignorée.")
+            return redirect('/connexion/')
+
+        return redirect(f"/connexion/?{urlencode({'next': adresse_de_retour})}")
 
     @action(detail=True, methods=['GET'], permission_classes=[permissions.IsAuthenticated])
     def redirect_session_to_another_tenant(self, request, pk):
@@ -3321,6 +3452,13 @@ class EventMVT(viewsets.ViewSet):
         if self.action == 'admin_show_event_detail':
             return [TenantAdminPermission()]
 
+        # Réserver exige d'être connecté. Le contrôle se fait sur le NOM de l'action,
+        # jamais sur la méthode HTTP : partial_list est un POST public (filtres).
+        # / Booking requires login. Checked by action name, never by HTTP method:
+        # partial_list is a public POST (filters).
+        if self.action in ['reservation', 'action_reservation']:
+            return [permissions.IsAuthenticated()]
+
         # Les autres vues d'EventMVT sont publiques (list/retrieve).
         # Les actions admin de creation d'evenement vivent dans EventWizardAdmin (S3).
         # / Other EventMVT views are public. Admin create actions live in EventWizardAdmin.
@@ -4034,7 +4172,7 @@ class EventMVT(viewsets.ViewSet):
 
         return render(request, template_path, context=template_context)
 
-    @action(detail=True, methods=['POST'], permission_classes=[permissions.IsAuthenticated])
+    @action(detail=True, methods=['POST'])
     def action_reservation(self, request, pk=None):
         event = get_object_or_404(Event, pk=pk)
 
@@ -4076,7 +4214,15 @@ class EventMVT(viewsets.ViewSet):
         # Vérification que l'évent existe bien sur ce tenant.
         # event = get_object_or_404(Event, slug=pk)
         logger.debug(f"Event Reservation : {request.data}")
-        validator = ReservationValidator(data=request.data, context={'request': request})
+
+        # La personne réserve toujours pour elle-même : l'email posté est remplacé
+        # par celui du compte connecté (get_permissions exige IsAuthenticated).
+        # .copy() garde les listes du QueryDict : extract_products lit la copie avec getlist.
+        # / The person always books for themselves: the posted email is replaced
+        # by the logged-in account's. .copy() keeps the QueryDict lists.
+        donnees_de_la_reservation = request.data.copy()
+        donnees_de_la_reservation["email"] = request.user.email
+        validator = ReservationValidator(data=donnees_de_la_reservation, context={'request': request})
 
         if not validator.is_valid():
             # Meme arbitrage que dans action_reservation ci-dessus : un refus metier
@@ -4109,21 +4255,11 @@ class EventMVT(viewsets.ViewSet):
             logger.debug("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
-        # On passe l'user resolu par le validator (via l'email saisi),
-        # pas request.user qui peut etre AnonymousUser si le visiteur n'est pas connecte.
-        # Le template choisit son message selon user.is_active : il doit refleter
-        # l'etat reel utilise par TicketCreator pour decider d'envoyer
-        # les billets immediatement (user actif) ou un mail de validation (user inactif).
-
-        if validator.reservation.user_commande.is_active:
-            messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
-            return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
-
-        from BaseBillet.models import DUREE_D_UN_PAIEMENT_EN_COURS
-        return render(request, "fonctionnel/event/reservation_ok.html", context={
-            "user": validator.reservation.user_commande,
-            "minutes_de_reservation": int(DUREE_D_UN_PAIEMENT_EN_COURS.total_seconds() // 60),
-        })
+        # Réservation sans paiement : elle est validée tout de suite.
+        # La personne est connectée, son compte est donc activé.
+        # / No payment needed: the booking is validated right away.
+        messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
+        return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
@@ -4677,7 +4813,14 @@ class MembershipMVT(viewsets.ViewSet):
 
     def create(self, request):
         logger.info(f"new membership : {request.data}")
-        membership_validator = MembershipValidator(data=request.data, context={'request': request})
+
+        # La personne adhère toujours pour elle-même : l'email posté est remplacé
+        # par celui du compte connecté (get_permissions exige IsAuthenticated).
+        # / The person always joins for themselves: the posted email is replaced
+        # by the logged-in account's.
+        donnees_de_l_adhesion = request.data.copy()
+        donnees_de_l_adhesion["email"] = request.user.email
+        membership_validator = MembershipValidator(data=donnees_de_l_adhesion, context={'request': request})
         if not membership_validator.is_valid():
             # Validation d'entree echouee (souvent un bot qui POST le formulaire vide ou partiel).
             # Ce n'est pas une erreur serveur : on logge en info, pas en warning, pour ne pas
@@ -6168,6 +6311,11 @@ class MembershipMVT(viewsets.ViewSet):
             'renouveller', 'renouveller_reset',
         ]:
             permission_classes = [TenantAdminPermission, ]
+
+        # Adhérer exige d'être connecté.
+        # / Joining requires login.
+        elif self.action == 'create':
+            permission_classes = [permissions.IsAuthenticated]
 
         else:
             permission_classes = [permissions.AllowAny]

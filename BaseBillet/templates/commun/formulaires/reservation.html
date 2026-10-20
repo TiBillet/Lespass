@@ -17,71 +17,21 @@
     {# / Scrollable body + sticky footer so both buttons stay visible #}
     <div class="flex-grow-1 overflow-y-auto">
         <input type="hidden" name="event" value="{{ event.uuid }}">
-        {% if user.is_anonymous %}
-            <div class="mb-3">
-                <label for="booking-email" class="form-label">{% trans "Email" %}</label>
-                <input type="email" name="email" class="form-control" id="booking-email" required data-testid="booking-email">
-            </div>
-            <div class="mb-3">
-                <label for="booking-confirm" class="form-label">{% trans "Email confirmation" %}</label>
-                <input type="email" name="email-confirm" class="form-control" id="booking-confirm" required data-testid="booking-email-confirm">
-            </div>
+        {% comment %}
+        EMAIL DE LA RESERVATION — en lecture seule
+        / Booking email — read-only
 
-            <div id="email-error" class="invalid-feedback" role="heading" style="display: block" data-testid="booking-email-error"></div>
-            <script>
-                const reservationForm = document.getElementById("reservation_form");
-                const validateEmails = () => {
-                    const emailEl = document.getElementById("booking-email");
-                    const confirmEl = document.getElementById("booking-confirm");
-                    const errorDiv = document.getElementById("email-error");
-                    if (!emailEl || !confirmEl || !errorDiv) {
-                        return true;
-                    }
-                    const email = emailEl.value || "";
-                    const confirmEmail = confirmEl.value || "";
-
-                    if (email !== confirmEmail) {
-                        confirmEl.setCustomValidity("{% translate 'Les emails ne correspondent pas.' %}");
-                        errorDiv.textContent = "{% translate 'Les emails ne correspondent pas.' %}";
-                        return false;
-                    }
-                    confirmEl.setCustomValidity("");
-                    errorDiv.textContent = "";
-                    return true;
-                };
-
-                // Check on HTMX request
-                reservationForm.addEventListener("htmx:configRequest", function (event) {
-                    if (!validateEmails()) {
-                        event.preventDefault();
-                    }
-                });
-
-                // Also check on normal submit (fallback)
-                reservationForm.addEventListener("submit", function (event) {
-                    if (!validateEmails()) {
-                        event.preventDefault();
-                    }
-                });
-
-                // Live check while typing (simple feedback)
-                const emailInput = document.getElementById("booking-email");
-                const confirmInput = document.getElementById("booking-confirm");
-                if (emailInput && confirmInput) {
-                    emailInput.addEventListener("input", validateEmails);
-                    confirmInput.addEventListener("input", validateEmails);
-                }
-            </script>
-            {#            <p><code>{{ user.email }}</code></p>#}
-        {% elif user.is_active %}
+        Seule une personne connectee peut reserver : la vue EventMVT.reservation
+        exige IsAuthenticated et remplace l'email poste par request.user.email.
+        Le champ montre a la personne l'adresse qui recevra les billets.
+        / Only a logged-in person can book: the view replaces the posted email
+        with request.user.email. The field shows where tickets will be sent.
+        {% endcomment %}
+        {% if user.is_authenticated %}
             <div class="mb-3">
                 <label for="booking-email" class="form-label">{% trans "Email" %}</label>
                 <input type="email" class="form-control" id="booking-email" name="email" value="{{ user.email }}"
                        readonly data-testid="booking-email">
-            </div>
-        {% else %}
-            <div class="alert alert-danger" role="alert">
-                {% translate "Your email is not confirmed. Please check your spam folder :)" %}
             </div>
         {% endif %}
 
@@ -567,16 +517,16 @@
         {% comment %}
         BOUTONS D'ACTION / ACTION BUTTONS
 
-        Deux intentions bien distinctes, toujours affichees comme deux vrais
-        boutons avec icones :
-        - "Payer maintenant" (ou "Envoyer la demande" si anonyme) : paiement
-          direct pour cet event uniquement.
+        Personne connectee : deux intentions bien distinctes, toujours affichees
+        comme deux vrais boutons avec icones :
+        - "Payer maintenant" : paiement direct pour cet event uniquement.
         - "Ajouter au panier" : cumule avec d'autres events et adhesions.
-        Pour un utilisateur non connecte, le second bouton ouvre l'offcanvas
-        login puisque le panier exige l'auth.
+        Personne non connectee : un seul bouton « Se connecter pour reserver »,
+        qui ouvre l'offcanvas login. Reserver exige d'etre connecte.
         `data-loading-disable` sur les submit : anti double-clic via extension
         HTMX loading-states (fix spinner merge main).
-        / Two separate intents, both shown as real buttons with icons.
+        / Logged-in: two separate intents, both shown as real buttons with icons.
+        Anonymous: one "log in to book" button that opens the login offcanvas.
         `data-loading-disable` on submits: prevent double-click via HTMX
         loading-states extension.
         {% endcomment %}
@@ -635,24 +585,20 @@
 
             {% endif %}
         {% else %}
-            {# Anonyme : "Envoyer la demande" en primary (flow direct), bouton "Connexion" en vrai bouton secondaire. #}
-            {# Le panier exige l'auth → on ouvre l'offcanvas login au clic. #}
-            {# / Anonymous: direct booking primary + real secondary button that opens login offcanvas. #}
-            <button type="submit"
-                    class="btn btn-primary w-100 mb-2"
-                    data-loading-disable
-                    data-testid="booking-submit">
-                <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
-                {% trans 'Send booking request' %}
-            </button>
+            {# Anonyme : un seul bouton, qui ouvre le panneau de connexion #loginPanel. #}
+            {# Le panneau copie data-next dans son lien « Se connecter » (commun/offcanvas/connexion.html) : #}
+            {# apres la connexion, la page revient avec le panneau de reservation ouvert. #}
+            {# / Anonymous: one button that opens #loginPanel. The panel copies data-next #}
+            {# into its login link: after login, the page comes back with the booking panel open. #}
             <button type="button"
-                    class="btn btn-outline-primary w-100"
+                    class="btn btn-primary w-100"
                     data-bs-toggle="offcanvas"
                     data-bs-target="#loginPanel"
-                    data-testid="booking-add-to-cart-login"
-                    aria-label="{% trans 'Log in to add these tickets to your cart' %}">
-                <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                {% trans "Log in to add to cart" %}
+                    aria-controls="loginPanel"
+                    data-next="{{ request.path }}?openbookingPanel=true"
+                    data-testid="booking-login">
+                <i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i>
+                {% translate "Se connecter pour réserver" %}
             </button>
         {% endif %}
         <button type="button" class="btn btn-link text-muted d-block mt-2 w-100" data-bs-dismiss="offcanvas" aria-label="Annuler" data-testid="booking-cancel">

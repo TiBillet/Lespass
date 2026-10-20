@@ -4,13 +4,28 @@ OFFCANVAS CONNEXION — panneau de login (#loginPanel)
 
 LOCALISATION : BaseBillet/templates/commun/offcanvas/connexion.html
 
-Chrome partagé, NON skinnable : inclus par la navbar reunion et par le shell
-faire_festival. Déclencheurs : boutons navbar + footer + partial volunteers.
-Un JS d'auto-ouverture (paramètre ?login=1) vit dans la navbar reunion et
+Chrome partagé, NON skinnable : inclus par les shells (bloc offcanvas_globaux).
+Déclencheurs : boutons navbar + footer + partial volunteers + boutons
+« Se connecter pour réserver / adhérer » des formulaires.
+Un JS d'auto-ouverture (paramètre ?login=1) vit dans la navbar et
 cible #loginPanel par id. L'id fait partie du contrat de skin : ne JAMAIS
 le renommer.
 / Shared chrome, NOT skinnable. An auto-open JS (?login=1 param) targets
 #loginPanel by id. The id is part of the skin contract.
+
+Le panneau ne contient aucun formulaire. Le formulaire (email puis code à
+6 chiffres) vit sur le guichet commun à tous les lieux.
+FLUX :
+1. Clic sur « Se connecter » -> GET /connexion/?next=<page>
+   (BaseBillet/views.py, connexion)
+2. La vue garde `next` en session et redirige vers le guichet /sso/
+3. Après le code, le guichet renvoie sur /connexion/retour/, qui redirige vers `next`
+/ The panel has no form: the login form lives on the shared login desk (/sso/).
+
+`next` vaut la page courante. Si le bouton qui ouvre le panneau porte un
+`data-next` (ex : « Se connecter pour réserver » ->
+/event/<slug>/?openbookingPanel=true), c'est lui qui est utilisé.
+/ `next` is the current page, unless the opener button carries a `data-next`.
 {% endcomment %}
 <div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
     <div class="offcanvas-header">
@@ -18,6 +33,59 @@ le renommer.
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
     </div>
     <div class="offcanvas-body">
-        {% include 'commun/formulaires/login.html' %}
+        <p>{% translate "Connectez-vous avec votre adresse email. Un code vous sera envoyé. Une seule connexion pour tous les lieux TiBillet." %}</p>
+        {# Sans JavaScript, le lien renvoie sur la page courante. #}
+        {# / Without JavaScript, the link returns to the current page. #}
+        <a id="loginGuichetLink"
+           class="btn btn-primary d-block w-100"
+           href="/connexion/?next={{ request.get_full_path|urlencode }}"
+           data-testid="login-guichet">
+            <i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i>
+            {% translate "Se connecter" %}
+        </a>
     </div>
 </div>
+
+<script>
+    (function () {
+        // Choisit la page de retour (`next`) du lien « Se connecter ».
+        // / Picks the return page (`next`) of the login link.
+        const loginPanel = document.getElementById('loginPanel');
+        const loginGuichetLink = document.getElementById('loginGuichetLink');
+        if (!loginPanel || !loginGuichetLink) {
+            return;
+        }
+
+        // À l'ouverture du panneau, on retient le `data-next` du bouton ouvreur.
+        // Ouverture sans bouton (?login=1, erreur 403 htmx) : pas de `data-next`.
+        // / On open, remember the opener button's `data-next` (none when opened by code).
+        loginPanel.addEventListener('show.bs.offcanvas', function (event) {
+            const openerButton = event.relatedTarget;
+            let nextFromOpener = '';
+            if (openerButton && openerButton.dataset && openerButton.dataset.next) {
+                nextFromOpener = openerButton.dataset.next;
+            }
+            loginGuichetLink.dataset.next = nextFromOpener;
+        });
+
+        // Au clic, on construit l'adresse. On lit la page courante à ce moment-là :
+        // la navbar retire ?login=1 de l'adresse juste après l'ouverture du panneau.
+        // / On click, build the URL. The current page is read now: the navbar
+        // removes ?login=1 from the URL right after opening the panel.
+        loginGuichetLink.addEventListener('click', function () {
+            let nextPage = loginGuichetLink.dataset.next;
+            if (!nextPage) {
+                nextPage = window.location.pathname + window.location.search;
+            }
+            loginGuichetLink.href = '/connexion/?next=' + encodeURIComponent(nextPage);
+
+            // Dans une iframe (page intégrée dans un autre site), le cookie de session
+            // ne passe pas : on ouvre la connexion dans un nouvel onglet.
+            // / Inside an iframe the session cookie is blocked: open login in a new tab.
+            if (window.self !== window.top) {
+                loginGuichetLink.target = '_blank';
+                loginGuichetLink.rel = 'noopener';
+            }
+        });
+    })();
+</script>

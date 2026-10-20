@@ -12,12 +12,12 @@ Voir TECH_DOC/SESSIONS/OTP/SPEC.md pour la spec complete.
 / See TECH_DOC/SESSIONS/OTP/SPEC.md for the full spec.
 """
 
-import hashlib
 import hmac
 import secrets
 from typing import Optional
 
 from django.template.loader import render_to_string
+from django.utils.crypto import salted_hmac
 from django.utils.translation import gettext_lazy as _
 
 
@@ -41,10 +41,19 @@ def generer_code_otp() -> str:
 
 def hash_code_otp(code: str) -> str:
     """
-    Hash SHA-256 d'un code OTP. Jamais stocker le code en clair.
-    / SHA-256 hash of an OTP code. Never store cleartext.
+    Empreinte d'un code OTP. On garde l'empreinte, jamais le code en clair.
+    / Fingerprint of an OTP code. Never store cleartext.
+
+    L'empreinte est un HMAC-SHA256 avec la cle secrete du projet (SECRET_KEY).
+    Un SHA-256 simple ne suffit pas : il n'y a qu'un million de codes possibles.
+    Avec une copie du cache, on les essaierait tous en une seconde.
+    Sans la cle secrete, c'est impossible.
+    / HMAC-SHA256 keyed with SECRET_KEY: a plain SHA-256 of a 6-digit code
+    is brute-forced instantly from a cache dump.
+
+    Resultat : 64 caracteres hexadecimaux. / Result: 64 hex characters.
     """
-    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+    return salted_hmac("AuthBillet.otp", code, algorithm="sha256").hexdigest()
 
 
 def verifier_code_otp(code_soumis: str, hash_stocke: str) -> bool:
@@ -64,10 +73,14 @@ def envoyer_email_otp(
     code_otp: str,
     libelle_action: str,
     nom_organisation: Optional[str] = None,
-) -> None:
+) -> Optional[bool]:
     """
     Envoie l'email OTP via le pattern projet `CeleryMailerClass`.
     / Sends the OTP email via the project-wide `CeleryMailerClass` pattern.
+
+    Renvoie `mail.sended` : True si le serveur mail a accepte le message,
+    None sinon. L'appelant journalise l'echec.
+    / Returns `mail.sended`: True if the mail server accepted it, None otherwise.
 
     On reutilise `BaseBillet.tasks.CeleryMailerClass` plutot que `send_mail`
     direct pour beneficier (DRY) :
@@ -119,3 +132,4 @@ def envoyer_email_otp(
         context=contexte_email,
     )
     mail.send()
+    return mail.sended

@@ -1,0 +1,87 @@
+{% load i18n %}
+{% comment %}
+  Guichet, étape 2 : la personne tape le code reçu par mail.
+  / Desk, step 2: the user types the emailed code.
+
+  LOCALISATION : AuthBillet/templates/sso/partials/etape_code.html
+  Rendu par : AuthBillet/views_sso.py (envoyer_le_code, verifier_le_code).
+  Envoie vers :
+    - POST /sso/code/verifier/ (bouton « Me connecter ») ;
+    - POST /sso/code/ (bouton « Recevoir un nouveau code »). Il est dans le
+      formulaire : htmx envoie aussi email, lieu et state.
+  Réponse dans #sso-contenu.
+
+  Contexte : lieu, state, email (champs cachés), etat_de_l_envoi ("envoye",
+  "attendre" ou vide), erreur_code (message, ou vide), lien_changer_d_adresse.
+
+  Un seul champ pour le code, sans JavaScript. autocomplete="one-time-code" :
+  sur iOS, l'app Mail propose le code reçu.
+  / One single code field, no JavaScript. iOS Mail suggests the code.
+{% endcomment %}
+{% if etat_de_l_envoi == "envoye" %}
+<div class="alert alert-info" role="status" data-testid="login-code-envoye">
+    {% blocktranslate trimmed %}
+        Un code a été envoyé à <strong>{{ email }}</strong>. Il est valable 10 minutes.
+        Le code est au début de l'objet du mail.
+    {% endblocktranslate %}
+    <br>
+    {% translate "Pas reçu ? Regardez vos indésirables, ou demandez un nouveau code dans une minute." %}
+</div>
+{% elif etat_de_l_envoi == "attendre" %}
+<div class="alert alert-warning" role="status" data-testid="login-code-attendre">
+    {% translate "Un code vient de partir. Patientez une minute avant d'en demander un autre." %}
+</div>
+{% endif %}
+
+<form id="loginCodeForm"
+      method="post"
+      action="{% url 'sso-code-verifier' %}"
+      hx-post="{% url 'sso-code-verifier' %}"
+      hx-target="#sso-contenu"
+      hx-swap="innerHTML"
+      novalidate
+      data-testid="login-code-form">
+    <input type="hidden" name="lieu" value="{{ lieu }}">
+    <input type="hidden" name="state" value="{{ state }}">
+    <input type="hidden" name="email" value="{{ email }}">
+
+    <div class="mb-3">
+        <label for="loginCode" class="form-label">{% translate "Code" %}</label>
+        <input type="text"
+               id="loginCode"
+               name="code"
+               class="form-control form-control-lg{% if erreur_code %} is-invalid{% endif %}"
+               inputmode="numeric"
+               pattern="[0-9]{6}"
+               maxlength="6"
+               autocomplete="one-time-code"
+               required
+               {% if erreur_code %}aria-invalid="true" aria-describedby="loginCodeErreur"{% endif %}
+               data-testid="login-code">
+        {% if erreur_code %}
+        <div id="loginCodeErreur" class="invalid-feedback d-block" role="alert" data-testid="login-code-erreur">
+            {{ erreur_code }}
+        </div>
+        {% endif %}
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100 mb-3" data-testid="login-code-submit">
+        <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>
+        {% translate "Me connecter" %}
+    </button>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <button type="button"
+                class="btn btn-outline-secondary"
+                hx-post="{% url 'sso-code' %}"
+                hx-target="#sso-contenu"
+                hx-swap="innerHTML"
+                data-testid="login-code-resend">
+            <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+            {% translate "Recevoir un nouveau code" %}
+        </button>
+        <a href="{{ lien_changer_d_adresse }}" data-testid="login-change-email">
+            {% translate "Changer d'adresse" %}
+        </a>
+    </div>
+</form>

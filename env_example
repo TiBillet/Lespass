@@ -77,6 +77,11 @@ EMAIL_PORT="1025"
 EMAIL_USE_SSL="False"
 EMAIL_USE_TLS="False"
 
+# Connexion par code : demandes de code permises par adresse IP, par tranche de
+# 10 minutes (defaut 500). A augmenter avant un tres gros festival (wifi partage).
+# / Login code requests allowed per IP per 10 minutes (default 500).
+# CONNEXION_CODE_PLAFOND_IP_10_MIN=500
+
 # Usefull for dev/test
 # Auto login for admin, no https cert' verification, demonstration data, auto database flush, etc ...
 # don't set 1 to production !

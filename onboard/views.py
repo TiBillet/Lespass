@@ -391,12 +391,13 @@ def _finalize_otp_success(request, wc):
     if update_fields:
         user.save(update_fields=update_fields)
 
-    # 4. Login Django : pose le cookie session auth. Backend explicite car
-    # le projet a plusieurs AUTHENTICATION_BACKENDS et `login()` l'exige
-    # sans `authenticate()` prealable.
-    # / 4. Django login: set auth session cookie. Explicit backend required
-    # because the project has several AUTHENTICATION_BACKENDS and `login()`
-    # needs one when called without a prior `authenticate()`.
+    # 4. Login Django : pose le cookie session auth. Le projet n'a qu'un
+    # backend (ModelBackend, AUTHENTICATION_BACKENDS non defini) : `backend=`
+    # est facultatif. On l'ecrit quand meme : sans lui, `login()` sans
+    # `authenticate()` prealable planterait le jour ou l'on ajoute un backend.
+    # / 4. Django login: set auth session cookie. The project has a single
+    # backend (ModelBackend): `backend=` is optional, but writing it keeps
+    # `login()` working if a second backend is ever added.
     login(
         request, user,
         backend="django.contrib.auth.backends.ModelBackend",

@@ -1869,14 +1869,25 @@ sur la contrainte unique. En test, toujours creer un user dedie par cle.
 **9.98 — `client.force_login(term_user)` ne pose PAS `set_expiry(12h)`.**
 La fixture `terminal_client` utilise `force_login` pour la rapidite, mais
 cela ne simule pas exactement le bridge. Pour tester l'expiration de session,
-faire un vrai POST sur `/laboutik/auth/bridge/`. Aussi : `term_user.backend` doit
-etre defini explicitement avant `force_login()` car le projet a plusieurs
-backends d'authentification.
+faire un vrai POST sur `/laboutik/auth/bridge/`.
+*Corrigé le 2026-10-20 :* le projet n'a **qu'un** backend d'authentification
+(`AUTHENTICATION_BACKENDS` n'est pas défini : Django garde `ModelBackend`). Le
+`backend=` de `force_login()` ou de `login()` est donc facultatif. L'écrire
+(`backend="django.contrib.auth.backends.ModelBackend"`) évite seulement une erreur
+le jour où l'on en ajoute un deuxième.
 
 **9.99 — `/laboutik/auth/bridge/` a un throttle AnonRateThrottle 10/min.**
-Dans les tests, `from django.core.cache import cache; cache.clear()` avant
-chaque appel pour reinitialiser. Attention : clear() vide TOUT le cache,
-acceptable uniquement sur dev DB.
+`BridgeThrottle` (`laboutik/views.py`) compte par adresse IP. Sa clé de cache est
+`throttle_laboutik_auth_bridge_<ip>`, sur le cache par défaut, préfixée par le schéma du
+lieu. *Corrigé le 2026-10-20 :* **ne pas** faire `cache.clear()` avant chaque appel
+(voir « Ne PAS utiliser `cache.clear()` » plus bas : c'est un `flush_all` de memcached,
+tous lieux confondus, partagé avec le serveur de dev). À la place :
+- donner une IP unique à chaque test : `Client(HTTP_HOST=..., REMOTE_ADDR="10.9.x.y")`
+  (pas d'en-tête `X-Forwarded-For` : avec `NUM_PROXIES = 1`, DRF lirait celui-ci) ;
+- ou effacer la seule clé du compteur, dans le contexte du lieu :
+  `with tenant_context(lespass): cache.delete(f"throttle_laboutik_auth_bridge_{ip}")`.
+`test_hardware_auth_bridge.py` et `test_discovery_claim_creates_termuser.py` font
+encore `cache.clear()` : à reprendre.
 
 ---
 
@@ -3923,6 +3934,58 @@ fonction depuis leur code shell (`sys.path.insert(0, '/DjangoFiles/tests/pytest'
 
 **Débloquer une J déjà polluée** : relier les produits en cause à une catégorie de caisse
 qui a un compte (« Plan complet ? » → « Régler »).
+
+---
+
+### Connexion par code et guichet commun (chantier AUTH, 2026-10-20)
+
+Spec : `TECH_DOC/SESSIONS/TODO/AUTH-connexion-par-code-achat-connecte.md`.
+
+**16.1 — Un compte non activé est vu comme anonyme.**
+`ModelBackend.get_user` refuse un compte `is_active=False`
+(`user_can_authenticate`). Même après `client.force_login(user)`, la requête suivante
+voit `AnonymousUser`. Conséquences :
+- un test « connecté » doit utiliser un compte `is_active=True` ;
+- dans un gabarit, une branche « connecté mais compte non activé » est du code mort.
+(À ne pas confondre avec `email_valid=False` : un compte lié par carte QR est actif,
+donc bien connecté, avec un email non vérifié.)
+
+**16.2 — Un `get_permissions()` écrit en dur écrase le `permission_classes` des `@action`.**
+`@action(permission_classes=[IsAuthenticated])` pose seulement l'attribut
+`self.permission_classes`. Seul le `get_permissions()` **par défaut** de DRF le lit. Si la
+vue surcharge `get_permissions()` et renvoie `AllowAny` sans lire cet attribut, la
+permission de l'`@action` est **ignorée**, en silence. Cas réel : `EventMVT` laissait un
+anonyme atteindre `action_reservation` (500). Parade : décider dans `get_permissions()`, par
+le **nom** de l'action (`self.action in [...]`), jamais par la méthode HTTP
+(`partial_list` est un POST public). Et ne rien poser sur l'`@action`.
+
+**16.3 — Activer un compte sur le schéma `public` ne valide pas les anciennes `F` du lieu.**
+La machine à états (`pre_save` de `TibilletUser`) lance `activator_free_reservation` au
+passage `is_active` False → True. Mais cette fonction ne fait rien sur `public`
+(`if connection.tenant.schema_name != "public"`, `BaseBillet/signals.py`). Le guichet
+tourne sur `public` : la finalisation du compte (`get_or_create_user`, `user.save()`)
+doit donc tourner dans `tenant_context(lieu)` (`AuthBillet/views_sso.py`). Même règle
+pour le rattachement au lieu (`client_achat`). En test, `tenant_context`, pas
+`schema_context` : `schema_context` pose un `FakeTenant`, et `get_or_create_user` lit
+`connection.tenant`.
+
+**16.4 — Un `cache.add()` qui sert de verrou ou d'usage unique passe par `caches["verrous"]`.**
+Le cache par défaut a `ignore_exc=True` (`TiBillet/settings.py`). En panne de memcached,
+`cache.add()` renvoie `False`, comme si la clé était déjà prise. Un verrou croirait
+toujours qu'un autre le tient ; un ticket à usage unique serait toujours refusé comme
+rejoué. Et rien n'arrive dans Sentry. L'alias `verrous` (même serveur, mêmes clés, sans
+`ignore_exc`) lève une exception à la place. Usages : `onboard/views.py`,
+`onboard/tasks.py`, `AuthBillet/sso.py` (ticket), `AuthBillet/connexion_par_code.py`
+(délai entre deux envois). En test, effacer la clé par le même alias :
+`caches["verrous"].delete(...)`.
+
+**16.5 — `request.get_host()` garde le port, `request.tenant.domain_url` non.**
+En dev, `lespass.tibillet.localhost:8080` est un hôte accepté, mais ce n'est pas une ligne
+`Domain`. Le middleware de django-tenants retire le port et le `www.` avant de chercher le
+`Domain` (`hostname_from_request`), puis pose `request.tenant.domain_url`. Pour comparer à
+un `Domain` (domaine envoyé au guichet, domaine écrit dans un ticket), toujours
+`request.tenant.domain_url`. `get_host()` sert seulement à contrôler une adresse de retour
+(`url_has_allowed_host_and_scheme`).
 
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

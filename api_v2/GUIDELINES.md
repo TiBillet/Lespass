@@ -140,6 +140,12 @@ Usage notes
   - Tests are ordered to run in the following sequence for Event CRUD: create → list → retrieve → delete. A `conftest.py` hook enforces this order.
   - The create test also stores the created `identifier` and `name` in pytest cache; subsequent tests read from this cache to make assertions independent of demo data.
 
+Réservations gratuites (POST /api/v2/reservations/)
+- Une réservation gratuite créée par l'API n'est jamais `F` (FREERES) : elle passe tout de suite en `FA` (FREERES_USERACTIV), même quand le compte de l'email n'est pas activé. Les billets partent aussitôt par mail. La clé API appartient au lieu : on lui fait confiance (`BaseBillet/validators.py`, `TicketCreator`).
+  / A free reservation created through the API is never `F`: it is `FA` at once, even for a non-activated account, and the tickets are mailed at once.
+- Le statut `F` ne concerne que d'anciennes réservations encore en base. Le filtre `FREERES (F)` de `openapi-schema.yaml` les retrouve.
+- `F` et `FA` sont rendues `https://schema.org/ReservationPending`, jusqu'au statut `V` posé par l'envoi du mail.
+
 
 
 ---

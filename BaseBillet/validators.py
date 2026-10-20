@@ -276,10 +276,10 @@ class TicketCreator():
             if produit.categorie_article != Product.FREERES:
                 reservation_ne_contient_que_des_reservations_gratuites = False
         if self.create_checkout and reservation_ne_contient_que_des_reservations_gratuites:
-            if reservation.user_commande.is_active:
-                reservation.status = Reservation.FREERES_USERACTIV
-            else:
-                reservation.status = Reservation.FREERES
+            # Toujours `FA` : la réservation vient d'une personne connectée (compte forcément
+            # activé) ou de l'API v2, à qui l'on fait confiance.
+            # / Always FA: the reservation comes from a logged-in person or the trusted API v2.
+            reservation.status = Reservation.FREERES_USERACTIV
             reservation.save()
 
         # Methode Action : evenement benevolat SANS produit reservable.
@@ -327,8 +327,8 @@ class TicketCreator():
         Réservation dont toutes les lignes valent 0 € : pas de paiement Stripe.
         Les lignes passent « payées » en « offert », comme une vente payée : la machine à
         états lance trigger_B (envoi de la vente à LaBoutik), qui les passe « validées ».
-        Puis la réservation passe au statut gratuit : la machine à états active les billets
-        et les envoie par mail (utilisateur actif).
+        Puis la réservation passe au statut gratuit validé (FA) : la machine à états active
+        les billets et les envoie par mail.
         Enfin la vente est encaissée à 0 (REGLEE, numérotée, aucun règlement), sauf si
         l'appelant écrit encore des lignes dans cette vente (`encaisser_la_vente_gratuite`).
         / Reservation where every line is 0 €: no Stripe. Lines go "paid" as "free", so
@@ -342,10 +342,10 @@ class TicketCreator():
             ligne_vendue.payment_method = PaymentMethod.FREE
             ligne_vendue.save(update_fields=["status", "payment_method"])
 
-        if self.user.is_active:
-            reservation.status = Reservation.FREERES_USERACTIV
-        else:
-            reservation.status = Reservation.FREERES
+        # Toujours `FA` : la réservation vient d'une personne connectée (compte forcément
+        # activé) ou de l'API v2, à qui l'on fait confiance.
+        # / Always FA: the reservation comes from a logged-in person or the trusted API v2.
+        reservation.status = Reservation.FREERES_USERACTIV
         reservation.save()
 
         # Une vente gratuite est une opération enregistrée : encaissée à 0, numérotée.
@@ -363,7 +363,10 @@ class TicketCreator():
             first_name=self.user.first_name,
             last_name=self.user.last_name,
         )
-        reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
+        # Toujours `FA` : la réservation vient d'une personne connectée (compte forcément
+        # activé) ou de l'API v2, à qui l'on fait confiance.
+        # / Always FA: the reservation comes from a logged-in person or the trusted API v2.
+        reservation.status = Reservation.FREERES_USERACTIV
         reservation.save()
         return [ticket, ]
 

@@ -37,7 +37,9 @@ class TestNumericOverflowValidation:
     """Rejet des montants hors limite / Oversized amounts rejection."""
 
     @pytest.mark.adhesion
-    def test_membership_rejects_oversized_custom_amount(self, page, create_product):
+    def test_membership_rejects_oversized_custom_amount(
+        self, page, create_product, login_as, django_shell
+    ):
         """L'adhesion a prix libre rejette un montant trop grand cote client.
         / Free-price membership rejects an oversized amount client-side.
         """
@@ -57,6 +59,17 @@ class TestNumericOverflowValidation:
         )
         assert result["ok"], f"Création produit échouée: {result}"
         product_uuid = result["uuid"]
+
+        # --- Etape 1 bis : Se connecter (adherer exige d'etre connecte) ---
+        # login_as exige un compte existant : on le cree, active.
+        # / Step 1 bis: log in (joining requires it). login_as needs an account.
+        django_shell(
+            "from AuthBillet.utils import get_or_create_user\n"
+            f"acheteur = get_or_create_user('{user_email}', send_mail=False)\n"
+            "acheteur.is_active = True\n"
+            "acheteur.save()\n"
+        )
+        login_as(page, user_email)
 
         # --- Etape 2 : Page standalone du formulaire d'adhesion ---
         # Les validations client (HTML5 + scripts inline) fonctionnent sans
@@ -81,8 +94,6 @@ class TestNumericOverflowValidation:
         custom_amount_input.click()
         custom_amount_input.fill("999999999999999")
 
-        page.locator("#membership-email").fill(user_email)
-        page.locator("#confirm-email").fill(user_email)
         page.locator('input[name="firstname"]').fill("Overflow")
         page.locator('input[name="lastname"]').fill("Test")
 

@@ -1,6 +1,7 @@
 from django.conf.urls.static import static
 from django.urls import path, include, re_path
 from ApiBillet.views import Webhook_stripe
+from AuthBillet import views_sso
 from django.conf import settings
 
 urlpatterns = [
@@ -18,6 +19,14 @@ urlpatterns = [
     # urls_tenants.py, where the details are explained.
     re_path(r'^api/user/', include('AuthBillet.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
+
+    # Guichet de connexion commun à tous les lieux (SSO). Il vit seulement sur
+    # le schéma public : les lieux y envoient la personne depuis /connexion/.
+    # Voir AuthBillet/views_sso.py.
+    # / Login desk shared by all venues (SSO), public schema only.
+    path('sso/', views_sso.guichet, name='sso-guichet'),
+    path('sso/code/', views_sso.envoyer_le_code, name='sso-code'),
+    path('sso/code/verifier/', views_sso.verifier_le_code, name='sso-code-verifier'),
 
     # Wizard d'onboarding nouveau tenant (SHARED : accessible aussi sur tenants).
     # / Onboarding wizard for new tenants (SHARED: also reachable on tenants).

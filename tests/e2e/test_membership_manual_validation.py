@@ -61,7 +61,7 @@ class TestMembershipManualValidation:
     """
 
     def test_request_and_approve_membership(
-        self, page, create_product, login_as_admin, django_shell
+        self, page, create_product, login_as_admin, django_shell, login_as
     ):
         """L'utilisateur demande une adhésion à validation manuelle, l'admin approuve.
         Vérifie que le statut passe à AV (ADMIN_VALID).
@@ -124,6 +124,15 @@ class TestMembershipManualValidation:
         # (manually validated), submit.
         # With manualValidation=True, status becomes AW (ADMIN_WAITING)
         # without Stripe redirect.
+        # Adhérer exige d'être connecté. login_as exige un compte existant : on le crée.
+        # / Joining requires login. login_as needs an existing account: create it.
+        django_shell(
+            "from AuthBillet.utils import get_or_create_user\n"
+            f"candidat = get_or_create_user('{user_email}', send_mail=False)\n"
+            "candidat.is_active = True\n"
+            "candidat.save()\n"
+        )
+        login_as(page, user_email)
         page.goto("/memberships/")
         page.wait_for_load_state("domcontentloaded")
 
@@ -137,10 +146,11 @@ class TestMembershipManualValidation:
         # / Wait for the offcanvas to be visible.
         page.wait_for_selector("#subscribePanel.show", state="visible", timeout=10_000)
 
-        # Remplir le formulaire dans l'offcanvas.
-        # / Fill the form in the offcanvas.
-        page.locator('#subscribePanel input[name="email"]').fill(user_email)
-        page.locator('#subscribePanel input[name="confirm-email"]').fill(user_email)
+        # Remplir le formulaire dans l'offcanvas. L'email est celui du compte.
+        # / Fill the form in the offcanvas. The email is the account's.
+        expect(
+            page.locator('#subscribePanel [data-testid="membership-email"]')
+        ).to_have_value(user_email)
         page.locator('#subscribePanel input[name="firstname"]').fill("Candidate")
         page.locator('#subscribePanel input[name="lastname"]').fill("User")
 

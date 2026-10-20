@@ -1,0 +1,53 @@
+{% load i18n %}
+{% comment %}
+  Guichet, étape 1 : la personne tape son email.
+  / Desk, step 1: the user types their email.
+
+  LOCALISATION : AuthBillet/templates/sso/partials/etape_email.html
+  Rendu par : AuthBillet/views_sso.py (guichet, envoyer_le_code).
+  Envoie vers : POST /sso/code/ (envoyer_le_code), réponse dans #sso-contenu.
+
+  Contexte : lieu, state (champs cachés), email (valeur déjà tapée),
+  erreur_email (message sous le champ, ou vide).
+
+  Les id `loginForm` et `loginEmail` sont lus par tests/e2e/test_login.py.
+  / The loginForm and loginEmail ids are used by tests/e2e/test_login.py.
+{% endcomment %}
+<form id="loginForm"
+      method="post"
+      action="{% url 'sso-code' %}"
+      hx-post="{% url 'sso-code' %}"
+      hx-target="#sso-contenu"
+      hx-swap="innerHTML"
+      novalidate
+      data-testid="login-form">
+    <input type="hidden" name="lieu" value="{{ lieu }}">
+    <input type="hidden" name="state" value="{{ state }}">
+
+    <p class="text-body-secondary">
+        {% translate "Tapez votre adresse email. Nous vous envoyons un code à 6 chiffres." %}
+    </p>
+
+    <div class="mb-3">
+        <label for="loginEmail" class="form-label">{% translate "Adresse email" %}</label>
+        <input type="email"
+               id="loginEmail"
+               name="email"
+               value="{{ email }}"
+               class="form-control form-control-lg{% if erreur_email %} is-invalid{% endif %}"
+               autocomplete="email"
+               required
+               {% if erreur_email %}aria-invalid="true" aria-describedby="loginEmailErreur"{% endif %}
+               data-testid="login-email">
+        {% if erreur_email %}
+        <div id="loginEmailErreur" class="invalid-feedback d-block" role="alert" data-testid="login-email-erreur">
+            {{ erreur_email }}
+        </div>
+        {% endif %}
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100" data-testid="login-submit">
+        <i class="bi bi-envelope me-1" aria-hidden="true"></i>
+        {% translate "Recevoir un code" %}
+    </button>
+</form>

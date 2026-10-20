@@ -18,20 +18,24 @@ Le service est conçu pour servir plusieurs cas d'usage :
 
 | # | Chantier | Statut | Spec | Plan |
 |---|---|---|---|---|
-| 01 | Service OTP DRY stateless + helper session HTTP | ✅ Implémenté (2026-05-19) | [SPEC.md](SPEC.md) | [../EVENT_WIZARD/PLAN.md](../EVENT_WIZARD/PLAN.md) (session S1) |
+| 01 | Service OTP DRY stateless + helper session HTTP | ✅ Implémenté (2026-05-19). Helper session (`OtpSession`) supprimé le 2026-10-20 | [SPEC.md](SPEC.md) | [../EVENT_WIZARD/PLAN.md](../EVENT_WIZARD/PLAN.md) (session S1) |
 
-> ℹ️ **Statut d'usage (2026-05-21)** : le service OTP est **en place et testé**,
-> mais son **premier consommateur (wizard public d'évènement) a été basculé sur la
-> connexion classique** (cf. [EVENT_WIZARD/CHANTIER-02](../EVENT_WIZARD/CHANTIER-02-login-place-split-multi-events.md)).
-> L'OTP est donc **parqué** : le code (`otp_service.py`, `otp_session.py`, étapes
-> `step0_verify`/`step0_resend`) reste en place, prêt à être réintégré dans
-> l'**offcanvas de connexion** — ce qui rejoint le CHANTIER-02 « Login OTP » ci-dessous.
+> **Statut d'usage (2026-10-20)** — chantier AUTH, non commité :
+> - `OtpSession` (`AuthBillet/otp_session.py`) est **supprimée**, avec ses 15 tests.
+>   Les étapes `step0_verify` / `step0_resend` du wizard n'existent plus depuis le 2026-05-21.
+> - La **connexion par code** utilise les fonctions pures de `otp_service.py`. Elle vit dans
+>   `AuthBillet/connexion_par_code.py` (code en cache, plafonds) et dans le **guichet commun**
+>   à tous les lieux (`AuthBillet/sso.py`, `AuthBillet/views_sso.py`, routes `/sso/…`).
+>   Détail : [`../TODO/AUTH-connexion-par-code-achat-connecte.md`](../TODO/AUTH-connexion-par-code-achat-connecte.md).
+> - L'empreinte du code est un HMAC-SHA256 avec la clé secrète (`salted_hmac`), plus un SHA-256 simple.
+> - L'**onboarding garde son propre OTP** (`onboard/services.py`, `generate_otp` / `verify_otp`,
+>   champs de `WaitingConfiguration`). Sa migration reste à faire : CHANTIER-03, toujours ouvert.
 
 ## Chantiers envisagés (non datés)
 
 | Idée | Description |
 |---|---|
-| CHANTIER-02 — Login OTP | Remplacer le formulaire de connexion classique par un flow OTP email. Réutilise le service. Stockage : `User.otp_hash` + `User.otp_expires_at` ou cache Redis. |
+| ~~CHANTIER-02 — Login OTP~~ | **Fait** par le chantier AUTH (2026-10-20) : code en cache Django (memcached), guichet commun. Voir la note ci-dessus. |
 | CHANTIER-03 — Migration onboard | Remplacer la logique OTP custom de `onboard/services.py` (basée sur `WaitingConfiguration.otp_*` champs) par des appels au service. Trois lignes à changer. |
 | CHANTIER-04 — Branchement SSO/OIDC | Étape de vérification email avant émission de l'access token, pour les flows OIDC où l'utilisateur n'a pas encore confirmé son adresse. |
 | CHANTIER-05 — TOTP (RFC 6238) | Extension du service à des codes time-based pour 2FA via app authenticator (Google Authenticator, Authy). Réutilise les templates email pour les codes de récupération. |
@@ -55,6 +59,6 @@ Le service est conçu pour servir plusieurs cas d'usage :
 |---|---|---|
 | Service stateless, l'appelant décide du stockage | Permet usage en session HTTP, modèle DB ou cache | Chantier 01 |
 | Localisation `AuthBillet/` | SHARED_APPS donc accessible partout (tenants + meta) | Chantier 01 |
-| Hash SHA-256 + `hmac.compare_digest` | Constant-time, jamais de code en clair en base/session | Chantier 01 |
+| Empreinte `salted_hmac` (HMAC-SHA256, clé secrète) + `hmac.compare_digest` | Constant-time, jamais de code en clair. SHA-256 simple remplacé le 2026-10-20 (un million de codes : une copie du cache suffisait) | Chantier 01, chantier AUTH (D10) |
 | Templates email génériques paramétrés par `libelle_action` | Un seul couple `.html` / `.txt` pour tous les usages | Chantier 01 |
 | Onboard reste indépendant tant qu'il marche | Migration optionnelle, future, jamais bloquante | Chantier 01 |

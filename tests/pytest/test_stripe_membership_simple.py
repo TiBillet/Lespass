@@ -25,6 +25,22 @@ def _random_id():
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
 
 
+def _client_connecte_pour(email):
+    """
+    Client de test connecté avec un compte activé à cet email (créé ici).
+    Adhérer exige d'être connecté (MembershipMVT.get_permissions).
+    / Test client logged in with an activated account for this email.
+    Joining requires login.
+    """
+    from django.test import Client
+    from AuthBillet.models import TibilletUser
+
+    utilisateur = TibilletUser.objects.create(email=email, username=email, is_active=True)
+    client = Client(HTTP_HOST="lespass.tibillet.localhost")
+    client.force_login(utilisateur)
+    return client
+
+
 def _create_membership_product(api_client, auth_headers, name, price_name,
                                 price_amount="10.00", free_price=False,
                                 form_fields=None, manual_validation=False,
@@ -82,11 +98,12 @@ def _create_membership_product(api_client, auth_headers, name, price_name,
     return data, price_uuid
 
 
-def _submit_membership_form(api_client, price_uuid, email, firstname="Test",
+def _submit_membership_form(price_uuid, email, firstname="Test",
                              lastname="User", custom_amount=None,
                              form_fields_data=None):
-    """Helper : POST le formulaire d'adhesion comme le ferait le navigateur.
-    / Helper: POST the membership form as the browser would.
+    """Helper : POST le formulaire d'adhesion comme le ferait le navigateur,
+    avec une personne connectee a cet email.
+    / Helper: POST the membership form as the browser would, logged in with this email.
     """
     post_data = {
         "price": price_uuid,
@@ -101,7 +118,7 @@ def _submit_membership_form(api_client, price_uuid, email, firstname="Test",
     if form_fields_data:
         post_data.update(form_fields_data)
 
-    resp = api_client.post(
+    resp = _client_connecte_pour(email).post(
         "/memberships/",
         data=post_data,
         HTTP_REFERER="https://lespass.tibillet.localhost/memberships/",
@@ -143,7 +160,7 @@ class TestStripeMembershipSimple:
         )
 
         # 2. Soumettre le formulaire
-        resp = _submit_membership_form(api_client, price_uuid, email)
+        resp = _submit_membership_form(price_uuid, email)
         # Le formulaire redirige vers Stripe (302) ou renvoie une page avec redirect JS
         assert resp.status_code in (200, 302, 303), (
             f"POST /memberships/ inattendu ({resp.status_code}): {resp.content[:300]}"
@@ -196,7 +213,7 @@ class TestStripeMembershipSimple:
 
         # 2. Soumettre avec les champs dynamiques
         resp = _submit_membership_form(
-            api_client, price_uuid, email,
+            price_uuid, email,
             form_fields_data={
                 "form__chantiers": "on",
                 "form__interets": "Art",
@@ -241,7 +258,7 @@ class TestStripeMembershipSimple:
 
         # 2. Soumettre avec montant custom 15€
         resp = _submit_membership_form(
-            api_client, price_uuid, email,
+            price_uuid, email,
             custom_amount="15.00",
         )
         assert resp.status_code in (200, 302, 303)
@@ -395,7 +412,7 @@ class TestStripeMembershipSimple:
             for field in ssa_product.form_fields.filter(required=True):
                 post_data[f"form__{field.name}"] = "TestSSA"
 
-        resp = api_client.post("/memberships/", data=post_data)
+        resp = _client_connecte_pour(email).post("/memberships/", data=post_data)
         assert resp.status_code in (200, 302, 303)
 
         # Simuler retour Stripe

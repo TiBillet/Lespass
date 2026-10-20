@@ -207,13 +207,13 @@ def test_e2_un_anonyme_qui_veut_ajouter_au_panier_voit_le_panneau_de_connexion(
     page, e2e_slugs
 ):
     """
-    Visiteur anonyme : le bouton « Connectez-vous pour ajouter au panier » ouvre le panneau
-    de connexion (le panier exige d'être connecté).
-    / Anonymous visitor: "Log in to add to cart" opens the login panel.
+    Visiteur anonyme : le seul bouton du formulaire, « Se connecter pour réserver », ouvre
+    le panneau de connexion (réserver et le panier exigent d'être connecté).
+    / Anonymous visitor: the only button, "Log in to book", opens the login panel.
     """
     ouvrir_le_panneau_de_reservation(page, e2e_slugs["event_payant_slug"])
 
-    page.locator('[data-testid="booking-add-to-cart-login"]').click()
+    page.locator('[data-testid="booking-login"]').click()
 
     expect(page.locator("#loginPanel")).to_have_class(
         re.compile(r"\bshow\b"), timeout=5_000

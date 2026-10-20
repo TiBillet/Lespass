@@ -379,6 +379,15 @@ CACHES = {
 SOLO_CACHE = 'default'
 TENANT_LIMIT_SET_CALLS = True
 
+# Connexion par code (AuthBillet/connexion_par_code.py) : nombre maximum de
+# demandes de code par adresse IP, par tranche de 10 minutes, tous lieux confondus.
+# Le chiffre est haut exprès : le wifi d'un festival met des milliers de personnes
+# derrière une seule adresse IP. Avant un très gros festival, on l'augmente dans
+# le .env, puis on redémarre le conteneur. Une valeur vide = 500.
+# / Login code requests per IP per 10-minute window, all venues together.
+#   High on purpose (festival wifi = one IP). Empty value = 500.
+CONNEXION_CODE_PLAFOND_IP_10_MIN = int(os.environ.get('CONNEXION_CODE_PLAFOND_IP_10_MIN') or 500)
+
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
     # Redirige (301) vers le domaine principal du tenant si on arrive sur un

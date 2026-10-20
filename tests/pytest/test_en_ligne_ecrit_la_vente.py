@@ -705,34 +705,45 @@ def test_reservation_freeres_seule_aucune_vente(lieu):
 
 def test_reservation_a_zero_annulee_garde_sa_vente_reglee(lieu):
     """
-    Trou T16 (accepté). Un visiteur anonyme réserve le dernier billet à 0 € d'un concert
-    (jauge 1). Son compte n'est pas encore activé : la réservation attend la confirmation
-    de son adresse mail (FREERES). La vente est déjà encaissée à 0.
+    Trou T16 (accepté). Une ancienne réservation gratuite en attente (FREERES) du dernier
+    billet à 0 € d'un concert (jauge 1) : le compte du visiteur n'est pas encore activé, la
+    vente est déjà encaissée à 0.
     Il confirme 40 minutes plus tard : sa place n'est plus retenue, et une autre personne
     a pris le dernier billet entre-temps. La réservation passe ANNULEE. La vente, elle,
     reste REGLEE à 0, numérotée : montant 0, aucun effet comptable.
-    / T16 (accepted): a 0 € reservation cancelled afterwards (seat lost while waiting for
-    the email confirmation) keeps its sale settled at 0.
+    Une réservation gratuite est créée directement en FREERES_USERACTIV
+    (BaseBillet/validators.py) : on la fait par le formulaire, puis on la remet en base
+    dans l'état d'une ancienne réservation en attente (statut FREERES, billet non actif,
+    compte non activé). Sa vente reste celle du formulaire.
+    / T16 (accepted): an old pending 0 € reservation, cancelled when the account is
+    activated too late, keeps its sale settled at 0. Booked through the form, then set
+    back in the database to the state of an old pending reservation.
     """
     from datetime import timedelta as duree
 
-    client_anonyme = client_connecte()
+    from BaseBillet.models import Ticket
+
+    visiteur = creer_utilisateur()
+    client_du_visiteur = client_connecte(visiteur)
     concert = creer_evenement_avec_tarif(prix="0.00", jauge_max=1)
-    email_du_visiteur = f"test+chantierpanier{identifiant_unique()}@mock.test"
-    client_anonyme.post(
+    client_du_visiteur.post(
         f"/event/{concert.evenement.slug}/reservation/",
         {
             "event": str(concert.evenement.uuid),
-            "email": email_du_visiteur,
+            "email": visiteur.email,
             str(concert.tarif.uuid): "1",
         },
         **EN_TETE_HTMX,
     )
-    visiteur = TibilletUser.objects.get(email=email_du_visiteur)
     reservation = Reservation.objects.get(
         user_commande=visiteur, event=concert.evenement
     )
-    assert reservation.status == Reservation.FREERES
+    # `update()` : ni machine à états, ni signal du compte.
+    # / update(): no state machine, no account signal.
+    Reservation.objects.filter(pk=reservation.pk).update(status=Reservation.FREERES)
+    reservation.tickets.update(status=Ticket.NOT_ACTIV)
+    TibilletUser.objects.filter(pk=visiteur.pk).update(is_active=False)
+    visiteur.refresh_from_db()
 
     # La place n'est plus retenue (plus de 30 minutes), et le dernier billet est vendu
     # à une autre personne. `update()` : `Reservation.datetime` est en auto_now

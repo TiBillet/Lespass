@@ -5565,7 +5565,9 @@ class ReservationAdmin(ModelAdmin):
 
     # Deux boutons d'envoi, jamais affichés en même temps :
     # - « renvoyer les billets » : la réservation a au moins un billet valide ;
-    # - « valider et envoyer » : la réservation attend la validation du mail (FREERES).
+    # - « valider et envoyer » : une ancienne réservation gratuite encore en FREERES (F),
+    #   qui attend l'activation du compte. Les nouvelles réservations gratuites sont
+    #   toujours FA (BaseBillet/validators.py, TicketCreator).
     # / Two sending buttons, never shown together.
     actions_detail = ["send_ticket_to_mail", "validate_and_send_ticket_to_mail", ]
 
@@ -5594,13 +5596,15 @@ class ReservationAdmin(ModelAdmin):
     )
     def validate_and_send_ticket_to_mail(self, request, object_id):
         """
-        Valide une réservation gratuite en attente du mail, puis envoie les billets.
-        / Validates a free booking waiting for email validation, then sends the tickets.
+        Valide une ancienne réservation gratuite en attente (FREERES), puis envoie les billets.
+        / Validates an old pending free booking (FREERES), then sends the tickets.
 
         LOCALISATION : Administration/admin_tenant.py
 
         Le bouton n'apparaît que si la réservation est en FREERES (F).
         Voir has_validate_and_send_ticket_to_mail_permission.
+        Seules d'anciennes réservations sont en F : une réservation gratuite est créée
+        directement en FA (BaseBillet/validators.py, TicketCreator).
 
         Pas de contrôle de jauge ici : l'admin valide en connaissance de cause.
         Le compte de l'utilisateur reste non activé : seule la réservation est validée.
@@ -5629,8 +5633,9 @@ class ReservationAdmin(ModelAdmin):
 
     def has_send_ticket_to_mail_permission(self, request, object_id):
         # Bouton « renvoyer les billets » : affiché seulement s'il y a au moins un billet valide.
-        # Sans billet valide (attente du mail, annulée, non payée), le mail partirait sans PDF,
-        # et ticket_celery_mailer forcerait quand même la réservation en VALID.
+        # Sans billet valide (ancienne réservation gratuite en attente, annulée, non payée),
+        # le mail partirait sans PDF, et ticket_celery_mailer forcerait quand même la
+        # réservation en VALID.
         # Unfold appelle cette méthode pour afficher le bouton ET à l'appel de l'URL.
         # / "Resend tickets" button: shown only if the booking has at least one valid ticket.
         if not TenantAdminPermissionWithRequest(request):
@@ -5642,9 +5647,9 @@ class ReservationAdmin(ModelAdmin):
         return reservation_a_au_moins_un_billet_valide
 
     def has_validate_and_send_ticket_to_mail_permission(self, request, object_id):
-        # Bouton « valider et envoyer » : affiché seulement si la réservation attend
-        # la validation du mail (FREERES).
-        # / "Validate and send" button: shown only for bookings waiting for email validation.
+        # Bouton « valider et envoyer » : affiché seulement pour une ancienne réservation
+        # gratuite encore en FREERES (F), qui attend l'activation du compte.
+        # / "Validate and send" button: shown only for an old pending free booking (FREERES).
         if not TenantAdminPermissionWithRequest(request):
             return False
         reservation_attend_la_validation_du_mail = Reservation.objects.filter(
