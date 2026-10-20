@@ -4,7 +4,7 @@ Tests E2E : connexion par code à 6 chiffres sur le guichet commun à tous les l
 
 LOCALISATION : tests/e2e/test_connexion_par_code.py
 
-Parcours testés (TECH_DOC/SESSIONS/TODO/AUTH-connexion-par-code-achat-connecte.md, §8.2) :
+Parcours testés (TECH_DOC/SESSIONS/OTP/CHANTIER-02-connexion-par-code-guichet.md, §8.2) :
 1. depuis un lieu, « Se connecter » mène au guichet ; on demande un code, on tape le
    code, on revient sur le lieu, connecté ;
 2. SSO : connecté sur `lespass`, on se connecte sur `festival` d'un clic, sans code ;

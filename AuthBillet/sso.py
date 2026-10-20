@@ -27,7 +27,7 @@ an optional warning. It carries no session.
 Ces fonctions ne connaissent ni la requête ni les gabarits.
 / These functions know neither the request nor the templates.
 
-Spec : TECH_DOC/SESSIONS/TODO/AUTH-connexion-par-code-achat-connecte.md (§3.3, §5.2).
+Spec : TECH_DOC/SESSIONS/OTP/CHANTIER-02-connexion-par-code-guichet.md (§3.3, §5.2).
 """
 
 import logging

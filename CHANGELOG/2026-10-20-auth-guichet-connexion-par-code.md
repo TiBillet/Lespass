@@ -27,7 +27,7 @@ Le code lit `jeton_de_session` à **chaque** requête d'une personne connectée.
 - Empreinte du code en HMAC-SHA256 avec la clé secrète (`salted_hmac`), plus un SHA-256 simple.
 - `OtpSession` supprimée (aucun utilisateur, et un code universel en DEBUG).
 
-**Pourquoi / Why :** un anonyme pouvait réserver au nom d'un autre (billets envoyés chez lui, quota et jauge pris), viser un tarif réservé aux adhérents, inonder une boîte mail, ou créer des comptes avant toute preuve de l'email. Et il fallait se reconnecter sur chaque lieu. Spec : `TECH_DOC/SESSIONS/TODO/AUTH-connexion-par-code-achat-connecte.md`.
+**Pourquoi / Why :** un anonyme pouvait réserver au nom d'un autre (billets envoyés chez lui, quota et jauge pris), viser un tarif réservé aux adhérents, inonder une boîte mail, ou créer des comptes avant toute preuve de l'email. Et il fallait se reconnecter sur chaque lieu. Spec : `TECH_DOC/SESSIONS/OTP/CHANTIER-02-connexion-par-code-guichet.md`.
 / Anonymous users could book in someone else's name, reach member-only prices, flood mailboxes and create accounts before proving the email; and each venue needed its own login.
 
 ### Fichiers modifies / Modified files

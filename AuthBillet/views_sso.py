@@ -26,7 +26,7 @@ RÉPONSES HTMX : toujours 200 avec le partiel, le message d'erreur dedans.
 htmx ne remplace pas le contenu d'une réponse 4xx. Jamais de Http404.
 / htmx answers are always 200 with the partial (htmx ignores 4xx bodies).
 
-Spec : TECH_DOC/SESSIONS/TODO/AUTH-connexion-par-code-achat-connecte.md (§5.3, §5.4).
+Spec : TECH_DOC/SESSIONS/OTP/CHANTIER-02-connexion-par-code-guichet.md (§5.3, §5.4).
 """
 
 import logging

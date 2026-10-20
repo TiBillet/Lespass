@@ -978,6 +978,8 @@ Le reste de la suite continue de se connecter par `login_as` (`__test_only__/for
 
 Relevées pendant la réalisation. Rien n'est changé dans le code : le mainteneur tranche.
 
+> Suite (2026-10-20) : relecture de sécurité Fable du code, inventaire de l'ancien code « attente de mail » et décisions UX dans [`CHANTIER-06-suites-guichet-securite-ux.md`](CHANTIER-06-suites-guichet-securite-ux.md). Le §7 sous-estime le déni de connexion ciblé : voir I-4.
+
 | # | Sujet | Constat | Options |
 |---|---|---|---|
 | E1 | `webhook_reservation` sans `on_commit` | `reservation_paid` (`BaseBillet/signals.py`) appelle `webhook_reservation.delay()` directement. Sous `transaction.atomic()` (API v2), la tâche peut partir avant le commit. Elle ne réessaie pas : `Reservation.objects.get` lève `DoesNotExist`, le webhook du lieu n'est pas appelé. D15 rend ce cas plus fréquent (toute réservation gratuite par l'API passe en `FA`) | Passer l'appel en `transaction.on_commit(...)`, comme `send_refund_to_laboutik` ; ou laisser tel quel |

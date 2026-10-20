@@ -27,7 +27,7 @@ CLÉS DU CACHE (<e> = 32 premiers caractères du SHA-256 de l'email) :
 - login_code:<e>:envois_de_l_heure    compteur d'envois       3600 s
 - login_code_ip:<ip>:demandes_des_10_min  compteur par IP      600 s
 
-Spec : TECH_DOC/SESSIONS/TODO/AUTH-connexion-par-code-achat-connecte.md (§5.1).
+Spec : TECH_DOC/SESSIONS/OTP/CHANTIER-02-connexion-par-code-guichet.md (§5.1).
 """
 
 import hashlib

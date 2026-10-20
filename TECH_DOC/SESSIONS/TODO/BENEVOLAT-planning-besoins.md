@@ -544,7 +544,7 @@ absente de `members[0]["labels"]`, faire un
 Sans `etiquettes_en_plus`, rien ne change pour les appels actuels.
 
 **Garde-fous :** pas de plafond de requêtes sur ce point d'entrée aujourd'hui (même constat
-que A4 dans `TODO/AUTH-connexion-par-code-achat-connecte.md`). Aucun compte TiBillet n'est
+que A4 dans `OTP/CHANTIER-02-connexion-par-code-guichet.md`). Aucun compte TiBillet n'est
 créé pour un email tapé ici : seul un membre Ghost l'est.
 
 ### 5.9 Rappel la veille et « Je ne peux plus venir » (D16)

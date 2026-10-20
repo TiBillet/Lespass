@@ -19,6 +19,8 @@ Le service est conçu pour servir plusieurs cas d'usage :
 | # | Chantier | Statut | Spec | Plan |
 |---|---|---|---|---|
 | 01 | Service OTP DRY stateless + helper session HTTP | ✅ Implémenté (2026-05-19). Helper session (`OtpSession`) supprimé le 2026-10-20 | [SPEC.md](SPEC.md) | [../EVENT_WIZARD/PLAN.md](../EVENT_WIZARD/PLAN.md) (session S1) |
+| 02 | Connexion par code sur un guichet commun (SSO entre lieux, déconnexion de partout), réservation et adhésion réservées aux connectés | ✅ Implémenté (2026-10-20, commits `97ebfb36`, `d3deb365`) | [CHANTIER-02-connexion-par-code-guichet.md](CHANTIER-02-connexion-par-code-guichet.md) | — |
+| 06 | Suites du guichet de connexion : relecture de sécurité Fable, ménage de l'ancien code « attente de mail », UX « Se connecter » | 📝 Relevé fait (2026-10-20), corrections à planifier | [CHANTIER-06-suites-guichet-securite-ux.md](CHANTIER-06-suites-guichet-securite-ux.md) | — |
 
 > **Statut d'usage (2026-10-20)** — chantier AUTH, non commité :
 > - `OtpSession` (`AuthBillet/otp_session.py`) est **supprimée**, avec ses 15 tests.
@@ -26,7 +28,7 @@ Le service est conçu pour servir plusieurs cas d'usage :
 > - La **connexion par code** utilise les fonctions pures de `otp_service.py`. Elle vit dans
 >   `AuthBillet/connexion_par_code.py` (code en cache, plafonds) et dans le **guichet commun**
 >   à tous les lieux (`AuthBillet/sso.py`, `AuthBillet/views_sso.py`, routes `/sso/…`).
->   Détail : [`../TODO/AUTH-connexion-par-code-achat-connecte.md`](../TODO/AUTH-connexion-par-code-achat-connecte.md).
+>   Détail : [`CHANTIER-02-connexion-par-code-guichet.md`](CHANTIER-02-connexion-par-code-guichet.md).
 > - L'empreinte du code est un HMAC-SHA256 avec la clé secrète (`salted_hmac`), plus un SHA-256 simple.
 > - L'**onboarding garde son propre OTP** (`onboard/services.py`, `generate_otp` / `verify_otp`,
 >   champs de `WaitingConfiguration`). Sa migration reste à faire : CHANTIER-03, toujours ouvert.
@@ -35,7 +37,7 @@ Le service est conçu pour servir plusieurs cas d'usage :
 
 | Idée | Description |
 |---|---|
-| ~~CHANTIER-02 — Login OTP~~ | **Fait** par le chantier AUTH (2026-10-20) : code en cache Django (memcached), guichet commun. Voir la note ci-dessus. |
+| ~~CHANTIER-02 — Login OTP~~ | **Fait** : voir [CHANTIER-02-connexion-par-code-guichet.md](CHANTIER-02-connexion-par-code-guichet.md). |
 | CHANTIER-03 — Migration onboard | Remplacer la logique OTP custom de `onboard/services.py` (basée sur `WaitingConfiguration.otp_*` champs) par des appels au service. Trois lignes à changer. |
 | CHANTIER-04 — Branchement SSO/OIDC | Étape de vérification email avant émission de l'access token, pour les flows OIDC où l'utilisateur n'a pas encore confirmé son adresse. |
 | CHANTIER-05 — TOTP (RFC 6238) | Extension du service à des codes time-based pour 2FA via app authenticator (Google Authenticator, Authy). Réutilise les templates email pour les codes de récupération. |

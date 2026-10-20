@@ -3939,7 +3939,7 @@ qui a un compte (« Plan complet ? » → « Régler »).
 
 ### Connexion par code et guichet commun (chantier AUTH, 2026-10-20)
 
-Spec : `TECH_DOC/SESSIONS/TODO/AUTH-connexion-par-code-achat-connecte.md`.
+Spec : `TECH_DOC/SESSIONS/OTP/CHANTIER-02-connexion-par-code-guichet.md`.
 
 **16.1 — Un compte non activé est vu comme anonyme.**
 `ModelBackend.get_user` refuse un compte `is_active=False`
