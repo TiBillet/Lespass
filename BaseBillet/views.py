@@ -4758,9 +4758,23 @@ class MembershipMVT(viewsets.ViewSet):
             # generer de bruit dans Sentry sur une soumission invalide attendue.
             # / Failed input validation (often a bot posting an empty/partial form). Not a server error.
             logger.info(f"Membership create — validation refusee : {membership_validator.errors}")
-            error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
-            messages.add_message(request, messages.ERROR, error_messages)
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
+            # Les erreurs s'affichent DANS le formulaire, sans recharger la page : la
+            # personne garde sa saisie. HX-Retarget envoie le partiel dans la zone
+            # #adhesion-erreurs du pied du formulaire (commun/adhesion/form.html).
+            # / Errors are shown inside the form, without reloading: input is kept.
+            messages_d_erreur = []
+            for liste_d_erreurs_du_champ in membership_validator.errors.values():
+                for erreur in liste_d_erreurs_du_champ:
+                    messages_d_erreur.append(str(erreur))
+            reponse_avec_les_erreurs = render(
+                request,
+                "commun/formulaires/reservation_erreurs.html",
+                context={"messages_d_erreur": messages_d_erreur},
+            )
+            reponse_avec_les_erreurs["HX-Retarget"] = "#adhesion-erreurs"
+            reponse_avec_les_erreurs["HX-Reswap"] = "innerHTML"
+            return reponse_avec_les_erreurs
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -7374,6 +7388,49 @@ class PanierMVT(viewsets.ViewSet):
             })
         return response
 
+    def _refus_dans_le_formulaire(self, request, message):
+        """
+        Refus d'un ajout au panier, affiché DANS le formulaire d'origine.
+        / Cart add refusal, shown INSIDE the originating form.
+
+        LOCALISATION : BaseBillet/views.py (dans PanierMVT).
+
+        Les boutons « Ajouter au panier » des formulaires visent la zone d'erreurs de
+        leur formulaire (hx-target) :
+        - commun/formulaires/reservation.html -> #reservation-erreurs ;
+        - commun/adhesion/form.html -> #adhesion-erreurs ;
+        - booking/partials/book_form.html -> #ressource-erreurs.
+        Le message s'y affiche comme ceux de « Payer maintenant » (même partiel).
+        Pas de toast : panier_scripts.html ne ferme alors pas le panneau.
+        / Cart buttons target their form's error zone; same partial as direct payment.
+        No toast, so panier_scripts.html keeps the panel open.
+
+        La réponse porte aussi le badge du panier (hx-swap-oob) : « Ajouter au panier et
+        payer » ajoute l'article AVANT de payer. Si le paiement est refusé, l'article
+        reste au panier, et le badge doit le montrer. htmx retire le badge de la réponse,
+        la zone d'erreurs ne reçoit que le message.
+        / The response also carries the OOB cart badge: on a refused "add and pay", the
+        item stays in the cart and the badge must show it.
+
+        Un ajout réussi répond avec _render_badge_and_toast : son corps ne contient
+        que le badge (hx-swap-oob), la zone d'erreurs est donc vidée.
+        / A successful add returns only the OOB badge: the error zone is emptied.
+        """
+        from django.template.loader import render_to_string
+        from django.http import HttpResponse
+
+        message_html = render_to_string(
+            "commun/formulaires/reservation_erreurs.html",
+            context={"messages_d_erreur": [str(message)]},
+            request=request,
+        )
+        badge_html = render_to_string(
+            "htmx/components/panier_badge.html",
+            context=get_context(request),
+            request=request,
+        )
+        return HttpResponse(message_html + badge_html)
+
     # --- GET /panier/ ---
     def list(self, request):
         """Page panier : récap complet, modif, total, bouton checkout."""
@@ -7464,7 +7521,7 @@ class PanierMVT(viewsets.ViewSet):
                 request, [tarif_choisi.product],
             )
             if erreur_du_formulaire:
-                return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+                return self._refus_dans_le_formulaire(request, erreur_du_formulaire)
 
         panier = PanierSession(request)
         try:
@@ -7479,18 +7536,16 @@ class PanierMVT(viewsets.ViewSet):
                 newsletter=newsletter_cochee,
             )
         except InvalidItemError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
+            return self._refus_dans_le_formulaire(request, exc)
         except Exception as exc:
             logger.error(f"add_membership unexpected error: {exc}")
-            return self._render_badge_and_toast(
-                request, message=_("Unable to add membership."), level='error'
-            )
+            return self._refus_dans_le_formulaire(request, _("Unable to add membership."))
         # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
         # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
         # / If the "Add to cart and pay" button sent `then=checkout`, chain
         # directly to checkout (Stripe redirect or free order).
         if request.POST.get('then') == 'checkout':
-            return self.checkout(request)
+            return self.checkout(request, refus_dans_le_formulaire=True)
         return self._render_badge_and_toast(request, message=_("Membership added to cart."))
 
     # --- POST /panier/remove/<int:pk>/ ---
@@ -7562,12 +7617,22 @@ class PanierMVT(viewsets.ViewSet):
 
     # --- POST /panier/checkout/ ---
     @action(detail=False, methods=['POST'], url_path='checkout')
-    def checkout(self, request):
+    def checkout(self, request, refus_dans_le_formulaire=False):
         """
         Matérialise le panier en Commande → redirect Stripe (payant) ou
         my_account (gratuit). Utilise request.user comme buyer (auth required).
         / Materialize cart → Stripe redirect (paid) or my_account (free).
         Uses request.user as buyer (auth required).
+
+        `refus_dans_le_formulaire` : True quand un bouton « Ajouter au panier et
+        payer » d'un formulaire enchaîne sur le paiement (add_*). Un refus s'affiche
+        alors dans le formulaire. Depuis la page panier, il reste un toast.
+        / True when chained from a form's "Add to cart and pay": refusals go in the form.
+
+        Exception : si un AUTRE article du panier n'est plus valide au moment de payer
+        (materialiser renvoie success=False), on renvoie toujours vers la page panier,
+        avec les messages. Le problème concerne le panier, pas le formulaire en cours.
+        / Exception: an invalid OTHER cart item always redirects to the cart page.
         """
         from BaseBillet.services_commande import CommandeService, CommandeServiceError
         from BaseBillet.services_panier import PanierSession, InvalidItemError
@@ -7607,6 +7672,7 @@ class PanierMVT(viewsets.ViewSet):
                 backup_first_name = membership_temp.get("firstname")
                 backup_last_name = membership_temp.get("lastname")
 
+        message_du_refus = None
         try:
             commande, success = CommandeService.materialiser(
                 panier, user,
@@ -7614,15 +7680,16 @@ class PanierMVT(viewsets.ViewSet):
                 last_name=user.last_name or backup_last_name,
                 email=user.email,
             )
-        except InvalidItemError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
-        except CommandeServiceError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except (InvalidItemError, CommandeServiceError) as exc:
+            message_du_refus = str(exc)
         except Exception as exc:
             logger.error(f"CommandeService.materialiser failed: {exc}")
-            return self._render_badge_and_toast(
-                request, message=_("Checkout failed. Please try again."), level='error'
-            )
+            message_du_refus = _("Checkout failed. Please try again.")
+
+        if message_du_refus is not None:
+            if refus_dans_le_formulaire:
+                return self._refus_dans_le_formulaire(request, message_du_refus)
+            return self._render_badge_and_toast(request, message=message_du_refus, level='error')
 
         # Check si l'état du flag success, puis affiche les erreurs retournées par "materialiser"
         if not success:
@@ -7699,30 +7766,42 @@ class PanierMVT(viewsets.ViewSet):
             except Event.DoesNotExist:
                 event = None
         if event is None:
-            return self._render_badge_and_toast(
-                request, message=_("Event not found."), level='error',
-            )
+            return self._refus_dans_le_formulaire(request, _("Event not found."))
 
         panier = PanierSession(request)
         added_count_before = len(panier.items())
+        # Copie du panier avant la demande : les limites y lisent « déjà au panier »,
+        # sans compter les tarifs ajoutés plus tôt dans cette même demande.
+        # / Cart copy before the request: limits read "already in cart" from it.
+        items_du_panier_avant_la_demande = panier.items()
 
         # Extraire options de l'event / Extract event options
         options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
-        # Réponses au formulaire personnalisé : on ne lit que les questions des produits
-        # dont au moins un billet est demandé (comme ReservationValidator). Sinon une
-        # question obligatoire d'un produit non choisi bloquerait l'ajout.
-        # / Custom form answers: only questions of products with a requested ticket.
+        # On relève ce que demande le formulaire, avant tout ajout :
+        # - quantites_de_la_demande : chaque tarif demandé et sa quantité. Les limites
+        #   par personne sont vérifiées sur la demande entière, comme en réservation
+        #   directe (services_panier.validate_ticket_cart_limits) ;
+        # - produits_demandes : les produits dont au moins un billet est demandé. On ne
+        #   lit que leurs questions (comme ReservationValidator) : une question
+        #   obligatoire d'un produit non choisi ne doit pas bloquer l'ajout.
+        # / What the form asks for, before any add:
+        # - quantites_de_la_demande: each requested price and its quantity (limits);
+        # - produits_demandes: products with a requested ticket (their questions only).
+        quantites_de_la_demande = {}
         produits_demandes = []
         for produit_de_l_evenement in event.products.all():
             for tarif_du_produit in produit_de_l_evenement.prices.filter(archived=False):
-                if quantite_de_billets_demandee(request.POST.get(str(tarif_du_produit.uuid))):
+                quantite = quantite_de_billets_demandee(request.POST.get(str(tarif_du_produit.uuid)))
+                if quantite is None:
+                    continue
+                quantites_de_la_demande[tarif_du_produit] = quantite
+                if produit_de_l_evenement not in produits_demandes:
                     produits_demandes.append(produit_de_l_evenement)
-                    break
         custom_form, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
             request, produits_demandes,
         )
         if erreur_du_formulaire:
-            return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+            return self._refus_dans_le_formulaire(request, erreur_du_formulaire)
 
         # Code promo saisi dans booking_form (champ `promotional_code`).
         # Valide cote serveur dans PanierSession.add_ticket (existence, actif,
@@ -7740,9 +7819,7 @@ class PanierMVT(viewsets.ViewSet):
                 is_active=True,
             ).exists()
             if not code_saisi_existe:
-                return self._render_badge_and_toast(
-                    request, message=_("Invalid or inactive promotional code."), level='error',
-                )
+                return self._refus_dans_le_formulaire(request, _("Invalid or inactive promotional code."))
 
         items_added = 0
         code_promo_applique_a_un_billet = False
@@ -7792,6 +7869,8 @@ class PanierMVT(viewsets.ViewSet):
                         options=options_ids,
                         custom_form=custom_form,
                         promotional_code_name=item_promo,
+                        items_du_panier_avant_la_demande=items_du_panier_avant_la_demande,
+                        quantites_de_la_demande=quantites_de_la_demande,
                     )
                     items_added += 1
 
@@ -7808,14 +7887,10 @@ class PanierMVT(viewsets.ViewSet):
             added_after = len(panier.items())
             for _idx in range(added_after - added_count_before):
                 panier.remove_item(added_count_before)
-            return self._render_badge_and_toast(
-                request, message=str(exc), level='error',
-            )
+            return self._refus_dans_le_formulaire(request, exc)
 
         if items_added == 0:
-            return self._render_badge_and_toast(
-                request, message=_("No tickets selected."), level='error',
-            )
+            return self._refus_dans_le_formulaire(request, _("No tickets selected."))
 
         message = ngettext(
             "%(count)d ticket added to cart.",
@@ -7826,7 +7901,7 @@ class PanierMVT(viewsets.ViewSet):
         # on enchaine directement sur le checkout.
         # / If "Add to cart and pay" button sent `then=checkout`, chain to checkout.
         if request.POST.get('then') == 'checkout':
-            return self.checkout(request)
+            return self.checkout(request, refus_dans_le_formulaire=True)
         return self._render_badge_and_toast(request, message=message)
 
     @action(detail=False, methods=["POST"], url_path="add/resource")
@@ -7869,9 +7944,7 @@ class PanierMVT(viewsets.ViewSet):
 
         # If it doesn't exist, return an error
         if resource is None:
-            return self._render_badge_and_toast(
-                request, message=_("Resource not found."), level='error',
-            )
+            return self._refus_dans_le_formulaire(request, _("Resource not found."))
 
         # Validation centralisée du formulaire ressource.
         # / Centralized resource form validation.
@@ -7882,35 +7955,7 @@ class PanierMVT(viewsets.ViewSet):
         )
 
         if error_message:
-            start_datetime = validation_result.get('start_datetime')
-            requested_slot = validation_result.get('requested_slot')
-            consecutive_slots = validation_result.get('consecutive_slots', [])
-            window_end = validation_result.get('window_end')
-
-            cancellation_deadline = None
-            cancellation_possible = False
-            if start_datetime:
-                cancellation_deadline = start_datetime - timedelta(
-                    hours=resource.cancellation_deadline_hours,
-                )
-                cancellation_possible = timezone.now() <= cancellation_deadline
-
-            context = get_context(request)
-            context.update({
-                'resource': resource,
-                'slot': requested_slot,
-                'consecutive_slots': consecutive_slots,
-                'max_slot_count': validation_result.get('max_slot_count', 0),
-                'slot_duration_minutes': validation_result.get('slot_duration_minutes'),
-                'start_datetime': start_datetime,
-                'group_end': consecutive_slots[-1].end if consecutive_slots else window_end,
-                'cancellation_deadline': cancellation_deadline,
-                'cancellation_possible': cancellation_possible,
-                'error': validation_result.get('error', error_message),
-            })
-            if request.htmx:
-                return render(request, 'booking/partials/book_form.html', context, status=422)
-            return render(request, 'booking/views/book.html', context)
+            return self._refus_dans_le_formulaire(request, error_message)
 
         start_datetime = validation_result['start_datetime']
         slot_duration_minutes = validation_result['slot_duration_minutes']
@@ -7944,8 +7989,8 @@ class PanierMVT(viewsets.ViewSet):
 
         # Réponses au formulaire dynamique du produit de la ressource, validées comme
         # dans la réservation directe (booking/views.py _book_post). Une question
-        # obligatoire sans réponse bloque l'ajout au panier avec un toast.
-        # / Dynamic form answers, validated like the direct flow; toast on error.
+        # obligatoire sans réponse bloque l'ajout au panier.
+        # / Dynamic form answers, validated like the direct flow.
         produits_avec_questions = []
         if resource.product is not None:
             produits_avec_questions = [resource.product]
@@ -7953,7 +7998,7 @@ class PanierMVT(viewsets.ViewSet):
             request, produits_avec_questions,
         )
         if erreur_du_formulaire:
-            return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+            return self._refus_dans_le_formulaire(request, erreur_du_formulaire)
 
         panier = PanierSession(request)
         try:
@@ -7973,16 +8018,14 @@ class PanierMVT(viewsets.ViewSet):
                 promotional_code_name=item_promo,
             )
         except InvalidItemError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
+            return self._refus_dans_le_formulaire(request, exc)
         except Exception as exc:
             logger.error(f"add_resource unexpected error: {exc}")
-            return self._render_badge_and_toast(
-                request, message=_("Unable to add resource."), level='error'
-            )
+            return self._refus_dans_le_formulaire(request, _("Unable to add resource."))
         # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
         # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
         # / If the "Add to cart and pay" button sent `then=checkout`, chain
         # directly to checkout (Stripe redirect or free order).
         if request.POST.get('then') == 'checkout':
-            return self.checkout(request)
+            return self.checkout(request, refus_dans_le_formulaire=True)
         return self._render_badge_and_toast(request, message=_("Resource added to cart."))

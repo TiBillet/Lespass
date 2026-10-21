@@ -37,20 +37,6 @@ DEPENDENCIES :
     </style>
 
     <!--
-    Message d'erreur generique (validation POST).
-    / Generic error message (POST validation).
-    -->
-    {% if error %}
-        <div class="alert alert-danger" role="alert" data-testid="booking-error-msg">
-            {% if error.non_field_errors %}
-                {% for msg in error.non_field_errors %}{{ msg }} {% endfor %}
-            {% else %}
-                {{ error }}
-            {% endif %}
-        </div>
-    {% endif %}
-
-    <!--
     Informations sur le creneau de depart.
     / Information about the starting slot.
     -->
@@ -443,6 +429,25 @@ DEPENDENCIES :
         {% endif %}
 
         <!--
+        Zone d'erreurs, juste au-dessus des boutons. Deux sources, un seul endroit :
+        - « Payer maintenant » : _book_post réaffiche ce partial avec `error` (422) ;
+        - « Ajouter au panier » : PanierMVT.add_resource remplit cette zone seule
+          (hx-target des boutons du panier). Les champs remplis restent.
+        / Error zone above the buttons: direct booking (re-render) and cart (hx-target).
+        -->
+        <div id="ressource-erreurs" aria-live="assertive" data-testid="resource-server-errors">
+            {% if error %}
+                <div class="alert alert-danger" role="alert" data-testid="booking-error-msg">
+                    {% if error.non_field_errors %}
+                        {% for msg in error.non_field_errors %}{{ msg }} {% endfor %}
+                    {% else %}
+                        {{ error }}
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+
+        <!--
         Boutons d'action.
         / Action buttons.
         -->
@@ -463,7 +468,8 @@ DEPENDENCIES :
                             class="btn btn-primary w-100 mb-2"
                             hx-post="/panier/add/resource/"
                             hx-include="closest form"
-                            hx-swap="none"
+                            hx-target="#ressource-erreurs"
+                            hx-swap="innerHTML"
                             data-loading-disable
                             data-testid="resource-add-to-cart"
                             aria-label="{% translate 'Add this resource to your cart' %}">
@@ -475,7 +481,8 @@ DEPENDENCIES :
                             hx-post="/panier/add/resource/"
                             hx-include="closest form"
                             hx-vals='{"then": "checkout"}'
-                            hx-swap="none"
+                            hx-target="#ressource-erreurs"
+                            hx-swap="innerHTML"
                             data-loading-disable
                             data-testid="resource-add-and-pay"
                             aria-label="{% translate 'Add to cart and pay all items' %}">
@@ -487,7 +494,8 @@ DEPENDENCIES :
                             class="btn btn-primary w-100 mb-2"
                             hx-post="/panier/add/resource/"
                             hx-include="closest form"
-                            hx-swap="none"
+                            hx-target="#ressource-erreurs"
+                            hx-swap="innerHTML"
                             data-loading-disable
                             data-testid="resource-add-to-cart"
                             aria-label="{% translate 'Add this resource to your cart' %}">

@@ -286,9 +286,9 @@ def test_reservation_directe_en_erreur_reaffiche_les_reponses_deja_tapees(lieu):
     assert 'value="Jazz manouche"' in reponse.content.decode()
 
 
-def test_panier_question_obligatoire_vide_donne_un_toast_et_un_panier_vide(lieu):
-    """Avec panier : une question obligatoire vide bloque l'ajout avec un toast d'erreur.
-    / Cart: an empty required question blocks the add with an error toast."""
+def test_panier_question_obligatoire_vide_donne_une_erreur_et_un_panier_vide(lieu):
+    """Avec panier : une question obligatoire vide bloque l'ajout, erreur dans le formulaire.
+    / Cart: an empty required question blocks the add, error shown in the form."""
     acheteur = creer_utilisateur()
     client = client_connecte(acheteur)
     location = creer_ressource_avec_tarif(prix="0.00")
@@ -296,7 +296,10 @@ def test_panier_question_obligatoire_vide_donne_un_toast_et_un_panier_vide(lieu)
 
     reponse = reserver_une_ressource(AVEC_PANIER, client, location, {})
 
-    assert niveau_du_toast(reponse) == "error"
+    # Refus affiché dans la zone d'erreurs du formulaire, sans toast.
+    # / Refusal shown in the form's error zone, no toast.
+    assert niveau_du_toast(reponse) is None
+    assert 'data-testid="booking-server-errors-list"' in reponse.content.decode()
     assert client.session.get("panier", {}).get("items", []) == []
     assert booking_de(acheteur, location) is None
 

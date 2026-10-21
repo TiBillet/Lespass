@@ -8,15 +8,18 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_cloture_rapport.html
 STYLE : laboutik/static/css/ventes.css (blocs .kpi-*, .mini-table, puis bloc CLOTURE)
 
 Affiche l'essentiel du rapport stocke dans la J (`comptabilite.ClotureCaisse`) :
-- un bloc total a gauche (chiffre d'affaires TTC), les exports empiles a droite ;
+- un bloc total a gauche (chiffre d'affaires TTC), le bouton « Imprimer un
+  duplicata » a droite (CaisseViewSet.imprimer_duplicata_z) ;
 - le chiffre d'affaires, les reglements (argent, cashless, hors argent), le tiroir
   (caisse especes), chacun dans un mini-tableau ;
 - la phrase de reconciliation ;
-- un lien vers la fiche complete de la cloture dans l'admin (le Z couvre aussi les
-  ventes en ligne : le detail est la-bas) ;
 - un seul geste de sortie en bas : « Fermer la caisse ».
-/ Shows the essential sections of the J's stored report, the reconciliation
-  sentence and a link to the full admin page.
+Aucun retour en arriere (le header arrive en hx-swap-oob, sans bouton retour), aucun
+lien vers l'admin, aucun telechargement : le PDF, le CSV et l'envoi du rapport sont
+reserves a l'admin (fiche de la cloture).
+/ Shows the essential sections of the J's stored report and the reconciliation
+  sentence. Only two actions: print a duplicate, close the register. No back
+  button, no admin link, no download (admin only).
 
 ACCES : Ventes → « Clôturer toutes les caisses » → « Confirmer la clôture »
         → hx-post CaisseViewSet.cloturer() → remplace #ventes-zone.
@@ -26,6 +29,12 @@ CONTEXTE : `_contexte_de_l_ecran_du_z` (laboutik/views.py). Les sections viennen
 ecrits a la francaise, aucune regle d'affichage n'est recopiee ici.
 / Context built by _contexte_de_l_ecran_du_z; sections come from the presentation.
 -->
+{# Header : titre « Clôture » et AUCUN bouton retour. Il remplace en hx-swap-oob #}
+{# celui de l'ecran Ventes (son retour ramenait a la caisse). #}
+{# / Header: "Clôture" title and NO back button, swapped out-of-band. #}
+{% translate "Clôture" as titre_ecran_du_z %}
+{% include "laboutik/partial/_hdr_retour_zone.html" with hdr_titre=titre_ecran_du_z hdr_oob=True hdr_sans_retour=True %}
+
 <div class="ventes-body" data-testid="cloture-rapport">
   <div class="ventes-view">
 
@@ -42,45 +51,23 @@ ecrits a la francaise, aucune regle d'affichage n'est recopiee ici.
         </span>
       </div>
 
-      <!-- Exports du rapport : actions neutres, empilees comme sur l'ecran Ventes -->
-      <!-- / Report exports: neutral actions, stacked like on the Sales screen -->
-      <div class="kpi-actions-stack" role="group" aria-label="{% translate 'Exporter le rapport' %}">
-        <a class="kpi-block kpi-action kpi-action-neutre"
-           href="{% url 'laboutik-caisse-rapport_pdf' pk=cloture.uuid %}"
-           download
-           data-testid="cloture-btn-pdf">
-          <span class="kpi-lbl">{% translate "Télécharger le PDF" %}</span>
-        </a>
-        <a class="kpi-block kpi-action kpi-action-neutre"
-           href="{% url 'laboutik-caisse-rapport_csv' pk=cloture.uuid %}"
-           download
-           data-testid="cloture-btn-csv">
-          <span class="kpi-lbl">{% translate "Télécharger le CSV" %}</span>
-        </a>
+      <!-- Le seul geste de la page avec « Fermer la caisse » : un duplicata du Z -->
+      <!-- / The page's only action besides "Close the register": a Z duplicate -->
+      <div class="kpi-actions-stack" data-testid="cloture-actions">
         <button type="button"
                 class="kpi-block kpi-action kpi-action-neutre"
-                hx-post="{% url 'laboutik-caisse-envoyer_rapport' pk=cloture.uuid %}"
-                hx-target="#messages"
+                hx-post="{% url 'laboutik-caisse-imprimer_duplicata_z' pk=cloture.uuid %}"
+                hx-target="#cloture-retour-impression"
                 hx-swap="innerHTML"
                 data-loading-disable
-                data-testid="cloture-btn-email">
-          <span class="kpi-lbl">{% translate "Envoyer par email" %}</span>
+                data-testid="cloture-btn-duplicata">
+          <span class="kpi-lbl">{% translate "Imprimer un duplicata" %}</span>
         </button>
-        <a class="kpi-block kpi-action kpi-action-neutre"
-           href="{{ adresse_de_la_fiche_de_la_cloture }}"
-           target="_blank"
-           rel="noopener"
-           data-testid="cloture-lien-fiche-admin">
-          <span class="kpi-lbl">{% translate "Voir la fiche complète" %}<span class="sr-only"> ({% translate "nouvel onglet" %})</span></span>
-        </a>
       </div>
     </div>
 
-    {# Aide sous le lien : la fiche complete est dans l'administration #}
-    {# / Help under the link: the full page is in the admin #}
-    <p class="cloture-aide" data-testid="cloture-aide-fiche-admin">
-      {% translate "La fiche complète s'ouvre dans l'administration du lieu : il faut y être connecté." %}
-    </p>
+    {# Retour de l'impression du duplicata / Duplicate print feedback #}
+    <div id="cloture-retour-impression" class="recap-feedback" aria-live="polite"></div>
 
     <div class="mini-tables">
       {% if section_chiffre_affaires %}

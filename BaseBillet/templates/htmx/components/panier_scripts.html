@@ -55,12 +55,13 @@
         // / If HX-Redirect is present ("Add + pay" case), don't interfere.
         if (evt.detail.xhr.getResponseHeader('HX-Redirect')) return;
 
-        // Un refus du panier (limite par personne, stock, adhésion...) répond aussi
-        // en 200, avec un toast de niveau "error" dans HX-Trigger (PanierMVT.
-        // _render_badge_and_toast). On laisse alors le panneau ouvert : la personne
+        // Seul un ajout réussi ferme le panneau : il porte un toast "success" dans
+        // HX-Trigger (PanierMVT._render_badge_and_toast). Un refus répond aussi en 200,
+        // mais sans toast : le message est rendu dans la zone d'erreurs du formulaire
+        // (PanierMVT._refus_dans_le_formulaire). Le panneau reste ouvert, la personne
         // corrige sa saisie sans tout rouvrir.
-        // / A cart refusal also answers 200, with an "error" toast in HX-Trigger:
-        // keep the panel open so the person can fix their input.
+        // / Only a successful add closes the panel (success toast). A refusal has no
+        // toast: its message is in the form's error zone, the panel stays open.
         let niveau_du_toast = '';
         try {
             const declencheurs = JSON.parse(evt.detail.xhr.getResponseHeader('HX-Trigger') || '{}');
@@ -68,7 +69,7 @@
         } catch (erreur_de_lecture) {
             niveau_du_toast = '';
         }
-        if (niveau_du_toast === 'error') return;
+        if (niveau_du_toast !== 'success') return;
 
         const elt = evt.detail.elt;
         const offcanvasEl = elt && elt.closest ? elt.closest('.offcanvas') : null;

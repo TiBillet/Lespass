@@ -30,6 +30,9 @@ COMMUNICATION :
 - "Sortie de caisse" → hx-get sortie_de_caisse → #ventes-zone (hx_sortie_de_caisse.html)
 - Historiques → basculerHistorique() → htmx.ajax GET → #detail-contenu
 - "Confirmer la cloture" → hx-post cloturer → #ventes-zone (hx_cloture_rapport.html)
+  Le bouton et sa popup n'existent que pour une carte primaire en mode gerant
+  (card.mode_gerant) ou sans carte (session admin). Sinon : un bouton desactive
+  « Cloture reservee au mode gerant ». Le serveur refait le controle (cloturer).
 - Zone retour du header : renvoyee en hx-swap-oob (_hdr_retour_zone.html)
 {% endcomment %}
 
@@ -115,11 +118,21 @@ COMMUNICATION :
                     data-testid="btn-imprimer-ticket-x">
               <span class="kpi-lbl">{% translate "Imprimer Ticket X" %}</span>
             </button>
-            <button type="button" class="kpi-block kpi-action kpi-action-danger"
-                    onclick="document.getElementById('cloture-modal').hidden = false"
-                    data-testid="btn-cloture-caisse">
-              <span class="kpi-lbl">{% translate "Clôturer toutes les caisses" %}</span>
-            </button>
+            {# Cloture : carte en mode gerant, ou session admin sans carte #}
+            {# / Closure: manager-mode card, or admin session without card #}
+            {% if card.mode_gerant or not card.tag_id %}
+              <button type="button" class="kpi-block kpi-action kpi-action-danger"
+                      onclick="document.getElementById('cloture-modal').hidden = false"
+                      data-testid="btn-cloture-caisse">
+                <span class="kpi-lbl">{% translate "Clôturer toutes les caisses" %}</span>
+              </button>
+            {% else %}
+              <button type="button" class="kpi-block kpi-action kpi-action-neutre"
+                      disabled
+                      data-testid="btn-cloture-caisse-reservee-au-gerant">
+                <span class="kpi-lbl">{% translate "Clôture réservée au mode gérant" %}</span>
+              </button>
+            {% endif %}
           </div>
         </div>
 
@@ -300,6 +313,9 @@ COMMUNICATION :
         </section>
 
         {# ============ POPUP CLOTURE / CLOSURE POPUP ============ #}
+        {# Meme condition que le bouton « Clôturer toutes les caisses » #}
+        {# / Same condition as the "Close all registers" button #}
+        {% if card.mode_gerant or not card.tag_id %}
         <div class="card-modal" id="cloture-modal" hidden data-testid="cloture-confirmation"
              role="alertdialog" aria-modal="true" aria-labelledby="cloture-modal-texte">
           <div class="card-modal-backdrop" onclick="document.getElementById('cloture-modal').hidden = true"></div>
@@ -325,6 +341,7 @@ COMMUNICATION :
             </div>
           </div>
         </div>
+        {% endif %}
 
         {# Recoit la popup fond de caisse (hx_fond_de_caisse.html) #}
         {# / Receives the cash float popup #}

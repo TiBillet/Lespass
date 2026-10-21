@@ -107,11 +107,10 @@ from QrcodeCashless.services import (
     FedowInjoignable,
     trouver_ou_rapatrier_la_carte,
 )
-# La cloture unique du lieu (la J) et ses lecteurs : exports, presentation, envoi.
-# / The venue's single closure (J) and its readers.
-from comptabilite.csv_export import generer_csv_cloture
+# La cloture unique du lieu (la J) et sa presentation. Les telechargements et
+# l'envoi du rapport sont dans l'admin, jamais a la caisse.
+# / The venue's single closure (J) and its presentation. Downloads: admin only.
 from comptabilite.models import ClotureCaisse as ClotureCaisseUnique
-from comptabilite.pdf import generer_pdf_cloture
 from comptabilite.presentation import (
     codes_des_moyens_dans_l_ordre,
     euros_a_la_francaise,
@@ -124,7 +123,6 @@ from comptabilite.presentation import (
 from comptabilite.tasks import (
     creer_la_cloture_journaliere_de_la_caisse,
     demander_l_email_automatique_si_configure,
-    envoyer_email_cloture_demande,
 )
 from laboutik.models import (
     LaboutikConfiguration,
@@ -3686,7 +3684,8 @@ class CaisseViewSet(viewsets.ViewSet):
         LOCALISATION : laboutik/views.py
 
         FLUX :
-        1. Validation (point de vente, carte primaire).
+        1. Validation (point de vente, carte primaire en mode gerant : refus en 400
+           dans #messages sinon).
         2. `comptabilite.tasks.creer_la_cloture_journaliere_de_la_caisse` : la J, avec
            l'operateur et le point de vente. Rien a cloturer (aucune vente reglee
            depuis la derniere J) : 400, aucun autre effet.
@@ -3713,10 +3712,49 @@ class CaisseViewSet(viewsets.ViewSet):
 
         uuid_pv = serializer.validated_data["uuid_pv"]
 
-        # --- 2. Verifier que la carte primaire a acces au PV ---
-        # --- 2. Check that the primary card has access to the PV ---
+        # --- 2. Seule une carte primaire en MODE GERANT peut cloturer ---
+        # La J couvre tout le lieu : la carte n'a pas besoin d'etre liee au point
+        # de vente d'ou elle clique. Le mode gerant est LU EN BASE
+        # (CartePrimaire.edit_mode), jamais une valeur envoyee par le navigateur.
+        # Sans carte primaire (session admin) : pas de restriction.
+        # Le refus est rendu dans #messages (HX-Retarget) : la popup s'affiche
+        # par-dessus l'ecran Ventes, qui reste en place.
+        # / 2. Only a primary card in MANAGER MODE may close. The J covers the
+        #   whole venue: no point of sale link needed. Read from the database.
+        #   No card (admin session): no restriction. Refusal rendered in #messages.
         tag_id_carte_manager = request.POST.get("tag_id_cm", "")
-        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
+        if tag_id_carte_manager:
+            carte_primaire_obj, erreur_de_carte = _charger_carte_primaire(
+                tag_id_carte_manager
+            )
+            carte_en_mode_gerant = (
+                carte_primaire_obj is not None and carte_primaire_obj.edit_mode
+            )
+            if not carte_en_mode_gerant:
+                logger.warning(
+                    f"Cloture refusee : la carte {tag_id_carte_manager} "
+                    f"n'est pas une carte primaire en mode gerant."
+                )
+                if erreur_de_carte is not None:
+                    message_de_refus = erreur_de_carte
+                else:
+                    message_de_refus = _(
+                        "Seule une carte en mode gérant peut clôturer les caisses."
+                    )
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": message_de_refus,
+                    "selector_bt_retour": "#messages",
+                }
+                reponse_de_refus = render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+                reponse_de_refus["HX-Retarget"] = "#messages"
+                reponse_de_refus["HX-Reswap"] = "outerHTML"
+                return reponse_de_refus
 
         # --- 3. Charger le point de vente ---
         # --- 3. Load the point of sale ---
@@ -3793,14 +3831,7 @@ class CaisseViewSet(viewsets.ViewSet):
         printer_de_ce_terminal = imprimante_du_terminal(request.user)
         if printer_de_ce_terminal:
             try:
-                ticket_z_data = formatter_ticket_cloture(cloture)
-                ticket_z_data["impression_meta"] = {
-                    "uuid_transaction": None,
-                    "cloture_uuid": str(cloture.uuid),
-                    "type_justificatif": ImpressionLog.CLOTURE,
-                    "operateur_pk": str(operateur.pk) if operateur else None,
-                    "format_emission": "P",
-                }
+                ticket_z_data = _ticket_z_avec_sa_trace(cloture, operateur)
                 imprimer_async.delay(
                     str(printer_de_ce_terminal.pk),
                     ticket_z_data,
@@ -3835,115 +3866,96 @@ class CaisseViewSet(viewsets.ViewSet):
         # L'essentiel du rapport stocke dans la J, mis en forme par
         # `comptabilite/presentation.py` (aucune regle d'affichage recopiee ici) :
         # chiffre d'affaires, reglements, tiroir, phrase de reconciliation. Le Z
-        # couvre aussi les ventes en ligne : le reste est sur la fiche de l'admin.
+        # couvre aussi les ventes en ligne : le reste est sur la fiche de l'admin,
+        # que la caisse n'ouvre pas.
         # / The Z screen: the essential sections of the J's stored report, formatted
         #   by comptabilite/presentation.py; the rest is on the admin page.
         context = _contexte_de_l_ecran_du_z(cloture)
         return render(request, "laboutik/partial/hx_cloture_rapport.html", context)
 
     # ----------------------------------------------------------------------- #
-    #  Export PDF / CSV / Email du rapport de cloture (Phase 5)                #
-    #  PDF / CSV / Email export of the closure report (Phase 5)                #
+    #  Duplicata du ticket Z (seul geste de l'ecran du Z, avec « Fermer »)     #
+    #  Z ticket duplicate (the Z screen's only action, besides "Close")        #
     # ----------------------------------------------------------------------- #
-
-    @action(
-        detail=True, methods=["get"], url_path="rapport_pdf", url_name="rapport_pdf"
-    )
-    def rapport_pdf(self, request, pk=None):
-        """
-        GET /laboutik/caisse/<uuid>/rapport_pdf/
-        Telecharge le PDF de la cloture unique : le meme que celui de l'admin
-        (`comptabilite/pdf.py`).
-        / Downloads the single closure's PDF, the same as the admin's.
-
-        LOCALISATION : laboutik/views.py
-        """
-        cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
-        contenu_du_pdf, nom_du_fichier, type_du_fichier = generer_pdf_cloture(cloture)
-        response = HttpResponse(contenu_du_pdf, content_type=type_du_fichier)
-        response["Content-Disposition"] = f'attachment; filename="{nom_du_fichier}"'
-        return response
-
-    @action(
-        detail=True, methods=["get"], url_path="rapport_csv", url_name="rapport_csv"
-    )
-    def rapport_csv(self, request, pk=None):
-        """
-        GET /laboutik/caisse/<uuid>/rapport_csv/
-        Telecharge le CSV de la cloture unique : le meme que celui de l'admin
-        (`comptabilite/csv_export.py`).
-        / Downloads the single closure's CSV, the same as the admin's.
-
-        LOCALISATION : laboutik/views.py
-        """
-        cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
-        contenu_du_csv, nom_du_fichier, type_du_fichier = generer_csv_cloture(cloture)
-        response = HttpResponse(contenu_du_csv, content_type=type_du_fichier)
-        response["Content-Disposition"] = f'attachment; filename="{nom_du_fichier}"'
-        return response
 
     @action(
         detail=True,
         methods=["post"],
-        url_path="envoyer_rapport",
-        url_name="envoyer_rapport",
+        url_path="imprimer_duplicata_z",
+        url_name="imprimer_duplicata_z",
     )
-    def envoyer_rapport(self, request, pk=None):
+    def imprimer_duplicata_z(self, request, pk=None):
         """
-        POST /laboutik/caisse/<uuid>/envoyer_rapport/
-        Envoie l'email de la cloture unique (PDF en piece jointe) aux destinataires
-        du lieu (`Configuration.rapport_emails`), quelle que soit la periodicite du
-        rapport : c'est un clic explicite. Une adresse postee avec le formulaire est
-        ignoree. Sans destinataire : message clair, rien n'est envoye.
-        / Sends the single closure's e-mail to the venue's recipients, whatever the
-        report periodicity. A posted address is ignored. No recipient: clear message.
+        POST /laboutik/caisse/<uuid>/imprimer_duplicata_z/
+        Re-imprime le ticket Z d'une cloture, sur l'imprimante du terminal qui le
+        demande. Appele par le bouton « Imprimer un duplicata » de l'ecran du Z
+        (hx_cloture_rapport.html).
+        / Reprints a closure's Z ticket on the requesting terminal's printer.
 
         LOCALISATION : laboutik/views.py
+
+        La tache d'impression compte les impressions de la J (`ImpressionLog`, type
+        CLOT) : un Z deja imprime ressort marque DUPLICATA (LNE exigence 9).
+        La caisse ne telecharge et n'envoie aucun rapport : c'est le role de
+        l'admin (fiche de la cloture).
+        / The print task counts the J's prints: an already printed Z comes out as
+        DUPLICATE. Downloads and e-mails are admin-only.
+
+        Les refus repondent en 400 : la caisse n'affiche que les 400 et les 422
+        (laboutik/base.html, htmx:beforeSwap).
+        / Refusals answer 400: the register only swaps 400 and 422.
         """
         cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
 
-        destinataires_du_lieu = Configuration.get_solo().rapport_emails or ""
-        if not destinataires_du_lieu.strip():
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _(
-                    "Aucun destinataire de rapport n'est configuré pour le lieu."
-                ),
-                "selector_bt_retour": "#messages",
-            }
+        printer_de_ce_terminal = imprimante_du_terminal(request.user)
+        if not printer_de_ce_terminal:
             return render(
-                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+                request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Aucune imprimante configurée pour ce terminal"),
+                },
+                status=400,
             )
 
-        # La demande part au broker (Celery). Un broker en panne ne doit pas donner
-        # une erreur 500 : l'erreur est journalisée et la caisse le dit en mots.
-        # / The request goes to the broker; a broken broker gives a clear message.
+        # La demande d'impression part au broker (Celery). Un broker en panne ne doit
+        # pas donner une erreur 500 : l'erreur est journalisee et la caisse le dit.
+        # / The print request goes to the broker; a broken broker gives a message.
+        operateur = request.user if request.user.is_authenticated else None
         try:
-            envoyer_email_cloture_demande.delay(
+            ticket_z_data = _ticket_z_avec_sa_trace(cloture, operateur)
+            imprimer_async.delay(
+                str(printer_de_ce_terminal.pk),
+                ticket_z_data,
                 connection.schema_name,
-                str(cloture.uuid),
             )
         except Exception:
             logger.exception(
-                f"[{connection.schema_name}] Échec de la demande d'envoi du rapport "
-                f"de la clôture n° {cloture.numero_sequentiel}."
+                f"[{connection.schema_name}] Échec de la demande d'impression "
+                f"du duplicata du Z n° {cloture.numero_sequentiel}."
             )
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _(
-                    "L'envoi du rapport n'a pas pu être demandé. Réessayez plus tard."
-                ),
-                "selector_bt_retour": "#messages",
-            }
             return render(
-                request, "laboutik/partial/hx_messages.html", context_erreur, status=503
+                request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Le duplicata n'a pas pu être envoyé à l'imprimante. "
+                        "Réessayez plus tard."
+                    ),
+                },
+                status=400,
             )
 
-        context = {
-            "msg_type": "info",
-            "msg_content": _("Envoi du rapport demandé"),
-        }
-        return render(request, "laboutik/partial/hx_messages.html", context)
+        return render(
+            request,
+            "laboutik/partial/hx_print_feedback.html",
+            {
+                "msg_type": "success",
+                "msg_content": _("Duplicata envoyé à l'imprimante"),
+            },
+        )
 
     # ----------------------------------------------------------------------- #
     #  Imprimer Ticket X (consultation temporaire, pas de cloture)             #
@@ -5487,11 +5499,11 @@ def _contexte_de_l_ecran_du_z(cloture):
 
     L'ecran montre le chiffre d'affaires, les reglements (argent, cashless, hors
     argent : offerts et points), le tiroir (caisse especes) et la phrase de
-    reconciliation, plus un lien vers la fiche complete de la cloture dans l'admin.
-    Aucune regle d'affichage n'est recopiee ici : les sections viennent telles
-    quelles de `sections_pour_affichage`.
-    / Revenue, payments, cash drawer, reconciliation sentence, and a link to the
-      admin page. No display rule is copied here.
+    reconciliation. Aucun lien vers l'admin ni aucun telechargement : ils sont
+    reserves a l'admin. Aucune regle d'affichage n'est recopiee ici : les sections
+    viennent telles quelles de `sections_pour_affichage`.
+    / Revenue, payments, cash drawer, reconciliation sentence. No admin link nor
+      download. No display rule is copied here.
 
     :param cloture: la `comptabilite.ClotureCaisse` (J) creee par le bouton
     :return: dict de contexte
@@ -5515,10 +5527,40 @@ def _contexte_de_l_ecran_du_z(cloture):
         "section_reglements": sections_par_cle.get("reglements"),
         "section_caisse_especes": sections_par_cle.get("caisse_especes"),
         "phrase_de_reconciliation": phrase_de_reconciliation,
-        "adresse_de_la_fiche_de_la_cloture": reverse(
-            "staff_admin:comptabilite_cloturecaisse_change", args=[cloture.pk]
-        ),
     }
+
+
+def _ticket_z_avec_sa_trace(cloture, operateur):
+    """
+    Le ticket Z d'une cloture, pret pour `imprimer_async`, avec ses metadonnees de
+    tracabilite : type CLOT, uuid de la J, operateur.
+    / A closure's Z ticket, ready for imprimer_async, with its tracking metadata.
+
+    LOCALISATION : laboutik/views.py
+
+    APPELEE PAR : `CaisseViewSet.cloturer` (premiere impression) et
+    `CaisseViewSet.imprimer_duplicata_z` (re-impression).
+    La tache d'impression lit `impression_meta` : elle ecrit l'`ImpressionLog` lie a
+    la J et marque DUPLICATA toute impression apres la premiere (LNE exigence 9).
+    / The print task reads impression_meta: it logs the print and marks DUPLICATE.
+
+    :param cloture: la `comptabilite.ClotureCaisse`
+    :param operateur: l'utilisateur connecte, ou None
+    :return: dict du ticket (`formatter_ticket_cloture`) + `impression_meta`
+    """
+    ticket_z_data = formatter_ticket_cloture(cloture)
+    if operateur is not None:
+        cle_de_l_operateur = str(operateur.pk)
+    else:
+        cle_de_l_operateur = None
+    ticket_z_data["impression_meta"] = {
+        "uuid_transaction": None,
+        "cloture_uuid": str(cloture.uuid),
+        "type_justificatif": ImpressionLog.CLOTURE,
+        "operateur_pk": cle_de_l_operateur,
+        "format_emission": "P",
+    }
+    return ticket_z_data
 
 
 def _contexte_des_chiffres_du_recap(

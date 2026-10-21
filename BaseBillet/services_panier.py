@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from django.db.models import Q
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 
 logger = logging.getLogger(__name__)
 
@@ -118,33 +118,47 @@ def _cart_qty_for_price(cart_items, price_uuid):
     )
 
 
-def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_items):
+def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_items,
+                                items_du_panier_avant_la_demande=None,
+                                quantites_de_la_demande=None):
     """
     Valide que l'ajout de `qty_to_add` billets ne depasse aucune limite.
     / Validate that adding `qty_to_add` tickets does not exceed any limit.
 
     Cette fonction est appelee depuis PanierSession.add_ticket (Validation 5bis)
-    avant de stocker l'item. Elle reproduit les checks de ReservationValidator
-    en prenant en compte le panier courant (cart-aware), pas uniquement la DB.
+    avant de stocker l'item. Elle reproduit les checks de ReservationValidator,
+    dans le meme ordre et avec les memes messages, en prenant en compte le panier
+    courant (cart-aware), pas uniquement la DB.
 
     / Called from PanierSession.add_ticket (Validation 5bis) before storing.
-    Mirrors ReservationValidator checks, cart-aware (not only DB).
+    Mirrors ReservationValidator checks (same order, same messages), cart-aware.
 
-    Verifications (5 au total) :
-    1. event.max_per_user — tickets user en DB + panier event + qty_to_add
-    2. product.max_per_user — tickets user en DB + panier product + qty_to_add
-    3. price.max_per_user — tickets user en DB + panier price + qty_to_add
-    4. Jauge event : valid + under_purchase + cart event + qty_to_add <= jauge_max
-    5. price.max_per_user vs qty_to_add seul (sanity check)
+    Verifications, dans l'ordre de ReservationValidator :
+    1. product.max_per_user — tickets user en DB + panier + demande, pour ce produit
+    2. price.max_per_user — tickets user en DB + panier + demande, pour ce tarif
+    3. event.max_per_user — tickets user en DB + panier + demande, pour l'evenement
+    4. Jauge event : valid + under_purchase + panier + demande <= jauge_max
 
-    / 5 checks: event/product/price max_per_user + jauge + sanity.
+    / Checks in ReservationValidator order: product, price, event limits, then capacity.
 
-    Pour l'utilisateur anonyme, les checks DB (1-3) sont skippes — seuls les
-    checks cart-level (panier courant) sont faits. En flow panier, l'user doit
+    Pour l'utilisateur anonyme, aucun billet n'est compte en DB : seuls les
+    checks cart-level (panier courant) comptent. En flow panier, l'user doit
     de toute facon etre authentifie (PanierMVT permission IsAuthenticated).
 
-    / Anonymous users skip DB checks (1-3) — only cart-level. Anyway cart flow
+    / Anonymous users have no DB tickets — only cart-level. Anyway cart flow
     requires auth (PanierMVT IsAuthenticated permission).
+
+    L'AJOUT GROUPE (plusieurs tarifs dans un seul envoi) :
+    Le formulaire d'un evenement envoie plusieurs tarifs d'un coup
+    (PanierMVT.add_tickets_batch). Ils sont ajoutes un par un, mais la limite est
+    verifiee sur la DEMANDE ENTIERE, comme en reservation directe : un refus nomme
+    tout ce qui est demande, des le premier tarif.
+    - `quantites_de_la_demande` : {Price: quantite} pour tous les tarifs de l'envoi ;
+    - `items_du_panier_avant_la_demande` : le panier avant l'envoi. Les tarifs deja
+      ajoutes par le meme envoi ne comptent pas une 2e fois (ils sont dans la demande).
+    None (ajout d'un seul tarif, ou rejeu au paiement) : la demande est ce tarif seul,
+    et tout `cart_items` etait deja au panier.
+    / Batch add: limits are checked on the WHOLE request, like direct booking.
 
     :param user: TibilletUser ou AnonymousUser
     :param event: Event instance
@@ -152,15 +166,37 @@ def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_it
     :param price: Price instance (doit appartenir au product)
     :param qty_to_add: int > 0 — nombre de billets a ajouter
     :param cart_items: list[dict] — items deja presents dans le panier
+    :param items_du_panier_avant_la_demande: list[dict] ou None — le panier avant l'envoi
+    :param quantites_de_la_demande: dict {Price: int} ou None — tous les tarifs de l'envoi
 
     :raises InvalidItemError: avec message clair si une limite est franchie.
     """
     from BaseBillet.models import Ticket
 
-    cart_qty_event = _cart_qty_for_event(cart_items, event.uuid)
-    cart_qty_product = _cart_qty_for_product(cart_items, event.uuid, product.uuid)
-    cart_qty_price = _cart_qty_for_price(cart_items, price.uuid)
+    if items_du_panier_avant_la_demande is None:
+        items_du_panier_avant_la_demande = cart_items
+    if quantites_de_la_demande is None:
+        quantites_de_la_demande = {price: qty_to_add}
 
+    # Ce qui etait au panier avant l'envoi en cours.
+    # / What was in the cart before the current request.
+    panier_avant_event = _cart_qty_for_event(items_du_panier_avant_la_demande, event.uuid)
+    panier_avant_product = _cart_qty_for_product(items_du_panier_avant_la_demande, event.uuid, product.uuid)
+    panier_avant_price = _cart_qty_for_price(items_du_panier_avant_la_demande, price.uuid)
+
+    # Ce que demande l'envoi en cours, pour l'evenement, ce produit et ce tarif.
+    # / What the current request asks for: event, this product, this price.
+    demandes_event = 0
+    demandes_product = 0
+    for tarif_demande, quantite_demandee in quantites_de_la_demande.items():
+        demandes_event += quantite_demandee
+        if tarif_demande.product_id == product.pk:
+            demandes_product += quantite_demandee
+    demandes_price = quantites_de_la_demande.get(price, qty_to_add)
+
+    db_qty_event = 0
+    db_qty_product = 0
+    db_qty_price = 0
     if user.is_authenticated:
         # Count des tickets du user sur cet event (status valides).
         # Utilise les memes statuts que ReservationValidator pour coherence.
@@ -183,71 +219,71 @@ def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_it
             status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
         ).count()
 
-        # 1. event.max_per_user — total tickets user pour cet event
-        # / event.max_per_user — total tickets for this event
-        if event.max_per_user:
-            total_event = db_qty_event + cart_qty_event + qty_to_add
-            if total_event > event.max_per_user:
-                raise InvalidItemError(
-                    _("Adding these tickets for %(event)s would exceed the per-user limit "
-                      "of %(max)s for this event. You already have %(db)s "
-                      "confirmed + %(cart)s in cart.")
-                    % {"max": event.max_per_user, "db": db_qty_event, "cart": cart_qty_event, "event": event}
-                )
+    # 1. product.max_per_user
+    if product.max_per_user:
+        total_product = db_qty_product + panier_avant_product + demandes_product
+        if total_product > product.max_per_user:
+            raise InvalidItemError(ngettext(
+                "Limite de %(max)s billet « %(produit)s » par personne. Demandés : %(demandes)s, déjà au panier : %(panier)s, déjà réservés : %(deja)s.",
+                "Limite de %(max)s billets « %(produit)s » par personne. Demandés : %(demandes)s, déjà au panier : %(panier)s, déjà réservés : %(deja)s.",
+                product.max_per_user,
+            ) % {
+                'max': product.max_per_user,
+                'produit': product.name,
+                'demandes': demandes_product,
+                'panier': panier_avant_product,
+                'deja': db_qty_product,
+            })
 
-        # 2. product.max_per_user
-        if product.max_per_user:
-            total_product = db_qty_product + cart_qty_product + qty_to_add
-            if total_product > product.max_per_user:
-                raise InvalidItemError(
-                    _("Adding these tickets would exceed the per-user limit "
-                      "of %(max)s for this product.")
-                    % {"max": product.max_per_user}
-                )
+    # 2. price.max_per_user — base + panier + demande : couvre aussi la demande seule
+    # / price.max_per_user — DB + cart + request: also covers the request alone
+    if price.max_per_user:
+        total_price = db_qty_price + panier_avant_price + demandes_price
+        if total_price > price.max_per_user:
+            raise InvalidItemError(ngettext(
+                "Limite de %(max)s billet au tarif « %(tarif)s » par personne. Demandés : %(demandes)s, déjà au panier : %(panier)s, déjà réservés : %(deja)s.",
+                "Limite de %(max)s billets au tarif « %(tarif)s » par personne. Demandés : %(demandes)s, déjà au panier : %(panier)s, déjà réservés : %(deja)s.",
+                price.max_per_user,
+            ) % {
+                'max': price.max_per_user,
+                'tarif': price.name,
+                'demandes': demandes_price,
+                'panier': panier_avant_price,
+                'deja': db_qty_price,
+            })
 
-        # 3. price.max_per_user — aussi en cart-aware (sur-set du check qty seul)
-        # / price.max_per_user — cart-aware (supersedes qty-alone check)
-        if price.max_per_user:
-            total_price = db_qty_price + cart_qty_price + qty_to_add
-            if total_price > price.max_per_user:
-                raise InvalidItemError(
-                    _("Adding these tickets would exceed the per-user limit "
-                      "of %(max)s for this rate.")
-                    % {"max": price.max_per_user}
-                )
-    else:
-        # Anonyme : checks uniquement cart-level (pas de user en DB).
-        # / Anonymous: cart-level checks only (no DB user).
-        if event.max_per_user and cart_qty_event + qty_to_add > event.max_per_user:
-            raise InvalidItemError(
-                _("Your cart would exceed the per-user limit of %(max)s tickets "
-                  "for this event.")
-                % {"max": event.max_per_user}
-            )
-        if product.max_per_user and cart_qty_product + qty_to_add > product.max_per_user:
-            raise InvalidItemError(
-                _("Your cart would exceed the per-user limit of %(max)s for this product.")
-                % {"max": product.max_per_user}
-            )
-        if price.max_per_user and cart_qty_price + qty_to_add > price.max_per_user:
-            raise InvalidItemError(
-                _("Your cart would exceed the per-user limit of %(max)s for this rate.")
-                % {"max": price.max_per_user}
-            )
+    # 3. event.max_per_user — total tickets user pour cet event
+    # / event.max_per_user — total tickets for this event
+    if event.max_per_user:
+        total_event = db_qty_event + panier_avant_event + demandes_event
+        if total_event > event.max_per_user:
+            raise InvalidItemError(ngettext(
+                "Limite de %(max)s billet par personne pour cet événement. Demandés : %(demandes)s, déjà au panier : %(panier)s, déjà réservés : %(deja)s.",
+                "Limite de %(max)s billets par personne pour cet événement. Demandés : %(demandes)s, déjà au panier : %(panier)s, déjà réservés : %(deja)s.",
+                event.max_per_user,
+            ) % {
+                'max': event.max_per_user,
+                'demandes': demandes_event,
+                'panier': panier_avant_event,
+                'deja': db_qty_event,
+            })
 
     # 4. Jauge globale de l'event — prend en compte tous les tickets pending + valid
-    # + les items panier (de cet event, toutes users confondues) + qty_to_add.
-    # / Event capacity — account for all valid + pending tickets + cart items + qty_to_add.
+    # + le panier de cette personne + la demande.
+    # / Event capacity — valid + pending tickets + this person's cart + the request.
     valid_count = event.valid_tickets_count()
     under_purchase = event.under_purchase()
     if event.jauge_max:
-        total_occupation = valid_count + under_purchase + cart_qty_event + qty_to_add
+        total_occupation = valid_count + under_purchase + panier_avant_event + demandes_event
         if total_occupation > event.jauge_max:
-            remains = event.jauge_max - valid_count - under_purchase - cart_qty_event
-            raise InvalidItemError(
-                _("Not enough seats available. Remaining: %(n)s")
-                % {"n": max(0, remains)}
-            )
+            remains = event.jauge_max - valid_count - under_purchase - panier_avant_event
+            if remains <= 0:
+                raise InvalidItemError(_("Cet événement est complet."))
+            raise InvalidItemError(ngettext(
+                "Il ne reste que %(n)s place pour cet événement.",
+                "Il ne reste que %(n)s places pour cet événement.",
+                remains,
+            ) % {'n': remains})
 
 
 def reservations_bloquantes_pour_user(user, start, end):
@@ -441,7 +477,8 @@ class PanierSession:
 
     def add_ticket(self, event_uuid, price_uuid, qty,
                    custom_amount=None, options=None, custom_form=None,
-                   promotional_code_name=None):
+                   promotional_code_name=None, items_du_panier_avant_la_demande=None,
+                   quantites_de_la_demande=None):
         """
         Ajoute un item billet au panier après validation.
         / Adds a ticket item to the cart after validation.
@@ -455,6 +492,13 @@ class PanierSession:
         Validates existence, active, usable, linked to product's Price.
         Stored per-item for application in materialiser() — each item
         carries its own code, no global cart-level code.
+
+        `items_du_panier_avant_la_demande` et `quantites_de_la_demande` (optionnels) :
+        le panier avant un ajout groupé de plusieurs tarifs, et tous les tarifs de cet
+        ajout. Les limites sont alors vérifiées sur la demande entière
+        (voir validate_ticket_cart_limits).
+        / Optional: the cart before a batch add, and all its prices. Limits are then
+        checked on the whole request.
 
         Raises:
             InvalidItemError: si le price/event est invalide, épuisé, non publié,
@@ -500,15 +544,6 @@ class PanierSession:
         if price.product not in event.products.all():
             raise InvalidItemError(_("This rate is not available for this event."))
 
-        # Validation 5 : max_per_user sur le price (si défini) — sanity check
-        # sur la qty de la requete seule. Le check cart-aware complet (qui
-        # inclut les items panier existants + les tickets DB du user) est
-        # fait dans validate_ticket_cart_limits (Validation 5bis).
-        # / Validation 5: max_per_user on price — sanity check on request qty.
-        # Full cart-aware check (cart + DB tickets) in validate_ticket_cart_limits.
-        if price.max_per_user and int(qty) > price.max_per_user:
-            raise InvalidItemError(_("Quantity exceeds the per-user limit for this rate."))
-
         # Validation 5bis : limites cart-aware (event/product/price.max_per_user
         # + jauge_max). Verifie que l'ajout, combine avec ce qui est deja en DB
         # pour ce user + ce qui est deja dans le panier + qty_to_add, ne depasse
@@ -524,6 +559,8 @@ class PanierSession:
             price=price,
             qty_to_add=int(qty),
             cart_items=self._data.get('items', []),
+            items_du_panier_avant_la_demande=items_du_panier_avant_la_demande,
+            quantites_de_la_demande=quantites_de_la_demande,
         )
 
         # Validation 6 : le stock du tarif doit accueillir la quantité demandée ET ce que le

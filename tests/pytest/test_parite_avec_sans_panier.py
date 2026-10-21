@@ -225,14 +225,16 @@ def verifier_un_refus_propre(parcours, reponse):
     """
     Le refus vient de la validation, pas d'une panne ni d'un refus d'accès.
     Sans panier : la vue répond 200 (redirection HTMX avec message) ou 422 (formulaire
-    réaffiché). Avec panier : l'AJOUT répond par un toast d'erreur.
+    réaffiché). Avec panier : l'AJOUT répond par le partiel d'erreurs du formulaire,
+    sans toast.
     / The refusal comes from validation, not a crash nor an access denial.
     """
     assert reponse.status_code in (200, 422), (
         f"Réponse inattendue : {reponse.status_code}"
     )
     if parcours == AVEC_PANIER:
-        assert niveau_du_toast(reponse) == "error"
+        assert niveau_du_toast(reponse) is None
+        assert 'data-testid="booking-server-errors-list"' in reponse.content.decode()
 
 
 # --------------------------------------------------------------------------

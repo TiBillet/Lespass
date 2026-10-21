@@ -123,9 +123,11 @@ def test_une_question_obligatoire_sans_reponse_est_refusee(lieu):
 
     reponse = ajouter_un_billet(client, billetterie, {})
 
-    assert niveau_du_toast(reponse) == "error"
-    message = json.loads(reponse["HX-Trigger"])["panierToast"]["text"]
-    assert "Votre téléphone ?" in message
+    # Refus affiché dans la zone d'erreurs du formulaire, sans toast.
+    # / Refusal shown in the form's error zone, no toast.
+    assert niveau_du_toast(reponse) is None
+    assert 'data-testid="booking-server-errors-list"' in reponse.content.decode()
+    assert "Votre téléphone ?" in reponse.content.decode()
     assert client.session.get("panier", {}).get("items", []) == []
 
 
@@ -211,5 +213,8 @@ def test_adhesion_question_obligatoire_sans_reponse_est_refusee(lieu):
         **EN_TETE_HTMX,
     )
 
-    assert niveau_du_toast(reponse) == "error"
+    # Refus affiché dans la zone d'erreurs du formulaire, sans toast.
+    # / Refusal shown in the form's error zone, no toast.
+    assert niveau_du_toast(reponse) is None
+    assert 'data-testid="booking-server-errors-list"' in reponse.content.decode()
     assert client.session.get("panier", {}).get("items", []) == []

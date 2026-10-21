@@ -9,6 +9,7 @@ BaseBillet/templates/htmx/components/panier_*.html.
 
 Les vues répondent en HTMX :
 - un toast passe par l'en-tête `HX-Trigger` : {"panierToast": {"level": ..., "text": ...}} ;
+- un ajout refusé (add/*) rend le partiel d'erreurs, affiché DANS le formulaire, sans toast ;
 - une redirection passe par l'en-tête `HX-Redirect` (statut 200).
 Les tests vérifient le NIVEAU du toast et l'état du panier ou de la base, pas le texte
 traduit.
@@ -81,6 +82,33 @@ def niveau_du_toast(reponse):
     if not en_tete:
         return None
     return json.loads(en_tete)["panierToast"]["level"]
+
+
+def est_un_refus_dans_le_formulaire(reponse):
+    """
+    Vrai si la réponse est un refus affiché dans la zone d'erreurs du formulaire :
+    le partiel d'erreurs, et aucun toast.
+    / True if the response is a refusal shown in the form's error zone (no toast).
+    """
+    partiel_d_erreurs = 'data-testid="booking-server-errors-list"' in reponse.content.decode()
+    return partiel_d_erreurs and niveau_du_toast(reponse) is None
+
+
+def texte_du_refus(reponse):
+    """
+    Le texte seul du message de refus, sans balises ni espaces en trop. On ne lit que
+    le bloc du message : la réponse porte aussi le badge du panier, et son compteur.
+    / Refusal message text only (the response also carries the cart badge counter).
+    """
+    import re
+
+    bloc_du_message = re.search(
+        r'data-testid="booking-server-errors-list">(.*?)</div>',
+        reponse.content.decode(),
+        re.DOTALL,
+    ).group(1)
+    sans_balises = re.sub(r"<[^>]+>", " ", bloc_du_message)
+    return " ".join(sans_balises.split())
 
 
 def items_du_panier(client):
@@ -307,9 +335,9 @@ def test_ajouter_des_billets_accepte_aussi_le_slug_de_l_evenement(lieu):
 
 
 def test_un_code_promo_inconnu_est_refuse_avec_son_propre_message(lieu):
-    """Code promo qui n'existe pas : toast d'erreur qui le dit (« code invalide »), pas un
-    message sur les produits choisis ; rien n'est ajouté.
-    / Unknown promo code: an error toast saying so, nothing added."""
+    """Code promo qui n'existe pas : erreur dans le formulaire qui le dit (« code invalide »),
+    pas un message sur les produits choisis ; rien n'est ajouté.
+    / Unknown promo code: a form error saying so, nothing added."""
     client = client_connecte(creer_utilisateur())
     concert = creer_evenement_avec_tarif(prix="10.00")
 
@@ -320,15 +348,14 @@ def test_un_code_promo_inconnu_est_refuse_avec_son_propre_message(lieu):
         promotional_code="TEST_panier_CODE_QUI_N_EXISTE_PAS",
     )
 
-    toast = json.loads(reponse["HX-Trigger"])["panierToast"]
-    assert toast["level"] == "error"
-    assert toast["text"] == "Invalid or inactive promotional code."
+    assert est_un_refus_dans_le_formulaire(reponse)
+    assert texte_du_refus(reponse) == "Invalid or inactive promotional code."
     assert items_du_panier(client) == []
 
 
 def test_ajouter_des_billets_d_un_evenement_inconnu_affiche_une_erreur(lieu):
-    """Événement introuvable : toast d'erreur, panier vide.
-    / Unknown event: error toast, empty cart."""
+    """Événement introuvable : erreur dans le formulaire, panier vide.
+    / Unknown event: form error, empty cart."""
     client = client_connecte(creer_utilisateur())
 
     reponse = client.post(
@@ -337,19 +364,19 @@ def test_ajouter_des_billets_d_un_evenement_inconnu_affiche_une_erreur(lieu):
         **EN_TETE_HTMX,
     )
 
-    assert niveau_du_toast(reponse) == "error"
+    assert est_un_refus_dans_le_formulaire(reponse)
     assert items_du_panier(client) == []
 
 
 def test_ajouter_sans_aucune_quantite_affiche_une_erreur(lieu):
-    """Toutes les quantités à zéro : toast d'erreur, panier vide.
-    / All quantities at zero: error toast, empty cart."""
+    """Toutes les quantités à zéro : erreur dans le formulaire, panier vide.
+    / All quantities at zero: form error, empty cart."""
     client = client_connecte(creer_utilisateur())
     concert = creer_evenement_avec_tarif(prix="10.00")
 
     reponse = ajouter_des_billets(client, concert.evenement, {concert.tarif: 0})
 
-    assert niveau_du_toast(reponse) == "error"
+    assert est_un_refus_dans_le_formulaire(reponse)
     assert items_du_panier(client) == []
 
 
@@ -366,7 +393,7 @@ def test_un_tarif_invalide_annule_tout_l_ajout(lieu):
         client, concert.evenement, {concert.tarif: 1, tarif_non_publie: 1}
     )
 
-    assert niveau_du_toast(reponse) == "error"
+    assert est_un_refus_dans_le_formulaire(reponse)
     assert items_du_panier(client) == []
 
 
@@ -377,10 +404,10 @@ def test_un_tarif_invalide_annule_tout_l_ajout(lieu):
 def test_une_quantite_trafiquee_affiche_une_erreur_sans_bloquer_le_serveur(
     lieu, quantite_trafiquee
 ):
-    """Quantité non numérique, infinie ou démesurée (formulaire trafiqué) : toast d'erreur,
+    """Quantité non numérique, infinie ou démesurée (formulaire trafiqué) : erreur dans le formulaire,
     pas d'erreur 500, réponse immédiate (« 1e1000000 » converti en entier bloquerait le
     serveur plusieurs secondes).
-    / Non-numeric, infinite or huge quantity: error toast, no 500, immediate answer."""
+    / Non-numeric, infinite or huge quantity: form error, no 500, immediate answer."""
     import time
 
     client = client_connecte(creer_utilisateur())
@@ -393,7 +420,7 @@ def test_une_quantite_trafiquee_affiche_une_erreur_sans_bloquer_le_serveur(
     duree_en_secondes = time.monotonic() - debut
 
     assert reponse.status_code == 200
-    assert niveau_du_toast(reponse) == "error"
+    assert est_un_refus_dans_le_formulaire(reponse)
     assert items_du_panier(client) == []
     # Sans la garde, int(Decimal("1e1000000")) prend environ 17 s (mesure du 2026-09-24).
     # Avec elle, la reponse arrive en moins d'1 s. Le seuil de 5 s separe nettement les
@@ -562,8 +589,8 @@ def test_ajouter_une_adhesion_a_prix_libre_lit_le_montant_de_son_tarif(lieu):
 
 @pytest.mark.parametrize("sorte_d_adhesion", ["recurrente", "validation_manuelle"])
 def test_une_adhesion_refusee_par_le_panier_affiche_une_erreur(lieu, sorte_d_adhesion):
-    """Adhésion récurrente ou à validation manuelle : toast d'erreur, panier inchangé.
-    / Recurring or manual-validation membership: error toast, cart unchanged."""
+    """Adhésion récurrente ou à validation manuelle : erreur dans le formulaire, panier inchangé.
+    / Recurring or manual-validation membership: form error, cart unchanged."""
     client = client_connecte(creer_utilisateur())
     if sorte_d_adhesion == "recurrente":
         adhesion = creer_adhesion(prix="15.00", recurrente=True)
@@ -574,7 +601,7 @@ def test_une_adhesion_refusee_par_le_panier_affiche_une_erreur(lieu, sorte_d_adh
         "/panier/add/membership/", {"price": str(adhesion.tarif.uuid)}, **EN_TETE_HTMX
     )
 
-    assert niveau_du_toast(reponse) == "error"
+    assert est_un_refus_dans_le_formulaire(reponse)
     assert items_du_panier(client) == []
 
 
@@ -799,3 +826,137 @@ def test_la_barre_de_navigation_de_chaque_skin_contient_la_cible_du_badge_du_pan
     )
 
     assert 'id="panier-badge-nav"' in barre_de_navigation
+
+
+# --------------------------------------------------------------------------
+# Ajout groupé refusé : le message compte juste
+# / Refused batch add: the message counts right
+# --------------------------------------------------------------------------
+
+
+def test_un_ajout_groupe_refuse_range_tous_ses_billets_dans_demandes(lieu):
+    """
+    Maximum 10 par personne, 10 + 10 sur deux tarifs, panier vide. Le 1er tarif est
+    ajouté avant que le 2e soit refusé : le message ne doit pas le compter « déjà au
+    panier », puisque tout est retiré.
+    / Limit 10, 10 + 10 on two prices, empty cart: the 1st price must not be reported
+    as "already in cart", since everything is rolled back.
+    """
+    import re
+
+    client = client_connecte(creer_utilisateur())
+    concert = creer_evenement_avec_tarif(prix="10.00", max_par_personne_evenement=10)
+    tarif_2 = ajouter_un_tarif(concert.produit, prix="10.00", nom="Plein 2")
+
+    reponse = ajouter_des_billets(client, concert.evenement, {concert.tarif: 10, tarif_2: 10})
+
+    assert est_un_refus_dans_le_formulaire(reponse)
+    # Limite 10, demandés 20, déjà au panier 0, déjà réservés 0.
+    # / Limit 10, requested 20, already in cart 0, already booked 0.
+    assert re.findall(r"\d+", texte_du_refus(reponse)) == ["10", "20", "0", "0"]
+    assert items_du_panier(client) == []
+
+
+def test_un_ajout_groupe_refuse_compte_le_panier_d_avant_la_demande(lieu):
+    """
+    Maximum 10 par personne, 2 billets déjà au panier, puis 5 + 5 : refusé. Le message
+    dit « demandés 10, déjà au panier 2 », et le panier garde ses 2 billets.
+    / Limit 10, 2 already in the cart, then 5 + 5: refused. Message says requested 10,
+    in cart 2; the cart keeps its 2 tickets.
+    """
+    import re
+
+    client = client_connecte(creer_utilisateur())
+    concert = creer_evenement_avec_tarif(prix="10.00", max_par_personne_evenement=10)
+    tarif_2 = ajouter_un_tarif(concert.produit, prix="10.00", nom="Plein 2")
+    ajouter_des_billets(client, concert.evenement, {concert.tarif: 2})
+
+    reponse = ajouter_des_billets(client, concert.evenement, {concert.tarif: 5, tarif_2: 5})
+
+    assert est_un_refus_dans_le_formulaire(reponse)
+    assert re.findall(r"\d+", texte_du_refus(reponse)) == ["10", "10", "2", "0"]
+    assert [item["qty"] for item in items_du_panier(client)] == [2]
+
+
+def test_un_ajout_groupe_refuse_compte_toute_la_demande_du_produit(lieu):
+    """
+    Maximum 1 par personne pour le produit, 3 + 2 sur deux tarifs du même produit : le
+    refus arrive dès le 1er tarif et compte TOUTE la demande (5), comme la réservation
+    directe, pas seulement le 1er tarif (3).
+    / Product limit 1, 3 + 2 on two prices of the same product: the refusal counts the
+    whole request (5), like direct booking.
+    """
+    import re
+    from BaseBillet.models import Product
+
+    client = client_connecte(creer_utilisateur())
+    concert = creer_evenement_avec_tarif(prix="10.00", max_par_personne_produit=1)
+    tarif_2 = ajouter_un_tarif(concert.produit, prix="10.00", nom="Plein 2")
+    # update() et pas save() : aucun signal (Stripe) hors simulation.
+    # / update(), not save(): no signal outside the mocks.
+    Product.objects.filter(pk=concert.produit.pk).update(name="Billet TEST")
+
+    reponse = ajouter_des_billets(client, concert.evenement, {concert.tarif: 3, tarif_2: 2})
+
+    assert est_un_refus_dans_le_formulaire(reponse)
+    texte = texte_du_refus(reponse)
+    assert "Billet TEST" in texte
+    # Limite 1, demandés 5, déjà au panier 0, déjà réservés 0.
+    # / Limit 1, requested 5, in cart 0, already booked 0.
+    assert re.findall(r"\d+", texte) == ["1", "5", "0", "0"]
+    assert items_du_panier(client) == []
+
+# --------------------------------------------------------------------------
+# Refus : dans le formulaire depuis un formulaire, en toast depuis la page panier
+# / Refusals: in the form from a form, as a toast from the cart page
+# --------------------------------------------------------------------------
+
+
+def test_ajouter_et_payer_refuse_au_paiement_affiche_l_erreur_dans_le_formulaire(lieu):
+    """
+    « Ajouter au panier et payer » (then=checkout) depuis le formulaire, Stripe injoignable :
+    le refus du paiement s'affiche dans le formulaire, pas en toast. Depuis la page panier,
+    le même refus reste un toast (test_stripe_indisponible_ne_cree_aucune_commande...).
+    / "Add to cart and pay" from the form, Stripe down: the refusal is shown in the form.
+    """
+    from BaseBillet.models import Commande
+
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    concert = creer_evenement_avec_tarif(prix="10.00")
+    lieu.stripe.mock_create.side_effect = ConnectionError("Stripe injoignable (simulé)")
+
+    reponse = ajouter_des_billets(client, concert.evenement, {concert.tarif: 1}, then="checkout")
+
+    assert est_un_refus_dans_le_formulaire(reponse)
+    assert "HX-Redirect" not in reponse
+    assert not Commande.objects.filter(user=acheteur).exists()
+    # Le billet a été ajouté avant le paiement refusé : il reste au panier, et la réponse
+    # rafraîchit le badge du panier (hx-swap-oob).
+    # / The ticket was added before the refused payment: it stays, and the badge refreshes.
+    assert len(items_du_panier(client)) == 1
+    assert 'id="panier-badge-nav" hx-swap-oob="true"' in reponse.content.decode()
+
+
+def test_un_creneau_invalide_ajoute_au_panier_affiche_l_erreur_dans_le_formulaire(lieu):
+    """
+    Créneau illisible envoyé par « Ajouter au panier » d'une ressource : l'erreur arrive dans
+    la zone d'erreurs du formulaire (réponse 200), rien n'est ajouté.
+    / Unreadable slot from a resource "Add to cart": error in the form's zone, nothing added.
+    """
+    location = creer_ressource_avec_tarif(prix="0.00")
+    client = client_connecte(creer_utilisateur())
+
+    reponse = client.post(
+        "/panier/add/resource/",
+        {
+            "resource": str(location.ressource.pk),
+            "price_uuid": str(location.tarif.uuid),
+            "start_datetime": "pas-une-date",
+        },
+        **EN_TETE_HTMX,
+    )
+
+    assert reponse.status_code == 200
+    assert est_un_refus_dans_le_formulaire(reponse)
+    assert items_du_panier(client) == []

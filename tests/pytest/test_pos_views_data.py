@@ -504,6 +504,13 @@ def test_bt_groupement_par_methode_caisse(tenant):
         # / A top-up product needs a linked Asset (otherwise _construire_donnees_articles skips it).
         # Reuse an existing TLF asset from the tenant to avoid signal conflicts.
         # If none exists, create one (the signal will also create a Product).
+        #
+        # archive=False INDISPENSABLE : la caisse masque un produit de recharge dont l'asset
+        # est archive. Des tests E2E laissent en base des assets archives mais encore actifs
+        # (tests/e2e/test_federation_asset_fedow_core.py) : sans ce filtre, .first() peut
+        # tomber dessus et l'article de recharge disparait.
+        # / archive=False is REQUIRED: the POS hides top-ups whose asset is archived, and E2E
+        # tests leave archived-but-active assets in the dev DB.
         from AuthBillet.models import Wallet
         from fedow_core.models import Asset
         from fedow_core.services import AssetService
@@ -513,6 +520,7 @@ def test_bt_groupement_par_methode_caisse(tenant):
             tenant_origin=tenant_client,
             category=Asset.TLF,
             active=True,
+            archive=False,
         ).first()
         wallet_groupement_cree = None
         if asset_recharge is None:

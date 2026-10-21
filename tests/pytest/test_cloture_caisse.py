@@ -15,15 +15,18 @@ RÈGLES MÉTIER TESTÉES
   occupées ou servies sont libérées.
 - « Rien à clôturer » : sans vente réglée depuis la dernière J (ou sans aucune vente),
   le bouton répond 400 « Aucune vente à clôturer » et ne crée aucune clôture.
+- Seule une carte primaire en mode gérant clôture, même si elle n'est pas liée au
+  point de vente (une J couvre tout le lieu). Une carte sans mode gérant reçoit un
+  refus 400 affiché dans #messages ; l'écran Ventes lui montre un bouton désactivé.
+  Sans carte (session admin) : pas de restriction.
 - L'écran du Z montre l'essentiel du rapport stocké dans la J : le chiffre d'affaires,
-  les règlements, le tiroir (caisse espèces), la phrase de réconciliation, et un lien
-  vers la fiche complète de la clôture dans l'admin.
-- Les téléchargements PDF / CSV de la caisse sont ceux de la clôture unique
-  (`comptabilite/pdf.py`, `comptabilite/csv_export.py`). L'envoi par e-mail demande
-  la tâche d'envoi de `comptabilite` : les destinataires sont ceux du lieu
-  (`Configuration.rapport_emails`), jamais une adresse saisie à la caisse, quelle
-  que soit la périodicité du rapport (clic explicite). Sans destinataire : message
-  clair, rien n'est demandé.
+  les règlements, le tiroir (caisse espèces), la phrase de réconciliation. Ses seuls
+  gestes : « Imprimer un duplicata » et « Fermer la caisse ». Son header n'a pas de
+  bouton retour.
+- La caisse ne télécharge ni n'envoie aucun rapport, et ne mène pas à l'admin : le
+  PDF, le CSV et l'e-mail sont réservés à l'admin. Le duplicata du Z part sur
+  l'imprimante du terminal avec les métadonnées du Z (type CLOT, uuid de la J) ;
+  sans imprimante ou broker en panne : message clair en 400.
 - Chaque impression du ticket Z est tracée : le ticket envoyé à l'imprimante porte ses
   métadonnées (type CLOT, uuid de la J). Le ticket Z est formaté depuis le rapport
   stocké dans la J.
@@ -98,7 +101,6 @@ from celery.app.task import Task  # noqa: E402
 from kombu.exceptions import OperationalError  # noqa: E402
 
 from django.db import connection  # noqa: E402
-from django.urls import reverse  # noqa: E402
 from django_tenants.test.cases import FastTenantTestCase  # noqa: E402
 from django_tenants.test.client import TenantClient  # noqa: E402
 
@@ -117,7 +119,6 @@ from BaseBillet.services_vente import (  # noqa: E402
     ouvrir_vente,
 )
 from comptabilite.models import ClotureCaisse  # noqa: E402
-from comptabilite.presentation import nom_du_fichier_de_la_cloture  # noqa: E402
 from fabriques_ecran import SIGNE_MOINS, euros, lire_l_element  # noqa: E402
 from fabriques_panier import taches_celery_enregistrees  # noqa: E402
 from fabriques_vente import (  # noqa: E402
@@ -126,8 +127,10 @@ from fabriques_vente import (  # noqa: E402
     verifier_egalites,
 )
 from laboutik.models import (  # noqa: E402
-    CommandeSauvegarde, LaboutikConfiguration, PointDeVente, Printer, Table,
+    CartePrimaire, CommandeSauvegarde, LaboutikConfiguration, PointDeVente, Printer,
+    Table,
 )
+from QrcodeCashless.models import CarteCashless  # noqa: E402
 from laboutik.models import ClotureCaisse as AncienneClotureCaisse  # noqa: E402
 from laboutik.printing.formatters import formatter_ticket_cloture  # noqa: E402
 from laboutik.views import _calculer_datetime_ouverture_service  # noqa: E402
@@ -442,6 +445,113 @@ class TestClotureCaisse(FastTenantTestCase):
         assert AncienneClotureCaisse.objects.count() == 0
 
     # ------------------------------------------------------------------
+    # Qui peut clôturer : la carte primaire en mode gérant
+    # / Who may close: the primary card in manager mode
+    # ------------------------------------------------------------------
+
+    def _carte_primaire(self, tag_id, mode_gerant, liee_au_point_de_vente):
+        """
+        Une carte primaire (carte du caissier), en mode gérant ou non, liée ou non
+        au comptoir du test. Rend son tag NFC.
+        / A primary card, manager mode or not, linked or not to the test counter.
+        Returns its NFC tag.
+        """
+        carte_du_caissier = CarteCashless.objects.create(tag_id=tag_id, number=tag_id)
+        carte_primaire = CartePrimaire.objects.create(
+            carte=carte_du_caissier, edit_mode=mode_gerant
+        )
+        if liee_au_point_de_vente:
+            carte_primaire.points_de_vente.add(self.point_de_vente)
+        return tag_id
+
+    def _ouvrir_l_ecran_ventes(self, tag_id_de_la_carte):
+        """L'écran « Ventes » de la caisse, ouvert avec une carte primaire.
+        / The register "Sales" screen, opened with a primary card."""
+        return self.client_http.get(
+            '/laboutik/caisse/recap-en-cours/',
+            {'uuid_pv': str(self.point_de_vente.uuid), 'tag_id_cm': tag_id_de_la_carte},
+        )
+
+    def test_carte_en_mode_gerant_cloture_meme_sans_lien_au_point_de_vente(self):
+        """
+        Une carte en mode gérant, PAS liée au comptoir : elle clôture quand même.
+        La J couvre tout le lieu, le lien au point de vente ne compte pas.
+        / A manager-mode card NOT linked to the counter still closes: the J
+        covers the whole venue.
+        """
+        tag_du_gerant = self._carte_primaire(
+            "CLGE0001", mode_gerant=True, liee_au_point_de_vente=False
+        )
+        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
+
+        reponse = self.client_http.post(
+            URL_DE_LA_CLOTURE, data={**self.post_data, 'tag_id_cm': tag_du_gerant}
+        )
+
+        assert reponse.status_code == 200, reponse.content.decode()[:400]
+        assert ClotureCaisse.objects.count() == 1
+
+    def test_carte_sans_mode_gerant_ne_cloture_pas_et_le_message_s_affiche(self):
+        """
+        Une carte SANS mode gérant, pourtant liée au comptoir : refus 400 avec un
+        message, rendu dans #messages (HX-Retarget, sinon htmx n'affiche rien).
+        Aucune J n'est créée.
+        / A card WITHOUT manager mode, though linked: 400 with a message rendered
+        in #messages. No J is created.
+        """
+        tag_du_caissier = self._carte_primaire(
+            "CLCA0001", mode_gerant=False, liee_au_point_de_vente=True
+        )
+        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
+
+        reponse = self.client_http.post(
+            URL_DE_LA_CLOTURE, data={**self.post_data, 'tag_id_cm': tag_du_caissier}
+        )
+
+        assert reponse.status_code == 400
+        assert reponse["HX-Retarget"] == "#messages"
+        assert "Seule une carte en mode gérant peut clôturer les caisses." in (
+            reponse.content.decode()
+        )
+        assert ClotureCaisse.objects.count() == 0
+
+    def test_ecran_ventes_carte_sans_mode_gerant_bouton_de_cloture_desactive(self):
+        """
+        L'écran « Ventes » avec une carte sans mode gérant : pas de bouton de
+        clôture actif ni de popup, un bouton désactivé « Clôture réservée au mode
+        gérant » à la place.
+        / Sales screen with a non-manager card: a disabled button instead.
+        """
+        tag_du_caissier = self._carte_primaire(
+            "CLCA0002", mode_gerant=False, liee_au_point_de_vente=True
+        )
+        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
+
+        contenu = self._ouvrir_l_ecran_ventes(tag_du_caissier).content.decode()
+
+        assert 'data-testid="btn-cloture-caisse-reservee-au-gerant"' in contenu
+        assert "Clôture réservée au mode gérant" in contenu
+        assert 'data-testid="btn-cloture-caisse"' not in contenu
+        assert 'data-testid="cloture-confirmation"' not in contenu
+
+    def test_ecran_ventes_carte_en_mode_gerant_bouton_de_cloture_actif(self):
+        """
+        L'écran « Ventes » avec une carte en mode gérant : le bouton « Clôturer
+        toutes les caisses » et sa popup sont là.
+        / Sales screen with a manager-mode card: the close button and its popup.
+        """
+        tag_du_gerant = self._carte_primaire(
+            "CLGE0002", mode_gerant=True, liee_au_point_de_vente=True
+        )
+        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
+
+        contenu = self._ouvrir_l_ecran_ventes(tag_du_gerant).content.decode()
+
+        assert 'data-testid="btn-cloture-caisse"' in contenu
+        assert 'data-testid="cloture-confirmation"' in contenu
+        assert 'data-testid="btn-cloture-caisse-reservee-au-gerant"' not in contenu
+
+    # ------------------------------------------------------------------
     # L'écran du Z
     # / The Z screen
     # ------------------------------------------------------------------
@@ -489,11 +599,12 @@ class TestClotureCaisse(FastTenantTestCase):
         )
         assert phrase_attendue in texte_de_la_reconciliation
 
-    def test_ecran_du_z_lien_vers_la_fiche_de_la_cloture_dans_l_admin(self):
+    def test_ecran_du_z_seulement_le_duplicata_et_fermer_la_caisse(self):
         """
-        L'écran du Z porte un lien vers la fiche complète de la J dans l'admin
-        `comptabilite` (le Z couvre aussi les ventes en ligne : le détail est là-bas).
-        / The Z screen links to the J's full page in the comptabilite admin.
+        L'écran du Z n'a que deux gestes : « Imprimer un duplicata » et « Fermer la
+        caisse ». Ni téléchargement, ni envoi, ni lien vers l'admin : ils sont
+        réservés à l'admin.
+        / The Z screen has only two actions: print a duplicate, close the register.
         """
         self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
 
@@ -502,19 +613,15 @@ class TestClotureCaisse(FastTenantTestCase):
         page = reponse.content.decode()
         assert reponse.status_code == 200, page[:400]
         j_du_bouton = self._la_seule_j_du_lieu()
-        adresse_de_la_fiche = reverse(
-            "staff_admin:comptabilite_cloturecaisse_change", args=[j_du_bouton.pk]
+        _texte, attributs_du_duplicata = lire_l_element(page, "cloture-btn-duplicata")
+        assert attributs_du_duplicata.get("hx-post") == (
+            f"/laboutik/caisse/{j_du_bouton.uuid}/imprimer_duplicata_z/"
         )
-        texte_du_lien, attributs_du_lien = lire_l_element(
-            page, "cloture-lien-fiche-admin"
-        )
-        assert attributs_du_lien.get("href") == adresse_de_la_fiche
-        # Le lien ouvre un nouvel onglet : il le dit (texte lu par le lecteur d'écran).
-        # / The link opens a new tab and says so.
-        assert attributs_du_lien.get("target") == "_blank"
-        assert "nouvel onglet" in texte_du_lien
-        texte_de_l_aide, _attributs = lire_l_element(page, "cloture-aide-fiche-admin")
-        assert "connecté" in texte_de_l_aide
+        assert 'data-testid="btn-fermer-caisse"' in page
+        assert "rapport_pdf" not in page
+        assert "rapport_csv" not in page
+        assert "envoyer_rapport" not in page
+        assert "/admin/" not in page
 
         # Seul le bloc du total est annoncé à l'arrivée du Z, pas tout l'écran.
         # / Only the total block is announced when the Z arrives.
@@ -523,181 +630,145 @@ class TestClotureCaisse(FastTenantTestCase):
         assert "aria-live" not in attributs_de_l_ecran
         assert attributs_du_total.get("aria-live") == "polite"
 
+    def test_ecran_du_z_header_sans_bouton_retour(self):
+        """
+        L'écran du Z remplace le header de l'écran Ventes (hx-swap-oob) par un
+        header SANS bouton retour : après une clôture, on ne revient pas en arrière.
+        / The Z screen swaps in a header WITHOUT back button.
+        """
+        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
+
+        reponse = self._cliquer_sur_cloturer()
+
+        page = reponse.content.decode()
+        assert reponse.status_code == 200, page[:400]
+        texte_du_titre, _attributs = lire_l_element(page, "header-titre")
+        assert "Clôture" in texte_du_titre
+        assert 'id="hdr-retour-zone"' in page
+        assert 'hx-swap-oob="true"' in page
+        assert 'data-testid="header-btn-retour"' not in page
+
     # ------------------------------------------------------------------
-    # Téléchargements et envoi du rapport
-    # / Report downloads and e-mail
+    # Le duplicata du ticket Z, et rien d'autre à la caisse
+    # / The Z ticket duplicate, and nothing else at the register
     # ------------------------------------------------------------------
 
-    def test_route_rapport_csv_de_la_caisse_sur_la_cloture_unique(self):
+    def test_routes_de_telechargement_et_d_envoi_absentes_de_la_caisse(self):
         """
-        Le CSV de la caisse est celui de la clôture unique (`comptabilite/csv_export`) :
-        200, `text/csv`, nom « cloture-<n°>-<date>.csv », et le contenu porte
-        l'empreinte de la J (ligne « Empreinte de la clôture » de ce CSV).
-        / The register CSV is the single closure's CSV: name and J fingerprint.
+        Le PDF, le CSV et l'envoi du rapport sont réservés à l'admin : la caisse
+        n'a plus ces routes (404).
+        / PDF, CSV and e-mail are admin-only: the register has no such routes.
         """
         self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
         j_du_lieu = self._cloturer_par_la_tache()
 
-        reponse = self.client_http.get(f'/laboutik/caisse/{j_du_lieu.uuid}/rapport_csv/')
-
-        assert reponse.status_code == 200
-        assert reponse['Content-Type'].startswith('text/csv')
-        nom_attendu = nom_du_fichier_de_la_cloture(j_du_lieu, "csv")
-        assert f'filename="{nom_attendu}"' in reponse['Content-Disposition']
-        assert j_du_lieu.hmac_hash
-        assert j_du_lieu.hmac_hash in reponse.content.decode('utf-8-sig')
-
-    def test_route_rapport_pdf_uuid_inconnu_404(self):
-        """
-        Un uuid qui n'est pas celui d'une clôture unique du lieu : 404.
-        / A uuid that is not a single closure of the venue: 404.
-        """
-        reponse = self.client_http.get(f'/laboutik/caisse/{uuid.uuid4()}/rapport_pdf/')
-
+        for route in ['rapport_pdf', 'rapport_csv']:
+            reponse = self.client_http.get(f'/laboutik/caisse/{j_du_lieu.uuid}/{route}/')
+            assert reponse.status_code == 404, route
+        reponse = self.client_http.post(
+            f'/laboutik/caisse/{j_du_lieu.uuid}/envoyer_rapport/'
+        )
         assert reponse.status_code == 404
 
-    def test_route_rapport_pdf_de_la_caisse_sur_la_cloture_unique(self):
+    def test_duplicata_imprime_le_ticket_z_trace_type_clot_lien_vers_la_j(self):
         """
-        Le PDF de la caisse est celui de la clôture unique (`comptabilite/pdf`) : 200,
-        `application/pdf`, nom « cloture-<n°>-<date>.pdf », un vrai PDF.
-        / The register PDF is the single closure's PDF.
+        Le terminal a une imprimante : le duplicata part à l'impression avec les
+        métadonnées du Z (type « CLOT », uuid de la J). La tâche d'impression le
+        marque DUPLICATA (le Z a déjà été imprimé). La caisse dit « Duplicata
+        envoyé à l'imprimante ».
+        / The duplicate is sent with the Z's metadata; the register confirms.
         """
-        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
-        j_du_lieu = self._cloturer_par_la_tache()
-
-        reponse = self.client_http.get(f'/laboutik/caisse/{j_du_lieu.uuid}/rapport_pdf/')
-
-        assert reponse.status_code == 200
-        assert reponse['Content-Type'] == 'application/pdf'
-        nom_attendu = nom_du_fichier_de_la_cloture(j_du_lieu, "pdf")
-        assert f'filename="{nom_attendu}"' in reponse['Content-Disposition']
-        assert reponse.content.startswith(b'%PDF')
-
-    def _regler_les_rapports_du_lieu(self, destinataires, periodicite):
-        """
-        Les destinataires et la périodicité des rapports de clôture du lieu
-        (`Configuration`), réécrits dans la configuration et dans son cache.
-        / The venue's report recipients and periodicity.
-        """
-        configuration = Configuration.get_solo()
-        configuration.rapport_emails = destinataires
-        configuration.rapport_periodicite = periodicite
-        configuration.save()
-
-    def test_route_envoyer_rapport_demande_l_envoi_de_comptabilite_aux_destinataires_du_lieu(self):
-        """
-        Le lieu a un destinataire, rapports journaliers. Le bouton « Envoyer par
-        e-mail » de la caisse demande l'envoi DEMANDÉ de `comptabilite` pour cette J
-        (lieu, uuid de la J), et seulement lui. Une adresse saisie à la caisse n'est
-        pas transmise : les destinataires sont ceux du lieu.
-        / The register e-mail button requests comptabilite's requested sending for
-        this J; an address typed at the register is not passed on.
-        """
-        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
-        j_du_lieu = self._cloturer_par_la_tache()
-        # Réglés après la J : sa création ne demande donc aucun envoi automatique.
-        # / Set after the J: its creation requests no automatic sending.
-        self._regler_les_rapports_du_lieu(
-            'compta@lieu-de-test.org', Configuration.PERIODICITE_JOURNALIER
+        imprimante_du_terminal = Printer.objects.create(
+            name='Imprimante test duplicata', printer_type=Printer.MOCK,
         )
+        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
+        j_du_lieu = self._cloturer_par_la_tache()
 
-        with taches_celery_enregistrees() as taches_demandees:
-            reponse = self.client_http.post(
-                f'/laboutik/caisse/{j_du_lieu.uuid}/envoyer_rapport/',
-                data={'email': 'saisie-a-la-caisse@exemple.org'},
-            )
+        with patch(
+            'laboutik.views.imprimante_du_terminal',
+            return_value=imprimante_du_terminal,
+        ):
+            with taches_celery_enregistrees() as taches_demandees:
+                reponse = self.client_http.post(
+                    f'/laboutik/caisse/{j_du_lieu.uuid}/imprimer_duplicata_z/'
+                )
 
         assert reponse.status_code == 200, reponse.content.decode()[:400]
-        assert "Envoi du rapport demandé" in reponse.content.decode()
-        assert taches_demandees == [
-            (
-                'envoyer_email_cloture_demande',
-                (self.tenant.schema_name, str(j_du_lieu.uuid)),
-            ),
-        ]
+        assert "Duplicata envoyé à l&#x27;imprimante" in reponse.content.decode()
+        impressions_demandees = []
+        for nom_de_la_tache, arguments in taches_demandees:
+            if nom_de_la_tache == 'imprimer_async':
+                impressions_demandees.append(arguments)
+        assert len(impressions_demandees) == 1
+        cle_de_l_imprimante, donnees_du_ticket, _schema = impressions_demandees[0]
+        assert cle_de_l_imprimante == str(imprimante_du_terminal.pk)
+        metadonnees = donnees_du_ticket['impression_meta']
+        assert metadonnees['type_justificatif'] == 'CLOT'
+        assert metadonnees['cloture_uuid'] == str(j_du_lieu.uuid)
+        assert metadonnees['operateur_pk'] == str(self.admin.pk)
 
-    def test_envoi_demande_du_z_part_meme_pour_un_lieu_en_periodicite_mensuelle(self):
+    def test_duplicata_sans_imprimante_message_clair_en_400(self):
         """
-        Le lieu reçoit ses rapports chaque MOIS. Le caissier demande quand même
-        l'e-mail de la J : c'est un clic explicite, la périodicité ne compte pas.
-        La route demande l'envoi, et la tâche d'envoi demandé envoie l'e-mail au
-        destinataire du lieu, avec le PDF de la J.
-        / Monthly reports venue: the requested sending of a J still goes out to the
-        venue's recipient, with the J's PDF.
+        Le terminal n'a pas d'imprimante : 400 (la caisse n'affiche que les 400 et
+        422) avec un message clair, aucune impression demandée.
+        / No printer: 400 with a clear message, nothing is printed.
         """
         self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
         j_du_lieu = self._cloturer_par_la_tache()
-        self._regler_les_rapports_du_lieu(
-            'compta@lieu-de-test.org', Configuration.PERIODICITE_MENSUEL
-        )
 
-        with taches_celery_enregistrees() as taches_demandees:
-            reponse = self.client_http.post(
-                f'/laboutik/caisse/{j_du_lieu.uuid}/envoyer_rapport/'
-            )
-        with patch('comptabilite.tasks.CeleryMailerClass') as facteur_simule:
-            email_envoye = comptabilite.tasks.envoyer_email_cloture_demande(
-                self.tenant.schema_name, str(j_du_lieu.uuid)
-            )
-
-        assert reponse.status_code == 200, reponse.content.decode()[:400]
-        assert len(taches_demandees) == 1
-        assert email_envoye is True
-        arguments_du_facteur = facteur_simule.call_args.kwargs
-        assert arguments_du_facteur['email'] == ['compta@lieu-de-test.org']
-        nom_du_pdf = nom_du_fichier_de_la_cloture(j_du_lieu, "pdf")
-        assert nom_du_pdf in arguments_du_facteur['attached_files']
-
-    def test_envoi_demande_du_z_sans_destinataire_message_clair_rien_n_est_demande(self):
-        """
-        Le lieu n'a aucun destinataire de rapport : le bouton répond 400 avec un
-        message clair, et aucune tâche d'envoi n'est demandée.
-        / No recipient: 400 with a clear message, no sending task requested.
-        """
-        self._regler_les_rapports_du_lieu('', Configuration.PERIODICITE_JOURNALIER)
-        self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
-        j_du_lieu = self._cloturer_par_la_tache()
-
-        with taches_celery_enregistrees() as taches_demandees:
-            reponse = self.client_http.post(
-                f'/laboutik/caisse/{j_du_lieu.uuid}/envoyer_rapport/'
-            )
+        with patch('laboutik.views.imprimante_du_terminal', return_value=None):
+            with taches_celery_enregistrees() as taches_demandees:
+                reponse = self.client_http.post(
+                    f'/laboutik/caisse/{j_du_lieu.uuid}/imprimer_duplicata_z/'
+                )
 
         assert reponse.status_code == 400
-        assert (
-            "Aucun destinataire de rapport n&#x27;est configuré pour le lieu."
-            in reponse.content.decode()
+        assert "Aucune imprimante configurée pour ce terminal" in (
+            reponse.content.decode()
         )
         assert taches_demandees == []
 
-    def test_envoi_demande_du_z_broker_en_panne_message_clair_pas_d_erreur_500(self):
+    def test_duplicata_broker_en_panne_message_clair_en_400(self):
         """
-        Le lieu a un destinataire, mais le broker de Celery est en panne : la
-        demande d'envoi lève `OperationalError`. La route ne tombe pas en erreur
-        500 : elle répond 503 avec un message clair.
-        / Broker down: the e-mail route answers 503 with a clear message, no 500.
+        Le broker de Celery est en panne : pas d'erreur 500, un 400 avec un
+        message clair (affiché par la caisse).
+        / Broker down: no 500, a 400 with a clear message.
         """
+        imprimante_du_terminal = Printer.objects.create(
+            name='Imprimante test duplicata panne', printer_type=Printer.MOCK,
+        )
         self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
         j_du_lieu = self._cloturer_par_la_tache()
-        self._regler_les_rapports_du_lieu(
-            'compta@lieu-de-test.org', Configuration.PERIODICITE_JOURNALIER
-        )
 
-        with patch.object(
-            Task,
-            'apply_async',
-            autospec=True,
-            side_effect=OperationalError("Broker injoignable (test)"),
+        with patch(
+            'laboutik.views.imprimante_du_terminal',
+            return_value=imprimante_du_terminal,
         ):
-            reponse = self.client_http.post(
-                f'/laboutik/caisse/{j_du_lieu.uuid}/envoyer_rapport/'
-            )
+            with patch.object(
+                Task,
+                'apply_async',
+                autospec=True,
+                side_effect=OperationalError("Broker injoignable (test)"),
+            ):
+                reponse = self.client_http.post(
+                    f'/laboutik/caisse/{j_du_lieu.uuid}/imprimer_duplicata_z/'
+                )
 
-        assert reponse.status_code == 503
-        assert (
-            "L&#x27;envoi du rapport n&#x27;a pas pu être demandé."
-            in reponse.content.decode()
+        assert reponse.status_code == 400
+        assert "Le duplicata n&#x27;a pas pu être envoyé à l&#x27;imprimante." in (
+            reponse.content.decode()
         )
+
+    def test_duplicata_uuid_inconnu_404(self):
+        """
+        Un uuid qui n'est pas celui d'une clôture du lieu : 404.
+        / A uuid that is not a closure of the venue: 404.
+        """
+        reponse = self.client_http.post(
+            f'/laboutik/caisse/{uuid.uuid4()}/imprimer_duplicata_z/'
+        )
+
+        assert reponse.status_code == 404
 
     # ------------------------------------------------------------------
     # Le ticket Z

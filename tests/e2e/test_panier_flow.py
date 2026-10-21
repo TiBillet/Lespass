@@ -225,9 +225,10 @@ def test_e3_une_adhesion_recurrente_est_refusee_par_le_panier(
     page, login_as, django_shell, e2e_slugs
 ):
     """
-    Adhésion récurrente (paiement direct seulement) : « Ajouter au panier » affiche un toast
-    d'erreur, et le panier reste vide.
-    / Recurring membership: "Add to cart" shows an error toast, the cart stays empty.
+    Adhésion récurrente (paiement direct seulement) : « Ajouter au panier » affiche l'erreur
+    dans le formulaire, le panneau reste ouvert, et le panier reste vide.
+    / Recurring membership: "Add to cart" shows the error in the form, the panel stays open,
+    the cart stays empty.
     """
     uuid_de_l_adhesion = fixture_du_panier(e2e_slugs, "adhesion_recurrente_uuid")
     uuid_du_tarif = fixture_du_panier(e2e_slugs, "adhesion_recurrente_price_uuid")
@@ -243,9 +244,12 @@ def test_e3_une_adhesion_recurrente_est_refusee_par_le_panier(
     page.fill('[data-testid="membership-lastname"]', "Lovelace")
     page.locator('[data-testid="membership-add-to-cart"]').click()
 
-    # SweetAlert2 v11 pose la classe de niveau sur le toast lui-même.
-    # / SweetAlert2 v11 puts the level class on the toast element itself.
-    expect(page.locator(".swal2-toast.swal2-icon-error")).to_be_visible(timeout=5_000)
+    # L'erreur s'affiche dans la zone du formulaire, pas en toast ; la saisie reste.
+    # / The error shows in the form's zone, not as a toast; the input stays.
+    zone_d_erreurs = page.locator('[data-testid="membership-server-errors"]')
+    expect(zone_d_erreurs.locator('[data-testid="booking-server-errors-list"]')).to_be_visible(timeout=5_000)
+    expect(page.locator(".swal2-toast")).to_have_count(0)
+    expect(page.locator('[data-testid="membership-firstname"]')).to_have_value("Ada")
 
     # Le panier de ce nouvel acheteur est resté vide : aucun article à retirer.
     # / This new buyer's cart stayed empty: no item to remove.

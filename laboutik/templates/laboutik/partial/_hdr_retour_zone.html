@@ -20,12 +20,16 @@ PARAMETRES (via include ... with) :
 - hdr_retour_ventes : True → le retour ramene a l'ecran Ventes (HTMX, #ventes-zone).
                       Absent → le retour ramene a la caisse (lien url_retour_pv).
 - hdr_oob          : True → ajoute hx-swap-oob="true".
+- hdr_sans_retour  : True → aucun bouton retour (ecran du Z, hx_cloture_rapport.html :
+                      apres une cloture, on ne revient pas en arriere).
 
 Contexte utilise : pv.id, url_retour_pv, params_ventes, card, type_app
 (tous fournis par _construire_contexte_ventes ou par la vue sortie_de_caisse).
 {% endcomment %}
 <div id="hdr-retour-zone" class="hdr-retour-zone"{% if hdr_oob %} hx-swap-oob="true"{% endif %}>
-  {% if hdr_retour_ventes %}
+  {% if hdr_sans_retour %}
+    {# Pas de retour : la seule sortie est dans la page / No back: the only exit is in the page #}
+  {% elif hdr_retour_ventes %}
     {# Retour vers l'ecran Ventes / Back to the Sales screen #}
     <button type="button" class="hdr-back"
             hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"

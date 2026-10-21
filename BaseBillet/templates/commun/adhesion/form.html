@@ -1,5 +1,9 @@
 {% load i18n l10n static tibitags %}
+{# hx-on::before-request : chaque nouvel envoi efface les erreurs du précédent. Une réponse #}
+{# réussie ne remplace que #target_formbricks : sans ça, l'ancienne erreur resterait affichée. #}
+{# / Each new request clears the previous errors (a success only replaces #target_formbricks). #}
 <form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
+      hx-on::before-request="document.getElementById('adhesion-erreurs').innerHTML = ''"
       class="d-flex flex-column h-100"
       data-loading-target="#tibillet-spinner"
       data-loading-class="active"
@@ -635,6 +639,11 @@
     {# / Sticky footer with action buttons — border-top for visual separation. #}
     {# data-loading-disable on submits: prevent double-click via HTMX loading-states. #}
     <div class="p-3 border-top bg-body flex-shrink-0">
+        {# Les erreurs du serveur arrivent ici seulement (HX-Retarget, MembershipMVT.create) : #}
+        {# les champs remplis restent. Placée dans le pied collant, à côté des boutons. #}
+        {# / Server errors land here only (HX-Retarget): filled fields are kept. #}
+        <div id="adhesion-erreurs" aria-live="assertive" data-testid="membership-server-errors"></div>
+
         {% comment %}
         BOUTONS D'ACTION / ACTION BUTTONS
 
@@ -658,7 +667,8 @@
                         class="btn btn-primary w-100 mb-2"
                         hx-post="/panier/add/membership/"
                         hx-include="closest form"
-                        hx-swap="none"
+                        hx-target="#adhesion-erreurs"
+                        hx-swap="innerHTML"
                         data-loading-disable
                         data-testid="membership-add-to-cart"
                         aria-label="{% translate 'Add this membership to your cart' %}">
@@ -670,7 +680,8 @@
                         hx-post="/panier/add/membership/"
                         hx-include="closest form"
                         hx-vals='{"then": "checkout"}'
-                        hx-swap="none"
+                        hx-target="#adhesion-erreurs"
+                        hx-swap="innerHTML"
                         data-loading-disable
                         data-testid="membership-add-and-pay"
                         aria-label="{% translate 'Add to cart and pay all items' %}">
@@ -682,7 +693,8 @@
                         class="btn btn-primary w-100 mb-2"
                         hx-post="/panier/add/membership/"
                         hx-include="closest form"
-                        hx-swap="none"
+                        hx-target="#adhesion-erreurs"
+                        hx-swap="innerHTML"
                         data-loading-disable
                         data-testid="membership-add-to-cart"
                         aria-label="{% translate 'Add this membership to your cart' %}">
