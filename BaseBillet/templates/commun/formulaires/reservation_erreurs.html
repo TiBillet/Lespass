@@ -1,0 +1,26 @@
+{% load i18n %}
+{% comment %}
+ERREURS DU FORMULAIRE DE RÉSERVATION
+/ Booking form errors
+
+LOCALISATION : BaseBillet/templates/commun/formulaires/reservation_erreurs.html
+
+Rendu par BaseBillet/views.py : EventMVT.reservation(), quand ReservationValidator
+refuse la demande. La réponse porte les en-têtes HX-Retarget / HX-Reswap : htmx
+remplace SEULEMENT la zone #reservation-erreurs du formulaire
+(commun/formulaires/reservation.html). Les champs déjà remplis restent en place.
+
+Contexte :
+- messages_d_erreur : liste de textes, déjà traduits.
+{% endcomment %}
+<div class="alert alert-danger mb-3" role="alert" data-testid="booking-server-errors-list">
+    {% if messages_d_erreur|length == 1 %}
+        {{ messages_d_erreur.0 }}
+    {% else %}
+        <ul class="mb-0 ps-3">
+            {% for message_d_erreur in messages_d_erreur %}
+                <li>{{ message_d_erreur }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>

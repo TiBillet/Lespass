@@ -1958,6 +1958,25 @@ img { max-width: 100%; display: block; }
     height: auto;
   }
   #explorer-root .explorer-list { width: auto; overflow: visible; padding: 0; gap: var(--space-4); }
+  /* Le panneau carte tient dans l'écran et reste collé pendant que la liste
+     défile. Sans ce bloc, le `height: 100%` de .map-panel prend la hauteur de
+     la ligne de grille, donc celle de la liste : la carte s'étire sur toute la
+     page.
+     top: 5rem = sous la .user-bar collante (~65px), même valeur que
+     --tb-sticky-top (déclarée sur .tb-page, absente de cette page).
+     `position: sticky` marche ici car body et html sont en `overflow: clip`,
+     qui ne crée pas de conteneur de défilement.
+     / The map panel fits the screen and sticks while the list scrolls.
+     top: 5rem clears the sticky .user-bar. */
+  #explorer-root .map-panel {
+    position: sticky;
+    top: 5rem;
+    height: calc(100vh - 5rem - var(--space-6));
+    /* dvh : suit la barre d'adresse qui apparaît et disparaît. vh reste le repli. */
+    /* / dvh follows the address bar; vh stays as fallback. */
+    height: calc(100dvh - 5rem - var(--space-6));
+    min-height: 400px;
+  }
   /* La carte remplit le map-panel (position relative + min-height). */
   /* / The map fills the map-panel (position relative + min-height). */
   #explorer-root .explorer-map { position: absolute; inset: 0; width: auto; height: auto; border-left: none; }

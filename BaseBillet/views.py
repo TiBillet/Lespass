@@ -3522,8 +3522,14 @@ class EventMVT(viewsets.ViewSet):
                 ).prefetch_related(
                     'tag', 'products', 'products__prices', 'artists', 'artists__artist',
                 ).filter(
+                    # À venir (à partir d'hier) OU en cours : un événement commencé
+                    # (ex : une expo de plusieurs semaines) reste dans l'agenda tant
+                    # que sa date de fin n'est pas passée.
+                    # / Upcoming (from yesterday) OR ongoing: a started event stays
+                    # listed until its end date has passed.
+                    Q(datetime__gte=timezone.localtime() - timedelta(days=1))
+                    | Q(end_datetime__gte=timezone.localtime()),
                     published=True,
-                    datetime__gte=timezone.localtime() - timedelta(days=1),  # On prend les évènement a partir d'hier
                     # Un event ARCHIVE est un event retiré de l'agenda. Il ne doit plus
                     # y apparaitre, meme s'il reste publié. Le cache SEO (carte,
                     # explorateur) applique déjà ce filtre partout : sans lui ici,
@@ -3582,7 +3588,24 @@ class EventMVT(viewsets.ViewSet):
                 # Collecte de TOUTES les dates et tags avant pagination
                 # Requêtes légères : dates() et values_list() évitent les subqueries lourdes
                 # / Collect ALL dates and tags before pagination (lightweight queries)
-                all_dates_set.update(events.dates('datetime', 'day'))
+                # Les jours du menu « Trier par date » : le jour de début de chaque
+                # événement. Un événement en cours, commencé avant aujourd'hui, compte
+                # pour aujourd'hui : son jour de début est passé, mais il a lieu aujourd'hui.
+                # / Dropdown days: each event's start day. An ongoing event that
+                # started before today counts for today.
+                aujourd_hui = timezone.localdate()
+                maintenant = timezone.now()
+                for debut_de_l_evenement, fin_de_l_evenement in events.order_by().values_list('datetime', 'end_datetime'):
+                    jour_de_debut = timezone.localdate(debut_de_l_evenement)
+                    commence_avant_aujourd_hui_et_toujours_en_cours = (
+                        jour_de_debut < aujourd_hui
+                        and fin_de_l_evenement is not None
+                        and fin_de_l_evenement >= maintenant
+                    )
+                    if commence_avant_aujourd_hui_et_toujours_en_cours:
+                        all_dates_set.add(aujourd_hui)
+                    else:
+                        all_dates_set.add(jour_de_debut)
                 tag_pks = set(events.order_by().values_list('tag__pk', flat=True))
                 tag_pks.discard(None)
                 for tag in Tag.objects.filter(pk__in=tag_pks):
@@ -3601,7 +3624,14 @@ class EventMVT(viewsets.ViewSet):
                 # / Applied AFTER collecting dates/tags so dropdowns stay complete.
                 events_a_afficher = events
                 if date_filter:
-                    events_a_afficher = events_a_afficher.filter(datetime__date=date_filter)
+                    # Le jour choisi : les événements qui commencent ce jour-là, et ceux
+                    # qui ont commencé avant et durent jusqu'à ce jour (une expo).
+                    # / The chosen day: events starting that day, and earlier ones
+                    # still running that day (an exhibition).
+                    events_a_afficher = events_a_afficher.filter(
+                        Q(datetime__date=date_filter)
+                        | Q(datetime__date__lt=date_filter, end_datetime__date__gte=date_filter)
+                    )
 
                 events_tries = events_a_afficher.order_by('datetime').distinct()
 
@@ -3630,7 +3660,13 @@ class EventMVT(viewsets.ViewSet):
                     # / Price label shown on the agenda card
                     event.price_min = EventMVT._libelle_prix_agenda(event)
 
-                    date = event.datetime.date()
+                    # Un jour est choisi : tout est rangé sous ce jour, y compris une
+                    # expo commencée avant. Sinon : sous le jour de début.
+                    # / A day is chosen: everything goes under it, ongoing events included.
+                    if date_filter:
+                        date = date_filter
+                    else:
+                        date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
 
@@ -4084,9 +4120,27 @@ class EventMVT(viewsets.ViewSet):
             # / Same call as in action_reservation above: a business refusal is not an
             # app error, so warning level and no Sentry alert.
             logger.warning(f"ReservationViewset CREATE : validation refusee : {validator.errors}")
-            for error in validator.errors:
-                messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
+            # Les erreurs s'affichent DANS le formulaire, sans recharger la page : la
+            # personne garde tout ce qu'elle a saisi (e-mail, quantités, réponses).
+            # HX-Retarget / HX-Reswap : htmx ne remplace que la zone #reservation-erreurs
+            # du formulaire (commun/formulaires/reservation.html), pas le formulaire entier.
+            # Statut 200 : htmx ignore le contenu d'une réponse 4xx.
+            # / Errors are shown INSIDE the form, no reload: filled fields are kept.
+            # Status 200: htmx ignores 4xx bodies.
+            messages_d_erreur = []
+            for liste_d_erreurs_du_champ in validator.errors.values():
+                for erreur in liste_d_erreurs_du_champ:
+                    messages_d_erreur.append(str(erreur))
+
+            reponse_avec_les_erreurs = render(
+                request,
+                "commun/formulaires/reservation_erreurs.html",
+                context={"messages_d_erreur": messages_d_erreur},
+            )
+            reponse_avec_les_erreurs["HX-Retarget"] = "#reservation-erreurs"
+            reponse_avec_les_erreurs["HX-Reswap"] = "innerHTML"
+            return reponse_avec_les_erreurs
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks

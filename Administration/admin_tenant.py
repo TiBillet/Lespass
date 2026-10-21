@@ -4353,7 +4353,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         EventPricesSummaryTable,
         ChildActionsSummaryTable,
     ]
-    list_per_page = 20
+    list_per_page = 200
 
     change_form_template = 'admin/event/change_form.html'
 
@@ -4518,6 +4518,114 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         sanitize_textfields(obj)
 
         super().save_model(request, obj, form, change)
+        self._avertir_si_le_creneau_est_deja_occupe(request, obj)
+
+    def _avertir_si_le_creneau_est_deja_occupe(self, request, evenement: Event):
+        """
+        Après l'enregistrement, prévient l'admin si le créneau de l'événement
+        est déjà occupé. Ce sont des AVERTISSEMENTS : l'événement est enregistré
+        quoi qu'il arrive.
+        / After saving, warns the admin if the event's time slot is already taken.
+        Warnings only: the event is saved anyway.
+
+        LOCALISATION : Administration/admin_tenant.py
+
+        Trois avertissements possibles :
+        1. La ressource bloquée a déjà des réservations sur le créneau.
+        2. La ressource bloquée est déjà bloquée par un autre événement.
+        3. D'autres événements ont lieu sur le même créneau (hors ceux du point 2).
+
+        Les réservations sont lues avec le filtre du moteur de réservation
+        (get_existing_bookings_for_resource), les événements qui bloquent avec
+        le même filtre que get_event_intervals_blocking_resource() : l'admin est
+        prévenu des mêmes occupants que ceux qui bloquent vraiment la ressource.
+
+        La famille de l'événement (parent, enfants, frères et sœurs) est ignorée :
+        une action bénévole a lieu pendant son événement parent, par nature. Les
+        actions bénévoles des autres événements sont ignorées aussi (avertissement 3).
+
+        Un événement sans date de fin compte comme un instant : il chevauche un
+        autre événement s'il commence pendant celui-ci, ou à la même heure.
+        / An event without an end date is an instant: it overlaps another event
+        if it starts during it, or at the same time.
+        """
+        from django.db.models.functions import Coalesce
+        from booking.booking_engine import Interval, get_existing_bookings_for_resource
+
+        debut = evenement.datetime
+        fin = evenement.end_datetime or evenement.datetime
+
+        # 1 et 2. La ressource bloquée est-elle libre ?
+        # EventForm.clean impose une date de fin quand une ressource est bloquée.
+        # / 1 and 2. Is the blocked resource free? EventForm.clean requires an end date.
+        evenements_qui_bloquent_deja_la_ressource = []
+        ressource = evenement.ressource_bloquee
+        if ressource and evenement.end_datetime:
+            reservations_sur_le_creneau = get_existing_bookings_for_resource(
+                ressource, window=Interval(start=debut, end=fin),
+            ).select_related('user').order_by('start_datetime')
+
+            personnes_qui_ont_reserve = []
+            for reservation in reservations_sur_le_creneau:
+                # Le nom saisi à la réservation d'abord, sinon celui du compte, sinon l'e-mail.
+                # / The name typed when booking first, else the account's, else the email.
+                prenom = reservation.first_name or reservation.user.first_name or ""
+                nom = reservation.last_name or reservation.user.last_name or ""
+                prenom_et_nom = f"{prenom} {nom}".strip()
+                personnes_qui_ont_reserve.append(prenom_et_nom or reservation.user.email)
+
+            if personnes_qui_ont_reserve:
+                messages.warning(request, _(
+                    "La ressource « %(ressource)s » est déjà réservée sur ce créneau par : %(personnes)s."
+                ) % {'ressource': ressource.name, 'personnes': ", ".join(personnes_qui_ont_reserve)})
+
+            evenements_qui_bloquent_deja_la_ressource = list(
+                Event.objects.filter(
+                    ressource_bloquee=ressource,
+                    archived=False,
+                    end_datetime__isnull=False,
+                    datetime__lt=fin,
+                    end_datetime__gt=debut,
+                ).exclude(pk=evenement.pk).order_by('datetime')
+            )
+            if evenements_qui_bloquent_deja_la_ressource:
+                titres = []
+                for autre_evenement in evenements_qui_bloquent_deja_la_ressource:
+                    titres.append(f"« {autre_evenement.name} »")
+                messages.warning(request, _(
+                    "La ressource « %(ressource)s » est déjà bloquée sur ce créneau par : %(evenements)s."
+                ) % {'ressource': ressource.name, 'evenements': ", ".join(titres)})
+
+        # 3. D'autres événements ont-ils lieu sur le même créneau ?
+        # / 3. Do other events take place in the same time slot?
+        autres_evenements_sur_le_creneau = (
+            Event.objects.annotate(fin_ou_debut=Coalesce('end_datetime', 'datetime'))
+            .filter(archived=False)
+            .filter(Q(datetime__lt=fin, fin_ou_debut__gt=debut) | Q(datetime=debut))
+            .exclude(pk=evenement.pk)
+            .exclude(parent_id=evenement.pk)
+            # Les actions bénévoles des autres événements ne sont pas des événements
+            # à part : elles noieraient l'avertissement. / Volunteer actions are not
+            # standalone events: they would drown the warning.
+            .exclude(categorie=Event.ACTION)
+            .order_by('datetime')
+        )
+        if evenement.parent_id:
+            autres_evenements_sur_le_creneau = (
+                autres_evenements_sur_le_creneau
+                .exclude(pk=evenement.parent_id)
+                .exclude(parent_id=evenement.parent_id)
+            )
+
+        titres = []
+        for autre_evenement in autres_evenements_sur_le_creneau:
+            deja_signale_pour_la_ressource = autre_evenement in evenements_qui_bloquent_deja_la_ressource
+            if not deja_signale_pour_la_ressource:
+                titres.append(f"« {autre_evenement.name} »")
+        if titres:
+            messages.warning(request, _(
+                "D'autres événements ont lieu sur ce créneau : %(evenements)s."
+            ) % {'evenements': ", ".join(titres)})
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)

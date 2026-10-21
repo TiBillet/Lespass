@@ -134,7 +134,9 @@ suivante), calendar_weeks, time_rows, mobile_days, mobile_time_rows, mobile_day_
                                                 </span>
                                             {% endif %}
                                             {% if slot.infos_admin %}
-                                                <span class="calendar-slot-occupant" data-testid="booking-calendar-slot-occupant">{{ slot.infos_admin.libelle_court }}</span>
+                                                {% for libelle in slot.infos_admin.libelles_de_la_case %}
+                                                    <span class="calendar-slot-occupant" data-testid="booking-calendar-slot-occupant">{{ libelle }}</span>
+                                                {% endfor %}
                                             {% endif %}
                                         </div>
                                         {% comment %}
@@ -261,7 +263,9 @@ suivante), calendar_weeks, time_rows, mobile_days, mobile_time_rows, mobile_day_
                                         >
                                             <span class="mobile-slot-time">{{ slot.start|date:"H\hi" }}</span>
                                             {% if slot.infos_admin %}
-                                                <span class="calendar-slot-occupant" data-testid="booking-mobile-slot-occupant">{{ slot.infos_admin.libelle_court }}</span>
+                                                {% for libelle in slot.infos_admin.libelles_de_la_case %}
+                                                    <span class="calendar-slot-occupant" data-testid="booking-mobile-slot-occupant">{{ libelle }}</span>
+                                                {% endfor %}
                                             {% endif %}
                                         </div>
                                         {# Admin seulement : même bouton que la grille desktop. / Admin only. #}

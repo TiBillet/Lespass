@@ -432,6 +432,46 @@ def test_un_admin_voit_l_evenement_et_la_reservation_qui_occupent_les_creneaux(s
     assert reservation.user.email in page
 
 
+def test_un_admin_voit_dans_la_case_tous_les_evenements_qui_se_chevauchent(salle, tenant):
+    # Lundi prochain, deux événements se chevauchent sur le créneau 10 h - 11 h.
+    # La case doit écrire les DEUX titres, pas seulement le premier.
+    # / Two events overlap the 10-11 slot: the cell must show BOTH titles.
+    from BaseBillet.models import Event
+
+    lundi = salle.semaine(1)
+
+    def a_l_heure(heure, minute):
+        return timezone.make_aware(
+            datetime.datetime.combine(lundi, datetime.time(heure, minute)), salle.fuseau_du_lieu,
+        )
+
+    Event.objects.create(
+        name="TEST premier evenement",
+        datetime=a_l_heure(10, 0),
+        end_datetime=a_l_heure(10, 40),
+        jauge_max=50,
+        ressource_bloquee=salle.ressource,
+    )
+    Event.objects.create(
+        name="TEST second evenement",
+        datetime=a_l_heure(10, 20),
+        end_datetime=a_l_heure(11, 0),
+        jauge_max=50,
+        ressource_bloquee=salle.ressource,
+    )
+    client = client_connecte(admin_du_lieu(tenant))
+
+    page = client.get(adresse_de_la_salle(salle, lundi)).content.decode()
+
+    # Un seul créneau occupé, mais deux lignes dans sa case (desktop et mobile).
+    # / One occupied slot, two lines in its cell (desktop and mobile).
+    assert page.count('data-testid="booking-calendar-slot-busy"') == 1
+    for titre in ["TEST premier evenement", "TEST second evenement"]:
+        assert page.count(f'data-testid="booking-calendar-slot-occupant">{titre}</span>') == 1
+        assert page.count(f'data-testid="booking-mobile-slot-occupant">{titre}</span>') == 1
+    assert "Événements qui bloquent la ressource" in page
+
+
 @pytest.mark.parametrize("connecte", [False, True])
 def test_un_visiteur_ou_un_membre_non_admin_ne_voit_pas_qui_occupe_les_creneaux(salle, connecte):
     evenement, reservation = occuper_le_lundi_a_10h(salle)

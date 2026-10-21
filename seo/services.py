@@ -130,7 +130,7 @@ def get_active_tenants_with_counts():
     """
     Retourne la liste des tenants actifs (hors ROOT et WAITING_CONFIG)
     avec deux comptages par tenant :
-    - event_count : nombre d'evenements publies et futurs
+    - event_count : nombre d'evenements publies, a venir ou en cours
     - product_count : nombre de Product publies appartenant aux categories
       "lieu vivant" (BILLET, FREERES, ADHESION)
     1 seule requete SQL UNION ALL sur tous les schemas tenant.
@@ -139,7 +139,7 @@ def get_active_tenants_with_counts():
 
     / Returns list of active tenants (excluding ROOT and WAITING_CONFIG)
     with two per-tenant counts:
-    - event_count: published future event count
+    - event_count: published upcoming or ongoing event count
     - product_count: published Product count for "alive venue" categories
       (BILLET, FREERES, ADHESION)
     Single SQL query (UNION ALL across all tenant schemas, scalar
@@ -182,7 +182,8 @@ def get_active_tenants_with_counts():
             f"SELECT %s AS tenant_id, %s AS schema_name, "
             f"(SELECT COUNT(*) "
             f' FROM "{schema}"."BaseBillet_event" '
-            f" WHERE published = true AND archived = false AND datetime >= %s"
+            f" WHERE published = true AND archived = false"
+            f"   AND (datetime >= %s OR end_datetime >= %s)"
             f") AS event_count, "
             f"(SELECT COUNT(*) "
             f' FROM "{schema}"."BaseBillet_product" '
@@ -192,6 +193,7 @@ def get_active_tenants_with_counts():
         )
         params.append(tenant_uuid_str)
         params.append(schema)
+        params.append(now)
         params.append(now)
         params.extend(CATEGORIES_PRODUIT_LIEU_VIVANT)
 
@@ -215,9 +217,9 @@ def get_active_tenants_with_counts():
 
 def get_counts_for_tenant(schema_name):
     """
-    Compte, pour UN schema tenant, les events futurs publies et les produits
+    Compte, pour UN schema tenant, les events publies a venir ou en cours et les produits
     "lieu vivant" (BILLET/FREERES/ADHESION) publies. Une seule requete sur 1 schema.
-    / Per-tenant counts (1 schema): published future events + alive-venue products.
+    / Per-tenant counts (1 schema): published upcoming/ongoing events + alive-venue products.
 
     SECURITE / SECURITY : schema_name vient de Client.schema_name (DB, admin-only),
     jamais d'input utilisateur (cf. note en tete de fichier).
@@ -229,12 +231,13 @@ def get_counts_for_tenant(schema_name):
     sql = (
         f"SELECT "
         f'(SELECT COUNT(*) FROM "{schema_name}"."BaseBillet_event" '
-        f" WHERE published = true AND archived = false AND datetime >= %s) AS event_count, "
+        f" WHERE published = true AND archived = false"
+        f"   AND (datetime >= %s OR end_datetime >= %s)) AS event_count, "
         f'(SELECT COUNT(*) FROM "{schema_name}"."BaseBillet_product" '
         f"   WHERE publish = true AND categorie_article IN ({placeholders_categories})"
         f") AS product_count"
     )
-    params = [now, *CATEGORIES_PRODUIT_LIEU_VIVANT]
+    params = [now, now, *CATEGORIES_PRODUIT_LIEU_VIVANT]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
         row = cursor.fetchone()
@@ -243,9 +246,10 @@ def get_counts_for_tenant(schema_name):
 
 def get_events_for_tenants(tenant_schemas):
     """
-    Recupere tous les evenements publies et futurs pour les schemas donnes.
+    Recupere tous les evenements publies, a venir ou en cours (date de fin pas
+    encore passee), pour les schemas donnes.
     1 seule requete SQL UNION ALL.
-    / Fetch all published future events for given schemas.
+    / Fetch all published upcoming or ongoing events for given schemas.
     Single UNION ALL SQL query.
 
     Parametres / Parameters:
@@ -275,13 +279,18 @@ def get_events_for_tenants(tenant_schemas):
         # plus apparaitre sur la carte ni dans les popups, meme s'il reste publie.
         # / archived = false filter: an archived event must not show on the map or
         # popups anymore, even if still published.
+        # À venir OU en cours : un événement commencé (une expo de plusieurs
+        # semaines) reste sur la carte tant que sa date de fin n'est pas passée.
+        # Même règle que l'agenda (EventMVT.federated_events_filter).
+        # / Upcoming OR ongoing, same rule as the agenda.
         parts.append(
             f"SELECT %s AS tenant_id, uuid::text AS uuid, name, slug, short_description, "
             f"datetime, end_datetime, img, postal_address_id, private "
             f'FROM "{schema_name}"."BaseBillet_event" '
-            f"WHERE published = true AND archived = false AND datetime >= %s"
+            f"WHERE published = true AND archived = false"
+            f"  AND (datetime >= %s OR end_datetime >= %s)"
         )
-        params.extend([str(tenant_uuid), now])
+        params.extend([str(tenant_uuid), now, now])
 
     sql = " UNION ALL ".join(parts) + " ORDER BY datetime ASC"
 
@@ -309,9 +318,9 @@ def get_events_for_tenants(tenant_schemas):
 
 def get_event_tags_for_tenants(tenant_schemas):
     """
-    Récupère tous les tags des events publiés et futurs pour les schémas donnés.
+    Récupère tous les tags des events publiés, à venir ou en cours, pour les schémas donnés.
     1 seule requête SQL UNION ALL avec JOIN sur la table M2M event_tag.
-    / Fetch all tags for published future events across given schemas.
+    / Fetch all tags for published upcoming or ongoing events across given schemas.
     Single UNION ALL SQL query with JOIN on the event_tag M2M table.
 
     Paramètres / Parameters:
@@ -342,8 +351,10 @@ def get_event_tags_for_tenants(tenant_schemas):
             f'FROM "{schema_name}"."BaseBillet_event" e '
             f'JOIN "{schema_name}"."BaseBillet_event_tag" et ON et.event_id = e.uuid '
             f'JOIN "{schema_name}"."BaseBillet_tag" t ON t.uuid = et.tag_id '
-            f"WHERE e.published = true AND e.archived = false AND e.datetime >= %s"
+            f"WHERE e.published = true AND e.archived = false"
+            f"  AND (e.datetime >= %s OR e.end_datetime >= %s)"
         )
+        params.append(now)
         params.append(now)
 
     sql = " UNION ALL ".join(parts)

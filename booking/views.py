@@ -110,7 +110,8 @@ class BookingViewSet(viewsets.ViewSet):
         Pose sur chaque créneau occupé (DisplaySlot) un dict `infos_admin` :
         - evenements : les événements qui bloquent la ressource (titre, horaires, jauge)
         - reservations : les réservations qui occupent le créneau (personne, statut, horaires)
-        - libelle_court : le texte écrit dans la case (titre, nom, ou « N réservations »)
+        - libelles_de_la_case : les lignes écrites dans la case (un titre par événement,
+          sinon le nom, sinon « N réservations »)
         Un créneau que personne n'occupe garde infos_admin à None.
         Lu par booking/partials/resource_semaine.html et infos_creneau_admin.html.
 
@@ -181,24 +182,27 @@ class BookingViewSet(viewsets.ViewSet):
                 if not creneau_occupe:
                     continue
 
-                # Le texte de la case : l'événement d'abord, sinon la personne,
-                # sinon le nombre de réservations.
-                # / Cell text: the event first, else the person, else the booking count.
+                # Les lignes écrites dans la case : le titre de CHAQUE événement
+                # (plusieurs événements peuvent se chevaucher sur un créneau),
+                # sinon la personne, sinon le nombre de réservations.
+                # / Cell lines: every event title, else the person, else the booking count.
+                libelles_de_la_case = []
                 if evenements_du_creneau:
-                    libelle_court = evenements_du_creneau[0]['titre']
+                    for evenement_du_creneau in evenements_du_creneau:
+                        libelles_de_la_case.append(evenement_du_creneau['titre'])
                 elif len(reservations_du_creneau) == 1:
                     premiere_reservation = reservations_du_creneau[0]
-                    libelle_court = premiere_reservation['prenom_et_nom'] or premiere_reservation['email']
+                    libelles_de_la_case.append(premiere_reservation['prenom_et_nom'] or premiere_reservation['email'])
                 else:
                     nombre_de_reservations = len(reservations_du_creneau)
-                    libelle_court = ngettext(
+                    libelles_de_la_case.append(ngettext(
                         "%(nombre)s réservation",
                         "%(nombre)s réservations",
                         nombre_de_reservations,
-                    ) % {'nombre': nombre_de_reservations}
+                    ) % {'nombre': nombre_de_reservations})
 
                 slot.infos_admin = {
-                    'libelle_court': libelle_court,
+                    'libelles_de_la_case': libelles_de_la_case,
                     'evenements': evenements_du_creneau,
                     'reservations': reservations_du_creneau,
                 }

@@ -552,6 +552,12 @@
     {# Footer sticky avec les boutons d'action — border-top pour separer visuellement #}
     {# / Sticky footer with action buttons — border-top for visual separation #}
     <div class="p-3 border-top bg-body flex-shrink-0">
+        {# Erreurs renvoyées par le serveur (EventMVT.reservation) : la réponse ne remplace #}
+        {# que cette zone, les champs remplis restent. Placée dans le pied collant pour #}
+        {# rester visible à côté des boutons, quel que soit le défilement du formulaire. #}
+        {# / Server errors land here only (HX-Retarget): filled fields are kept. #}
+        <div id="reservation-erreurs" aria-live="assertive" data-testid="booking-server-errors"></div>
+
         {# Un seul champ « Code promo » pour tout l'événement : le serveur lit UN code par envoi #}
         {# et ne l'applique qu'au produit auquel il est lié (BaseBillet/validators.py, method_B). #}
         {# / One promo field for the whole event: the server reads ONE code and applies it to its product. #}
