@@ -14,6 +14,7 @@ La différence avec le reste de `CHANGELOG/` : ici, rien n'est fait.
 | `pages-apercu-admin-suites.md` | Pages (admin) : suites de l'aperçu en direct — en-tête périmé après une action dans l'iframe, plan B, vidéo dans l'aperçu (2026-09-23) |
 | `controlvanne-audit-securite-facturation.md` | Tireuses : restes non instruits de l'audit (code mort, fonctions privées de laboutik importées, IP derrière Traefik). Lots sécurité et facturation traités le 2026-09-28 (2026-09-26) |
 | `fk-product-vers-proxys.md` | `PromotionalCode.product` → proxy `TicketProduct` + `limit_choices_to` BILLET. Le reste de l'inventaire des FK vers `Product` est traité (2026-09-29) |
+| `libelle-prix-unification-restante.md` | Libellé de prix : newsletter, JSON-LD et adhésions faire_festival pas encore sur le système commun (2026-10-22) |
 
 **Convention :** quand un point est traité, il sort d'ici et devient une entrée
 normale dans `CHANGELOG/`. Un point qui n'est plus pertinent est supprimé avec

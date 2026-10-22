@@ -10,9 +10,9 @@ et pages/V2/vues/services.html.
     <c-V2.ressource_card :ressource="resource" />
 
 Reçoit un booking.Resource. Affiche son image (Resource.img), son nom, sa
-description (Resource.description, texte riche) et son prix « à partir de »
-(ressource.price_min, posé par booking/views.py BookingViewSet.list ; absent,
-la carte n'affiche pas de prix).
+description (Resource.description, texte riche) et son texte de prix
+(ressource.libelle_prix, posé par booking/views.py BookingViewSet.list via
+BaseBillet/services_libelle_prix.py ; absent, la carte n'affiche pas de prix).
 
 FLUX DU CLIC SUR « Réserver » : lien HTMX vers /booking/<pk>/resource/
 (hx-target="body"), le calendrier de la ressource.
@@ -36,8 +36,8 @@ FLUX DU CLIC SUR « Réserver » : lien HTMX vers /booking/<pk>/resource/
 
         <div class="offer-card__footer">
             <div class="offer-card__price">
-                {% if ressource.price_min %}
-                    {% translate 'A partir de' %} {{ ressource.price_min }}
+                {% if ressource.libelle_prix %}
+                    <span data-testid="ressource-card-prix-{{ ressource.pk }}">{{ ressource.libelle_prix }}</span>
                 {% endif %}
             </div>
             <a href="{% url 'booking-resource' pk=ressource.pk %}"

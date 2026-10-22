@@ -106,12 +106,12 @@ showed as federated.
                    hx-get="/my_account/my_reservations/" hx-target="body" hx-push-url="true"
                    data-testid="event-card-voir-billet">{% translate 'Voir le billet' %}</a>
             {% else %}
-                {# event.price_min n'est pas un champ du modèle : il est posé par #}
+                {# event.libelle_prix n'est pas un champ du modèle : il est posé par #}
                 {# EventMVT.federated_events_filter (accueil, agenda, bloc LISTE) #}
-                {# et par EventMVT.retrieve (détail). #}
-                {# / price_min is computed by the view #}
-                {% if event.price_min %}
-                    <span class="event-card__price">{{ event.price_min }}</span>
+                {# et par EventMVT.retrieve (détail), via BaseBillet/services_libelle_prix.py. #}
+                {# / libelle_prix is computed by the view #}
+                {% if event.libelle_prix %}
+                    <span class="event-card__price" data-testid="event-card-prix">{{ event.libelle_prix }}</span>
                 {% endif %}
                 {# Mode événement : fiche de l'événement. Un événement d'un autre #}
                 {# lieu (fédéré) s'ouvre dans un nouvel onglet. #}

@@ -60,6 +60,12 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
     WizardEventSerializer
 from BaseBillet.models_vente import Vente
+from BaseBillet.services_libelle_prix import (
+    TYPE_ADHESION,
+    TYPE_EVENEMENT,
+    libelle_prix,
+    tarifs_publies_de_l_evenement,
+)
 from BaseBillet.services_vente import (
     MOYENS_DU_CHAMP_REMBOURSE_PAR,
     ajouter_article,
@@ -2948,12 +2954,12 @@ def index(request):
     # Tri les évènements par datetime
     events_a_afficher.sort(key=lambda event: event.datetime)
 
-    # Le libelle de prix des cartes (event.price_min) est DEJA pose par
+    # Le libelle de prix des cartes (event.libelle_prix) est DEJA pose par
     # federated_events_filter, dans le tenant_context de chaque evenement
-    # (EventMVT._libelle_prix_agenda). Ne pas le recalculer ici : hors de ce
+    # (BaseBillet/services_libelle_prix.py). Ne pas le recalculer ici : hors de ce
     # contexte, les tarifs d'un evenement federe seraient lus dans le schema du
     # lieu courant, et il s'afficherait toujours « Entré libre ».
-    # / price_min is ALREADY set by federated_events_filter inside each event's
+    # / libelle_prix is ALREADY set by federated_events_filter inside each event's
     # tenant_context. Recomputing it here would read a federated event's prices
     # from the current schema ("Entré libre" every time).
 
@@ -3326,68 +3332,6 @@ class EventMVT(viewsets.ViewSet):
         # / Other EventMVT views are public. Admin create actions live in EventWizardAdmin.
         return [permissions.AllowAny()]
 
-    def _calculer_prix_min_max_event(self, event):
-        """
-        Pose sur l'event les prix min et max, et le drapeau prix libre.
-        / Sets min/max prices and the free-price flag on the event.
-
-        LOCALISATION : BaseBillet/views.py — EventMVT
-
-        Ces attributs ne sont pas des champs du modele : ils vivent en memoire.
-        Ils sont lus par partials/reservation_declencheur.html.
-        Utilise par federated_events_get() et federated_events_get_hex8().
-
-        A appeler DANS le tenant_context de l'event : les tarifs vivent
-        dans le schema du tenant.
-        / Must be called INSIDE the event's tenant_context.
-        """
-        # Un tarif archive (« supprime ») n'est jamais pris en compte.
-        # / An archived ("deleted") price is never counted.
-        prices = []
-        for product in event.products.all():
-            for price in product.prices.all():
-                if not price.archived and price.publish:
-                    prices.append(price)
-
-        tarifs = [price.prix for price in prices]
-        event.price_min = min(tarifs) if tarifs else None
-        event.price_max = max(tarifs) if tarifs else None
-        event.free_price = any(price.free_price for price in prices)
-
-    @staticmethod
-    def _libelle_prix_agenda(event):
-        """
-        Renvoie le texte du prix affiche sur la carte d'un event dans l'agenda.
-        / Returns the price label shown on an event card in the agenda.
-
-        LOCALISATION : BaseBillet/views.py — EventMVT
-
-        Meme format que index() : « A partir de X € », « Prix libre » ou « Entré libre ».
-        Le resultat va dans event.price_min, lu par cotton/V2/event_card.html.
-
-        A appeler DANS le tenant_context de l'event : les tarifs vivent
-        dans le schema du tenant.
-        / Must be called INSIDE the event's tenant_context.
-        """
-        # Un tarif archive (« supprime ») n'est jamais pris en compte.
-        # On lit products.all() et prices.all() : ils sont deja precharges
-        # par le prefetch_related de federated_events_filter (pas de requete en plus).
-        # / Archived prices are skipped. Reads the prefetched relations (no extra query).
-        prices = []
-        for product in event.products.all():
-            for price in product.prices.all():
-                if not price.archived and price.publish:
-                    prices.append(price)
-
-        tarifs = [price.prix for price in prices]
-        il_y_a_un_prix_libre = any(price.free_price for price in prices)
-
-        if tarifs:
-            return _("À partir de %(price)s €") % {"price": min(tarifs)}
-        if il_y_a_un_prix_libre:
-            return _("Prix libre")
-        return _("Entrée libre")
-
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all().select_related('tenant'):
             tenant = place.tenant
@@ -3399,7 +3343,11 @@ class EventMVT(viewsets.ViewSet):
                         'tag', 'products', 'products__prices',
                     ).get(slug=slug)
                     event.img = event.get_img()
-                    self._calculer_prix_min_max_event(event)
+                    # Texte du prix, calcule ici : on est dans le tenant_context du lieu
+                    # / Price label, computed here inside the place's tenant_context
+                    event.libelle_prix = libelle_prix(
+                        tarifs_publies_de_l_evenement(event), TYPE_EVENEMENT,
+                    )
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -3417,7 +3365,11 @@ class EventMVT(viewsets.ViewSet):
                         'tag', 'products', 'products__prices',
                     ).get(uuid__startswith=hex8)
                     event.img = event.get_img()
-                    self._calculer_prix_min_max_event(event)
+                    # Texte du prix, calcule ici : on est dans le tenant_context du lieu
+                    # / Price label, computed here inside the place's tenant_context
+                    event.libelle_prix = libelle_prix(
+                        tarifs_publies_de_l_evenement(event), TYPE_EVENEMENT,
+                    )
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -3444,14 +3396,14 @@ class EventMVT(viewsets.ViewSet):
             # / List-cache version token for this tenant (default 'v0' if never written)
             version = cache.get(f'event_list_version_{connection.tenant.uuid}', 'v0')
             # La langue fait partie de la cle : le resultat contient le prix
-            # deja traduit (event.price_min, ex : « A partir de 12 € »).
+            # deja traduit (event.libelle_prix, ex : « De 10 à 25 € »).
             # Sans elle, tous les visiteurs verraient la langue du premier.
             # / Language is part of the key: the result holds translated price labels.
             langue = get_language()
             if date_seule:
-                cache_key = f'event_list_{connection.tenant.uuid}_{version}_{langue}_date_{date_filter.isoformat()}'
+                cache_key = f'event_list_v2_{connection.tenant.uuid}_{version}_{langue}_date_{date_filter.isoformat()}'
             else:
-                cache_key = f'event_list_{connection.tenant.uuid}_{version}_{langue}'
+                cache_key = f'event_list_v2_{connection.tenant.uuid}_{version}_{langue}'
             cached = cache.get(cache_key)
             if cached:
                 return cached
@@ -3658,7 +3610,9 @@ class EventMVT(viewsets.ViewSet):
 
                     # Texte du prix affiche sur la carte de l'agenda
                     # / Price label shown on the agenda card
-                    event.price_min = EventMVT._libelle_prix_agenda(event)
+                    event.libelle_prix = libelle_prix(
+                        tarifs_publies_de_l_evenement(event), TYPE_EVENEMENT,
+                    )
 
                     # Un jour est choisi : tout est rangé sous ce jour, y compris une
                     # expo commencée avant. Sinon : sous le jour de début.
@@ -3923,7 +3877,7 @@ class EventMVT(viewsets.ViewSet):
             event.img = event.get_img()
 
             # Récupération des produits et des prix pour :
-            # - afficher le min / max
+            # - afficher le libelle de prix
             # - vérifier le max par user
 
             # Précharger les prix en même temps que les produits
@@ -3962,14 +3916,10 @@ class EventMVT(viewsets.ViewSet):
             # call costs two COUNT queries, it must never run inside the price loop.
             places_restantes = event.places_restantes()
 
-            tarifs = [price.prix for price in prices]
-            # Calcul des prix min et max
-            event.price_min = min(tarifs) if tarifs else None
-            event.price_max = max(tarifs) if tarifs else None
-
-            # Vérification de l'existence d'un prix libre (sans requêtes supplémentaires)
-            event.free_price = any(
-                price.free_price for price in prices
+            # Texte du prix lu par partials/reservation_declencheur.html
+            # / Price label read by partials/reservation_declencheur.html
+            event.libelle_prix = libelle_prix(
+                tarifs_publies_de_l_evenement(event), TYPE_EVENEMENT,
             )
 
             event_in_this_tenant = True
@@ -4837,45 +4787,16 @@ class MembershipMVT(viewsets.ViewSet):
             # Les tarifs en points ou en temps se vendent a la caisse seulement :
             # ils ne comptent pas dans le prix affiche en euros.
             # / Points or time prices are sold at the POS only: not an euro price.
-            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False, publish=True)
-            tarifs = [price.prix for price in prices]
-            # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
-            # la caisse seulement), la carte n'affiche pas de prix.
-            # / Min price. Without a euro price, the card shows no price.
-            product.price_min = None
-            if tarifs:
-                product.price_min = f"{min(tarifs)} €"
+            # libelle_prix() les met de cote lui-meme.
+            # / libelle_prix() sets them aside itself.
+            prices = product.prices.filter(archived=False, publish=True)
+            product.libelle_prix = libelle_prix(prices, TYPE_ADHESION)
 
         template_context['products'] = products
 
         # On utilise le template par "défaut" adhésion, sauf si le module booking est activé, dans ce cas là on change de template
         template_path = "vues/adhesions.html"
         config = Configuration.get_solo()
-
-        # V2 -> a déterminer
-        # if config.module_booking:
-        #     # On récupère les ressources, puis on les met dans un tableau organisé selon leur group
-        #     ressources = Resource.objects.select_related('group', 'product').order_by('product__name')
-        #     for ressource in ressources:
-        #         # Les tarifs en points ou en temps se vendent a la caisse seulement :
-        #         # ils ne comptent pas dans le prix affiche en euros.
-        #         # / Points or time prices are sold at the POS only: not an euro price.
-        #         prices = ressource.product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
-        #         tarifs = [price.prix for price in prices]
-        #         # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
-        #         # la caisse seulement), la carte n'affiche pas de prix.
-        #         # / Min price. Without a euro price, the card shows no price.
-        #         ressource.product.price_min = None
-        #         if tarifs:
-        #             ressource.product.price_min = f"{min(tarifs)} €"
-        #
-        #     ressources_grouped = defaultdict(list)
-        #     for ressource in ressources:
-        #         ressources_grouped[ressource.group].append(ressource)
-        #
-        #     template_context['ressources_grouped'] = ressources_grouped
-        #     template_path = "vues/services.html"
-
 
         # Le paramètre GET "open" (optionnel) contient l'uuid d'un produit d'adhésion à ouvrir directement au chargement de la page
         # On vérifie que le produit adhésion exist, puis c'est le JS qui gère l'ouverture

@@ -6,7 +6,7 @@ LOCALISATION : tests/pytest/test_bloc_agenda_prix_federes.py
 
 Code teste : pages/templatetags/pages_tags.py:agenda_a_venir_du_bloc.
 
-EventMVT.federated_events_filter pose `price_min` DANS le tenant_context de
+EventMVT.federated_events_filter pose `libelle_prix` DANS le tenant_context de
 chaque evenement (ses tarifs vivent dans son schema). Un evenement d'un lieu
 federe n'a donc un prix juste QUE si personne ne le recalcule apres, hors de ce
 contexte : il sortirait « Entré libre » a chaque fois.
@@ -27,20 +27,20 @@ from pages.templatetags.pages_tags import agenda_a_venir_du_bloc
 def _faux_resultat_du_filtre_federe():
     """
     Imite le retour de federated_events_filter : evenements ranges par jour,
-    chacun avec un price_min deja pose dans son propre lieu.
-    / Mimics the filter's return: events grouped by day, price_min already set.
+    chacun avec un libelle_prix deja pose dans son propre lieu.
+    / Mimics the filter's return: events grouped by day, libelle_prix already set.
     """
     demain = datetime(2030, 1, 2, 20, 0)
     apres_demain = demain + timedelta(days=1)
     evenement_d_un_lieu_federe = SimpleNamespace(
         name="Concert federe",
         datetime=apres_demain,
-        price_min="A partir de 12.00 €",
+        libelle_prix="De 12 à 20 €",
     )
     evenement_du_lieu = SimpleNamespace(
         name="Atelier du lieu",
         datetime=demain,
-        price_min="Prix libre",
+        libelle_prix="Prix libre",
     )
     evenements_par_jour = {
         apres_demain.date(): [evenement_d_un_lieu_federe],
@@ -57,9 +57,9 @@ def test_le_bloc_garde_le_prix_pose_par_le_filtre_federe():
         agenda = agenda_a_venir_du_bloc(6)
 
     prix_par_nom = {
-        evenement.name: evenement.price_min for evenement in agenda["evenements"]
+        evenement.name: evenement.libelle_prix for evenement in agenda["evenements"]
     }
-    assert prix_par_nom["Concert federe"] == "A partir de 12.00 €"
+    assert prix_par_nom["Concert federe"] == "De 12 à 20 €"
     assert prix_par_nom["Atelier du lieu"] == "Prix libre"
 
 

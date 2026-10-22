@@ -32,6 +32,7 @@ from django.utils.translation import ngettext
 from rest_framework.decorators import action
 
 from BaseBillet.models import Configuration, Event, Paiement_stripe, Price, PaymentMethod, ProductFormField, Ticket
+from BaseBillet.services_libelle_prix import TYPE_RESSOURCE, libelle_prix
 from BaseBillet.views import get_context, reponses_du_formulaire_personnalise_pour_le_panier
 from booking.benevolat import lire_la_semaine_demandee, lundi_de_la_semaine, titre_de_la_semaine
 from booking.booking_engine import Interval, compute_slots, confirmer_booking_gratuit, get_checkout_stripe, validate_new_booking
@@ -479,19 +480,13 @@ class BookingViewSet(viewsets.ViewSet):
 
         context = get_context(request)
 
-        # Prix « à partir de » de chaque carte (cotton/V2/ressource_card.html).
-        # Les tarifs en points ou en temps se vendent à la caisse seulement :
-        # ils ne comptent pas dans le prix affiché en euros. Sans tarif en euros,
-        # la carte n'affiche pas de prix.
-        # / "From" price of each card; points/time prices are POS-only.
+        # Texte du prix de chaque carte (cotton/V2/ressource_card.html).
+        # Les regles sont dans BaseBillet/services_libelle_prix.py.
+        # / Price label of each card. Rules live in services_libelle_prix.py.
         for resource in toutes_les_ressources:
-            tarifs_en_euros = resource.published_prices().filter(
-                asset__isnull=True,
-                non_fiduciaire=False,
-            ).values_list('prix', flat=True)
-            resource.price_min = None
-            if tarifs_en_euros:
-                resource.price_min = f"{min(tarifs_en_euros)} €"
+            resource.libelle_prix = libelle_prix(
+                resource.published_prices(), TYPE_RESSOURCE,
+            )
 
         context.update({
             'resources_groups': resources_groups,

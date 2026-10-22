@@ -32,21 +32,10 @@
             {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
         </button>
 
-        {% if not event.free_price %}
-            {% if event.price_min or event.price_max %}
-                <p class="text-secondary">
-                    {% if event.price_min is not event.price_max %}
-                        {% blocktrans trimmed with min=event.price_min max=event.price_max %}
-                            Prices ranging between {{ min }} and {{ max }} euros per ticket.
-                        {% endblocktrans %}
-
-                    {% elif event.price_min is event.price_max and event.price_min > 0 %}
-                        {% blocktrans trimmed with price=event.price_min %}
-                            Priced at {{ price }} euros per ticket.
-                        {% endblocktrans %}
-                    {% endif %}
-                </p>
-            {% endif %}
+        {# Texte du prix pose par EventMVT.retrieve (BaseBillet/services_libelle_prix.py) #}
+        {# / Price label set by EventMVT.retrieve #}
+        {% if event.libelle_prix %}
+            <p class="text-secondary" data-testid="booking-libelle-prix">{{ event.libelle_prix }}</p>
         {% endif %}
         {% if event.show_gauge %}
             <p class="text-secondary">

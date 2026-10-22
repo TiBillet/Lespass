@@ -999,7 +999,7 @@ def agenda_a_venir_du_bloc(nombre_max=6):
 
     Renvoie un dictionnaire :
     - "evenements" : les `nombre_max` prochains evenements, tries par date,
-      avec leur libelle de prix (price_min, pose par le filtre) ;
+      avec leur libelle de prix (libelle_prix, pose par le filtre) ;
     - "total" : le nombre d'evenements a venir renvoyes par le filtre, pour
       l'en-tete « · N événements à venir » (meme compteur que l'accueil) ;
     - "nombre_de_cartes" : nombre_max, ou 6 s'il est vide.
@@ -1023,9 +1023,9 @@ def agenda_a_venir_du_bloc(nombre_max=6):
     # le composant compare forloop.counter a cette valeur, un None n'afficherait
     # aucune carte. / Empty nombre_max -> 6; returned so the component never gets None.
     nombre_de_cartes = nombre_max or 6
-    # Le libelle de prix (price_min) est deja pose par federated_events_filter,
+    # Le libelle de prix (libelle_prix) est deja pose par federated_events_filter,
     # dans le tenant_context de chaque evenement : ne pas le recalculer ici.
-    # / price_min is already set by the filter, in each event's tenant_context.
+    # / libelle_prix is already set by the filter, in each event's tenant_context.
     evenements_affiches = tous_les_evenements_a_venir[:nombre_de_cartes]
 
     return {
