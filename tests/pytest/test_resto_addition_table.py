@@ -12,7 +12,11 @@ CE QUI EST COUVERT / WHAT IS COVERED :
   encaisses dans la vente de l'addition. Commandes PAID, table LIBRE.
 - payer_commande refuse une commande qui fait partie d'une addition.
 - Ecran d'une table choisie : ecran restaurant, bandeau, bouton « Ajouter a la table ».
-- Touches du bas : seulement les moyens acceptes par le point de vente.
+- Touches du bas : seulement les moyens acceptes par le point de vente, dans
+  l'ordre des tuiles de paiement. Vider, « Ajouter a la table » et « Envoi prepa »
+  sont des touches ; le ticket n'a plus de boutons en mode restaurant.
+- « Envoi prepa » (CommandeViewSet.envoyer_en_preparation) : articles EN_COURS,
+  un ticket par commande envoyee, rien de plus au 2e appui.
 
 Lancement / Run:
     poetry run pytest tests/pytest/test_resto_addition_table.py -v
@@ -27,6 +31,7 @@ import django
 django.setup()
 
 from decimal import Decimal
+from unittest import mock
 
 from django.db import connection
 from django_tenants.test.cases import FastTenantTestCase
@@ -41,7 +46,12 @@ from BaseBillet.models import (
     Product,
 )
 from BaseBillet.models_vente import Vente
-from laboutik.models import CommandeSauvegarde, PointDeVente, Table
+from laboutik.models import (
+    ArticleCommandeSauvegarde,
+    CommandeSauvegarde,
+    PointDeVente,
+    Table,
+)
 
 
 class TestRestoAdditionTable(FastTenantTestCase):
@@ -156,7 +166,10 @@ class TestRestoAdditionTable(FastTenantTestCase):
         """POST payer() en especes, avec la table. / POST payer() in cash, with the table."""
         donnees = self._formulaire_d_addition(articles)
         donnees["moyen_paiement"] = "espece"
-        donnees["total"] = "0"
+        # Panier vide : le vrai #addition-form poste un total VIDE (addition.js ne
+        # le remplit qu'au premier article). Le serveur ne le lit jamais.
+        # / Empty cart: the real form posts an EMPTY total. The server never reads it.
+        donnees["total"] = ""
         donnees["given_sum"] = str(somme_donnee_en_centimes)
         return self.client_http.post("/laboutik/paiement/payer/", data=donnees)
 
@@ -400,3 +413,136 @@ class TestRestoAdditionTable(FastTenantTestCase):
         self.assertIn('data-testid="resto-touche-mixte"', html)
         self.assertIn('data-testid="resto-touche-cb"', html)
         self.assertNotIn('data-testid="resto-touche-cheque"', html)
+
+    def test_les_touches_de_paiement_suivent_l_ordre_des_tuiles(self):
+        """
+        Meme ordre que _tuiles_paiement.html : Carte TiBillet, Especes, CB, Cheque,
+        Mixte (Offrir seulement en mode gerant).
+        / Same order as the payment tiles.
+        """
+        html = self._ecran_de_la_table().content.decode()
+
+        ordre_attendu = [
+            "resto-touche-cashless",
+            "resto-touche-especes",
+            "resto-touche-cb",
+            "resto-touche-cheque",
+            "resto-touche-mixte",
+        ]
+        positions = []
+        for data_testid in ordre_attendu:
+            positions.append(html.index(f'data-testid="{data_testid}"'))
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("Carte TiBillet", html)
+
+    def test_le_ticket_n_a_plus_de_boutons_en_mode_restaurant(self):
+        """
+        Mode restaurant : Vider, « Ajouter a la table » et « Envoi prepa » sont des
+        touches de la zone bas-droite. Le ticket garde son total, sans boutons.
+        / Restaurant mode: the ticket keeps its total, no buttons.
+        """
+        html = self._ecran_de_la_table().content.decode()
+
+        self.assertNotIn('class="addition-actions"', html)
+        self.assertNotIn('data-testid="addition-check-carte"', html)
+        self.assertIn('data-testid="addition-total-affiche"', html)
+        zone_du_bas = html[html.index('id="win-bottom-right"') :]
+        self.assertIn('data-testid="addition-vider"', zone_du_bas)
+        self.assertIn('data-testid="addition-ajouter-a-la-table"', zone_du_bas)
+        self.assertIn('data-testid="resto-touche-envoyer-prepa"', zone_du_bas)
+
+    def test_sans_table_ni_ajout_ni_envoi_prepa(self):
+        """
+        « Continuer sans table » : la touche Vider reste, pas d'« Ajouter a la
+        table » ni d'« Envoi prepa ».
+        / Without a table: Empty stays, no add-to-table nor send-to-prep.
+        """
+        html = self.client_http.get(
+            "/laboutik/caisse/point_de_vente/",
+            {"uuid_pv": str(self.point_de_vente.uuid)},
+        ).content.decode()
+
+        self.assertIn('data-testid="addition-vider"', html)
+        self.assertNotIn('data-testid="addition-ajouter-a-la-table"', html)
+        self.assertNotIn('data-testid="resto-touche-envoyer-prepa"', html)
+
+    # ------------------------------------------------------------------ #
+    #  Envoi prepa / Send to preparation
+    # ------------------------------------------------------------------ #
+
+    def _envoyer_en_preparation(self, articles):
+        """POST de la touche « Envoi prepa ». / POST of the send-to-prep key."""
+        return self.client_http.post(
+            "/laboutik/commande/envoyer_en_preparation/",
+            data=self._formulaire_d_addition(articles),
+        )
+
+    def test_l_envoi_prepa_envoie_les_articles_et_imprime(self):
+        """
+        Les articles ajoutes passent EN_COURS. Apres le commit, un ticket par
+        commande envoyee. Le bandeau ne compte plus rien « a envoyer ».
+        / Added articles become in progress; one print per sent order after commit.
+        """
+        self._ajouter_a_la_table([(self.burger, self.prix_du_burger, 1)])
+        self._ajouter_a_la_table([(self.cafe, self.prix_du_cafe, 1)])
+
+        with mock.patch("laboutik.views.imprimer_commande") as tache_d_impression:
+            with self.captureOnCommitCallbacks(execute=True):
+                reponse = self._envoyer_en_preparation([])
+
+        self.assertEqual(reponse.status_code, 200)
+        statuts = set(
+            ArticleCommandeSauvegarde.objects.filter(
+                commande__table=self.table
+            ).values_list("statut", flat=True)
+        )
+        self.assertEqual(statuts, {ArticleCommandeSauvegarde.EN_COURS})
+        self.assertEqual(tache_d_impression.delay.call_count, 2)
+        self.assertNotIn("resto-addition-table-a-envoyer", reponse.content.decode())
+
+    def test_l_envoi_prepa_ajoute_d_abord_le_panier(self):
+        """
+        Panier non vide : il devient une commande de la table, puis part en
+        preparation. Un seul appui pour commander et envoyer.
+        / Non-empty cart: added to the table first, then sent.
+        """
+        with mock.patch("laboutik.views.imprimer_commande"):
+            reponse = self._envoyer_en_preparation(
+                [(self.burger, self.prix_du_burger, 2)]
+            )
+
+        self.assertEqual(reponse.status_code, 200)
+        article = ArticleCommandeSauvegarde.objects.get(commande__table=self.table)
+        self.assertEqual(article.qty, 2)
+        self.assertEqual(article.statut, ArticleCommandeSauvegarde.EN_COURS)
+        self.assertEqual(article.commande.vente.statut, Vente.Statut.EN_ATTENTE)
+
+    def test_un_deuxieme_envoi_prepa_n_envoie_rien(self):
+        """
+        Tout est deja en preparation : 400, aucune impression.
+        / Everything already sent: 400, no print.
+        """
+        self._ajouter_a_la_table([(self.burger, self.prix_du_burger, 1)])
+        with mock.patch("laboutik.views.imprimer_commande"):
+            self._envoyer_en_preparation([])
+
+        with mock.patch("laboutik.views.imprimer_commande") as tache_d_impression:
+            with self.captureOnCommitCallbacks(execute=True):
+                reponse = self._envoyer_en_preparation([])
+
+        self.assertEqual(reponse.status_code, 400)
+        tache_d_impression.delay.assert_not_called()
+
+    def test_l_ajout_a_la_table_attend_l_envoi_prepa(self):
+        """
+        « Ajouter a la table » ne part pas en cuisine : l'article reste EN_ATTENTE
+        et le bandeau affiche « 1 a envoyer ».
+        / Add to table does not reach the kitchen: the banner shows "1 to send".
+        """
+        reponse = self._ajouter_a_la_table([(self.burger, self.prix_du_burger, 1)])
+
+        article = ArticleCommandeSauvegarde.objects.get(commande__table=self.table)
+        self.assertEqual(article.statut, ArticleCommandeSauvegarde.EN_ATTENTE)
+        self.assertIn(
+            'data-testid="resto-addition-table-a-envoyer"', reponse.content.decode()
+        )

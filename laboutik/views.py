@@ -142,6 +142,7 @@ from laboutik.services_table import (
     ajouter_le_panier_a_la_table,
     articles_panier_de_l_addition,
     cloturer_l_addition,
+    envoyer_l_addition_en_preparation,
     raison_du_refus_d_un_article_de_table,
     reprendre_la_vente_de_l_addition,
     resume_de_l_addition,
@@ -167,7 +168,7 @@ from laboutik.affichage_des_ventes import (
     reglements_pour_l_affichage,
 )
 from laboutik.printing.formatters import formatter_ticket_cloture, formatter_ticket_x
-from laboutik.printing.tasks import imprimer_async
+from laboutik.printing.tasks import imprimer_async, imprimer_commande
 from laboutik.serializers import (
     ClientIdentificationSerializer,
     CartePrimaireSerializer,
@@ -3648,6 +3649,11 @@ class CaisseViewSet(viewsets.ViewSet):
                 + int(pv.accepte_cheque)
             )
             >= 2,
+            # Ecran restaurant : les boutons du ticket sont des touches de la zone
+            # bas-droite (cotton/addition_footer.html ne les affiche pas).
+            # / Restaurant screen: the ticket buttons are bottom-right keys.
+            "mode_restaurant": template_name
+            == "laboutik/views/restaurant_interface.html",
             # Bandeau de la table en tete du ticket (services_table.resume_de_l_addition)
             # / Table banner on top of the ticket
             "addition_de_table": addition_de_table,
@@ -9662,7 +9668,10 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Normaliser les montants (les champs texte du formulaire → entiers) ---
         # --- Normalize amounts (form text fields → integers) ---
-        donnees_paiement["total"] = int(donnees_paiement.get("total", 0))
+        # Le champ « total » du formulaire n'est jamais lu tel quel : il est
+        # remplace plus bas par le total calcule depuis les articles. Il peut etre
+        # vide (table payee avec un panier vide) : ne pas le convertir ici.
+        # / The posted "total" is never trusted: replaced below by the server total.
         somme_donnee_brute = donnees_paiement.get("given_sum", "")
         if somme_donnee_brute == "":
             donnees_paiement["given_sum"] = 0
@@ -9741,6 +9750,7 @@ class PaiementViewSet(viewsets.ViewSet):
         if consigne_dans_panier:
             total_en_euros = abs(total_en_euros)
             total_centimes = abs(total_centimes)
+        donnees_paiement["total"] = total_centimes
 
         moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
 
@@ -15571,6 +15581,88 @@ class CommandeViewSet(viewsets.ViewSet):
     #  2b. Add the POS cart to a table bill                                    #
     # ----------------------------------------------------------------------- #
 
+    def _lire_la_table_et_le_panier(self, request, panier_vide_accepte):
+        """
+        Lit le point de vente, la table et le panier de #addition-form.
+        / Reads the POS, the table and the cart from #addition-form.
+
+        LOCALISATION : laboutik/views.py
+
+        Partage par ajouter_a_la_table() et envoyer_en_preparation().
+        Verifie la carte primaire, et refuse ce qui ne passe pas par une table
+        (services_table.raison_du_refus_d_un_article_de_table), AVANT toute ecriture.
+
+        :param request: POST de #addition-form
+        :param panier_vide_accepte: False = un panier vide est une erreur
+        :return: tuple (point_de_vente, table, articles_du_panier, reponse_d_erreur).
+                 reponse_d_erreur n'est pas None si la lecture a echoue.
+        """
+
+        def _erreur(message, statut_http):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": message,
+                "selector_bt_retour": "#messages",
+            }
+            reponse = render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                context_erreur,
+                status=statut_http,
+            )
+            return None, None, None, reponse
+
+        uuid_pv = request.POST.get("uuid_pv")
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):
+            return _erreur(_("Point de vente introuvable"), 404)
+
+        _valider_carte_primaire_pour_pv(request.POST.get("tag_id_cm", ""), uuid_pv)
+
+        try:
+            table = Table.objects.get(uuid=request.POST.get("id_table"), archive=False)
+        except (Table.DoesNotExist, ValueError, DjangoValidationError):
+            return _erreur(_("Table introuvable"), 404)
+
+        try:
+            articles_du_panier = _extraire_articles_du_panier(
+                request.POST, point_de_vente
+            )
+        except ValueError as erreur_du_panier:
+            return _erreur(str(erreur_du_panier), 400)
+
+        if not articles_du_panier and not panier_vide_accepte:
+            return _erreur(_("Panier vide."), 400)
+
+        # Un seul article refuse bloque tout l'envoi.
+        # / One refused article blocks the whole send.
+        for article_du_panier in articles_du_panier:
+            raison_du_refus = raison_du_refus_d_un_article_de_table(article_du_panier)
+            if raison_du_refus is not None:
+                return _erreur(raison_du_refus, 400)
+
+        return point_de_vente, table, articles_du_panier, None
+
+    def _reponse_de_succes_de_table(self, request, table, message):
+        """
+        Message de succes dans #messages + bandeau de table a jour (hors bande).
+        Le bouton Retour vide le panier (manageReset) : il est sur l'addition.
+        / Success message + up-to-date table banner. Back empties the cart.
+        """
+        context_du_succes = {
+            "msg_type": "success",
+            "msg_content": message,
+            "action": "manageReset();",
+            "selector_bt_retour": "#messages",
+        }
+        reponse = render(request, "laboutik/partial/hx_messages.html", context_du_succes)
+        reponse.content = (
+            reponse.content.decode()
+            + _bandeau_de_table_hors_bande(request, table, request.POST)
+        ).encode()
+        return reponse
+
     @action(
         detail=False,
         methods=["post"],
@@ -15585,8 +15677,8 @@ class CommandeViewSet(viewsets.ViewSet):
 
         LOCALISATION : laboutik/views.py
 
-        Envoye par le bouton « Ajouter a la table » du ticket
-        (cotton/addition_footer.html), avec tout #addition-form (hx-include).
+        Envoye par la touche « Ajouter a la table » (partial/win_bottom_right.html),
+        avec tout #addition-form (hx-include).
 
         Corps (POST form, #addition-form) :
         - uuid_pv, tag_id_cm, type_app : le point de vente et la carte primaire
@@ -15594,74 +15686,76 @@ class CommandeViewSet(viewsets.ViewSet):
         - repid-<product>--<price> : les articles du panier
 
         FLUX :
-        1. Verifie le point de vente, la carte primaire et la table.
-        2. Lit le panier (_extraire_articles_du_panier) et refuse ce qui ne passe
-           pas par une table (services_table.raison_du_refus_d_un_article_de_table).
-        3. services_table.ajouter_le_panier_a_la_table : Vente EN_ATTENTE de
+        1. _lire_la_table_et_le_panier : PV, carte primaire, table, panier, refus.
+        2. services_table.ajouter_le_panier_a_la_table : Vente EN_ATTENTE de
            l'addition (ouverte au 1er envoi), une commande, table OCCUPEE.
-        4. Repond par un message de succes dans #messages. Le bouton Retour vide
-           le panier (manageReset). Le bandeau de table est mis a jour hors bande.
+           Les articles attendent l'envoi en preparation (« Envoi prepa »).
+        3. Message de succes + bandeau de table a jour (hors bande).
         """
-        uuid_pv = request.POST.get("uuid_pv")
-        try:
-            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
-        except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _("Point de vente introuvable"),
-                "selector_bt_retour": "#messages",
-            }
-            return render(
-                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
-            )
+        point_de_vente, table, articles_du_panier, reponse_d_erreur = (
+            self._lire_la_table_et_le_panier(request, panier_vide_accepte=False)
+        )
+        if reponse_d_erreur is not None:
+            return reponse_d_erreur
 
-        tag_id_carte_manager = request.POST.get("tag_id_cm", "")
-        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
+        ajouter_le_panier_a_la_table(
+            table,
+            point_de_vente,
+            articles_du_panier,
+            _operateur_de_la_caisse(request, request.POST.get("tag_id_cm", "")),
+        )
+        return self._reponse_de_succes_de_table(
+            request, table, _("Ajouté à la table %(nom)s") % {"nom": table.name}
+        )
 
-        try:
-            table = Table.objects.get(uuid=request.POST.get("id_table"), archive=False)
-        except (Table.DoesNotExist, ValueError, DjangoValidationError):
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _("Table introuvable"),
-                "selector_bt_retour": "#messages",
-            }
-            return render(
-                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
-            )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="envoyer_en_preparation",
+        url_name="envoyer_en_preparation",
+    )
+    def envoyer_en_preparation(self, request):
+        """
+        POST /laboutik/commande/envoyer_en_preparation/
+        Envoie en preparation ce que la table n'a pas encore envoye.
+        / Sends to preparation what the table has not sent yet.
 
-        try:
-            articles_du_panier = _extraire_articles_du_panier(
-                request.POST, point_de_vente
-            )
-        except ValueError as erreur_du_panier:
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": str(erreur_du_panier),
-                "selector_bt_retour": "#messages",
-            }
-            return render(
-                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
-            )
+        LOCALISATION : laboutik/views.py
 
-        if not articles_du_panier:
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _("Panier vide."),
-                "selector_bt_retour": "#messages",
-            }
-            return render(
-                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
-            )
+        Envoye par la touche « Envoi prepa » (partial/win_bottom_right.html),
+        avec tout #addition-form (hx-include).
 
-        # Refus AVANT toute ecriture : un seul article refuse bloque l'envoi.
-        # / Refused before any write: one refused article blocks the whole send.
-        for article_du_panier in articles_du_panier:
-            raison_du_refus = raison_du_refus_d_un_article_de_table(article_du_panier)
-            if raison_du_refus is not None:
+        FLUX :
+        1. _lire_la_table_et_le_panier (le panier peut etre vide).
+        2. Panier non vide : il est d'abord ajoute a l'addition, comme
+           « Ajouter a la table ». Un seul appui suffit pour commander et envoyer.
+        3. services_table.envoyer_l_addition_en_preparation : EN_ATTENTE → EN_COURS.
+           Rien a envoyer → message, rien ne change.
+        4. Apres le commit : un ticket par commande envoyee, decoupe par imprimante
+           de categorie (printing/tasks.py:imprimer_commande). Une categorie sans
+           imprimante ne produit pas de ticket.
+        5. Message de succes + bandeau de table a jour (hors bande).
+        """
+        point_de_vente, table, articles_du_panier, reponse_d_erreur = (
+            self._lire_la_table_et_le_panier(request, panier_vide_accepte=True)
+        )
+        if reponse_d_erreur is not None:
+            return reponse_d_erreur
+
+        with db_transaction.atomic():
+            if articles_du_panier:
+                ajouter_le_panier_a_la_table(
+                    table,
+                    point_de_vente,
+                    articles_du_panier,
+                    _operateur_de_la_caisse(request, request.POST.get("tag_id_cm", "")),
+                )
+            commandes_envoyees = envoyer_l_addition_en_preparation(table)
+
+            if not commandes_envoyees:
                 context_erreur = {
-                    "msg_type": "warning",
-                    "msg_content": raison_du_refus,
+                    "msg_type": "info",
+                    "msg_content": _("Rien à envoyer : tout est déjà en préparation."),
                     "selector_bt_retour": "#messages",
                 }
                 return render(
@@ -15671,27 +15765,22 @@ class CommandeViewSet(viewsets.ViewSet):
                     status=400,
                 )
 
-        ajouter_le_panier_a_la_table(
-            table,
-            point_de_vente,
-            articles_du_panier,
-            _operateur_de_la_caisse(request, tag_id_carte_manager),
-        )
+            # L'impression part apres le commit : la tache relit les commandes.
+            # / Printing starts after commit: the task reads the orders back.
+            nom_du_schema = connection.schema_name
+            for commande_envoyee in commandes_envoyees:
+                uuid_de_la_commande = str(commande_envoyee.uuid)
+                db_transaction.on_commit(
+                    lambda uuid_de_la_commande=uuid_de_la_commande: imprimer_commande.delay(
+                        uuid_de_la_commande, nom_du_schema
+                    )
+                )
 
-        context_du_succes = {
-            "msg_type": "success",
-            "msg_content": _("Ajouté à la table %(nom)s") % {"nom": table.name},
-            # Retour : on vide le panier, il est sur l'addition.
-            # / Back: empty the cart, it is on the bill now.
-            "action": "manageReset();",
-            "selector_bt_retour": "#messages",
-        }
-        reponse = render(request, "laboutik/partial/hx_messages.html", context_du_succes)
-        reponse.content = (
-            reponse.content.decode()
-            + _bandeau_de_table_hors_bande(request, table, request.POST)
-        ).encode()
-        return reponse
+        return self._reponse_de_succes_de_table(
+            request,
+            table,
+            _("Envoyé en préparation pour %(nom)s") % {"nom": table.name},
+        )
 
     # ----------------------------------------------------------------------- #
     #  3. Marquer une commande comme servie                                    #

@@ -1,16 +1,16 @@
 {% load static i18n %}
 <link rel="stylesheet" href="{% static 'css/win_bottom_right.css' %}" />
 <!--
-ZONE BAS-DROITE DU MODE RESTAURANT : clavier des moyens de paiement et actions
-/ Restaurant mode bottom-right area: payment keys and actions
+ZONE BAS-DROITE DU MODE RESTAURANT : paiement, panier et table
+/ Restaurant mode bottom-right area: payment, cart and table keys
 
 LOCALISATION : laboutik/templates/laboutik/partial/win_bottom_right.html
 STYLE : laboutik/static/css/win_bottom_right.css
 Inclus seulement par views/restaurant_interface.html.
 
-FLUX D'UNE TOUCHE DE PAIEMENT (Espèces, CB, Chèque, Cashless, Mixte, Offrir) :
+FLUX D'UNE TOUCHE DE PAIEMENT (Carte TiBillet, Especes, CB, Cheque, Offrir, Mixte) :
 1. restoPayerAvec('<code>') range le code dans #addition-form (champ moyen_prefere).
-2. Il appelle footer.js:displayPaymentTypes(), le meme chemin que VALIDER du ticket.
+2. Il appelle footer.js:displayPaymentTypes(), le chemin du VALIDER du service direct.
    Panier vide -> message « aucun article » (partial/no_articles.html).
 3. #addition-form poste vers PaiementViewSet.moyens_paiement (laboutik/views.py),
    qui verifie stock, monnaie, client requis... puis rend hx_display_type_payment.html.
@@ -19,19 +19,25 @@ FLUX D'UNE TOUCHE DE PAIEMENT (Espèces, CB, Chèque, Cashless, Mixte, Offrir) :
    repartition) dans #confirm, par-dessus la liste des moyens.
    Moyen non propose pour ce panier (ou client a identifier) : la liste s'affiche,
    le caissier choisit lui-meme.
-5. Apres la reponse, le champ moyen_prefere est retire : VALIDER du ticket
-   rouvre toujours la liste complete.
+5. Apres la reponse, le champ moyen_prefere est retire : le prochain affichage
+   des moyens de paiement montre toujours la liste complete.
 
 Avec une table choisie, les touches encaissent toute l'addition de la table
 (ses commandes + le panier en cours) : views.py:_articles_du_panier_et_de_l_addition.
-Le bouton du ticket, lui, ajoute le panier a la table (cotton/addition_footer.html).
+En mode restaurant, le ticket n'a pas de boutons : Vider, « Ajouter a la table »
+et « Envoi prepa » sont ici (ces deux derniers seulement avec une table choisie).
 -->
-<nav id="win-bottom-right" aria-label="{% translate 'Paiement' %}">
-  {# Seulement les moyens acceptes par le point de vente, comme les tuiles de    #}
-  {# _tuiles_paiement.html. Cashless : toujours (le serveur l'ecarte d'un panier  #}
-  {# avec recharge payante). Mixte : au moins deux moyens combinables.            #}
-  {# Le serveur garde ses verifications (moyens_paiement, payer).                 #}
-  {# / Only the methods the POS accepts, like the payment tiles.                  #}
+<nav id="win-bottom-right" aria-label="{% translate 'Paiement et commande' %}">
+  {# --- Paiement / Payment ---                                                  #}
+  {# Meme ordre et memes conditions que les tuiles de _tuiles_paiement.html :    #}
+  {# Carte TiBillet, Especes, CB, Cheque, Offrir, Mixte.                         #}
+  {# Carte TiBillet : toujours (le serveur l'ecarte d'un panier avec recharge    #}
+  {# payante). Mixte : au moins deux moyens combinables. Offrir : mode gerant.   #}
+  {# Le serveur garde ses verifications (moyens_paiement, payer).                #}
+  {# / Same order and conditions as the payment tiles.                          #}
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('nfc')" data-testid="resto-touche-cashless">
+    <span class="material-symbols-outlined" aria-hidden="true">contactless</span>{% translate "Carte TiBillet" %}
+  </button>
   {% if state.accepte_especes %}
   <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('espece')" data-testid="resto-touche-especes">
     <span class="material-symbols-outlined" aria-hidden="true">payments</span>{% translate "Espèces" %}
@@ -47,27 +53,63 @@ Le bouton du ticket, lui, ajoute le panier a la table (cotton/addition_footer.ht
     <span class="material-symbols-outlined" aria-hidden="true">receipt</span>{% translate "Chèque" %}
   </button>
   {% endif %}
-  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('nfc')" data-testid="resto-touche-cashless">
-    <span class="material-symbols-outlined" aria-hidden="true">contactless</span>{% translate "Cashless" %}
-  </button>
-  {% if paiement_mixte_possible %}
-  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('mix')" data-testid="resto-touche-mixte">
-    <span class="material-symbols-outlined" aria-hidden="true">call_split</span>{% translate "Mixte" %}
-  </button>
-  {% endif %}
-  {# Offrir : carte primaire en mode gerant, comme la tuile OFFRIR.              #}
-  {# Le serveur le verifie aussi (_panier_peut_etre_offert).                     #}
-  {# / Gift: manager-mode primary cards only; the server checks it too.          #}
   {% if card.mode_gerant %}
   <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('gift')" data-testid="resto-touche-offrir">
     <span class="material-symbols-outlined" aria-hidden="true">redeem</span>{% translate "Offrir" %}
   </button>
   {% endif %}
-  {# TODO : « Envoi prépa » n'est pas encore branche.                             #}
-  {# / Not wired yet: send-to-kitchen.                                            #}
-  <button type="button" class="key-touch key-size1 c-white bc-purple" disabled data-testid="resto-touche-envoyer-prepa">
+  {% if paiement_mixte_possible %}
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('mix')" data-testid="resto-touche-mixte">
+    <span class="material-symbols-outlined" aria-hidden="true">call_split</span>{% translate "Mixte" %}
+  </button>
+  {% endif %}
+
+  {# --- Panier et table / Cart and table ---                                     #}
+  {# Vider : meme id et meme confirmation en deux temps que le Vider du ticket    #}
+  {# (addition.js:additionArmerVider). addition.js le grise panier vide.          #}
+  {# / Empty: same id and two-step confirmation as the ticket's Empty button.     #}
+  <button type="button"
+          id="addition-vider"
+          class="key-touch key-size1 win-bottom-right-vider"
+          onclick="additionArmerVider()"
+          data-label-vider="{% translate 'Vider' %}"
+          data-label-confirmer="{% translate 'Confirmer' %}"
+          data-testid="addition-vider"
+          disabled>
+    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+    <span class="addition-vider-label">{% translate "Vider" %}</span>
+  </button>
+  {% if addition_de_table %}
+  {# Ajouter a la table : id #addition-bt-valider, que addition.js grise panier   #}
+  {# vide. Il porte son propre hx-post : footer.js n'y branche pas le paiement.   #}
+  {# / Add to table: addition.js greys it on an empty cart; own hx-post.          #}
+  <button type="button"
+          id="addition-bt-valider"
+          class="key-touch key-size1 win-bottom-right-table"
+          hx-post="{% url 'laboutik-commande-ajouter_a_la_table' %}"
+          hx-include="#addition-form"
+          hx-target="#messages"
+          hx-swap="outerHTML"
+          data-loading-disable
+          data-testid="addition-ajouter-a-la-table"
+          disabled>
+    <span class="material-symbols-outlined" aria-hidden="true">add_circle</span>{% translate "Ajouter à la table" %}
+  </button>
+  {# Envoi prepa : ajoute le panier s'il y en a un, puis envoie en preparation   #}
+  {# tout ce que la table n'a pas encore envoye (tickets cuisine / bar).          #}
+  {# CommandeViewSet.envoyer_en_preparation (views.py).                          #}
+  {# / Send to prep: adds the cart if any, then sends what was not sent yet.     #}
+  <button type="button"
+          class="key-touch key-size1 c-white bc-purple"
+          hx-post="{% url 'laboutik-commande-envoyer_en_preparation' %}"
+          hx-include="#addition-form"
+          hx-target="#messages"
+          hx-swap="outerHTML"
+          data-loading-disable
+          data-testid="resto-touche-envoyer-prepa">
     <span class="material-symbols-outlined" aria-hidden="true">soup_kitchen</span>{% translate "Envoi prépa" %}
   </button>
+  {% endif %}
 </nav>
 
 <script>
@@ -90,7 +132,7 @@ function restoPayerAvec(moyenPrefere) {
 
   // Rien a payer (panier vide, et pas d'addition de table) : pas de requete,
   // displayPaymentTypes() affiche le message. On ne range rien dans le formulaire,
-  // sinon le prochain VALIDER le reprendrait.
+  // sinon le prochain affichage des moyens de paiement le reprendrait.
   // L'addition vient du bandeau de table (partial/_addition_de_table.html).
   // / Nothing to pay (empty cart, no table bill): no request, nothing stored.
   const panierADesArticles = formulaireAddition.querySelector('input[name^="repid-"]') !== null
@@ -110,8 +152,8 @@ function restoPayerAvec(moyenPrefere) {
   })
 
   // Une fois la reponse recue (succes ou erreur), on retire le champ :
-  // VALIDER du ticket doit toujours rouvrir la liste complete.
-  // / Once answered, remove the field so VALIDER shows the full list again.
+  // le prochain affichage des moyens de paiement montre la liste complete.
+  // / Once answered, remove the field so the full list shows next time.
   formulaireAddition.addEventListener('htmx:afterRequest', function () {
     const champMoyenPrefere = formulaireAddition.querySelector('input[name="moyen_prefere"]')
     if (champMoyenPrefere) {
@@ -119,7 +161,7 @@ function restoPayerAvec(moyenPrefere) {
     }
   }, { once: true })
 
-  // Meme chemin que VALIDER du ticket / Same path as the ticket's VALIDER
+  // Meme chemin que VALIDER du service direct / Same path as direct-service VALIDER
   displayPaymentTypes()
 }
 </script>

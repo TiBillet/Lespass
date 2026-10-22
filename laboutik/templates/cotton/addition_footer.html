@@ -49,6 +49,12 @@ Ids are prefixed with addition- so a returning footer would not collide.
 	      data-testid="addition-total-affiche">0.00 {{ currency_data.symbol }}</span>
 </div>
 
+{# Mode restaurant : pas de boutons ici. Vider, « Ajouter a la table » et le       #}
+{# paiement sont des touches de la zone bas-droite (partial/win_bottom_right.html), #}
+{# avec les memes id (#addition-vider, #addition-bt-valider) : addition.js les      #}
+{# active et les desactive de la meme facon. Check carte est en bas a gauche.       #}
+{# / Restaurant mode: no buttons here, they are keys of the bottom-right area.      #}
+{% if not mode_restaurant %}
 <div class="addition-actions">
     <button type="button"
             id="addition-vider"
@@ -74,28 +80,6 @@ Ids are prefixed with addition- so a returning footer would not collide.
 		<span>{% translate "CHECK" %} {% translate "CARTE" %}</span>
 	</button>
 
-	{# Deux comportements / Two behaviours :                                        #}
-	{# - sans table : VALIDER ouvre les moyens de paiement (footer.js, clic ecoute) ; #}
-	{# - table choisie : « Ajouter a la table » poste #addition-form vers             #}
-	{#   CommandeViewSet.ajouter_a_la_table (views.py). footer.js ne branche pas      #}
-	{#   displayPaymentTypes() sur un bouton qui porte hx-post.                       #}
-	{#   La table se paie avec les touches du bas (partial/win_bottom_right.html).    #}
-	{# / No table: payment methods. Table chosen: adds the cart to the table bill.   #}
-	{% if addition_de_table %}
-	<button type="button"
-	        id="addition-bt-valider"
-	        class="addition-act addition-act-valid"
-	        hx-post="{% url 'laboutik-commande-ajouter_a_la_table' %}"
-	        hx-include="#addition-form"
-	        hx-target="#messages"
-	        hx-swap="outerHTML"
-	        data-loading-disable
-	        data-testid="addition-ajouter-a-la-table"
-	        disabled>
-		<span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
-		<span>{% translate "Ajouter à la table" %}</span>
-	</button>
-	{% else %}
 	<button type="button"
 	        id="addition-bt-valider"
 	        class="addition-act addition-act-valid"
@@ -104,6 +88,6 @@ Ids are prefixed with addition- so a returning footer would not collide.
 		<span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
 		<span>{% translate "VALIDER" %}</span>
 	</button>
-	{% endif %}
 </div>
+{% endif %}
 <script src="{% static 'js/footer.js' %}"></script>

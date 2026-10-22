@@ -22,7 +22,12 @@
   /* auto-fill : autant de touches par rangee que la largeur le permet
      / auto-fill: as many keys per row as fit */
   grid-template-columns: repeat(auto-fill, minmax(min(var(--key-width), 100%), 1fr));
-  grid-auto-rows: minmax(56px, 1fr);
+  /* Une rangee ne depasse jamais la hauteur d'une touche (80 px au plus,
+     sizes.css) : avec 1fr, une rangee seule s'etirait sur toute la zone.
+     align-content: start garde les rangees en haut, sans espace entre elles.
+     / A row never exceeds one key's height; rows stay at the top. */
+  grid-auto-rows: minmax(56px, var(--key-height));
+  align-content: start;
   gap: 8px;
   padding: 8px;
   box-sizing: border-box;
@@ -86,6 +91,38 @@
 }
 
 #win-bottom-right .bc-purple .material-symbols-outlined { color: var(--warn); }
+
+/* VIDER : liseré rouge, puis rouge plein une fois arme (confirmation en deux
+   temps, addition.js:additionArmerVider)
+   / EMPTY: red edge, solid red once armed (two-step confirmation) */
+#win-bottom-right .win-bottom-right-vider:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--invalid), 0 3px 0 var(--key-edge);
+}
+
+#win-bottom-right .win-bottom-right-vider .material-symbols-outlined {
+  color: var(--invalid);
+}
+
+#win-bottom-right .win-bottom-right-vider.is-armed {
+  --key-bg: var(--invalid);
+  --key-ink: var(--blanc01);
+}
+
+#win-bottom-right .win-bottom-right-vider.is-armed .material-symbols-outlined {
+  color: var(--blanc01);
+}
+
+/* AJOUTER A LA TABLE : l'action principale de la table, la seule touche pleine
+   / ADD TO TABLE: the table's main action, the only solid key */
+#win-bottom-right .win-bottom-right-table:not(:disabled) {
+  --key-bg: var(--valid-deep);
+  --key-ink: var(--valid-ink);
+  box-shadow: 0 3px 0 var(--shade-3);
+}
+
+#win-bottom-right .win-bottom-right-table:not(:disabled) .material-symbols-outlined {
+  color: var(--valid-ink);
+}
 
 @media (hover: hover) {
   #win-bottom-right .key-touch:hover { filter: brightness(1.12); }

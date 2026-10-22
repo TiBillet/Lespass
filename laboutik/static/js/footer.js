@@ -118,15 +118,20 @@ function changeMethodOfValidateButton(event) {
 * 2. Custom event listener 'updateBtValider' on #bt-valider
 */
 document.addEventListener('DOMContentLoaded', () => {
-  // document.querySelector('#bt-reset').addEventListener('click', manageReset)
-  document.querySelector('#addition-bt-valider').addEventListener('updateSumOfValidateButton', updateSumOfValidateButton)
-  // manage bt validate
-  document.querySelector('#addition-bt-valider').addEventListener('changeMethodOfValidateButton', changeMethodOfValidateButton)
-  // Table choisie (mode restaurant) : le bouton porte son propre hx-post vers
-  // ajouter_a_la_table (cotton/addition_footer.html). Il ne doit pas ouvrir
-  // les moyens de paiement en plus.
-  // / Table chosen: the button has its own hx-post, no payment methods on top.
+  // Mode restaurant sans table : pas de #addition-bt-valider (le paiement passe
+  // par les touches de partial/win_bottom_right.html).
+  // Table choisie : #addition-bt-valider est la touche « Ajouter a la table »,
+  // qui porte son propre hx-post : elle n'ouvre pas les moyens de paiement.
+  // / Restaurant mode without table: no validate button. With a table: the
+  // add-to-table key has its own hx-post, no payment methods on top.
   const boutonValider = document.querySelector('#addition-bt-valider')
+  if (!boutonValider) {
+    return
+  }
+  // document.querySelector('#bt-reset').addEventListener('click', manageReset)
+  boutonValider.addEventListener('updateSumOfValidateButton', updateSumOfValidateButton)
+  // manage bt validate
+  boutonValider.addEventListener('changeMethodOfValidateButton', changeMethodOfValidateButton)
   const boutonAjouteALaTable = boutonValider.hasAttribute('hx-post')
   if (!boutonAjouteALaTable) {
     boutonValider.addEventListener('click', displayPaymentTypes)

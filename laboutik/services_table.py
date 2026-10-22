@@ -320,38 +320,99 @@ def resume_de_l_addition(table):
 
     Utilise par partial/_addition_de_table.html.
 
+    Une ligne par tarif ET par etat d'envoi : les articles deja partis en
+    preparation et ceux qui attendent l'envoi (« Envoi prepa ») ne sont jamais
+    melanges, le serveur voit ce qui reste a envoyer.
+
     :param table: `Table`
     :return: dict (uuid, nom, statut_css, statut_libelle, lignes, nombre_d_articles,
-             total_centimes)
+             nombre_a_envoyer, total_centimes)
     """
-    lignes_deja_envoyees = []
+    lignes_par_tarif_et_envoi = {}
     nombre_d_articles = 0
+    nombre_a_envoyer = 0
     total_en_centimes = 0
-    for article_du_panier in articles_panier_de_l_addition(table):
-        quantite = article_du_panier["quantite"]
-        prix_unitaire_en_centimes = article_du_panier["prix_centimes"]
-        total_de_la_ligne_en_centimes = prix_unitaire_en_centimes * quantite
-        lignes_deja_envoyees.append(
-            {
-                "nom": article_du_panier["product"].name,
-                "nom_du_tarif": article_du_panier["price"].name,
-                "quantite": quantite,
-                "prix_unitaire_centimes": prix_unitaire_en_centimes,
-                "total_centimes": total_de_la_ligne_en_centimes,
-            }
+    for article_de_commande in _articles_a_payer_de_la_table(table):
+        envoye_en_preparation = (
+            article_de_commande.statut != ArticleCommandeSauvegarde.EN_ATTENTE
         )
+        quantite = article_de_commande.qty
+        prix_unitaire_en_centimes = int(round(article_de_commande.price.prix * 100))
+
+        cle_de_la_ligne = (article_de_commande.price_id, envoye_en_preparation)
+        ligne = lignes_par_tarif_et_envoi.get(cle_de_la_ligne)
+        if ligne is None:
+            ligne = {
+                "nom": article_de_commande.product.name,
+                "nom_du_tarif": article_de_commande.price.name,
+                "quantite": 0,
+                "prix_unitaire_centimes": prix_unitaire_en_centimes,
+                "total_centimes": 0,
+                "envoye_en_preparation": envoye_en_preparation,
+            }
+            lignes_par_tarif_et_envoi[cle_de_la_ligne] = ligne
+        ligne["quantite"] += quantite
+        ligne["total_centimes"] += prix_unitaire_en_centimes * quantite
+
         nombre_d_articles += quantite
-        total_en_centimes += total_de_la_ligne_en_centimes
+        total_en_centimes += prix_unitaire_en_centimes * quantite
+        if not envoye_en_preparation:
+            nombre_a_envoyer += quantite
+
+    lignes_de_l_addition = []
+    for ligne in lignes_par_tarif_et_envoi.values():
+        lignes_de_l_addition.append(ligne)
 
     return {
         "uuid": str(table.uuid),
         "nom": table.name,
         "statut_css": CLASSES_CSS_DES_STATUTS.get(table.statut, "libre"),
         "statut_libelle": _libelle_du_statut(table.statut),
-        "lignes": lignes_deja_envoyees,
+        "lignes": lignes_de_l_addition,
         "nombre_d_articles": nombre_d_articles,
+        "nombre_a_envoyer": nombre_a_envoyer,
         "total_centimes": total_en_centimes,
     }
+
+
+def envoyer_l_addition_en_preparation(table):
+    """
+    Envoie en preparation les articles de l'addition qui ne sont pas encore partis.
+    / Sends to preparation the bill's articles not sent yet.
+
+    LOCALISATION : laboutik/services_table.py
+
+    Les articles EN_ATTENTE des commandes non payees passent EN_COURS. L'appelant
+    imprime ensuite le ticket de chaque commande renvoyee
+    (laboutik/printing/tasks.py:imprimer_commande, une imprimante par categorie).
+    Un 2e appui n'envoie rien de plus : les articles sont deja EN_COURS.
+
+    Appele par / Called by : views.py:CommandeViewSet.envoyer_en_preparation
+
+    :param table: `Table`
+    :return: liste des `CommandeSauvegarde` dont des articles viennent de partir
+    """
+    with transaction.atomic():
+        articles_a_envoyer = (
+            ArticleCommandeSauvegarde.objects.select_for_update().filter(
+                commande__table=table,
+                commande__statut__in=STATUTS_DES_COMMANDES_A_PAYER,
+                statut=ArticleCommandeSauvegarde.EN_ATTENTE,
+            )
+        )
+        uuids_des_commandes_envoyees = set()
+        for article_a_envoyer in articles_a_envoyer:
+            uuids_des_commandes_envoyees.add(article_a_envoyer.commande_id)
+
+        ArticleCommandeSauvegarde.objects.filter(
+            commande_id__in=uuids_des_commandes_envoyees,
+            statut=ArticleCommandeSauvegarde.EN_ATTENTE,
+        ).update(statut=ArticleCommandeSauvegarde.EN_COURS)
+
+    commandes_envoyees = list(
+        CommandeSauvegarde.objects.filter(uuid__in=uuids_des_commandes_envoyees)
+    )
+    return commandes_envoyees
 
 
 def reprendre_la_vente_de_l_addition(vente, idempotency_key, client=None, carte=None):
