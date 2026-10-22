@@ -3886,7 +3886,7 @@ msgstr "Dupliquer (+1 jour)"
 #: Administration/admin_tenant.py:4782 Administration/admin_tenant.py:4799
 #: Administration/admin_tenant.py:4816 Administration/admin_tenant.py:4833
 msgid "Event duplicated successfully"
-msgstr "Ticket 'dé-scanné' avec succes"
+msgstr "Événement dupliqué avec succès !"
 
 #: Administration/admin_tenant.py:4784 Administration/admin_tenant.py:4801
 #: Administration/admin_tenant.py:4818 Administration/admin_tenant.py:4835
