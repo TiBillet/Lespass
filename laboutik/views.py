@@ -138,6 +138,16 @@ from laboutik.models import (
     SortieCaisse,
     HistoriqueFondDeCaisse,
 )
+from laboutik.services_table import (
+    ajouter_le_panier_a_la_table,
+    articles_panier_de_l_addition,
+    cloturer_l_addition,
+    raison_du_refus_d_un_article_de_table,
+    reprendre_la_vente_de_l_addition,
+    resume_de_l_addition,
+    vente_de_l_addition_de_la_table,
+    vente_reglee_de_l_addition_de_la_table,
+)
 from comptabilite.rapport import (
     CLE_SANS_POINT_DE_VENTE,
     MOYENS_CASHLESS,
@@ -3525,17 +3535,24 @@ class CaisseViewSet(viewsets.ViewSet):
             titre_page = _("Service direct")
             template_name = "laboutik/views/common_user_interface.html"
 
-        # Une table spécifique est sélectionnée → interface de commande
-        # A specific table is selected → order interface
+        # Une table est choisie → l'ecran restaurant reste, sans la grille, avec
+        # le bandeau de la table en tete du ticket (partial/_addition_de_table.html).
+        # Table inconnue ou archivee → on revient a la grille des tables.
+        # / A table is chosen → restaurant screen without the grid, with the table
+        # banner on top of the ticket. Unknown table → back to the grid.
         nom_table = ""
+        addition_de_table = None
         if id_table is not None:
             try:
-                table_obj = Table.objects.get(uuid=id_table)
+                table_obj = Table.objects.get(uuid=id_table, archive=False)
+            except (Table.DoesNotExist, ValueError, DjangoValidationError):
+                table_obj = None
+            if table_obj is None:
+                id_table = None
+            else:
                 nom_table = table_obj.name
-            except (Table.DoesNotExist, ValueError):
-                nom_table = str(id_table)
-            titre_page = _("Commande table ") + nom_table
-            template_name = "laboutik/views/common_user_interface.html"
+                addition_de_table = resume_de_l_addition(table_obj)
+                titre_page = _("Commande table ") + nom_table
 
         # --- Construire le dict PV au format attendu par les templates ---
         # --- Build POS dict in the format expected by templates ---
@@ -3622,6 +3639,21 @@ class CaisseViewSet(viewsets.ViewSet):
             # Nom de la table choisie, affiche dans le bouton Tables de l'en-tete
             # / Selected table name, shown in the header Tables button
             "nom_table": nom_table,
+            # Touche « Mixte » du clavier resto : au moins deux moyens combinables
+            # acceptes par le PV, comme la tuile MIXTE (_moyens_du_paiement_mixte).
+            # / Restaurant "Mixed" key: at least two combinable methods accepted.
+            "paiement_mixte_possible": (
+                int(pv.accepte_especes)
+                + int(pv.accepte_carte_bancaire)
+                + int(pv.accepte_cheque)
+            )
+            >= 2,
+            # Bandeau de la table en tete du ticket (services_table.resume_de_l_addition)
+            # / Table banner on top of the ticket
+            "addition_de_table": addition_de_table,
+            "url_de_la_grille_des_tables": _url_de_la_grille_des_tables(
+                str(pv.uuid), tag_id_carte_manager or "", type_app
+            ),
             "laboutik_config": laboutik_config,
             # Mode ecole : active le bandeau SIMULATION dans header.html (LNE exigence 5)
             # / Training mode: enables SIMULATION banner in header.html (LNE req. 5)
@@ -8732,6 +8764,158 @@ def _executer_recharges(
         )
 
 
+def _addition_de_table_postee(donnees_post):
+    """
+    La table postee par #addition-form, et la vente de son addition.
+    / The table posted by #addition-form, and its bill's sale.
+
+    LOCALISATION : laboutik/views.py
+
+    Le champ id_table de #addition-form (cotton/addition.html) est rempli quand
+    une table est choisie. Sans table, ou sans addition en attente : (table, None).
+
+    :param donnees_post: request.POST
+    :return: tuple (Table ou None, Vente EN_ATTENTE ou None)
+    """
+    id_table = donnees_post.get("id_table", "")
+    if not id_table:
+        return None, None
+    try:
+        table = Table.objects.get(uuid=id_table)
+    except (Table.DoesNotExist, ValueError, DjangoValidationError):
+        return None, None
+    return table, vente_de_l_addition_de_la_table(table)
+
+
+def _articles_du_panier_et_de_l_addition(donnees_post, point_de_vente):
+    """
+    Les articles a encaisser : le panier, plus l'addition de la table s'il y en a une.
+    / The articles to collect: the cart, plus the table bill if any.
+
+    LOCALISATION : laboutik/views.py
+
+    Avec une table choisie, les touches de paiement encaissent TOUT ce que la
+    table doit : ses commandes non payees (services_table.py) et le panier en
+    cours. Sans table, c'est exactement `_extraire_articles_du_panier`.
+
+    Appelee par / Called by : moyens_paiement(), _executer_paiement(),
+    _executer_paiement_complementaire()
+
+    :param donnees_post: request.POST
+    :param point_de_vente: PointDeVente
+    :return: liste de dicts au format de `_extraire_articles_du_panier`
+    :raises ValueError: comme `_extraire_articles_du_panier`
+    """
+    articles_du_panier = _extraire_articles_du_panier(donnees_post, point_de_vente)
+
+    table, vente_de_l_addition = _addition_de_table_postee(donnees_post)
+    if vente_de_l_addition is None:
+        return articles_du_panier
+
+    articles_a_encaisser = articles_panier_de_l_addition(table)
+    for article_du_panier in articles_du_panier:
+        articles_a_encaisser.append(article_du_panier)
+    return articles_a_encaisser
+
+
+def _url_de_la_grille_des_tables(uuid_pv, tag_id_carte_manager, type_app):
+    """
+    L'adresse du point de vente sans id_table : la grille des tables.
+    / The POS address without id_table: the table grid.
+    """
+    parametres_de_la_grille = urlencode(
+        {
+            "uuid_pv": uuid_pv,
+            "tag_id_cm": tag_id_carte_manager,
+            "type_app": type_app,
+        }
+    )
+    return f"{reverse('laboutik-caisse-point_de_vente')}?{parametres_de_la_grille}"
+
+
+def _bandeau_de_table_hors_bande(request, table, donnees_post):
+    """
+    Le bandeau de table a jour, pour un swap hors bande (hx-swap-oob).
+    / The up-to-date table banner, for an out-of-band swap.
+
+    LOCALISATION : laboutik/views.py
+
+    Ajoute a la reponse de ajouter_a_la_table() et du paiement d'une table :
+    le ticket montre tout de suite les lignes envoyees et le nouveau statut.
+
+    :return: HTML (str) de partial/_addition_de_table.html, avec hx-swap-oob
+    """
+    context_du_bandeau = {
+        "addition_de_table": resume_de_l_addition(table),
+        "url_de_la_grille_des_tables": _url_de_la_grille_des_tables(
+            donnees_post.get("uuid_pv", ""),
+            donnees_post.get("tag_id_cm", ""),
+            donnees_post.get("type_app", "unknown"),
+        ),
+        "hors_bande": True,
+    }
+    return render(
+        request, "laboutik/partial/_addition_de_table.html", context_du_bandeau
+    ).content.decode()
+
+
+def _cloturer_l_addition_payee(request, reponse_du_paiement):
+    """
+    Apres un paiement : si l'addition de la table est reglee, on la cloture.
+    / After a payment: if the table bill is settled, close it.
+
+    LOCALISATION : laboutik/views.py
+
+    Appelee par payer() et payer_complementaire(), apres le paiement.
+    La vente de l'addition est REGLEE seulement si le paiement a reussi : un
+    refus, un ecran « fonds insuffisants » ou une popup laissent la table telle
+    quelle. Un rejeu (meme cle) ne trouve plus de commande a payer : rien ne change.
+
+    FLUX :
+    1. Le panier en cours, paye avec l'addition, devient une derniere commande.
+    2. `cloturer_l_addition` : commandes PAID, table LIBRE.
+    3. Le bandeau de table a jour est ajoute a la reponse (swap hors bande).
+
+    :param request: la requete du paiement (POST de #addition-form)
+    :param reponse_du_paiement: la reponse HTML du flux de paiement
+    :return: la meme reponse, avec le bandeau a jour si la table a ete payee
+    """
+    id_table = request.POST.get("id_table", "")
+    if not id_table:
+        return reponse_du_paiement
+    try:
+        table = Table.objects.get(uuid=id_table)
+    except (Table.DoesNotExist, ValueError, DjangoValidationError):
+        return reponse_du_paiement
+
+    vente_reglee = vente_reglee_de_l_addition_de_la_table(table)
+    if vente_reglee is None:
+        return reponse_du_paiement
+
+    try:
+        point_de_vente = PointDeVente.objects.get(uuid=request.POST.get("uuid_pv"))
+        articles_du_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+    except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):
+        point_de_vente = None
+        articles_du_panier = []
+
+    if articles_du_panier:
+        ajouter_le_panier_a_la_table(
+            table,
+            point_de_vente,
+            articles_du_panier,
+            _operateur_de_la_caisse(request, request.POST.get("tag_id_cm", "")),
+            vente_de_l_addition=vente_reglee,
+        )
+    cloturer_l_addition(table, vente_reglee)
+
+    reponse_du_paiement.content = (
+        reponse_du_paiement.content.decode()
+        + _bandeau_de_table_hors_bande(request, table, request.POST)
+    ).encode()
+    return reponse_du_paiement
+
+
 def _ouvrir_la_vente_de_caisse(
     request,
     point_de_vente,
@@ -8772,6 +8956,18 @@ def _ouvrir_la_vente_de_caisse(
         client_de_la_vente = adherent["user"]
     elif carte_client is not None:
         client_de_la_vente = carte_client.user
+
+    # Table du mode restaurant avec une addition : on encaisse la vente de
+    # l'addition, deja ouverte, au lieu d'en ouvrir une nouvelle.
+    # / Restaurant table with a bill: settle the bill's sale instead of a new one.
+    _table, vente_de_l_addition = _addition_de_table_postee(request.POST)
+    if vente_de_l_addition is not None:
+        return reprendre_la_vente_de_l_addition(
+            vente_de_l_addition,
+            idempotency_key=str(uuid_transaction),
+            client=client_de_la_vente,
+            carte=carte_client,
+        )
 
     tag_id_carte_manager = request.POST.get("tag_id_cm", "")
     return ouvrir_vente(
@@ -9119,8 +9315,12 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Extraire les articles du panier depuis le POST ---
         # --- Extract cart articles from POST ---
+        # Avec une table : le panier + l'addition de la table.
+        # / With a table: the cart + the table bill.
         try:
-            articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+            articles_panier = _articles_du_panier_et_de_l_addition(
+                request.POST, point_de_vente
+            )
         except ValueError as e:
             context_erreur = {
                 "msg_type": "warning",
@@ -9412,10 +9612,13 @@ class PaiementViewSet(viewsets.ViewSet):
         Sans cle (ancien client) : le paiement s'execute comme avant.
         / Without a key (old client): the payment runs as before.
         """
-        return _executer_avec_cle_idempotence(
+        reponse_du_paiement = _executer_avec_cle_idempotence(
             request,
             self._executer_paiement,
         )
+        # Table payee : on cloture son addition (services_table.py).
+        # / Paid table: close its bill.
+        return _cloturer_l_addition_payee(request, reponse_du_paiement)
 
     def _executer_paiement(self, request, uuid_transaction_impose=None):
         """
@@ -9476,8 +9679,12 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Extraire les articles du panier depuis la DB ---
         # --- Extract cart articles from DB ---
+        # Avec une table : le panier + l'addition de la table.
+        # / With a table: the cart + the table bill.
         try:
-            articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+            articles_panier = _articles_du_panier_et_de_l_addition(
+                request.POST, point_de_vente
+            )
         except ValueError as e:
             context_erreur = {
                 "action": "initUrlAddition();",
@@ -11193,7 +11400,19 @@ class PaiementViewSet(viewsets.ViewSet):
 
                 vente = None
                 panier_vide = len(articles_panier) == 0
-                if not panier_vide:
+                # Table avec une addition : on encaisse la vente de l'addition.
+                # Une addition est toujours en euros (services_table.py refuse
+                # les tarifs en points).
+                # / Table with a bill: settle the bill's sale (always in euros).
+                _table, vente_de_l_addition = _addition_de_table_postee(request.POST)
+                if not panier_vide and vente_de_l_addition is not None:
+                    vente = reprendre_la_vente_de_l_addition(
+                        vente_de_l_addition,
+                        idempotency_key=str(uuid_transaction),
+                        client=client_de_la_vente,
+                        carte=carte_client,
+                    )
+                elif not panier_vide:
                     vente = ouvrir_vente(
                         origine=SaleOrigin.LABOUTIK,
                         nature=Vente.Nature.VENTE,
@@ -11707,7 +11926,7 @@ class PaiementViewSet(viewsets.ViewSet):
         if uuid_pv:
             try:
                 point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
-                articles_panier = _extraire_articles_du_panier(
+                articles_panier = _articles_du_panier_et_de_l_addition(
                     request.POST, point_de_vente
                 )
                 total_centimes = _calculer_total_panier_centimes(articles_panier)
@@ -12116,10 +12335,13 @@ class PaiementViewSet(viewsets.ViewSet):
         / Same idempotency key as payer(). The "2nd card insufficient" first pass
         writes nothing, so the second pass can reuse the key.
         """
-        return _executer_avec_cle_idempotence(
+        reponse_du_paiement = _executer_avec_cle_idempotence(
             request,
             self._executer_paiement_complementaire,
         )
+        # Table payee : on cloture son addition (services_table.py).
+        # / Paid table: close its bill.
+        return _cloturer_l_addition_payee(request, reponse_du_paiement)
 
     def _executer_paiement_complementaire(self, request, uuid_transaction_impose=None):
         """
@@ -12161,8 +12383,12 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=404
             )
 
+        # Avec une table : le panier + l'addition de la table.
+        # / With a table: the cart + the table bill.
         try:
-            articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+            articles_panier = _articles_du_panier_et_de_l_addition(
+                request.POST, point_de_vente
+            )
         except ValueError as e:
             context_erreur = {
                 "action": "initUrlAddition();",
@@ -12520,17 +12746,30 @@ class PaiementViewSet(viewsets.ViewSet):
                     # Le client est le titulaire de la carte 1.
                     # / 6.0) Open the payment's sale: one sale for the whole payment. The
                     #   payment id is its idempotency key. Always in euros.
-                    vente = ouvrir_vente(
-                        origine=SaleOrigin.LABOUTIK,
-                        nature=Vente.Nature.VENTE,
-                        point_de_vente=point_de_vente,
-                        operateur=_operateur_de_la_caisse(
-                            request, request.POST.get("tag_id_cm", "")
-                        ),
-                        client=carte1.user,
-                        carte=carte1,
-                        idempotency_key=str(uuid_transaction),
+                    # Table avec une addition : on encaisse la vente de l'addition.
+                    # / Table with a bill: settle the bill's sale.
+                    _table, vente_de_l_addition = _addition_de_table_postee(
+                        request.POST
                     )
+                    if vente_de_l_addition is not None:
+                        vente = reprendre_la_vente_de_l_addition(
+                            vente_de_l_addition,
+                            idempotency_key=str(uuid_transaction),
+                            client=carte1.user,
+                            carte=carte1,
+                        )
+                    else:
+                        vente = ouvrir_vente(
+                            origine=SaleOrigin.LABOUTIK,
+                            nature=Vente.Nature.VENTE,
+                            point_de_vente=point_de_vente,
+                            operateur=_operateur_de_la_caisse(
+                                request, request.POST.get("tag_id_cm", "")
+                            ),
+                            client=carte1.user,
+                            carte=carte1,
+                            idempotency_key=str(uuid_transaction),
+                        )
 
                     # 6a) Recharges gratuites
                     # Elles n'arrivent pas ici aujourd'hui : une recharge cadeau mêlée à
@@ -13284,17 +13523,30 @@ class PaiementViewSet(viewsets.ViewSet):
                     # / Open the payment's sale: one sale for the whole payment. The
                     #   payment id is its idempotency key. Always in euros. Card 1 gives
                     #   the sale's customer and card.
-                    vente = ouvrir_vente(
-                        origine=SaleOrigin.LABOUTIK,
-                        nature=Vente.Nature.VENTE,
-                        point_de_vente=point_de_vente,
-                        operateur=_operateur_de_la_caisse(
-                            request, request.POST.get("tag_id_cm", "")
-                        ),
-                        client=carte1.user,
-                        carte=carte1,
-                        idempotency_key=str(uuid_transaction),
+                    # Table avec une addition : on encaisse la vente de l'addition.
+                    # / Table with a bill: settle the bill's sale.
+                    _table, vente_de_l_addition = _addition_de_table_postee(
+                        request.POST
                     )
+                    if vente_de_l_addition is not None:
+                        vente = reprendre_la_vente_de_l_addition(
+                            vente_de_l_addition,
+                            idempotency_key=str(uuid_transaction),
+                            client=carte1.user,
+                            carte=carte1,
+                        )
+                    else:
+                        vente = ouvrir_vente(
+                            origine=SaleOrigin.LABOUTIK,
+                            nature=Vente.Nature.VENTE,
+                            point_de_vente=point_de_vente,
+                            operateur=_operateur_de_la_caisse(
+                                request, request.POST.get("tag_id_cm", "")
+                            ),
+                            client=carte1.user,
+                            carte=carte1,
+                            idempotency_key=str(uuid_transaction),
+                        )
 
                     # Recharges gratuites
                     # Elles n'arrivent pas ici aujourd'hui : une recharge cadeau mêlée à
@@ -15315,6 +15567,133 @@ class CommandeViewSet(viewsets.ViewSet):
         return render(request, "laboutik/partial/hx_messages.html", context)
 
     # ----------------------------------------------------------------------- #
+    #  2 bis. Ajouter le panier de la caisse a l'addition d'une table          #
+    #  2b. Add the POS cart to a table bill                                    #
+    # ----------------------------------------------------------------------- #
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="ajouter_a_la_table",
+        url_name="ajouter_a_la_table",
+    )
+    def ajouter_a_la_table(self, request):
+        """
+        POST /laboutik/commande/ajouter_a_la_table/
+        Ajoute le panier de la caisse a l'addition de la table choisie.
+        / Adds the POS cart to the chosen table's bill.
+
+        LOCALISATION : laboutik/views.py
+
+        Envoye par le bouton « Ajouter a la table » du ticket
+        (cotton/addition_footer.html), avec tout #addition-form (hx-include).
+
+        Corps (POST form, #addition-form) :
+        - uuid_pv, tag_id_cm, type_app : le point de vente et la carte primaire
+        - id_table : la table choisie
+        - repid-<product>--<price> : les articles du panier
+
+        FLUX :
+        1. Verifie le point de vente, la carte primaire et la table.
+        2. Lit le panier (_extraire_articles_du_panier) et refuse ce qui ne passe
+           pas par une table (services_table.raison_du_refus_d_un_article_de_table).
+        3. services_table.ajouter_le_panier_a_la_table : Vente EN_ATTENTE de
+           l'addition (ouverte au 1er envoi), une commande, table OCCUPEE.
+        4. Repond par un message de succes dans #messages. Le bouton Retour vide
+           le panier (manageReset). Le bandeau de table est mis a jour hors bande.
+        """
+        uuid_pv = request.POST.get("uuid_pv")
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
+
+        tag_id_carte_manager = request.POST.get("tag_id_cm", "")
+        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
+
+        try:
+            table = Table.objects.get(uuid=request.POST.get("id_table"), archive=False)
+        except (Table.DoesNotExist, ValueError, DjangoValidationError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Table introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
+
+        try:
+            articles_du_panier = _extraire_articles_du_panier(
+                request.POST, point_de_vente
+            )
+        except ValueError as erreur_du_panier:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(erreur_du_panier),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        if not articles_du_panier:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Panier vide."),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # Refus AVANT toute ecriture : un seul article refuse bloque l'envoi.
+        # / Refused before any write: one refused article blocks the whole send.
+        for article_du_panier in articles_du_panier:
+            raison_du_refus = raison_du_refus_d_un_article_de_table(article_du_panier)
+            if raison_du_refus is not None:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": raison_du_refus,
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
+        ajouter_le_panier_a_la_table(
+            table,
+            point_de_vente,
+            articles_du_panier,
+            _operateur_de_la_caisse(request, tag_id_carte_manager),
+        )
+
+        context_du_succes = {
+            "msg_type": "success",
+            "msg_content": _("Ajouté à la table %(nom)s") % {"nom": table.name},
+            # Retour : on vide le panier, il est sur l'addition.
+            # / Back: empty the cart, it is on the bill now.
+            "action": "manageReset();",
+            "selector_bt_retour": "#messages",
+        }
+        reponse = render(request, "laboutik/partial/hx_messages.html", context_du_succes)
+        reponse.content = (
+            reponse.content.decode()
+            + _bandeau_de_table_hors_bande(request, table, request.POST)
+        ).encode()
+        return reponse
+
+    # ----------------------------------------------------------------------- #
     #  3. Marquer une commande comme servie                                    #
     #  3. Mark an order as served                                              #
     # ----------------------------------------------------------------------- #
@@ -15429,6 +15808,28 @@ class CommandeViewSet(viewsets.ViewSet):
             context_erreur = {
                 "msg_type": "warning",
                 "msg_content": _("Cette commande ne peut pas être payée"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # Une commande rattachee a l'addition d'une table (services_table.py) se
+        # paie avec toute l'addition, depuis la caisse. La payer seule encaisserait
+        # la vente de l'addition avec ses seuls articles : les autres commandes de
+        # la table pointeraient alors vers une vente reglee sans eux.
+        # / An order on a table bill is paid with the whole bill, from the POS.
+        commande_rattachee_a_une_addition = (
+            commande.vente_id is not None
+            and commande.vente.statut == Vente.Statut.EN_ATTENTE
+        )
+        if commande_rattachee_a_une_addition:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Cette commande fait partie de l'addition de la table : "
+                    "payez l'addition depuis la caisse."
+                ),
                 "selector_bt_retour": "#messages",
             }
             return render(

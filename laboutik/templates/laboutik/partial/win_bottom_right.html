@@ -22,59 +22,52 @@ FLUX D'UNE TOUCHE DE PAIEMENT (Espèces, CB, Chèque, Cashless, Mixte, Offrir) :
 5. Apres la reponse, le champ moyen_prefere est retire : VALIDER du ticket
    rouvre toujours la liste complete.
 
-La touche VALIDER fait exactement ce que fait VALIDER du ticket.
+Avec une table choisie, les touches encaissent toute l'addition de la table
+(ses commandes + le panier en cours) : views.py:_articles_du_panier_et_de_l_addition.
+Le bouton du ticket, lui, ajoute le panier a la table (cotton/addition_footer.html).
 -->
 <nav id="win-bottom-right" aria-label="{% translate 'Paiement' %}">
+  {# Seulement les moyens acceptes par le point de vente, comme les tuiles de    #}
+  {# _tuiles_paiement.html. Cashless : toujours (le serveur l'ecarte d'un panier  #}
+  {# avec recharge payante). Mixte : au moins deux moyens combinables.            #}
+  {# Le serveur garde ses verifications (moyens_paiement, payer).                 #}
+  {# / Only the methods the POS accepts, like the payment tiles.                  #}
+  {% if state.accepte_especes %}
   <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('espece')" data-testid="resto-touche-especes">
     <span class="material-symbols-outlined" aria-hidden="true">payments</span>{% translate "Espèces" %}
   </button>
+  {% endif %}
+  {% if state.accepte_carte_bancaire %}
   <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('carte_bancaire')" data-testid="resto-touche-cb">
     <span class="material-symbols-outlined" aria-hidden="true">credit_card</span>{% translate "CB" %}
   </button>
+  {% endif %}
+  {% if state.accepte_cheque %}
   <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('CH')" data-testid="resto-touche-cheque">
     <span class="material-symbols-outlined" aria-hidden="true">receipt</span>{% translate "Chèque" %}
   </button>
+  {% endif %}
   <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('nfc')" data-testid="resto-touche-cashless">
     <span class="material-symbols-outlined" aria-hidden="true">contactless</span>{% translate "Cashless" %}
   </button>
+  {% if paiement_mixte_possible %}
   <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('mix')" data-testid="resto-touche-mixte">
     <span class="material-symbols-outlined" aria-hidden="true">call_split</span>{% translate "Mixte" %}
   </button>
-  {# Offrir est reserve a la carte primaire en mode gerant, comme la tuile OFFRIR. #}
-  {# Le serveur le verifie aussi (_panier_peut_etre_offert).                       #}
-  {# / Gift is for manager-mode primary cards only; the server checks it too.      #}
-  <button type="button"
-          class="key-touch key-size1 win-bottom-right-g1"
-          onclick="restoPayerAvec('gift')"
-          {% if not card.mode_gerant %}disabled title="{% translate 'Réservé au mode gérant' %}"{% endif %}
-          data-testid="resto-touche-offrir">
+  {% endif %}
+  {# Offrir : carte primaire en mode gerant, comme la tuile OFFRIR.              #}
+  {# Le serveur le verifie aussi (_panier_peut_etre_offert).                     #}
+  {# / Gift: manager-mode primary cards only; the server checks it too.          #}
+  {% if card.mode_gerant %}
+  <button type="button" class="key-touch key-size1 win-bottom-right-g1" onclick="restoPayerAvec('gift')" data-testid="resto-touche-offrir">
     <span class="material-symbols-outlined" aria-hidden="true">redeem</span>{% translate "Offrir" %}
   </button>
-  {# TODO : « Ticket de caisse » et « Envoi prépa » ne sont pas encore branches.  #}
-  {# Envoi prépa devra appeler CommandeViewSet.ouvrir_commande (JSON d'articles). #}
-  {# / Not wired yet: receipt print and send-to-kitchen.                          #}
-  <button type="button" class="key-touch key-size1 c-white bc-info" disabled data-testid="resto-touche-ticket">
-    <span class="material-symbols-outlined" aria-hidden="true">print</span>{% translate "Ticket de caisse" %}
-  </button>
+  {% endif %}
+  {# TODO : « Envoi prépa » n'est pas encore branche.                             #}
+  {# / Not wired yet: send-to-kitchen.                                            #}
   <button type="button" class="key-touch key-size1 c-white bc-purple" disabled data-testid="resto-touche-envoyer-prepa">
     <span class="material-symbols-outlined" aria-hidden="true">soup_kitchen</span>{% translate "Envoi prépa" %}
   </button>
-  <button type="button"
-          class="key-touch key-size3 c-white bc-success win-bottom-right-valider"
-          onclick="displayPaymentTypes()"
-          data-testid="resto-touche-valider">
-    <span class="material-symbols-outlined" aria-hidden="true">check</span>{% translate "Valider" %}
-  </button>
-  <div class="key-size1 win-bottom-right-status" data-testid="resto-statuts">
-    <div class="line-status">
-      <span class="led-status bc-green-led" aria-hidden="true"></span>
-      <span>{% translate "Ventes" %}</span>
-    </div>
-    <div class="line-status">
-      <span class="led-status bc-red-led" aria-hidden="true"></span>
-      <span>{% translate "Note" %}</span>
-    </div>
-  </div>
 </nav>
 
 <script>
@@ -95,11 +88,15 @@ La touche VALIDER fait exactement ce que fait VALIDER du ticket.
 function restoPayerAvec(moyenPrefere) {
   const formulaireAddition = document.querySelector('#addition-form')
 
-  // Panier vide : pas de requete, displayPaymentTypes() affiche le message.
-  // On ne range rien dans le formulaire, sinon le prochain VALIDER le reprendrait.
-  // / Empty cart: no request, nothing stored in the form.
+  // Rien a payer (panier vide, et pas d'addition de table) : pas de requete,
+  // displayPaymentTypes() affiche le message. On ne range rien dans le formulaire,
+  // sinon le prochain VALIDER le reprendrait.
+  // L'addition vient du bandeau de table (partial/_addition_de_table.html).
+  // / Nothing to pay (empty cart, no table bill): no request, nothing stored.
   const panierADesArticles = formulaireAddition.querySelector('input[name^="repid-"]') !== null
-  if (!panierADesArticles) {
+  const bandeauDeTable = document.querySelector('#addition-table')
+  const totalDeLAddition = bandeauDeTable ? Number(bandeauDeTable.dataset.additionTotal) || 0 : 0
+  if (!panierADesArticles && totalDeLAddition <= 0) {
     displayPaymentTypes()
     return
   }

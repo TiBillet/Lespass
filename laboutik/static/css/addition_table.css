@@ -1,0 +1,300 @@
+/* ============================================================
+   ADDITION_TABLE.CSS — bandeau de la table choisie, en tete du ticket
+   / Chosen table banner, on top of the ticket
+
+   LOCALISATION : laboutik/static/css/addition_table.css
+   SOURCE : laboutik/partial/_addition_de_table.html et _pastille_de_table.html
+
+   Le bandeau remplace l'en-tete « Ticket ». Il reprend la tuile de la grille
+   des tables (restaurant_interface.css, .table-tile) : liseré et lavis a la
+   couleur du statut. Les classes .table-statut--* et .table-statut-dot
+   viennent de restaurant_interface.css ; quand cette feuille n'est pas
+   chargee, les regles de repli ci-dessous donnent les memes couleurs.
+   Les lignes deja envoyees reprennent les classes de ligne d'addition.css.
+
+   Uniquement des jetons de palette.css.
+   / Only tokens from palette.css.
+   ============================================================ */
+
+/* Repli des statuts (si restaurant_interface.css est absent)
+   / Status fallback (when restaurant_interface.css is absent) */
+.addition-table.table-statut--libre,
+.addition-table-pastille.table-statut--libre {
+  --statut: var(--table-libre);
+  --statut-wash: var(--table-libre-wash);
+}
+
+.addition-table.table-statut--occupee,
+.addition-table-pastille.table-statut--occupee {
+  --statut: var(--table-occupee);
+  --statut-wash: var(--table-occupee-wash);
+}
+
+.addition-table.table-statut--servie,
+.addition-table-pastille.table-statut--servie {
+  --statut: var(--table-servie);
+  --statut-wash: var(--table-servie-wash);
+}
+
+.addition-table .table-statut-dot,
+.addition-table-pastille .table-statut-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--statut, var(--text-faint));
+  box-shadow: 0 0 0 3px var(--statut-wash, var(--wash-1));
+}
+
+/* --- Bloc complet : bandeau + deja envoye + separateur --- */
+.addition-table {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+/* --- Bandeau : nom + statut a gauche, « Changer » a droite --- */
+.addition-table-bandeau {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 84px;
+  padding: 14px 14px 14px 22px;
+  background-image: linear-gradient(90deg, var(--statut-wash, var(--wash-1)), transparent 80%);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* Liseré gauche dans la teinte du statut / Left stripe in the status hue */
+.addition-table-bandeau::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background-color: var(--statut, transparent);
+}
+
+.addition-table-texte {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.addition-table-nom {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  /* Un nom long passe a la ligne, deux lignes max
+     / A long name wraps, two lines max */
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.addition-table-statut {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-min);
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* « Changer » : meme relief touche que les boutons de la zone bas-gauche
+   / "Change": same key relief as the bottom-left buttons */
+.addition-table-changer {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line), 0 3px 0 var(--shade-3);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-min);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+
+.addition-table-changer .material-symbols-outlined {
+  font-size: 20px;
+  color: var(--valid);
+}
+
+@media (hover: hover) {
+  .addition-table-changer:hover { background-color: var(--surface-3); }
+}
+
+.addition-table-changer:active {
+  transition-duration: 0s;
+  transform: translateY(3px);
+  box-shadow: inset 0 0 0 1px var(--line), 0 0 0 var(--shade-3);
+}
+
+.addition-table-changer:focus-visible {
+  outline: 2px solid var(--nfc);
+  outline-offset: 2px;
+}
+
+/* --- Deja envoye : repliable (details / summary), replie par defaut --- */
+.addition-table-envoye {
+  margin: 6px 6px 0;
+  border-radius: 10px;
+}
+
+.addition-table-envoye > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 8px 0 4px;
+  border-radius: 10px;
+  color: var(--text-dim);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.addition-table-envoye > summary::-webkit-details-marker {
+  display: none;
+}
+
+.addition-table-envoye > summary:focus-visible {
+  outline: 2px solid var(--nfc);
+  outline-offset: 2px;
+}
+
+.addition-table-envoye[open] > summary {
+  background-color: var(--wash-1);
+}
+
+/* transform: rotate() et pas la propriete rotate (WebView SUNMI anciennes)
+   / transform: rotate(), not the standalone rotate property (old WebViews) */
+.addition-table-chevron {
+  font-size: 22px;
+  color: var(--text-faint);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.addition-table-envoye[open] .addition-table-chevron {
+  transform: rotate(90deg);
+}
+
+.addition-table-envoye-titre,
+.addition-table-separateur {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.addition-table-envoye-resume {
+  margin-left: auto;
+  font-size: var(--fs-min);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.addition-table-envoye-resume b {
+  color: var(--text);
+}
+
+/* Liste deja envoyee : defile seule si elle est longue
+   / Sent list: scrolls on its own when long */
+.addition-table-lignes {
+  max-height: 30vh;
+  margin: 0;
+  padding: 0 0 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-3) transparent;
+}
+
+/* Ligne envoyee : texte attenue, icone « envoye » a la place du bouton moins
+   / Sent row: dimmed text, "sent" glyph instead of the minus button */
+.addition-table-ligne {
+  color: var(--text-dim);
+}
+
+.addition-table-ligne .addition-col-quantity,
+.addition-table-ligne .addition-col-price {
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.addition-table-ligne-icone {
+  width: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  color: var(--text-faint);
+}
+
+/* Separateur « Nouvelle commande » : un filet qui court jusqu'au bord
+   / "New order" divider: a hairline running to the edge */
+.addition-table-separateur {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 4px;
+}
+
+.addition-table-separateur::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--line-soft);
+}
+
+/* --- Pastille de la bande repliee (<= 1022 px) / Folded strip chip --- */
+.addition-table-pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 50vw;
+  padding: 4px 10px 4px 8px;
+  border-radius: var(--r-pill);
+  background-color: var(--statut-wash, var(--wash-1));
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.addition-table-pastille-nom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* La pastille n'a de sens que ticket replie : la bande n'existe qu'en dessous
+   de 1023 px (addition.css). / The chip only lives in the folded strip. */
+@media only screen and (min-width: 1023px) {
+  .addition-table-pastille { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .addition-table-changer,
+  .addition-table-chevron { transition: none; }
+  .addition-table-changer:active { transform: none; }
+}

@@ -23,6 +23,9 @@
                   data-label-un="{% translate 'article' %}"
                   data-label-plusieurs="{% translate 'articles' %}"
                   data-testid="addition-count">&mdash;</span>
+            {# Mode restaurant : la table choisie reste visible, ticket replie. #}
+            {# / Restaurant mode: the chosen table stays visible, folded ticket. #}
+            {% if addition_de_table %}{% include "laboutik/partial/_pastille_de_table.html" %}{% endif %}
 {#            <span class="last-added-item"> {% translate 'Dernier ajout : ' %}</span>#}
         </div>
 
@@ -32,6 +35,12 @@
 		</span>
 	</div>
     <div id="addition-responsive-wrapper">
+        {# Mode restaurant, table choisie : le bandeau de la table remplace l'en-tete  #}
+        {# « Ticket », avec les lignes deja envoyees (partial/_addition_de_table.html). #}
+        {# / Restaurant mode, table chosen: the table banner replaces the header.       #}
+        {% if addition_de_table %}
+        {% include "laboutik/partial/_addition_de_table.html" %}
+        {% else %}
         <div class="addition-head">
             <span class="addition-title">{% translate "Ticket" context "receipt" %}</span>
             <span id="addition-count"
@@ -55,6 +64,7 @@
 {#                <span class="addition-vider-label">{% translate "Vider" %}</span>#}
 {#            </button>#}
         </div>
+        {% endif %}
 
         <div id="addition-list" data-empty-text="{% translate 'Panier vide' %}" aria-live="polite">
 
@@ -96,7 +106,10 @@
 		hx-disabled-elt="#bt-valider-layer2, #bt-valider, #addition-bt-valider"
 		hx-on::after-request="hideAndEmptyElement('#confirm')"
 		data-url-reset="{% url 'laboutik-paiement-moyens_paiement' %}">
-		<input type="text" name="id_table" value="{{ id_table }}" />
+		<input type="text" name="id_table" value="{{ id_table|default_if_none:'' }}" />
+		{# type_app : pour l'adresse de la grille des tables (bouton « Changer » du bandeau) #}
+		{# / type_app: for the table grid address (banner "Change" button)                 #}
+		<input type="text" name="type_app" value="{{ type_app }}" />
 		<input type="text" name="uuid_pv" value="{{ pv.id }}" />
 		<input type="text" name="responsable" value="{{ card.name }}" />
 		<input type="text" name="tag_id_cm" value="{{ card.tag_id }}" />

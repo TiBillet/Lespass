@@ -122,5 +122,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#addition-bt-valider').addEventListener('updateSumOfValidateButton', updateSumOfValidateButton)
   // manage bt validate
   document.querySelector('#addition-bt-valider').addEventListener('changeMethodOfValidateButton', changeMethodOfValidateButton)
-  document.querySelector('#addition-bt-valider').addEventListener('click', displayPaymentTypes)
+  // Table choisie (mode restaurant) : le bouton porte son propre hx-post vers
+  // ajouter_a_la_table (cotton/addition_footer.html). Il ne doit pas ouvrir
+  // les moyens de paiement en plus.
+  // / Table chosen: the button has its own hx-post, no payment methods on top.
+  const boutonValider = document.querySelector('#addition-bt-valider')
+  const boutonAjouteALaTable = boutonValider.hasAttribute('hx-post')
+  if (!boutonAjouteALaTable) {
+    boutonValider.addEventListener('click', displayPaymentTypes)
+  }
 })

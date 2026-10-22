@@ -1,0 +1,19 @@
+{% comment %}
+PASTILLE DE LA TABLE CHOISIE, DANS LA BANDE DU TICKET REPLIE (<= 1022 px)
+/ Chosen table chip, in the folded ticket strip
+
+LOCALISATION : laboutik/templates/laboutik/partial/_pastille_de_table.html
+STYLE : laboutik/static/css/addition_table.css
+INCLUS PAR : cotton/addition.html (bande .addition-head-responsive) et
+partial/_addition_de_table.html quand hors_bande (swap hors bande du statut).
+
+CONTEXTE : addition_de_table (services_table.resume_de_l_addition), hors_bande.
+{% endcomment %}
+<span id="addition-table-pastille"
+      class="addition-table-pastille table-statut--{{ addition_de_table.statut_css }}"
+      {% if hors_bande %}hx-swap-oob="true"{% endif %}
+      data-testid="resto-addition-table-pastille">
+  <span class="table-statut-dot" aria-hidden="true"></span>
+  <span class="addition-table-pastille-nom">{{ addition_de_table.nom }}</span>
+  <span class="sr-only">{{ addition_de_table.statut_libelle }}</span>
+</span>

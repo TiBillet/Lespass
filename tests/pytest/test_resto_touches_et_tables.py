@@ -224,7 +224,7 @@ class TestRestoTouchesEtTables(FastTenantTestCase):
     def test_la_nouvelle_table_est_creee_et_choisie(self):
         """
         La table est creee en base, libre, ephemere. La reponse redirige
-        vers l'ecran de cette table, qui s'affiche avec son nom.
+        vers l'ecran de cette table : l'ecran restaurant, avec son nom.
         / The table is created and the response selects it.
         """
         reponse = self._creer_une_table("  Terrasse 4  ")
@@ -236,7 +236,7 @@ class TestRestoTouchesEtTables(FastTenantTestCase):
         self.assertIn(f"id_table={table_creee.uuid}", reponse["Location"])
 
         ecran_de_la_table = self.client_http.get(reponse["Location"])
-        self.assertTemplateUsed(ecran_de_la_table, "laboutik/views/common_user_interface.html")
+        self.assertTemplateUsed(ecran_de_la_table, "laboutik/views/restaurant_interface.html")
         self.assertIn("Terrasse 4", ecran_de_la_table.content.decode())
 
     def test_un_nom_vide_donne_un_nom_automatique(self):

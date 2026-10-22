@@ -7,7 +7,7 @@
    views/restaurant_interface.html)
 
    Toutes les regles sont prefixees par #win-bottom-right : les classes
-   .key-touch / .bc-info / .bc-success existent aussi ailleurs
+   .key-touch / .bc-purple existent aussi ailleurs
    (hx_managed_card.css).
    / Every rule is scoped under #win-bottom-right: these classes also exist
    elsewhere.
@@ -78,36 +78,14 @@
   color: var(--text-dim);
 }
 
-/* Touches d'action : TICKET, ENVOYER EN PREPARATION
-   / Action keys */
-#win-bottom-right .bc-info {
-  --key-bg: var(--info-wash);
-  box-shadow: inset 0 0 0 1px var(--info-edge), 0 3px 0 var(--key-edge);
-}
-
+/* Touche d'action : ENVOI PREPA
+   / Action key */
 #win-bottom-right .bc-purple {
   --key-bg: var(--warn-wash);
   box-shadow: inset 0 0 0 1px var(--warn-edge), 0 3px 0 var(--key-edge);
 }
 
-#win-bottom-right .bc-info .material-symbols-outlined { color: var(--info-ink); }
 #win-bottom-right .bc-purple .material-symbols-outlined { color: var(--warn); }
-
-/* VALIDER : la seule touche pleine, sur 2 cases
-   / VALIDER: the only solid key, spanning 2 cells */
-#win-bottom-right .win-bottom-right-valider {
-  grid-column: span 2;
-  --key-bg: var(--valid-deep);
-  --key-ink: var(--valid-ink);
-  flex-direction: row;
-  gap: 8px;
-  font-size: 1.125rem;
-  box-shadow: 0 3px 0 var(--shade-3);
-}
-
-#win-bottom-right .win-bottom-right-valider .material-symbols-outlined {
-  color: var(--valid-ink);
-}
 
 @media (hover: hover) {
   #win-bottom-right .key-touch:hover { filter: brightness(1.12); }
@@ -131,48 +109,6 @@
   filter: saturate(.4);
   cursor: not-allowed;
   transform: none;
-}
-
-/* --- Voyants VENTES / NOTE / Status lights --- */
-#win-bottom-right .win-bottom-right-status {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 0;
-  padding: 6px 10px;
-  border-radius: var(--r-ctrl);
-  background-color: var(--bg);
-  box-shadow: inset 0 0 0 1px var(--line-soft);
-  color: var(--text-dim);
-  font-size: var(--fs-min);
-}
-
-#win-bottom-right .line-status {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-#win-bottom-right .led-status {
-  flex: none;
-  width: var(--led-size);
-  height: var(--led-size);
-  border-radius: 50%;
-}
-
-#win-bottom-right .bc-green-led {
-  background-color: var(--valid);
-  box-shadow: 0 0 0 3px var(--valid-wash);
-}
-
-#win-bottom-right .bc-red-led {
-  background-color: var(--danger);
-  box-shadow: 0 0 0 3px var(--danger-wash);
 }
 
 @media (prefers-reduced-motion: reduce) {

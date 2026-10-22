@@ -1,19 +1,22 @@
 {% extends "laboutik/base.html" %}
 {% load static i18n %}
 <!--
-INTERFACE MODE RESTAURANT — AUCUNE TABLE CHOISIE
-/ Restaurant mode interface — no table chosen
+INTERFACE MODE RESTAURANT
+/ Restaurant mode interface
 
 LOCALISATION : laboutik/templates/laboutik/views/restaurant_interface.html
 STYLE : laboutik/static/css/restaurant_interface.css
 
 Rendu par CaisseViewSet.point_de_vente (laboutik/views.py) quand le point de vente
-n'est pas en service direct et que l'URL ne porte pas d'id_table.
+n'est pas en service direct.
 
 FLUX :
 1. L'ecran de vente (en-tete, articles, addition, zones du bas) est construit.
-2. Par-dessus, sous l'en-tete, la grille des tables (cotton/tables_definition.html).
-3. Clic sur une table -> rechargement avec id_table -> views/common_user_interface.html.
+2. Sans id_table : par-dessus, sous l'en-tete, la grille des tables
+   (cotton/tables_definition.html).
+3. Clic sur une table -> rechargement avec id_table -> meme ecran, sans la grille.
+   Le ticket montre le bandeau de la table (partial/_addition_de_table.html) et
+   son bouton « Ajouter a la table ». Les touches du bas paient l'addition.
 -->
 {% block content %}
   <c-header :title="title" />
@@ -28,6 +31,30 @@ FLUX :
   {% if not id_table %}
     <c-tables-definition />
   {% endif %}
+  {# Panneau de l'appui long sur un article et indicateur WebSocket :         #}
+  {# les memes que views/common_user_interface.html.                          #}
+  {# / Long-press article panel and WebSocket indicator, as on the sales view. #}
+  <div id="article-panel"></div>
+  <div id="article-panel-backdrop"></div>
+  <script src="{% static 'js/longpress.js' %}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Appui long sur une tuile article : ouvre le panneau contextuel
+      // / Long press on an article tile: opens the contextual panel
+      initLongPress({
+        container: document.querySelector('#products'),
+        selector: '.article-container',
+        delay: 600,
+        moveThreshold: 10
+      })
+
+      // Toucher le fond ferme le panneau / Tapping the backdrop closes the panel
+      document.getElementById('article-panel-backdrop').addEventListener('click', function () {
+        document.getElementById('article-panel').innerHTML = ''
+      })
+    })
+  </script>
+  {% include "laboutik/partial/hx_ws_indicator.html" %}
 {% endblock content %}
 {% block css %}
   <link rel="stylesheet" href="{% static 'css/restaurant_interface.css' %}" />

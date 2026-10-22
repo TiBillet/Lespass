@@ -115,6 +115,33 @@
   height: 100%;
 }
 
+/* Grand ecran : le ticket tient dans sa case de grille. Le contenu (bandeau de
+   table, lignes) defile ; le total et les boutons restent toujours visibles en bas.
+   min-height: 0 est indispensable : sans lui, un element flex ne descend jamais
+   sous la hauteur de son contenu et pousse le bas du ticket hors de la case.
+   / Large screens: the ticket fits its grid cell, its content scrolls, the
+   total and buttons stay visible. min-height: 0 is required for that. */
+@media only screen and (min-width: 1023px) {
+  #addition {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #addition #addition-responsive-wrapper {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  #addition #addition-list {
+    flex: 1 0 auto;
+    min-height: 0;
+    overflow-y: visible;
+  }
+}
+
 /* ============================================================
    GRILLE DES TABLES — cotton/tables_definition.html
    / Table picker grid

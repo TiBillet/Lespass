@@ -19,23 +19,16 @@ TODO : « CB / Espèces » (hx_currency_swap) pointe vers une URL qui n'existe p
     <c-categories direction="row" />
   </div>
   <div class="win-bottom-left-actions">
-    <button type="button"
-            class="wbld-bt bc-place"
-            hx-get="/laboutik/caisse/managed_card/?uuid_pv={{ state.uuid_pv }}"
-            hx-target="#messages"
-            hx-swap="outerHTML"
-            data-testid="resto-action-poser-carte">
-      <span class="material-symbols-outlined" aria-hidden="true">contactless</span>
-      <span class="wbld-bt-label">{% translate "Poser carte" %}</span>
-    </button>
+    {# Meme action que CHECK CARTE du ticket (cotton/addition_footer.html) #}
+    {# / Same action as the ticket's CHECK CARTE                             #}
     <button type="button"
             class="wbld-bt bc-info"
-            hx-get="/laboutik/paiement/verifier_carte/"
+            hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
             hx-target="#messages"
             hx-swap="innerHTML"
-            data-testid="resto-action-verifier-carte">
-      <span class="material-symbols-outlined" aria-hidden="true">credit_card</span>
-      <span class="wbld-bt-label">{% translate "Vérifier carte" %}</span>
+            data-testid="resto-action-check-carte">
+      <span class="material-symbols-outlined" aria-hidden="true">contactless</span>
+      <span class="wbld-bt-label">{% translate "Check carte" %}</span>
     </button>
     <button type="button"
             class="wbld-bt bc-purple"

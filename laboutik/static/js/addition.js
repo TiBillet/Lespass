@@ -698,7 +698,15 @@ function additionDisplayPaymentTypes() {
 		}
 	})
 
-	if (nbArticles <= 0) {
+	// Mode restaurant : une table qui doit deja de l'argent se paie, meme
+	// panier vide. Le total de l'addition vient du bandeau de table
+	// (partial/_addition_de_table.html, data-addition-total en centimes).
+	// / Restaurant mode: a table that already owes money can be paid with an
+	// empty cart. The bill total comes from the table banner.
+	const bandeauDeTable = document.querySelector('#addition-table')
+	const totalDeLAddition = bandeauDeTable ? Number(bandeauDeTable.dataset.additionTotal) || 0 : 0
+
+	if (nbArticles <= 0 && totalDeLAddition <= 0) {
 		document.querySelector('#message-no-article').classList.remove('hide')
 	} else {
 		/**

@@ -7,7 +7,7 @@
    views/restaurant_interface.html)
 
    Moitie haute : categories en ligne (styles de categories.css, partages).
-   Moitie basse : 4 actions carte / table, au style des touches de la refonte.
+   Moitie basse : 3 actions carte / table, au style des touches de la refonte.
    Toutes les regles des boutons sont prefixees par #win-bottom-left :
    les classes .bc-info / .bc-place existent aussi dans hx_managed_card.css.
    / Every button rule is scoped under #win-bottom-left: .bc-* classes also
@@ -64,7 +64,7 @@
   width: 100%;
   min-height: 56px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -113,7 +113,6 @@
 
 /* Une teinte d'accent par action, portee par l'icone
    / One accent hue per action, carried by the icon */
-#win-bottom-left .bc-place .material-symbols-outlined { color: var(--nfc); }
 #win-bottom-left .bc-info .material-symbols-outlined { color: var(--info-ink); }
 #win-bottom-left .bc-purple .material-symbols-outlined { color: var(--warn); }
 #win-bottom-left .bc-table-ephemeral .material-symbols-outlined { color: var(--valid); }
@@ -133,11 +132,15 @@
   outline-offset: 2px;
 }
 
-/* Petits ecrans : icone seule au-dessus du libelle, 2 x 2
-   / Small screens: 2 x 2 grid */
+/* Petits ecrans : les 3 actions restent sur une rangee, icone au-dessus du
+   libelle : empilees, elles prendraient la place des articles.
+   / Small screens: the 3 actions stay on one row, icon above the label. */
 @media only screen and (max-width: 599px) {
-  .win-bottom-left-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  #win-bottom-left .wbld-bt {
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    font-size: 13px;
   }
 }
 

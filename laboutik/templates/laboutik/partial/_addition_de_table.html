@@ -1,0 +1,82 @@
+{% load i18n l10n static laboutik_filters %}
+{% comment %}
+BANDEAU DE LA TABLE CHOISIE, EN TETE DU TICKET (mode restaurant)
+/ Chosen table banner, on top of the ticket (restaurant mode)
+
+LOCALISATION : laboutik/templates/laboutik/partial/_addition_de_table.html
+STYLE : laboutik/static/css/addition_table.css
+INCLUS PAR : cotton/addition.html (a la place de l'en-tete « Ticket »)
+RENDU AUSSI PAR : views.py:_bandeau_de_table_hors_bande() avec hors_bande=True,
+ajoute a la reponse de ajouter_a_la_table() et du paiement d'une table.
+htmx remplace alors #addition-table et #addition-table-pastille (hx-swap-oob).
+
+CONTEXTE :
+- addition_de_table : dict de services_table.resume_de_l_addition()
+  (nom, statut_css, statut_libelle, lignes, nombre_d_articles, total_centimes)
+- url_de_la_grille_des_tables : le point de vente sans id_table
+- hors_bande : True = swap hors bande (reponse htmx)
+
+data-addition-total : total de l'addition en centimes. Lu par
+win_bottom_right.html:restoPayerAvec() et addition.js:additionDisplayPaymentTypes() :
+une table qui doit de l'argent se paie meme avec un panier vide.
+
+Les lignes deja envoyees sont en lecture seule : pas de bouton moins, on ne
+retire pas ce qui est parti. Le bloc se replie (details / summary), replie par
+defaut pour laisser la place a la nouvelle commande.
+{% endcomment %}
+{% if not hors_bande %}<link rel="stylesheet" href="{% static 'css/addition_table.css' %}" />{% endif %}
+<div id="addition-table"
+     class="addition-table table-statut--{{ addition_de_table.statut_css }}"
+     data-addition-total="{{ addition_de_table.total_centimes|unlocalize }}"
+     aria-live="polite"
+     {% if hors_bande %}hx-swap-oob="true"{% endif %}
+     data-testid="resto-addition-table">
+  <div class="addition-table-bandeau">
+    <div class="addition-table-texte">
+      <span class="addition-table-nom" data-testid="resto-addition-table-nom">{{ addition_de_table.nom }}</span>
+      <span class="addition-table-statut" data-testid="resto-addition-table-statut">
+        <span class="table-statut-dot" aria-hidden="true"></span>{{ addition_de_table.statut_libelle }}
+      </span>
+    </div>
+    {# Rechargement complet sans id_table : la vue rend la grille des tables. #}
+    {# / Full reload without id_table: the view renders the table grid.       #}
+    <button type="button"
+            class="addition-table-changer"
+            onclick="window.location = '{{ url_de_la_grille_des_tables|escapejs }}'"
+            data-nav-spinner
+            data-testid="resto-addition-table-changer">
+      <span class="material-symbols-outlined" aria-hidden="true">table_restaurant</span>
+      {% translate "Changer" %}
+    </button>
+  </div>
+
+  {% if addition_de_table.lignes %}
+    <details class="addition-table-envoye" data-testid="resto-addition-table-envoye">
+      <summary>
+        <span class="material-symbols-outlined addition-table-chevron" aria-hidden="true">chevron_right</span>
+        <span class="addition-table-envoye-titre">{% translate "Déjà envoyé" %}</span>
+        <span class="addition-table-envoye-resume">
+          {% blocktrans count nombre=addition_de_table.nombre_d_articles %}{{ nombre }} article{% plural %}{{ nombre }} articles{% endblocktrans %}
+          · <b data-testid="resto-addition-table-total">{{ addition_de_table.total_centimes|euros }}</b>
+        </span>
+      </summary>
+      <ul class="addition-table-lignes" aria-label="{% translate 'Articles déjà envoyés' %}">
+        {% for ligne in addition_de_table.lignes %}
+          <li class="addition-line-grid addition-table-ligne">
+            <span class="addition-table-ligne-icone material-symbols-outlined" aria-hidden="true">check</span>
+            <div class="addition-col-info">
+              <span class="addition-col-name">{{ ligne.nom }}</span>
+              <span class="addition-col-unit">{{ ligne.prix_unitaire_centimes|euros }}</span>
+            </div>
+            <div class="addition-col-right">
+              <span class="addition-col-quantity">{{ ligne.quantite }}</span>
+              <span class="addition-col-price">{{ ligne.total_centimes|euros }}</span>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+    <div class="addition-table-separateur">{% translate "Nouvelle commande" %}</div>
+  {% endif %}
+</div>
+{% if hors_bande %}{% include "laboutik/partial/_pastille_de_table.html" %}{% endif %}
