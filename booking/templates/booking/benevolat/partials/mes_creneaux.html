@@ -13,9 +13,8 @@ Le bouton de retrait poste sur la vue du planning avec depuis=mes_creneaux : la 
 est vide et remplace la ligne, qui disparaît ; un toast confirme (appToast).
 / The withdraw button posts with depuis=mes_creneaux: the empty response replaces the row.
 -->
-{# Les boutons « bv- » viennent de benevolat.css, comme sur la page du planning. #}
-{# / The "bv-" buttons come from benevolat.css, like on the planning page. #}
-<link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
+{# Les boutons « bv- » viennent de benevolat.css, chargé dans le <head> du shell. #}
+{# / The "bv-" buttons come from benevolat.css, loaded in the shell <head>. #}
 <div class="benevolat">
 {% if creneaux %}
     <ul class="list-group mb-4" data-testid="benevolat-mes-creneaux">

@@ -27,9 +27,8 @@ Reçoit du serveur (en-têtes HX-Trigger*) :
 
 {% block title %}{{ planning.name }}{% endblock %}
 
-{% block extra_meta %}
-    <link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
-{% endblock %}
+{# benevolat.css est chargé dans le <head> du shell (pages/<skin>/shell.html). #}
+{# / benevolat.css is loaded in the shell <head>. #}
 
 {% block booking_content %}
 <div class="benevolat" data-testid="benevolat-page">

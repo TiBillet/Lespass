@@ -130,6 +130,14 @@
     {# unstyled until the browser revalidates the file (~25 ms, even cached). #}
     {# The <head> is never swapped, so the sheet stays applied across pages. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+    {# CSS du bénévolat (classes « bv- ») : planning, cartes « Coups de main », #}
+    {# « Mes créneaux ». Dans ce <head> pour la même raison que tb-blocs.css : #}
+    {# une page de planning arrivée par htmx est rendue avec headless.html, qui #}
+    {# n'a pas de bloc extra_meta. Un <link> posé par la page serait perdu. #}
+    {# Chargé AVANT V2.css, qui peut le surcharger. #}
+    {# / Volunteering CSS. In this <head> like tb-blocs.css: an htmx-loaded page #}
+    {# is rendered with headless.html, which has no extra_meta block. #}
+    <link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
     <link rel="stylesheet" href="{% static 'V2/css/V2.css' %}?v=1">
     <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 

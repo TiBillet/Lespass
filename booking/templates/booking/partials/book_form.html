@@ -83,15 +83,9 @@ DEPENDENCIES :
                 {# ce tarif est alors coché d'office. #}
                 {# / True when the resource has a single published price: it is pre-checked. #}
                 {% for price in resource.published_prices %}
-                    <div class="p-3 js-order" data-testid="booking-price-{{ price.uuid }}">
-                        <label for="amount-{{ price.uuid }}" class="form-label">
-                            <strong>{{ price.name }}</strong>
-                            {% if not price.free_price and price.prix > 0 %}&nbsp;:
-                                <span class="js-order-price">{{ price.prix }}</span>&nbsp;€  /h
-                            {% elif price.free_price %}
-                                <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
-                            {% endif %}
-                        </label>
+                    <div class="p-3" data-testid="booking-price-{{ price.uuid }}">
+                        {# Le nom et le prix du tarif sont dans le label du bouton radio, plus bas. #}
+                        {# / The price name and amount live in the radio button label, below. #}
                         {# Ni limite par personne ni stock ici : ces règles portent sur un #}
                         {# événement, pas sur une ressource. Le serveur refuse ce qu'il faut #}
                         {# refuser (booking_engine.validate_new_booking). #}
@@ -183,7 +177,7 @@ DEPENDENCIES :
                                     {% if price.free_price %}
                                         {{ price.name }}
                                     {% else %}
-                                        {{ price.name }} - {{ price.prix }}€ {% translate 'par heure' %}
+                                        {{ price.name }} - {{ price.prix }}€ /h
                                     {% endif %}
                                     {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
                                 </label>
