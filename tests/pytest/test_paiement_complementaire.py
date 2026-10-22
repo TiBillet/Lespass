@@ -444,6 +444,16 @@ class TestPaiementComplementaire(FastTenantTestCase):
         assert 'data-testid="paiement-succes"' in contenu
         assert 'data-testid="paiement-monnaie-a-rendre"' not in contenu
 
+    def test_nfc1_puis_espece_affiche_la_repartition_comme_le_mixte(self):
+        """L'ecran de succes detaille la repartition, comme le paiement mixte :
+        « paiement mixte (carte TiBillet 6.00 € · espèce 9.00 €) ».
+        / The success screen shows the split, like the split payment."""
+        reponse = self._payer_carte1_puis_especes(given_sum='')
+        contenu = reponse.content.decode()
+
+        assert reponse.status_code == 200
+        assert "carte TiBillet 6.00 € · espèce 9.00 €" in contenu
+
     # ------------------------------------------------------------------ #
     #  Test : NFC1 + CB → succès
     # ------------------------------------------------------------------ #
@@ -792,6 +802,9 @@ class TestPaiementComplementaire(FastTenantTestCase):
         # / The success screen shows both cards, each in its own frame.
         assert 'data-testid="succes-carte-1"' in contenu3
         assert 'data-testid="succes-carte-2"' in contenu3
+        # Les deux cartes sont additionnees, le reste suit : comme le mixte.
+        # / Both cards are summed, then the rest: like the split payment.
+        assert "carte TiBillet 14.00 € · espèce 1.00 €" in contenu3
 
     def test_deux_cartes_insuffisantes_puis_cb_debite_les_deux_cartes(self):
         """Reste 1 € en CB : succes, les DEUX cartes debitees, 1 € en CB (pas 9 €).

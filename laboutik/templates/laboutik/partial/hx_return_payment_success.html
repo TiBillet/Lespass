@@ -23,7 +23,9 @@ FLUX :
 1. Le serveur traite le paiement (laboutik-paiement-payer, payer_complementaire...)
 2. Renvoie ce partial dans #messages
 3. Le caissier touche « Nouvelle vente » (ou le fond) : #messages se vide
-   et manageReset() (footer.js) remet le panier a zero.
+   et succesNouvelleVente() (en bas de ce fichier) remet le panier a zero.
+   Mode restaurant : si le paiement portait une table (champ id_table de
+   #addition-form), on revient a la grille des tables pour choisir la suivante.
 
 DONNEES CARTE : cartes_apres_paiement, une entree par carte debitee
 ({"tag_id", "soldes"}). Les soldes viennent de views.py:_calculer_soldes_apres_paiement() :
@@ -37,7 +39,7 @@ cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
   <div data-testid="paiement-succes" aria-live="polite">
     <div class="card-modal" role="dialog" aria-modal="true" aria-labelledby="succes-titre">
       {# Toucher le fond = Nouvelle vente / Tapping the backdrop = New sale #}
-      <div class="card-modal-backdrop" onclick="hideAndEmptyElement('#messages');manageReset()"></div>
+      <div class="card-modal-backdrop" onclick="succesNouvelleVente()"></div>
 
       <div class="card-modal-box succes-box">
 
@@ -200,7 +202,7 @@ cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
           <button type="button"
                   id="bt-retour-layer1"
                   class="card-valider"
-                  onclick="hideAndEmptyElement('#messages');manageReset()"
+                  onclick="succesNouvelleVente()"
                   data-testid="paiement-nouvelle-vente">
             {% translate "OK" %}
           </button>
@@ -210,4 +212,26 @@ cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
       </div>
     </div>
   </div>
+<script>
+/**
+ * Ferme l'ecran de succes et prepare la vente suivante
+ * / Closes the success screen and prepares the next sale
+ *
+ * LOCALISATION : laboutik/templates/laboutik/partial/hx_return_payment_success.html
+ *
+ * - Paiement d'une table (mode restaurant, id_table poste par #addition-form) :
+ *   retour a la grille des tables (point de vente sans id_table).
+ * - Sinon : on vide le panier (footer.js:manageReset), la caisse reste prete.
+ * / Table payment: back to the table grid. Otherwise: empty the cart.
+ */
+function succesNouvelleVente() {
+  hideAndEmptyElement('#messages')
+  {% if request.POST.id_table %}
+    {% url 'laboutik-caisse-point_de_vente' as url_du_point_de_vente %}
+    window.location = '{{ url_du_point_de_vente }}?uuid_pv={{ request.POST.uuid_pv|urlencode }}&tag_id_cm={{ request.POST.tag_id_cm|urlencode }}&type_app={{ request.POST.type_app|default:"unknown"|urlencode }}'
+  {% else %}
+    manageReset()
+  {% endif %}
+}
+</script>
 </div>

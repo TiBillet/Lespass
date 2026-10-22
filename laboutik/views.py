@@ -1301,37 +1301,6 @@ def _verifier_carte_primaire_aupres_de_l_ancien_fedow(carte_primaire_obj):
     return None
 
 
-def _carte_primaire_a_un_point_de_vente_cashless(tag_id_carte_primaire):
-    """
-    La carte primaire du caissier donne-t-elle acces a un point de vente cashless ?
-    / Does the cashier's primary card give access to a cashless POS?
-
-    LOCALISATION : laboutik/views.py
-
-    Regle metier : la zone « Recharger » de la popup check carte ne s'affiche
-    que si la carte primaire a au moins un point de vente CASHLESS.
-    Un caissier de bar sans PV cashless ne voit donc pas la recharge.
-    Sans carte primaire (acces admin par session), pas de recharge non plus.
-    / Business rule: the check card "Top up" zone only shows when the primary
-    card has at least one CASHLESS POS. No primary card: no top-up either.
-
-    Utilise par / Used by : PaiementViewSet.retour_carte()
-
-    :param tag_id_carte_primaire: tag_id de la carte primaire (str, peut etre vide)
-    :return: bool
-    """
-    if not tag_id_carte_primaire:
-        return False
-
-    carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_primaire)
-    if erreur is not None:
-        return False
-
-    return carte_primaire_obj.points_de_vente.filter(
-        comportement=PointDeVente.CASHLESS,
-    ).exists()
-
-
 def obtenir_wallet_carte_depuis_fedow(carte):
     """
     Demande a Fedow (source de verite) le wallet de la carte et le miroir en
@@ -2477,12 +2446,7 @@ def _produits_de_recharge_du_lieu():
     REGLE (decision du 2026-09-18) : la recharge est possible depuis TOUS les
     points de vente, pas seulement ceux qui contiennent le produit (Cashless).
     La vente reste enregistree sur le point de vente ou elle a lieu.
-    MAIS (decision du 2026-09-29) : le check carte ne propose la zone
-    « Recharger » que si la carte primaire du caissier a au moins un point
-    de vente cashless (voir _carte_primaire_a_un_point_de_vente_cashless).
     / Top-ups are allowed from EVERY POS, not only those holding the product.
-    BUT the check card only shows the "Top up" zone when the primary card
-    has a cashless POS.
 
     Un produit est retenu s'il est publie, non archive, et lie a un Asset
     actif et non archive (meme regle que l'ecran de vente).
@@ -2532,8 +2496,7 @@ def _construire_contexte_recharge(
     La zone avance par etapes. Chaque clic renvoie la zone entiere,
     recalculee ici (HTMX, pas d'etat cote JS) :
     1. Choisir QUOI : une tuile par produit de recharge du lieu
-       (monnaie locale RE, cadeau RC, temps TM), depuis n'importe quel PV,
-       si la carte primaire a un PV cashless (sinon retour_carte passe None).
+       (monnaie locale RE, cadeau RC, temps TM), depuis n'importe quel PV.
     2. Choisir COMBIEN : les tarifs du produit (1, 5, 10, Libre...).
     3. Montant libre : un champ de saisie (seulement si le tarif est libre).
     4. Confirmer : le montant, le solde apres recharge, puis
@@ -2549,8 +2512,6 @@ def _construire_contexte_recharge(
 
     :param carte: CarteCashless scannee
     :param point_de_vente: PointDeVente courant, ou None (pas de recharge alors).
-        retour_carte() passe None si la carte primaire n'a aucun PV cashless
-        (voir _carte_primaire_a_un_point_de_vente_cashless).
     :param uuid_produit_choisi: uuid (str) du produit choisi a l'etape 1
     :param uuid_prix_choisi: uuid (str) du tarif choisi a l'etape 2
     :param montant_libre_saisi: centimes (int) valides par le serializer, ou None
@@ -5378,6 +5339,58 @@ def vente_imprimable_a_la_caisse(vente):
         and nature_avec_ticket
         and vente.point_de_vente_id is not None
     )
+
+
+# Libelle d'un reglement de la caisse pour l'ecran de succes. Tout ce qui n'est pas
+# especes, CB, cheque ou offert a ete paye par la carte du client (monnaie locale,
+# cadeau, federee...).
+# / Success screen label of a register payment; anything else is the customer card.
+LIBELLES_DES_REGLEMENTS_POUR_LE_SUCCES = {
+    PaymentMethod.CASH: PAYMENT_METHOD_TRANSLATIONS["espece"],
+    PaymentMethod.CC: PAYMENT_METHOD_TRANSLATIONS["carte_bancaire"],
+    PaymentMethod.CHEQUE: PAYMENT_METHOD_TRANSLATIONS["CH"],
+    PaymentMethod.FREE: PAYMENT_METHOD_TRANSLATIONS["gift"],
+}
+
+
+def _libelle_du_paiement_par_carte_et_complement(uuid_de_la_vente):
+    """
+    Le libelle d'un paiement carte TiBillet complete par un autre moyen, comme celui
+    du paiement mixte : « paiement mixte (carte TiBillet 10.00 € · espèce 2.00 €) ».
+    / Label of a card payment completed with another method, like the split payment.
+
+    LOCALISATION : laboutik/views.py
+
+    Les montants sont lus dans les reglements de la vente, deja reglee : ce sont
+    exactement les sommes encaissees. Les reglements d'un meme moyen sont additionnes
+    (deux cartes, ou plusieurs monnaies d'une carte = « carte TiBillet »).
+
+    Appelee par / Called by : _executer_paiement_complementaire() (les deux ecrans
+    de succes du complement).
+
+    :param uuid_de_la_vente: uuid (str) de la vente reglee, ou ""
+    :return: str, ou "" si la vente est introuvable
+    """
+    if not uuid_de_la_vente:
+        return ""
+
+    montants_par_libelle = {}
+    for reglement in Reglement.objects.filter(vente_id=uuid_de_la_vente):
+        libelle_du_reglement = LIBELLES_DES_REGLEMENTS_POUR_LE_SUCCES.get(
+            reglement.moyen, _("carte TiBillet")
+        )
+        montant_deja_vu = montants_par_libelle.get(libelle_du_reglement, 0)
+        montants_par_libelle[libelle_du_reglement] = montant_deja_vu + reglement.montant
+
+    parts_du_paiement = []
+    for libelle_du_reglement, montant_en_centimes in montants_par_libelle.items():
+        parts_du_paiement.append(
+            f"{libelle_du_reglement} {montant_en_centimes / 100:.2f} "
+            f"{CURRENCY_DATA['symbol']}"
+        )
+    if not parts_du_paiement:
+        return ""
+    return f"{PAYMENT_METHOD_TRANSLATIONS['mix']} ({' · '.join(parts_du_paiement)})"
 
 
 def _uuid_de_la_vente_du_paiement(uuid_transaction):
@@ -13081,12 +13094,18 @@ class PaiementViewSet(viewsets.ViewSet):
                     somme_donnee_en_centimes - montant_paye_en_complement
                 ) / 100
 
+            # Libelle comme le paiement mixte : « paiement mixte (carte TiBillet
+            # 10.00 € · espèce 2.00 €) », lu dans les reglements de la vente.
+            # / Label like the split payment, read from the sale's payments.
+            libelle_du_paiement = _libelle_du_paiement_par_carte_et_complement(
+                _uuid_de_la_vente_du_paiement(uuid_transaction)
+            )
             context_succes = {
                 "currency_data": CURRENCY_DATA,
                 "payment": donnees_paiement,
                 "monnaie_name": nom_monnaie_principal,
-                "moyen_paiement": moyen_complement,
-                "original_payment": True,
+                "moyen_paiement": libelle_du_paiement or moyen_complement,
+                "original_payment": None,
                 "original_moyen_paiement": _("NFC"),
                 "deposit_is_present": False,
                 "total": total_centimes / 100,
@@ -13913,15 +13932,21 @@ class PaiementViewSet(viewsets.ViewSet):
                 nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
                 nom_monnaie_principal = soldes_apres_paiement[0]["name"]
 
-            # Moyen affiche : « NFC » si les cartes ont tout paye, sinon
-            # « NFC / especes » ou « NFC / CB » comme la branche especes/CB.
-            # / Shown method: "NFC", or "NFC / cash|CC" when the rest was paid otherwise.
+            # Moyen affiche : « NFC » si les cartes ont tout paye.
+            # / Shown method: "NFC" when the cards paid everything.
+            # Reste paye en especes ou CB : libelle comme le paiement mixte,
+            # « paiement mixte (carte TiBillet 10.00 € · espèce 2.00 €) ».
+            # / Rest paid in cash or card: label like the split payment.
             if lignes_reste_apres_carte2:
-                moyen_paiement_affiche = moyen_reste_apres_carte2
-                original_payment_affiche = True
+                moyen_paiement_affiche = (
+                    _libelle_du_paiement_par_carte_et_complement(
+                        _uuid_de_la_vente_du_paiement(uuid_transaction)
+                    )
+                    or moyen_reste_apres_carte2
+                )
             else:
                 moyen_paiement_affiche = _("NFC")
-                original_payment_affiche = None
+            original_payment_affiche = None
 
             context_succes = {
                 "currency_data": CURRENCY_DATA,
@@ -14029,22 +14054,14 @@ class PaiementViewSet(viewsets.ViewSet):
         prenom_carte = carte.user.first_name if carte.user else None
         couleur_fond = "--success" if email_carte else "--warning"
 
-        # 6. Zone « Recharger » : les produits de recharge du point de vente courant.
-        #    uuid_pv et tag_id_cm viennent de #addition-form (hx-include sur
-        #    #form-check-nfc, voir hx_check_card.html).
-        #    La zone ne s'affiche que si la carte primaire a un PV cashless,
-        #    et seulement avec un PV valide.
-        # 6. "Top up" zone: the current POS top-up products. uuid_pv and tag_id_cm
-        #    come from #addition-form. Shown only if the primary card has a
-        #    cashless POS, and only with a valid POS.
-        tag_id_carte_primaire = request.POST.get("tag_id_cm", "").strip().upper()
-        la_recharge_est_permise = _carte_primaire_a_un_point_de_vente_cashless(
-            tag_id_carte_primaire
-        )
-
+        # 6. Zone « Recharger » : les produits de recharge du lieu, toujours
+        #    proposes des que le point de vente courant est connu. uuid_pv vient
+        #    de #addition-form (hx-include sur #form-check-nfc, voir hx_check_card.html).
+        # 6. "Top up" zone: the venue top-up products, always offered as soon as
+        #    the current POS is known. uuid_pv comes from #addition-form.
         point_de_vente_courant = None
         uuid_pv_recu = request.POST.get("uuid_pv", "").strip()
-        if uuid_pv_recu and la_recharge_est_permise:
+        if uuid_pv_recu:
             try:
                 point_de_vente_courant = PointDeVente.objects.get(uuid=uuid_pv_recu)
             except (PointDeVente.DoesNotExist, ValueError, DjangoValidationError):

@@ -14,7 +14,8 @@
   est partie en préparation (coche) ou si elle est « à envoyer » (horloge, et une
   pastille « N à envoyer » dans le résumé). En mobile, une pastille de table
   s'affiche dans la bande du ticket replié. Une table inconnue ramène à la grille.
-- **Addition de table (une Vente en attente)** : la touche « Ajouter à la table » Il poste vers `POST /laboutik/commande/ajouter_a_la_table/`.
+- **Addition de table (une Vente en attente)** : la touche « Ajouter à la table »
+  poste vers `POST /laboutik/commande/ajouter_a_la_table/`.
   Le 1er envoi ouvre une `Vente` EN_ATTENTE, sans article ni règlement. Chaque envoi
   crée une `CommandeSauvegarde` rattachée à cette vente (`commande.vente`), et la table
   passe Occupée. Les retours de consigne, tarifs en points, tarifs au poids ou à prix
@@ -24,7 +25,17 @@
   chèque, offert, mixte, NFC et complément NFC reprennent la vente de l'addition au lieu
   d'en ouvrir une. Après l'encaissement, les commandes passent PAID et la table Libre.
   Le bandeau est mis à jour hors bande. `payer_commande` refuse une commande qui fait
-  partie d'une addition.
+  partie d'une addition. Après un paiement avec une table, le bouton OK de l'écran de
+  succès (ou le fond) ramène à la grille des tables, pour choisir la suivante.
+  Avec un panier vide, le champ `total` vide de `#addition-form` provoquait une 500 :
+  le serveur ne le lit plus et prend le total calculé depuis les articles.
+- **Carte TiBillet complétée par un autre moyen** (fonds insuffisants) : l'écran de
+  succès affiche la répartition comme le paiement mixte, par exemple
+  « paiement mixte (carte TiBillet 10.00 € · espèce 2.00 €) ». Les montants sont lus
+  dans les règlements de la vente, et ceux de deux cartes sont additionnés.
+- **Check carte** : la zone « Recharger » s'affiche toujours, dès que le point de
+  vente est connu. La règle « la carte primaire doit avoir un PV cashless »
+  (`_carte_primaire_a_un_point_de_vente_cashless`) est supprimée.
 - **Envoi prépa** : `POST /laboutik/commande/envoyer_en_preparation/`. Si le panier
   n'est pas vide, il est d'abord ajouté à la table. Ensuite, les articles de la table
   qui ne sont pas encore partis passent EN_COURS. Après le commit, un ticket est
@@ -71,8 +82,12 @@ l'en-tête, et les zones du bas disparaissaient.
 | `laboutik/templates/laboutik/partial/win_bottom_left.html`, `win_bottom_left.css` | « Poser carte » retiré, « Check carte », 3 actions |
 | `laboutik/templates/laboutik/views/restaurant_interface.html` | Écran aussi avec une table ; panneau appui long + indicateur WebSocket |
 | `laboutik/static/css/restaurant_interface.css` | Bas du ticket toujours visible (min-height: 0) |
-| `tests/pytest/test_resto_addition_table.py` | Nouveau : 20 tests |
+| `tests/pytest/test_resto_addition_table.py` | Nouveau : 19 tests |
 | `tests/pytest/test_resto_touches_et_tables.py` | Écran de la table : gabarit restaurant |
+| `laboutik/templates/laboutik/partial/hx_return_payment_success.html` | `succesNouvelleVente()` : retour à la grille après le paiement d'une table |
+| `laboutik/templates/laboutik/partial/hx_check_card.html`, `hx_card_recharge.html` | Documentation : la recharge s'affiche toujours |
+| `tests/pytest/test_paiement_complementaire.py` | +1 test, +1 vérification : libellé de la répartition |
+| `tests/pytest/test_retour_carte_recharge.py` | La recharge s'affiche sans PV cashless et sans carte primaire |
 
 ---
 
@@ -97,6 +112,14 @@ Prérequis : PV « Terrasse » (`service_direct = False`, `accepte_commandes = T
    l'addition → valider.
 2. Vente réglée et numérotée. Le bandeau repasse « Libre », « Déjà envoyé » disparaît.
 3. Recommencer avec un article dans le panier : il est encaissé avec l'addition.
+
+### Test 2 bis — après le paiement, carte complétée, recharge
+1. Payer une table → écran de succès → OK : la grille des tables s'affiche.
+2. Sans table, payer un panier → OK : la caisse reste sur l'écran de vente, panier vidé.
+3. Payer 15 € avec une carte qui n'a que 6 € → compléter en espèces : le succès affiche
+   « paiement mixte (carte TiBillet 6.00 € · espèce 9.00 €) ».
+4. Check carte depuis un PV, avec une carte primaire sans PV cashless : la zone
+   « Recharger » est là.
 
 ### Test 3 — cas limites
 - Retour de consigne, tarif au poids : « Ajouter à la table » refuse, rien en base.

@@ -275,6 +275,13 @@ class TestRestoAdditionTable(FastTenantTestCase):
         self.assertEqual(commande.statut, CommandeSauvegarde.PAID)
         self.table.refresh_from_db()
         self.assertEqual(self.table.statut, Table.LIBRE)
+        # OK de l'ecran de succes : retour a la grille des tables (sans id_table).
+        # / Success OK: back to the table grid.
+        html = reponse.content.decode()
+        self.assertIn(
+            f"window.location = '/laboutik/caisse/point_de_vente/?uuid_pv={self.point_de_vente.uuid}",
+            html,
+        )
 
     def test_payer_la_table_encaisse_aussi_le_panier_en_cours(self):
         """

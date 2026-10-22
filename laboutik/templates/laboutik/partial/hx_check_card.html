@@ -24,9 +24,9 @@ hx-include : envoie aussi uuid_pv et tag_id_cm (lus dans #addition-form) a
 retour_carte(). Le serveur en a besoin pour la zone « Recharger » de
 hx_card_feedback.html :
 - uuid_pv : la recharge est enregistree sur le point de vente courant ;
-- tag_id_cm : la zone ne s'affiche que si la carte primaire a un PV cashless.
+- tag_id_cm : la carte primaire du caissier.
 / hx-include also sends uuid_pv (top-up recorded on the current POS) and
-tag_id_cm (zone shown only if the primary card has a cashless POS).
+tag_id_cm (the cashier's primary card).
 -->
 <c-V2.read-nfc selector="#messages" input-selector="#nfc-tag-id" form-selector="#form-check-nfc" submit-url="{% url 'laboutik-paiement-retour_carte' %}">
 <form id="form-check-nfc"
