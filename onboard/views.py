@@ -1491,7 +1491,7 @@ class OnboardViewSet(viewsets.ViewSet):
     def venue(self, request):
         """
         GET  `/onboard/venue/` -> rend l'étape « Votre lieu » : recherche
-        Tiers-Lieux + nom du lieu + domaine (slug éditable + suffixe .coop/.re).
+        Tiers-Lieux + nom du lieu + domaine (slug éditable + suffixe tibillet.coop).
         POST `/onboard/venue/` -> valide nom + slug + domaine, met à jour le
         brouillon, et redirige vers `onboard-place` (adresse).
 
@@ -1509,19 +1509,27 @@ class OnboardViewSet(viewsets.ViewSet):
         if redirect_response is not None:
             return redirect_response
 
-        # Suffixes DNS derives de l'environnement (source unique). Le 1er est le
-        # choix par defaut. / Env-derived DNS suffixes (single source). 1st = default.
-        from onboard.services import dns_suffixes_disponibles
-        dns_choices = dns_suffixes_disponibles()
+        # Suffixes DNS proposes : la meme liste que celle validee par le
+        # serializer (pour l'instant, le seul 1er suffixe derive de l'env).
+        # / Offered DNS suffixes: same list as the serializer validates.
+        from onboard.serializers import DNS_CHOICES
+        dns_choices = list(DNS_CHOICES)
 
         if request.method == "GET":
+            # Un brouillon peut porter un ancien suffixe qui n'est plus propose :
+            # on retombe alors sur le 1er suffixe disponible.
+            # / A draft may hold a suffix no longer offered: fall back to the 1st.
+            dns_choice_initial = wc.dns_choice
+            if dns_choice_initial not in dns_choices:
+                dns_choice_initial = dns_choices[0]
+
             return render(request, "onboard/steps/03_venue.html", {
                 "step": "venue", "wc": wc,
                 "dns_choices": dns_choices,
                 "initial": {
                     "name": wc.organisation,
                     "slug": wc.slug,
-                    "dns_choice": wc.dns_choice or dns_choices[0],
+                    "dns_choice": dns_choice_initial,
                 },
             })
 
