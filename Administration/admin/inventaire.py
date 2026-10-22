@@ -102,10 +102,11 @@ class StockAdmin(ModelAdmin):
     """
     Admin des stocks produits.
     L'article, la quantité et l'unité sont en lecture seule.
-    Le seuil d'alerte et le flag de vente hors stock sont modifiables.
+    Le seuil d'alerte, le flag de vente hors stock et le suivi actif sont modifiables.
+    Décocher « Suivi actif » met le suivi en pause sans perdre l'historique.
     / Product stock admin.
     Article, quantity and unit are read-only.
-    Alert threshold and out-of-stock flag are editable.
+    Alert threshold, out-of-stock flag and tracking switch are editable.
 
     LOCALISATION : Administration/admin/inventaire.py
     """
@@ -145,9 +146,11 @@ class StockAdmin(ModelAdmin):
         display_stock_unite,
         "seuil_alerte",
         "autoriser_vente_hors_stock",
+        "suivi_actif",
     ]
-    list_editable = ["seuil_alerte", "autoriser_vente_hors_stock"]
+    list_editable = ["seuil_alerte", "autoriser_vente_hors_stock", "suivi_actif"]
     list_display_links = [display_stock_article]
+    list_filter = ["suivi_actif"]
 
     fields = [
         "product",
@@ -194,6 +197,7 @@ class StockAdmin(ModelAdmin):
                 "unite",
                 "seuil_alerte",
                 "autoriser_vente_hors_stock",
+                "suivi_actif",
             ]
         return [
             "product",

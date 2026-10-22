@@ -216,10 +216,13 @@ def donnees_badge_stock(stock):
     - data-stock-quantite : quantité disponible ;
     - data-autoriser-hors-stock : "false" si la vente hors stock est interdite ;
     - data-stock-bloquant : rupture ET vente hors stock interdite.
+    Suivi en pause (suivi_actif=False) : le badge est rendu vide, sans data-stock-*.
+    La garde JS ne trouve plus de quantité et laisse vendre.
+    / Paused tracking: empty badge, no data-stock-*, the JS guard lets the sale through.
 
     :param stock: instance inventaire.models.Stock
-    :return: dict {product_uuid, quantite, unite, en_alerte, en_rupture, bloquant,
-             autoriser_vente_hors_stock, quantite_lisible}
+    :return: dict {product_uuid, suivi_actif, quantite, unite, en_alerte, en_rupture,
+             bloquant, autoriser_vente_hors_stock, quantite_lisible}
     """
     # Import local : laboutik.views importe ce module (évite l'import circulaire)
     # / Local import: laboutik.views imports this module (avoids circular import)
@@ -227,6 +230,7 @@ def donnees_badge_stock(stock):
 
     return {
         "product_uuid": str(stock.product_id),
+        "suivi_actif": stock.suivi_actif,
         "quantite": stock.quantite,
         "unite": stock.unite,
         "en_alerte": stock.est_en_alerte(),

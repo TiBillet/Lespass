@@ -46,11 +46,10 @@ ANCRE_SECTION_STOCK = "section-stock"
 # Champs conditionnels de la section Stock, appliqués par le JS générique
 # Administration/static/admin/js/inline_conditional_fields.js.
 # Tant que « Suivre le stock » n'est pas coché, les autres champs sont cachés.
-# Quand le produit a déjà un stock, la case n'est pas affichée :
-# le JS ne trouve pas le champ source et laisse tout visible.
+# Avec un stock existant, la case reste affichée : la décocher met le suivi en pause.
+# La quantité de départ n'est alors pas rendue : le JS ignore une cible absente.
 # / Stock section conditional fields, applied by the generic JS.
-# Hidden until "Track stock" is checked. With an existing stock, the switch
-# is not rendered: the JS finds no source field and keeps everything visible.
+# Hidden until "Track stock" is checked. The switch also pauses an existing stock.
 CLE_REGLES_FORMULAIRE_PRINCIPAL = "__formulaire_principal__"
 REGLES_CONDITIONNELLES_SECTION_STOCK = {
     "stock_quantite_initiale": "stock_suivi == true",
@@ -164,7 +163,12 @@ class ChampsStockFicheProduitMixin(forms.Form):
             self.fields["stock_unite"].initial = self.unite_stock_par_defaut
             return
 
-        self.fields["stock_suivi"].initial = True
+        self.fields["stock_suivi"].initial = stock_existant.suivi_actif
+        self.fields["stock_suivi"].help_text = _(
+            "Décochez pour mettre le suivi en pause. "
+            "Les ventes ne décomptent plus le stock et la caisse n'affiche plus "
+            "de pastille. L'historique des mouvements est conservé."
+        )
         self.fields["stock_unite"].initial = stock_existant.unite
         self.fields["stock_seuil_alerte"].initial = stock_existant.seuil_alerte
         self.fields[
@@ -200,6 +204,17 @@ def panneau_operations_stock(produit):
     if stock is None:
         return "—"
 
+    # Suivi en pause : pas d'opération possible tant qu'il n'est pas réactivé
+    # / Tracking paused: no operation until it is turned back on
+    if not stock.suivi_actif:
+        return format_html(
+            '<p data-testid="product-stock-suivi-en-pause">{}</p>',
+            _(
+                "Suivi en pause. Cochez « Suivre le stock » et enregistrez "
+                "pour faire des opérations."
+            ),
+        )
+
     derniers_mouvements = (
         MouvementStock.objects.filter(stock=stock)
         .exclude(type_mouvement__in=[TypeMouvement.VE, TypeMouvement.DM])
@@ -225,14 +240,15 @@ def fieldset_section_stock(produit):
     Construit le fieldset « Stock » à ajouter à la fin des fieldsets du produit.
     / Builds the "Stock" fieldset appended to the product fieldsets.
 
-    Trois cas :
+    Deux cas :
     - produit sans stock (création ou modification) : case « Suivre le stock »,
       quantité de départ et réglages ;
-    - produit avec stock : réglages + panneau d'opérations.
-      La case et la quantité de départ disparaissent :
+    - produit avec stock : case « Suivre le stock » (la décocher met le suivi
+      en pause), réglages + panneau d'opérations.
+      La quantité de départ disparaît :
       le stock se modifie par des mouvements tracés, pas par un champ.
     / Without stock: tracking switch + starting quantity + settings.
-    With stock: settings + operations panel.
+    With stock: tracking switch (unchecking pauses it), settings + operations panel.
     """
     # La description porte l'ancre et la règle à retenir
     # / The description carries the anchor and the rule to remember
@@ -256,6 +272,7 @@ def fieldset_section_stock(produit):
         )
     else:
         champs_de_la_section = (
+            "stock_suivi",
             "stock_unite",
             "stock_seuil_alerte",
             "stock_vente_hors_stock",
@@ -288,8 +305,8 @@ def enregistrer_section_stock(request, produit, donnees_validees):
 
     - Pas de stock et « Suivre le stock » coché :
       StockService.creer_stock_initial (stock + mouvement « Stock initial »).
-    - Stock existant : met à jour les 3 réglages s'ils ont changé,
-      puis prévient les caisses (la tuile peut se débloquer).
+    - Stock existant : met à jour le suivi (actif ou en pause) et les 3 réglages
+      s'ils ont changé, puis prévient les caisses (la tuile peut se débloquer).
       Aucun mouvement : la quantité ne change jamais ici.
     - Pas de stock et case décochée : rien.
 
@@ -297,9 +314,12 @@ def enregistrer_section_stock(request, produit, donnees_validees):
     :param produit: Product déjà enregistré
     :param donnees_validees: form.cleaned_data
     """
+    from django.contrib import messages
+
     from inventaire.services import StockService
     from wsocket.broadcast import broadcast_etat_stock
 
+    suivi_demande = bool(donnees_validees.get("stock_suivi"))
     unite_choisie = donnees_validees.get("stock_unite") or UniteStock.UN
     seuil_choisi = donnees_validees.get("stock_seuil_alerte")
     vente_hors_stock_choisie = bool(donnees_validees.get("stock_vente_hors_stock"))
@@ -308,7 +328,6 @@ def enregistrer_section_stock(request, produit, donnees_validees):
 
     # --- Pas encore de stock ---
     if stock_existant is None:
-        suivi_demande = bool(donnees_validees.get("stock_suivi"))
         if not suivi_demande:
             return
 
@@ -323,8 +342,22 @@ def enregistrer_section_stock(request, produit, donnees_validees):
         )
         return
 
-    # --- Stock existant : mise à jour des réglages seulement ---
+    # --- Stock existant : mise à jour du suivi et des réglages seulement ---
     reglages_modifies = []
+    if stock_existant.suivi_actif != suivi_demande:
+        stock_existant.suivi_actif = suivi_demande
+        reglages_modifies.append("suivi_actif")
+
+        # Pendant la pause, les ventes n'ont rien décompté : la quantité est périmée
+        # / While paused, sales were not counted: the quantity is outdated
+        if suivi_demande:
+            messages.info(
+                request,
+                _(
+                    "Suivi du stock réactivé. La quantité n'a pas bougé pendant "
+                    "la pause : faites un ajustement d'inventaire si besoin."
+                ),
+            )
     if stock_existant.unite != unite_choisie:
         stock_existant.unite = unite_choisie
         reglages_modifies.append("unite")
@@ -380,7 +413,7 @@ def html_badge_stock_avec_lien(produit, nom_url_fiche_produit):
 
     LOCALISATION : Administration/admin/stock_fiche_produit.py
 
-    - Pas de stock suivi : « — », pas de lien.
+    - Pas de stock, ou suivi en pause : « — », pas de lien.
     - Sinon : quantité lisible (ex : « 1.5 L ») dans un badge coloré.
       Rouge = épuisé, orange = sous le seuil, vert = ok.
     - Épuisé mais vente hors stock autorisée : badge rouge avec le chiffre
@@ -397,7 +430,7 @@ def html_badge_stock_avec_lien(produit, nom_url_fiche_produit):
     from Administration.admin.inventaire import _formater_quantite_lisible
 
     stock = stock_du_produit_ou_none(produit)
-    if stock is None:
+    if stock is None or not stock.suivi_actif:
         return "—"
 
     etat = etat_du_stock(stock)
@@ -462,7 +495,8 @@ class EtatStockFilter(admin.SimpleListFilter):
 
     Mêmes règles que Stock.est_en_rupture() et Stock.est_en_alerte(),
     écrites en requête pour filtrer en base.
-    / Same rules as the model methods, written as queries.
+    Un stock en pause (suivi_actif=False) compte comme « Non suivi ».
+    / Same rules as the model methods, written as queries. Paused = not tracked.
     """
 
     title = _("État du stock")
@@ -479,10 +513,14 @@ class EtatStockFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         valeur_choisie = self.value()
 
+        # Les états rupture / alerte / ok ne concernent que les stocks suivis
+        # / Out / alert / ok states only apply to tracked stocks
+        produits_suivis = queryset.filter(stock_inventaire__suivi_actif=True)
+
         # Rupture : quantité à 0 ou négative
         # / Out of stock: quantity 0 or less
         if valeur_choisie == "rupture":
-            return queryset.filter(stock_inventaire__quantite__lte=0)
+            return produits_suivis.filter(stock_inventaire__quantite__lte=0)
 
         # Alerte : un seuil existe, et 0 < quantité <= seuil
         # / Alert: a threshold exists, and 0 < quantity <= threshold
@@ -492,19 +530,21 @@ class EtatStockFilter(admin.SimpleListFilter):
             stock_inventaire__quantite__lte=F("stock_inventaire__seuil_alerte"),
         )
         if valeur_choisie == "alerte":
-            return queryset.filter(condition_alerte)
+            return produits_suivis.filter(condition_alerte)
 
         # OK : un stock existe, pas en rupture, pas en alerte
         # / OK: stock exists, not out, not in alert
         if valeur_choisie == "ok":
-            return queryset.filter(
-                stock_inventaire__isnull=False,
+            return produits_suivis.filter(
                 stock_inventaire__quantite__gt=0,
             ).exclude(condition_alerte)
 
-        # Non suivi : le produit n'a pas de stock
-        # / Not tracked: the product has no stock
+        # Non suivi : le produit n'a pas de stock, ou son suivi est en pause
+        # / Not tracked: no stock, or tracking paused
         if valeur_choisie == "non_suivi":
-            return queryset.filter(stock_inventaire__isnull=True)
+            return queryset.filter(
+                Q(stock_inventaire__isnull=True)
+                | Q(stock_inventaire__suivi_actif=False)
+            )
 
         return queryset

@@ -206,6 +206,7 @@ class TestEnregistrerSectionStock:
                 SimpleNamespace(user=admin_user),
                 produit_caisse_sans_stock,
                 {
+                    "stock_suivi": True,
                     "stock_unite": "UN",
                     "stock_seuil_alerte": 4,
                     "stock_vente_hors_stock": False,
@@ -507,3 +508,219 @@ class TestCreationProduitAvecStock:
             finally:
                 if produit_cree is not None:
                     produit_cree.delete()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Suivi du stock en pause / Paused stock tracking
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _poster_la_fiche_produit(admin_client, produit, suivi_coche):
+    """
+    POST de la fiche d'un produit de caisse existant (sans tarif).
+    « Suivre le stock » est coché ou non selon suivi_coche.
+    / Change POST of an existing POS product (no price), with or without tracking.
+    """
+    from BaseBillet.models import Product
+
+    donnees_du_formulaire = {
+        "name": produit.name,
+        "categorie_article": Product.NONE,
+        "methode_caisse": Product.VENTE,
+        "poids": "0",
+        "prix_achat": "0",
+        "publish": "on",
+        "stock_unite": "UN",
+        "stock_seuil_alerte": "",
+        "stock_vente_hors_stock": "on",
+        "prices-TOTAL_FORMS": "0",
+        "prices-INITIAL_FORMS": "0",
+        "prices-MIN_NUM_FORMS": "0",
+        "prices-MAX_NUM_FORMS": "1000",
+        "_save": "Enregistrer",
+    }
+    # Une case décochée n'est pas envoyée par le navigateur
+    # / An unchecked box is not sent by the browser
+    if suivi_coche:
+        donnees_du_formulaire["stock_suivi"] = "on"
+
+    reponse = admin_client.post(
+        f"/admin/BaseBillet/posproduct/{produit.pk}/change/",
+        data=donnees_du_formulaire,
+    )
+    erreurs = (
+        reponse.context["adminform"].form.errors
+        if reponse.status_code == 200
+        else None
+    )
+    assert reponse.status_code == 302, erreurs
+    return reponse
+
+
+class TestSuiviDuStockEnPause:
+    def test_17_fiche_avec_stock_affiche_la_case_suivre_le_stock(
+        self, admin_client, tenant, produit_caisse_sans_stock
+    ):
+        """Stock existant → la case « Suivre le stock » reste affichée et cochée."""
+        _creer_stock(tenant, produit_caisse_sans_stock, quantite=8)
+
+        reponse = admin_client.get(
+            f"/admin/BaseBillet/posproduct/{produit_caisse_sans_stock.pk}/change/"
+        )
+        assert reponse.status_code == 200
+        formulaire = reponse.context["adminform"].form
+        assert "stock_suivi" in formulaire.fields
+        assert formulaire.fields["stock_suivi"].initial is True
+
+    def test_18_decocher_met_le_suivi_en_pause_et_garde_l_historique(
+        self, admin_client, tenant, produit_caisse_sans_stock
+    ):
+        """
+        Décocher « Suivre le stock » sur un produit avec stock :
+        suivi_actif passe à False, le stock et ses mouvements restent.
+        / Unchecking pauses tracking; stock and movements are kept.
+        """
+        with tenant_context(tenant):
+            from inventaire.services import StockService
+
+            stock = StockService.creer_stock_initial(
+                product=produit_caisse_sans_stock,
+                unite="UN",
+                quantite_initiale=15,
+            )
+
+        _poster_la_fiche_produit(
+            admin_client, produit_caisse_sans_stock, suivi_coche=False
+        )
+
+        with tenant_context(tenant):
+            stock.refresh_from_db()
+            assert stock.suivi_actif is False
+            assert stock.quantite == 15
+        assert _nombre_de_mouvements(tenant, produit_caisse_sans_stock) == 1
+
+    def test_19_recocher_reactive_le_suivi_sans_toucher_la_quantite(
+        self, admin_client, tenant, produit_caisse_sans_stock
+    ):
+        """Recocher → suivi_actif à True, quantité inchangée, aucun mouvement."""
+        stock = _creer_stock(tenant, produit_caisse_sans_stock, quantite=9)
+        with tenant_context(tenant):
+            from inventaire.models import Stock
+
+            Stock.objects.filter(pk=stock.pk).update(suivi_actif=False)
+
+        _poster_la_fiche_produit(
+            admin_client, produit_caisse_sans_stock, suivi_coche=True
+        )
+
+        with tenant_context(tenant):
+            stock.refresh_from_db()
+            assert stock.suivi_actif is True
+            assert stock.quantite == 9
+        assert _nombre_de_mouvements(tenant, produit_caisse_sans_stock) == 0
+
+    def test_20_stock_en_pause_compte_comme_non_suivi(
+        self, tenant, produit_caisse_sans_stock
+    ):
+        """
+        Stock en pause : le helper renvoie None, le badge de liste affiche « — »,
+        le filtre le range dans « Non suivi » et plus dans « OK ».
+        / Paused stock: helper returns None, list badge is "—", filter says not tracked.
+        """
+        from BaseBillet.models import Product
+
+        stock = _creer_stock(tenant, produit_caisse_sans_stock, quantite=50)
+        with tenant_context(tenant):
+            from Administration.admin.stock_fiche_produit import (
+                EtatStockFilter,
+                display_stock_produit_caisse,
+            )
+            from inventaire.models import Stock, stock_suivi_du_produit
+
+            Stock.objects.filter(pk=stock.pk).update(suivi_actif=False)
+            produit = Product.objects.get(pk=produit_caisse_sans_stock.pk)
+
+            assert stock_suivi_du_produit(produit) is None
+            assert display_stock_produit_caisse(produit) == "—"
+
+            produits_du_test = Product.objects.filter(pk=produit.pk)
+
+            def filtrer(valeur):
+                filtre = EtatStockFilter(None, {"etat_stock": valeur}, Product, None)
+                return set(filtre.queryset(None, produits_du_test))
+
+            assert filtrer("non_suivi") == {produit}
+            assert filtrer("ok") == set()
+
+    def test_21_stock_en_pause_ne_bloque_pas_la_vente(
+        self, tenant, produit_caisse_sans_stock
+    ):
+        """
+        Stock à 0, vente hors stock interdite, mais suivi en pause :
+        _valider_stock_panier ne renvoie aucune erreur.
+        / Stock 0, out-of-stock sale forbidden, tracking paused: no cart error.
+        """
+        from types import SimpleNamespace
+
+        from BaseBillet.models import Product
+
+        stock = _creer_stock(
+            tenant,
+            produit_caisse_sans_stock,
+            quantite=0,
+            autoriser_vente_hors_stock=False,
+        )
+        with tenant_context(tenant):
+            from inventaire.models import Stock
+            from laboutik.views import _valider_stock_panier
+
+            produit = Product.objects.get(pk=produit_caisse_sans_stock.pk)
+            panier = [
+                {
+                    "product": produit,
+                    "price": SimpleNamespace(contenance=None),
+                    "quantite": 3,
+                    "weight_amount": None,
+                }
+            ]
+
+            # Suivi actif : la vente est refusée
+            # / Tracking on: the sale is refused
+            assert len(_valider_stock_panier(panier)) == 1
+
+            Stock.objects.filter(pk=stock.pk).update(suivi_actif=False)
+            produit = Product.objects.get(pk=produit_caisse_sans_stock.pk)
+            panier[0]["product"] = produit
+
+            # Suivi en pause : la vente passe
+            # / Tracking paused: the sale goes through
+            assert _valider_stock_panier(panier) == []
+
+    def test_22_badge_temps_reel_vide_quand_le_suivi_est_en_pause(
+        self, tenant, produit_caisse_sans_stock
+    ):
+        """
+        Le badge envoyé aux caisses n'a plus de data-stock-quantite :
+        la garde JS ne bloque plus la tuile.
+        / The pushed badge has no data-stock-quantite: the JS guard stops blocking.
+        """
+        from django.template.loader import render_to_string
+
+        stock = _creer_stock(
+            tenant,
+            produit_caisse_sans_stock,
+            quantite=0,
+            autoriser_vente_hors_stock=False,
+        )
+        with tenant_context(tenant):
+            from wsocket.broadcast import donnees_badge_stock
+
+            stock.suivi_actif = False
+            html_du_badge = render_to_string(
+                "laboutik/partial/hx_stock_badge.html",
+                {"produits_stock": [donnees_badge_stock(stock)]},
+            )
+            assert f'id="stock-badge-{produit_caisse_sans_stock.pk}"' in html_du_badge
+            assert "data-stock-quantite" not in html_du_badge
+            assert "data-stock-bloquant" not in html_du_badge
+            assert "Épuisé" not in html_du_badge
