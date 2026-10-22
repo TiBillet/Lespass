@@ -182,6 +182,26 @@
                 evenement.detail.target = document.body;
             }
         });
+
+        /**
+         * Retour en haut de page apres une navigation HTMX qui remplace le body.
+         * / Scroll to top after an HTMX navigation that replaces the body.
+         *
+         * LOCALISATION : pages/templates/pages/classic/shell.html
+         *
+         * Un lien hx-target="body" remplace le contenu de la page, mais le
+         * navigateur garde la position de defilement. Sans ce script, on arrive
+         * sur la nouvelle page a la hauteur ou on etait sur l'ancienne (souvent
+         * tout en bas, apres une longue liste d'evenements).
+         * Seuls les swaps du body sont concernes : un partiel dans une zone de
+         * la page (offcanvas, formulaire) ne fait pas remonter.
+         * / Only body swaps scroll to top; partial swaps keep the position.
+         */
+        document.addEventListener("htmx:afterSwap", function (evenement) {
+            if (evenement.detail.target === document.body) {
+                window.scrollTo(0, 0);
+            }
+        });
     </script>
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
     {# defer : sweetalert2 n'est appelé que sur interaction (jamais au 1er paint). #}

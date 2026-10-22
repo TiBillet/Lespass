@@ -1813,6 +1813,11 @@ img { max-width: 100%; display: block; }
   border-radius: var(--radius-l);
   overflow: hidden;
   box-shadow: var(--shadow-card);
+  /* Quand htmx fait défiler jusqu'ici (show:.event-hero:top, depuis
+     « En savoir plus »), la banniere s'arrete sous la .user-bar collante
+     au lieu de passer dessous. 5rem : meme marge que les titres du socle.
+     / Keeps the banner below the sticky .user-bar when scrolled into view. */
+  scroll-margin-top: 5rem;
 }
 .event-hero__cover {
   height: 220px;

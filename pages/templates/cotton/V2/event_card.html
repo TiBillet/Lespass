@@ -122,8 +122,12 @@ showed as federated.
                         <span class="visually-hidden"> : {{ event.name }}</span>
                     </a>
                 {% else %}
+                    {# show:.event-hero:top : apres le chargement, htmx fait defiler #}
+                    {# jusqu'a la banniere de l'evenement (pas l'en-tete du lieu). #}
+                    {# / After loading, htmx scrolls to the event banner. #}
                     <a class="btn btn--tertiary" href="{{ event.full_url }}"
-                       hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true">{% translate 'En savoir plus' %}<span class="visually-hidden"> : {{ event.name }}</span></a>
+                       hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true"
+                       hx-swap="innerHTML show:.event-hero:top">{% translate 'En savoir plus' %}<span class="visually-hidden"> : {{ event.name }}</span></a>
                 {% endif %}
             {% endif %}
         </div>
