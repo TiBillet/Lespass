@@ -115,7 +115,6 @@ class TestVentesAFacturer(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
         configuration.save()
 
         self.categorie_des_boissons = CategorieProduct.objects.create(

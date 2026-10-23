@@ -101,9 +101,6 @@ class TestRapportsCheque(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
-        # Aucun e-mail de rapport : une clôture journalière n'envoie rien.
-        # / No report e-mail: a daily closure sends nothing.
-        configuration.rapport_emails = ""
         configuration.save()
 
         # Le singleton de la caisse porte la clé des empreintes (tests/PIEGES.md 9.86).

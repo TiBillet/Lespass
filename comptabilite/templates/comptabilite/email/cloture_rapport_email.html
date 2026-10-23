@@ -7,7 +7,10 @@ LOCALISATION : comptabilite/templates/comptabilite/email/cloture_rapport_email.h
 
 Envoyé par comptabilite/tasks.py `envoyer_email_cloture`, qui passe `config`, `cloture`,
 `chiffre_affaires_ttc_en_euros` (comptabilite/presentation.py `euros_a_la_francaise`) et
-la période déjà écrite en heure du lieu (`debut_en_heure_du_lieu`, `fin_en_heure_du_lieu`).
+la période déjà écrite en heure du lieu (`debut_en_heure_du_lieu`, `fin_en_heure_du_lieu`),
+et, pour une H ou une M, `compteurs_de_l_activite` : les compteurs non nuls de l'activité
+de la période, sans détail (Administration/recap_quotidien.py `compteurs_de_la_periode`),
+et `lien_des_reglages_des_envois` (le lien de désabonnement).
 Styles inline : un client mail ne lit pas de feuille externe.
 / Sent by envoyer_email_cloture. Inline styles for mail clients.
 {% endcomment %}
@@ -26,10 +29,20 @@ Styles inline : un client mail ne lit pas de feuille externe.
         <strong>{% translate "Ventes" %} :</strong> {{ cloture.nombre_transactions }}<br>
         <strong>{% translate "Chiffre d'affaires TTC" %} :</strong> {{ chiffre_affaires_ttc_en_euros }}
     </p>
+    {% if compteurs_de_l_activite %}
+        <p>
+            <strong>{% translate "L'activité de la période" %} :</strong><br>
+            {{ compteurs_de_l_activite|join:" · " }}
+        </p>
+    {% endif %}
     <p>{% translate "Rapport complet en pièce jointe (PDF)." %}</p>
     <hr>
-    <p style="font-size: 8pt; color: #888; margin-top: 16px;">
-        {% translate "Envoyé automatiquement par le module de comptabilité. Pour ne plus recevoir ces rapports, demandez à un administrateur du tenant de modifier la configuration." %}
+    {# Désabonnement : la page des réglages des envois, réservée aux admins du lieu. #}
+    {# / Unsubscribe: the mail settings page, for the venue's admins. #}
+    <p style="font-size: 8pt; color: #888; margin-top: 16px;" data-testid="cloture-desabonnement">
+        {% translate "Envoyé automatiquement par le module de comptabilité." %}
+        {% translate "Vous pouvez vous désabonner de cette lettre d'information :" %}
+        <a href="{{ lien_des_reglages_des_envois }}" style="color: #2d76a6;">{% translate "réglages des envois" %}</a>
     </p>
 </body>
 </html>

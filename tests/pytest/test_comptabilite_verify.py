@@ -95,7 +95,6 @@ class TestVerifyClotures(FastTenantTestCase):
 
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
-        configuration.rapport_emails = ""
         configuration.save()
 
         self.tarif_du_jus = creer_tarif_vendu(

@@ -1460,6 +1460,14 @@ class TenantCreateValidator:
             user.groups.add(staff_group)
             user.save()
 
+            # Le premier admin reçoit le récap du matin et les rapports. C'est le seul
+            # abonné d'office : un admin ajouté plus tard s'inscrit lui-même dans
+            # l'admin (« Envoi des rapports »). Ajout par pk : le M2M vise le proxy
+            # HumanUser et refuse une instance TibilletUser.
+            # / The first admin gets the mails. Added by pk: the M2M targets HumanUser.
+            from comptabilite.models import ConfigurationDesRapports
+            ConfigurationDesRapports.get_solo().destinataires.add(user.pk)
+
             from BaseBillet.models import Configuration
             config = Configuration.get_solo()
             config.organisation = name

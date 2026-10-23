@@ -13,6 +13,7 @@
 |---|---|---|
 | [SPEC.md](SPEC.md) | Le récap : contenu, fenêtre, heure, destinataires, fusion avec le Z, tests | Validée, relue (Fable) |
 | [PLAN.md](PLAN.md) | Le plan d'implémentation : 8 tâches en TDD (la 8 : démo du flush) | Écrit, relu (Fable), corrigé |
+| [CHANTIER-02-recap-allege.md](CHANTIER-02-recap-allege.md) | Chantier 02 : récap plus court (tout est né la veille, ruptures de stock, crowds et annulations/remboursements regroupés, 5 lignes, plus de boutons) + compteurs dans les mails Z H/M | Spec relue deux fois (Fable). **§2, §3 et §5 codés** (2026-10-22, non commités, migrations appliquées en dev, 708 tests verts) — fiche [`CHANGELOG/2026-10-22-recap-allege.md`](../../../CHANGELOG/2026-10-22-recap-allege.md) |
 | [SUIVI/](SUIVI/) | Journal de l'exécution : registre (`progress.md`), consignes et rapports de chaque agent (`task-N-brief.md`, `task-N-report.md`), constats des relectures, diagnostic de l'incident mémoire (`diag-memoire-cancel-sub.md`), aperçu du mail (`apercu-recap.html` / `.pdf`) | Archive |
 
 ## État d'avancement

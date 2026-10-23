@@ -1014,6 +1014,17 @@ def _construire_sections_modules(request):
             ),
             "permission": admin_permission,
         },
+        # Les réglages des envois : visibles par tous les lieux, avec ou sans caisse
+        # (le récap du matin concerne tout le monde).
+        # / Mail settings: every venue, with or without a register.
+        {
+            "title": _("Envoi des rapports"),
+            "icon": "forward_to_inbox",
+            "link": _safe_rev(
+                "staff_admin:comptabilite_configurationdesrapports_changelist"
+            ),
+            "permission": admin_permission,
+        },
     ]
     navigation.append(
         {

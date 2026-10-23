@@ -258,7 +258,6 @@ class TestEcransVentesSurLesVentes(FastTenantTestCase):
         configuration.module_caisse = True
         configuration.fuseau_horaire = FUSEAU_DU_LIEU
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
         configuration.save()
 
         self.comptoir = PointDeVente.objects.create(

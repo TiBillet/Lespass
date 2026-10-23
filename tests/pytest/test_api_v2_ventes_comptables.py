@@ -109,8 +109,6 @@ class TestApiVentesComptables(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
-        configuration.rapport_periodicite = Configuration.PERIODICITE_NONE
         configuration.save()
 
         categorie_des_boissons = CategorieProduct.objects.create(

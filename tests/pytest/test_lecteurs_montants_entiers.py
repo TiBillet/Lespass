@@ -319,7 +319,6 @@ class TestGardeDeCorrectionSurLaClotureUnique(FastTenantTestCase):
         configuration.module_caisse = True
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
         configuration.save()
 
         self.point_de_vente = PointDeVente.objects.create(
@@ -888,7 +887,6 @@ class TestBoutonCloturerEtTicketZSurLaClotureUnique(FastTenantTestCase):
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
         configuration.fuseau_horaire = "Europe/Paris"
-        configuration.rapport_emails = ""
         configuration.save()
 
         self.point_de_vente = PointDeVente.objects.create(

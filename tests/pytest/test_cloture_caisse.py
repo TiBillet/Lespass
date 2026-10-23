@@ -122,6 +122,7 @@ from comptabilite.models import ClotureCaisse  # noqa: E402
 from fabriques_ecran import SIGNE_MOINS, euros, lire_l_element  # noqa: E402
 from fabriques_panier import taches_celery_enregistrees  # noqa: E402
 from fabriques_vente import (  # noqa: E402
+    abonner_aux_envois_des_rapports,
     creer_tarif_vendu,
     fabriquer_vente_encaissee,
     verifier_egalites,
@@ -213,8 +214,6 @@ class TestClotureCaisse(FastTenantTestCase):
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
         configuration.fuseau_horaire = "Europe/Paris"
-        configuration.rapport_emails = ""
-        configuration.rapport_periodicite = Configuration.PERIODICITE_NONE
         configuration.save()
 
         # Le singleton de la caisse, en base (tests/PIEGES.md 9.86) : la clé des
@@ -1008,7 +1007,7 @@ class TestClotureCaisse(FastTenantTestCase):
 
     def test_broker_en_panne_effets_faits_avant_et_ecran_du_z_affiche(self):
         """
-        Le lieu a un destinataire de rapport en périodicité journalière, le
+        Le lieu a un destinataire de rapport et le récap du matin coché, le
         terminal a une imprimante, mais le broker est en panne : chaque demande de
         tâche lève une erreur. Une table occupée, une commande ouverte, une vente.
         Le clic répond 200 avec l'écran du Z : la J existe, la table est libérée et
@@ -1018,10 +1017,7 @@ class TestClotureCaisse(FastTenantTestCase):
         / Broker down: the J exists, the Z screen shows, and the table/order effects
         were already done at the broker call (the print only: a J requests no e-mail).
         """
-        configuration = Configuration.get_solo()
-        configuration.rapport_emails = 'compta@lieu-de-test.org'
-        configuration.rapport_periodicite = Configuration.PERIODICITE_JOURNALIER
-        configuration.save()
+        abonner_aux_envois_des_rapports('compta@lieu-de-test.org')
         imprimante_du_terminal = Printer.objects.create(
             name='Imprimante broker en panne', printer_type=Printer.MOCK,
         )
@@ -1057,18 +1053,15 @@ class TestClotureCaisse(FastTenantTestCase):
             (Table.LIBRE, CommandeSauvegarde.CANCEL),
         ]
 
-    def test_bouton_lieu_en_periodicite_j_aucun_email_separe(self):
+    def test_bouton_lieu_avec_recap_du_matin_aucun_email_separe(self):
         """
-        Le lieu veut ses rapports journaliers, avec un destinataire. Un clic sur
+        Le lieu veut son récap du matin, avec un destinataire. Un clic sur
         « Clôturer » crée la J et ne demande aucun e-mail : le Z de cette J part dans
         le récap du matin des admins.
         / Daily reports venue: one click creates the J and requests no e-mail; its Z
         goes in the admins' morning recap.
         """
-        configuration = Configuration.get_solo()
-        configuration.rapport_emails = 'compta@lieu-de-test.org'
-        configuration.rapport_periodicite = Configuration.PERIODICITE_JOURNALIER
-        configuration.save()
+        abonner_aux_envois_des_rapports('compta@lieu-de-test.org')
         self._vendre(self.tarif_du_jus, 1, 350, PaymentMethod.CASH)
 
         with taches_celery_enregistrees() as taches_demandees:

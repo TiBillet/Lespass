@@ -2431,6 +2431,11 @@ class Command(BaseCommand):
                     admin_user.client_admin.add(tenant)
                     admin_user.is_staff = True
                     admin_user.save()
+                    # Comme l'onboarding : le premier admin reçoit le récap du matin et
+                    # les rapports. Ajout par pk (le M2M vise le proxy HumanUser).
+                    # / Like the onboarding: the first admin gets the mails.
+                    from comptabilite.models import ConfigurationDesRapports
+                    ConfigurationDesRapports.get_solo().destinataires.add(admin_user.pk)
                 except Exception as e:
                     logger.error(f"Impossible d'ajouter l'admin au tenant {name}: {e}")
                     raise e

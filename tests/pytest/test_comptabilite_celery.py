@@ -50,7 +50,11 @@ from comptabilite.tasks import (  # noqa: E402
     generer_cloture_pour_tenant,
 )
 from Customers.models import Client  # noqa: E402
-from fabriques_vente import creer_tarif_vendu, fabriquer_vente_encaissee  # noqa: E402
+from fabriques_vente import (  # noqa: E402
+    abonner_aux_envois_des_rapports,
+    creer_tarif_vendu,
+    fabriquer_vente_encaissee,
+)
 from laboutik.models import LaboutikConfiguration  # noqa: E402
 
 
@@ -184,7 +188,6 @@ class TestEmailDeCloture(FastTenantTestCase):
         LaboutikConfiguration.get_solo().save()
 
         configuration = Configuration.get_solo()
-        configuration.rapport_emails = ""
         configuration.save()
 
         tarif_du_jus = creer_tarif_vendu(
@@ -212,8 +215,8 @@ class TestEmailDeCloture(FastTenantTestCase):
 
     def test_envoyer_email_cloture_skip_si_pas_de_config(self):
         """
-        Si Configuration.rapport_emails est vide, l'email n'est PAS envoye.
-        / If rapport_emails is empty, no email is sent.
+        Sans destinataire dans les réglages des envois, l'email n'est PAS envoyé.
+        / Without any recipient in the mail settings, no email is sent.
         """
         with patch("comptabilite.tasks.CeleryMailerClass") as MockMailer:
             result = envoyer_email_cloture(self.tenant.schema_name, self.uuid_de_la_j)
@@ -222,11 +225,11 @@ class TestEmailDeCloture(FastTenantTestCase):
 
     def test_envoyer_email_cloture_envoie_si_config_ok(self):
         """
-        Si rapport_emails est configure ET la periodicite du rapport est
-        hebdomadaire, l'envoi automatique de la cloture de la semaine instancie
-        CeleryMailerClass avec le PDF en attachement.
-        / If rapport_emails is set and the periodicity is weekly, the automatic
-        sending of the week closure calls CeleryMailerClass with the PDF attachment.
+        Avec deux destinataires et le rapport hebdomadaire coché, l'envoi automatique
+        de la clôture de la semaine instancie CeleryMailerClass avec le PDF en
+        attachement.
+        / With two recipients and the weekly report ticked, the automatic sending of
+        the week closure calls CeleryMailerClass with the PDF attachment.
         """
         # La semaine de la vente du setUp, clôturée le lundi suivant à 5 h 10, heure du
         # lieu (fermeture à 2 h : le filet de ce lundi est passé à 4 h). Créée avant de
@@ -249,10 +252,7 @@ class TestEmailDeCloture(FastTenantTestCase):
             )
         assert uuid_de_la_semaine is not None
 
-        configuration = Configuration.get_solo()
-        configuration.rapport_emails = "compta@example.com, tresorerie@example.com"
-        configuration.rapport_periodicite = Configuration.PERIODICITE_HEBDOMADAIRE
-        configuration.save()
+        abonner_aux_envois_des_rapports("compta@example.com", "tresorerie@example.com")
 
         # L'envoi de l'email est remplacé : on lit les arguments qu'il reçoit. Son
         # `send()` rend 1, comme l'envoi de Django quand il réussit.
@@ -269,8 +269,8 @@ class TestEmailDeCloture(FastTenantTestCase):
             assert email_envoye is True
             assert MockMailer.called, "CeleryMailerClass should be instantiated"
             kwargs = MockMailer.call_args.kwargs
-            # Deux destinataires, séparés par une virgule dans la configuration.
-            # / Two recipients, comma-separated in the configuration.
+            # Les deux destinataires de la liste, triés par e-mail.
+            # / The list's two recipients, sorted by e-mail.
             assert kwargs.get("email") == [
                 "compta@example.com", "tresorerie@example.com",
             ]

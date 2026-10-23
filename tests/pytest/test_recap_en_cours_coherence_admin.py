@@ -207,8 +207,6 @@ class TestRecapEnCoursCoherentAvecLAdmin(FastTenantTestCase):
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
         configuration.fuseau_horaire = "Europe/Paris"
-        configuration.rapport_emails = ""
-        configuration.rapport_periodicite = Configuration.PERIODICITE_NONE
         configuration.save()
 
         # Le singleton de la caisse (tests/PIEGES.md 9.86) : clé des empreintes et fond.

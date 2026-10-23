@@ -135,7 +135,6 @@ class TestClotureEnrichie(FastTenantTestCase):
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
         configuration.fuseau_horaire = "Europe/Paris"
-        configuration.rapport_emails = ""
         configuration.save()
 
         self.tarif_de_la_biere = creer_tarif_vendu(

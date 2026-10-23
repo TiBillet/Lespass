@@ -2657,12 +2657,21 @@ class CompteComptableSerializer(serializers.Serializer):
     """
     Un compte du plan comptable du lieu : numero, libelle, actif ou non. Un compte
     inactif est seulement cache des menus : il sert encore aux exports.
-    / One account of the venue's chart: number, label, active or not.
+    `treasury` : l'argent d'une vente peut arriver sur ce compte (caisse, banque,
+    monnaie, avances des clients). La vue passe ces numeros dans le contexte
+    (`numeros_de_tresorerie`).
+    / One account of the venue's chart: number, label, active or not, and whether a
+    sale's money can land on it.
     """
 
     accountNumber = serializers.CharField(source="numero_de_compte")
     name = serializers.CharField(source="libelle_du_compte")
     active = serializers.BooleanField(source="est_actif")
+    treasury = serializers.SerializerMethodField()
+
+    def get_treasury(self, compte):
+        numeros_de_tresorerie = self.context.get("numeros_de_tresorerie", set())
+        return compte.numero_de_compte in numeros_de_tresorerie
 
 
 def _numero_ou_rien(compte):

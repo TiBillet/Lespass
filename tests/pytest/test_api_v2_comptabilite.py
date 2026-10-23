@@ -26,7 +26,8 @@ comptables/CHANTIER-06-A-api-comptable.md)
 - La J reprise est refusée par la MÊME règle à l'admin et à l'API (A10), avec la même
   phrase.
 - `GET /api/v2/accounts/` rend tous les comptes du lieu, actifs ou non, triés par
-  numéro ; il charge le plan par défaut si le lieu n'en a aucun.
+  numéro ; il charge le plan par défaut si le lieu n'en a aucun. `treasury` marque
+  les comptes où l'argent d'une vente arrive (moyens, monnaies, 419100).
 / Business rules tested: key right, J-only list with a number cursor, entries in FEC
 column names without ValidDate, FEC identical to the admin button, 404 / 409 refusals,
 same go-live rule for admin and API, the venue's accounts.
@@ -160,8 +161,6 @@ class TestApiComptable(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
-        configuration.rapport_periodicite = Configuration.PERIODICITE_NONE
         configuration.save()
 
         self.tarif_de_l_entree = creer_tarif_vendu(
@@ -753,7 +752,39 @@ class TestApiComptable(FastTenantTestCase):
                 numero_de_compte="707900"
             ).libelle_du_compte,
             "active": False,
+            "treasury": False,
         }
+
+    def test_accounts_marque_les_comptes_de_tresorerie(self):
+        """
+        `treasury` est vrai pour les comptes où l'argent d'une vente arrive : celui
+        d'un moyen de paiement (530000 pour les espèces), celui d'une monnaie, et le
+        419100 des recharges. Faux pour un compte de vente.
+        / `treasury` is true for payment method, currency and top-up accounts; false
+        for a sales account.
+        """
+        compte_de_la_monnaie, _ = CompteComptable.objects.get_or_create(
+            numero_de_compte="467900",
+            defaults={
+                "libelle_du_compte": "Monnaie de test",
+                "nature_du_compte": CompteComptable.TRESORERIE,
+            },
+        )
+        MappingMonnaie.objects.create(
+            asset_uuid=uuid.uuid4(), compte_de_tresorerie=compte_de_la_monnaie
+        )
+
+        reponse = self._lire("/api/v2/accounts/")
+
+        assert reponse.status_code == 200
+        tresorerie_par_numero = {}
+        for compte in reponse.json()["results"]:
+            tresorerie_par_numero[compte["accountNumber"]] = compte["treasury"]
+        assert tresorerie_par_numero["530000"] is True
+        assert tresorerie_par_numero["467900"] is True
+        assert tresorerie_par_numero["419100"] is True
+        assert tresorerie_par_numero["706000"] is False
+        assert tresorerie_par_numero["707900"] is False
 
     def test_accounts_charge_le_plan_si_le_lieu_n_en_a_aucun(self):
         """
