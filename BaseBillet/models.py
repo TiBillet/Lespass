@@ -702,8 +702,10 @@ class Configuration(SingletonModel):
         default=True,
         verbose_name=_("Membership module"),
     )
+    # Eteint par defaut : un nouveau lieu l'allume depuis le tableau de bord admin.
+    # / Off by default: a new venue turns it on from the admin dashboard.
     module_crowdfunding = models.BooleanField(
-        default=True,
+        default=False,
         verbose_name=_("Crowdfunding module"),
     )
 
