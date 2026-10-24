@@ -565,8 +565,8 @@ def explorer(request):
 
     URL: GET /explorer/
     """
-    from django.conf import settings
     from seo.services import build_explorer_data
+    from TiBillet.maptiler import cle_maptiler_a_exposer
 
     explorer_data = build_explorer_data()
 
@@ -611,7 +611,7 @@ def explorer(request):
         # ROOT public : aucun tenant courant a highlighter sur la carte.
         # / Public ROOT: no current tenant to highlight on the map.
         "current_tenant_uuid": "",
-        "maptiler_key": settings.MAPTILER_KEY,
+        "maptiler_key": cle_maptiler_a_exposer(),
         "federation_json_ld": json_for_html(federation_json_ld_dict),
         "page_title": _("Explorer - TiBillet"),
         "page_description": _(

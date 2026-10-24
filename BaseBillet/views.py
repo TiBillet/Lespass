@@ -74,6 +74,7 @@ from BaseBillet.services_vente import (
 from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain, lieu_en_moteur_legacy
 from TiBillet import settings
+from TiBillet.maptiler import cle_maptiler_a_exposer
 from booking.models import Booking, Resource, ResourceGroup
 # Le settings PARESSEUX de Django, sous alias : `TiBillet.settings` ci-dessus est
 # le module brut, fige a l'import, qu'un `override_settings()` de test ne touche
@@ -334,7 +335,7 @@ def get_context(request):
         # Utilisee par la carte de la page event (geoloc.html), meme fond que la
         # carto federation. / MapTiler key for basemaps (empty -> OSM France HOT
         # fallback). Used by the event page map, same basemap as the federation map.
-        "maptiler_key": settings.MAPTILER_KEY,
+        "maptiler_key": cle_maptiler_a_exposer(),
         "header": True,
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,
@@ -3263,12 +3264,11 @@ class FederationViewset(viewsets.ViewSet):
 
         # Contexte standard du skin + variables specifiques a l'explorer
         # / Standard skin context + explorer-specific variables
-        from django.conf import settings
         template_context = get_context(request)
         template_context.update({
             'explorer_data': explorer_data,
             'current_tenant_uuid': current_uuid,
-            'maptiler_key': settings.MAPTILER_KEY,
+            'maptiler_key': cle_maptiler_a_exposer(),
             'has_other_federated_places': has_other_federated_places,
             'federation_json_ld': federation_json_ld,
             'breadcrumb_json_ld': breadcrumb_json_ld,

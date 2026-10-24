@@ -3,12 +3,12 @@ from random import randint
 
 import requests
 from django import template
-from django.conf import settings
 from django.db import connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import Membership
+from TiBillet.maptiler import cle_maptiler_a_exposer
 from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
@@ -23,8 +23,11 @@ def maptiler_key():
     / MapTiler key for basemaps, empty if not set (-> OSM France HOT fallback in
     JS). A tag rather than a context variable: the address map widget is
     included by views that do not pass `maptiler_key`.
+
+    Vide aussi quand MapTiler refuse les tuiles (quota) : cf. TiBillet/maptiler.py.
+    / Also empty when MapTiler refuses tiles (quota).
     """
-    return getattr(settings, "MAPTILER_KEY", "")
+    return cle_maptiler_a_exposer()
 
 @register.filter
 def get_item(dictionary, key):
