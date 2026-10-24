@@ -393,14 +393,17 @@ def get_context(request):
             'icon': 'diagram-2-fill'
         })
 
-    # Remove from navbar, it is now a button in the tenant_header
-    # if crowd_config.active and Initiative.objects.exists() and config.module_crowdfunding:
-    #     navbar.append({
-    #         'name': 'crowd-list',
-    #         'url': '/contrib/',
-    #         'label': f'{crowd_config.title}',
-    #         'icon': 'people-fill'
-    #     })
+    # Bouton « Contribuez » de l'en-tete du lieu (pages/V2/tenant_header.html).
+    # Il s'affiche seulement si les trois conditions sont vraies :
+    # - le module financement participatif est active (tableau de bord admin) ;
+    # - la fonction est activee dans la config Crowds (champ « Activer ») ;
+    # - il existe au moins une initiative non archivee a montrer.
+    # / "Contribute" button of the venue header: shown only when the module is
+    # on, the Crowds config is active, and at least one initiative is listed.
+    afficher_bouton_contribuer = False
+    if config.module_crowdfunding and crowd_config.active:
+        afficher_bouton_contribuer = Initiative.objects.filter(archived=False).exists()
+    context["afficher_bouton_contribuer"] = afficher_bouton_contribuer
 
 
     # V2 -> a déterminer - POUR L'INSTANT ACTIVÉ NORMALEMENT

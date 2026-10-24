@@ -2,7 +2,10 @@
 
 **Date :** 2026-10-23
 **Statut :** spec relue (Fable 5, 2026-10-23) et corrigée, rien de codé
-**Migration :** Oui — `inventaire/migrations/0002_stock_actif.py` (`AddField`, `default=True`)
+**Migration :** Oui — `inventaire/migrations/0002_stock_actif.py` (`AddField`, `default=True`).
+`0003` si le chantier 02 (`afficher_en_caisse`) est livré avant.
+Interaction avec le chantier 02 : un stock inactif n'a pas de badge, quel que soit
+`afficher_en_caisse` (voir `CHANTIER-02-afficher-en-caisse.md`, D6).
 
 ---
 
