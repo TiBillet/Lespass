@@ -3865,6 +3865,7 @@ class EventMVT(viewsets.ViewSet):
         # / Stays None for a federated event: it does not live in the current schema,
         # so its capacity counters are meaningless here.
         places_restantes = None
+        event_payant = None
 
         try:
             if hex8:
@@ -3919,11 +3920,20 @@ class EventMVT(viewsets.ViewSet):
             # call costs two COUNT queries, it must never run inside the price loop.
             places_restantes = event.places_restantes()
 
+
+            tarifs_publies = tarifs_publies_de_l_evenement(event)
             # Texte du prix lu par partials/reservation_declencheur.html
             # / Price label read by partials/reservation_declencheur.html
             event.libelle_prix = libelle_prix(
-                tarifs_publies_de_l_evenement(event), TYPE_EVENEMENT,
+                tarifs_publies, TYPE_EVENEMENT,
             )
+
+            # Un flag pour déterminer si un event est payant
+            event_payant = False
+            for tarif in tarifs_publies:
+                if tarif.prix > 0 or tarif.free_price:
+                    event_payant = True
+                    break
 
             event_in_this_tenant = True
 
@@ -3950,6 +3960,7 @@ class EventMVT(viewsets.ViewSet):
         template_context['price_max_per_user_reached'] = price_max_per_user_reached
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
+        template_context['event_payant'] = event_payant
         template_context['event_max_per_user_reached'] = event_max_per_user_reached
         template_context['places_restantes'] = places_restantes
         # Lu par le gabarit du skin faire_festival (vues/evenement.html).

@@ -591,93 +591,53 @@
         {% endcomment %}
         {% if event.panier_desactive %}
             <button type="submit"
-                    class="btn btn-primary w-100 mb-2"
-                    data-loading-disable
-                    data-testid="booking-submit">
-                {% if user.is_authenticated %}
-                    <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                class="btn btn-primary w-100 mb-2"
+                data-loading-disable
+                data-testid="booking-submit">
+
+                <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                {% if event_payant %}
                     {% translate "Payer maintenant" %}
                 {% else %}
-                    <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
-                    {% trans 'Send booking request' %}
+                    {% translate "Réserver maintenant" %}
                 {% endif %}
             </button>
         {% elif user.is_authenticated %}
-            {# Utilisateur connecte : le "Payer maintenant" et "Ajouter au panier" sont accessibles. #}
-            {# Si panier deja non vide, on met "Ajouter au panier" en primary pour favoriser le cumul. #}
-            {# / Authenticated: both actions available. If cart not empty, promote "Add to cart". #}
-            {% if panier.count > 0 %}
-                {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
-                {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
-                {# / Cart non-empty: both buttons end at cart. #}
-                {# 1) Add to cart (cumulate). 2) Add + pay: chain to checkout. #}
-                <button type="button"
-                        class="btn btn-primary w-100 mb-2"
-                        hx-post="/panier/add/tickets_batch/"
-                        hx-include="closest form"
-                        hx-target="#reservation-erreurs"
-                        hx-swap="innerHTML"
-                        data-loading-disable
-                        data-testid="booking-add-to-cart"
-                        aria-label="{% trans 'Add these tickets to your cart' %}">
-                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                    {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
-                </button>
-                <button type="button"
-                        class="btn btn-outline-primary w-100"
-                        hx-post="/panier/add/tickets_batch/"
-                        hx-include="closest form"
-                        hx-vals='{"then": "checkout"}'
-                        hx-target="#reservation-erreurs"
-                        hx-swap="innerHTML"
-                        data-loading-disable
-                        data-testid="booking-add-and-pay"
-                        aria-label="{% trans 'Add to cart and pay all items' %}">
-                    <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                    {% trans "Add to cart and pay" %}
-                </button>
-            {% else %}
-                <button type="button"
-                        class="btn btn-primary w-100 mb-2"
-                        hx-post="/panier/add/tickets_batch/"
-                        hx-include="closest form"
-                        hx-target="#reservation-erreurs"
-                        hx-swap="innerHTML"
-                        data-loading-disable
-                        data-testid="booking-add-to-cart"
-                        aria-label="{% trans 'Add these tickets to your cart' %}">
-                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                    {% trans "Add to cart" %}
-                </button>
-                <button type="submit"
-                        class="btn btn-outline-primary w-100"
-                        data-loading-disable
-                        data-testid="booking-submit"
-                        aria-label="{% trans 'Pay this event now' %}">
-                    <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                    {% translate "Payer maintenant" %}
-                </button>
-
-            {% endif %}
-        {% else %}
-            {# Anonyme : "Envoyer la demande" en primary (flow direct), bouton "Connexion" en vrai bouton secondaire. #}
-            {# Le panier exige l'auth → on ouvre l'offcanvas login au clic. #}
-            {# / Anonymous: direct booking primary + real secondary button that opens login offcanvas. #}
             <button type="submit"
                     class="btn btn-primary w-100 mb-2"
                     data-loading-disable
                     data-testid="booking-submit">
-                <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
-                {% trans 'Send booking request' %}
+                <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                {% if event_payant %}
+                    {% translate "Payer maintenant" %}
+                {% else %}
+                    {% translate "Réserver maintenant" %}
+                {% endif %}
             </button>
             <button type="button"
-                    class="btn btn-outline-primary w-100"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#loginPanel"
-                    data-testid="booking-add-to-cart-login"
-                    aria-label="{% trans 'Log in to add these tickets to your cart' %}">
+                    class="btn btn-secondary w-100 mb-2"
+                    hx-post="/panier/add/tickets_batch/"
+                    hx-include="closest form"
+                    hx-target="#reservation-erreurs"
+                    hx-swap="innerHTML"
+                    data-loading-disable
+                    data-testid="booking-add-to-cart"
+                    aria-label="{% trans 'Add these tickets to your cart' %}">
                 <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                {% trans "Log in to add to cart" %}
+                {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
+            </button>
+        {% else %}
+            {# Anonyme : "Réserver" en primary (flow direct) #}
+            <button type="submit"
+                    class="btn btn-primary w-100 mb-2"
+                    data-loading-disable
+                    data-testid="booking-submit">
+                <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                {% if event_payant %}
+                    {% translate "Payer maintenant" %}
+                {% else %}
+                    {% translate "Réserver maintenant" %}
+                {% endif %}
             </button>
         {% endif %}
         <button type="button" class="btn btn-link text-muted d-block mt-2 w-100" data-bs-dismiss="offcanvas" aria-label="Annuler" data-testid="booking-cancel">
