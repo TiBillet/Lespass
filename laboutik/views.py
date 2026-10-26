@@ -167,7 +167,7 @@ from laboutik.serializers import (
     RechargeMontantLibreSerializer,
 )
 from laboutik.reports import MOYENS_HORS_ARGENT
-from inventaire.models import Stock, TypeMouvement, stock_suivi_du_produit
+from inventaire.models import Stock, TypeMouvement
 from inventaire.serializers import MouvementRapideSerializer
 from inventaire.services import StockService
 from wsocket.broadcast import broadcast_stock_update, donnees_badge_stock
@@ -848,14 +848,8 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         if a_poids_mesure:
             try:
                 stock_du_produit_pm = product.stock_inventaire
-                # Quantité et blocage seulement si le suivi est actif.
-                # L'unité, elle, se lit toujours : elle décrit le produit.
-                # / Quantity and blocking only when tracked. The unit is always read.
-                if stock_du_produit_pm.suivi_actif:
-                    stock_disponible_pm = stock_du_produit_pm.quantite
-                    autoriser_hors_stock_pm = (
-                        stock_du_produit_pm.autoriser_vente_hors_stock
-                    )
+                stock_disponible_pm = stock_du_produit_pm.quantite
+                autoriser_hors_stock_pm = stock_du_produit_pm.autoriser_vente_hors_stock
                 if stock_du_produit_pm.unite == "GR":
                     unite_saisie_label = "g"
                     prix_reference_label = "/kg"
@@ -941,13 +935,12 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         }
 
         # --- Données stock pour l'affichage dans la tuile POS ---
-        # Si le produit a un Stock suivi, on enrichit le dict avec l'état du stock.
-        # Sinon (pas de stock, ou suivi en pause), stock_quantite=None signifie
-        # "pas de gestion de stock".
-        # / If the product has a tracked Stock, enrich the dict with stock state.
-        # Otherwise (no stock or paused), stock_quantite=None means "no stock management".
-        stock_du_produit = stock_suivi_du_produit(product)
-        if stock_du_produit is not None:
+        # Si le produit a un Stock lié, on enrichit le dict avec l'état du stock.
+        # Sinon, stock_quantite=None signifie "pas de gestion de stock".
+        # / If the product has a linked Stock, enrich the dict with stock state.
+        # Otherwise, stock_quantite=None means "no stock management".
+        try:
+            stock_du_produit = product.stock_inventaire
             est_en_rupture = stock_du_produit.est_en_rupture()
             article_dict["stock_quantite"] = stock_du_produit.quantite
             article_dict["stock_unite"] = stock_du_produit.unite
@@ -962,7 +955,7 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             article_dict["stock_quantite_lisible"] = _formater_stock_lisible(
                 stock_du_produit.quantite, stock_du_produit.unite
             )
-        else:
+        except Stock.DoesNotExist:
             article_dict["stock_quantite"] = None
 
         articles.append(article_dict)
@@ -7048,10 +7041,11 @@ def _valider_stock_panier(articles_panier):
         if produit.methode_caisse == Product.RETOUR_CONSIGNE:
             continue
 
-        stock = stock_suivi_du_produit(produit)
-        if stock is None:
-            # Pas de stock suivi pour ce produit, rien a verifier
-            # / No tracked stock for this product, nothing to check
+        try:
+            stock = produit.stock_inventaire
+        except Stock.DoesNotExist:
+            # Pas de gestion de stock pour ce produit, rien a verifier
+            # / No stock management for this product, nothing to check
             continue
 
         if stock.autoriser_vente_hors_stock:
@@ -7375,9 +7369,12 @@ def _creer_lignes_articles(
         # (F() ne met pas à jour l'instance en mémoire).
         # / If the product has a linked Stock, auto-decrement.
         # After decrement, re-read stock from DB (F() doesn't update in-memory instance).
-        # Pas de stock, ou suivi en pause : rien à décrémenter — comportement normal
-        # / No stock, or tracking paused: nothing to decrement — normal behavior
-        stock_du_produit = stock_suivi_du_produit(produit)
+        try:
+            stock_du_produit = produit.stock_inventaire
+        except Stock.DoesNotExist:
+            # Pas de gestion de stock pour ce produit — comportement normal
+            # / No stock management for this product — normal behavior
+            stock_du_produit = None
 
         # Un retour de consigne ne sort rien du stock : le gobelet REVIENT. Décrémenter
         # ici retirerait un gobelet de l'inventaire au moment même où le client en
@@ -7715,9 +7712,12 @@ def _creer_lignes_articles_cascade(
         # (le poids saisi pour une pesée). La ligne sert de référence au mouvement.
         # / Stock decrement: once per item; the line is the movement's reference.
         # ---------------------------------------------------------- #
-        # Pas de stock, ou suivi en pause : rien à décrémenter — comportement normal
-        # / No stock, or tracking paused: nothing to decrement — normal behavior
-        stock_du_produit = stock_suivi_du_produit(produit)
+        try:
+            stock_du_produit = produit.stock_inventaire
+        except Stock.DoesNotExist:
+            # Pas de gestion de stock pour ce produit — comportement normal
+            # / No stock management for this product — normal behavior
+            stock_du_produit = None
 
         if stock_du_produit is not None:
             if weight_amount:
@@ -8943,9 +8943,12 @@ class PaiementViewSet(viewsets.ViewSet):
         produit = get_object_or_404(
             Product, uuid=serializer.validated_data["product_uuid"]
         )
-        stock = stock_suivi_du_produit(produit)
+        try:
+            stock = produit.stock_inventaire
+        except Stock.DoesNotExist:
+            stock = None
 
-        # Pas de stock gere (ou suivi en pause), ou vente hors stock autorisee : l'ajout etait permis.
+        # Pas de stock gere, ou vente hors stock autorisee : l'ajout etait permis.
         # Le badge de la tuile etait en retard sur la base.
         # / No managed stock, or out-of-stock sale allowed: the tile badge was stale.
         if stock is None or stock.autoriser_vente_hors_stock:
@@ -15603,12 +15606,11 @@ class ArticlePanelViewSet(viewsets.ViewSet):
         / GET — Main menu of the context panel.
         """
         product = get_object_or_404(Product, uuid=product_uuid)
+        stock = Stock.objects.filter(product=product).first()
 
-        # Un stock en pause ne propose pas d'opérations de stock depuis la caisse
-        # / A paused stock offers no stock operations from the POS
         context = {
             "product": product,
-            "has_stock": stock_suivi_du_produit(product) is not None,
+            "has_stock": stock is not None,
         }
         return render(request, "laboutik/partial/article_panel.html", context)
 

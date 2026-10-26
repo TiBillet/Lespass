@@ -172,21 +172,10 @@ def test_champs_stock_caches_tant_que_suivre_le_stock_n_est_pas_coche(
 def test_champs_stock_visibles_quand_le_produit_a_deja_un_stock(
     page, login_as_admin, produit_caisse_avec_stock
 ):
-    """
-    Produit avec stock : la case « Suivre le stock » est cochée, les réglages visibles.
-    La décocher (mise en pause du suivi) cache les réglages.
-    / Product with stock: switch checked, settings visible; unchecking hides them.
-    """
+    """Produit avec stock : pas de case, les réglages restent visibles."""
     login_as_admin(page)
     page.goto(f"/admin/BaseBillet/posproduct/{produit_caisse_avec_stock.pk}/change/")
 
-    case_suivre_le_stock = page.locator("#id_stock_suivi")
-    assert case_suivre_le_stock.is_checked()
+    assert page.locator("#id_stock_suivi").count() == 0
     assert page.locator("#id_stock_unite").is_visible()
     assert page.locator("#id_stock_seuil_alerte").is_visible()
-
-    # force=True : le switch Unfold stylise l'input / Unfold styles the switch input
-    case_suivre_le_stock.uncheck(force=True)
-    page.wait_for_timeout(400)
-    assert not page.locator("#id_stock_unite").is_visible()
-    assert not page.locator("#id_stock_seuil_alerte").is_visible()

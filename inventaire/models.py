@@ -104,20 +104,6 @@ class Stock(models.Model):
         help_text=_("Si coché, la vente reste possible même en rupture de stock"),
     )
 
-    # Suivi du stock actif ou en pause. En pause, le produit se vend comme s'il
-    # n'avait pas de stock : pas de décompte, pas de badge, pas de blocage.
-    # Le Stock et ses mouvements restent en base pour garder l'historique.
-    # Lire ce champ via stock_suivi_du_produit(), jamais à la main.
-    # / Tracking on or paused. Paused: sold as if untracked, history is kept.
-    suivi_actif = models.BooleanField(
-        default=True,
-        verbose_name=_("Suivi actif"),
-        help_text=_(
-            "Décoché : les ventes ne décomptent plus ce stock. "
-            "L'historique des mouvements est conservé."
-        ),
-    )
-
     class Meta:
         verbose_name = _("Stock")
         verbose_name_plural = _("Stocks")
@@ -140,35 +126,6 @@ class Stock(models.Model):
 
     def __str__(self):
         return f"{self.product.name} — {self.quantite} {self.get_unite_display()}"
-
-
-def stock_suivi_du_produit(produit):
-    """
-    Renvoie le Stock du produit s'il est suivi, sinon None.
-    / Returns the product's Stock if tracked, otherwise None.
-
-    LOCALISATION : inventaire/models.py
-
-    Un produit est « suivi » quand il a un Stock ET que ce Stock a suivi_actif=True.
-    Toutes les ventes (caisse, tireuse, débit mètre) passent par cette fonction.
-    Elles traitent un stock en pause exactement comme une absence de stock.
-
-    Pour lire seulement l'UNITÉ (vente au poids, rapports), ne pas utiliser
-    cette fonction : l'unité décrit le produit, que le suivi soit actif ou non.
-    / For the unit only, read produit.stock_inventaire directly.
-
-    :param produit: Product
-    :return: Stock ou None
-    """
-    # getattr avec défaut marche sur une relation OneToOne inverse absente
-    # (RelatedObjectDoesNotExist hérite d'AttributeError).
-    # / getattr default works on a missing reverse OneToOne.
-    stock_du_produit = getattr(produit, "stock_inventaire", None)
-    if stock_du_produit is None:
-        return None
-    if not stock_du_produit.suivi_actif:
-        return None
-    return stock_du_produit
 
 
 class MouvementStock(models.Model):

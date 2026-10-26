@@ -826,18 +826,14 @@ def facturer_tirage(
         # une erreur et TOUTE la facture était annulée (audit 2026-09-26, point 2.1).
         # / No stock: nothing to do. Stock: decrement inside a SAVEPOINT, so a
         # stock DB error only rolls back the savepoint; the bill stays valid.
-        # Un stock en pause (suivi_actif=False) compte comme une absence de stock
-        # / A paused stock counts as no stock
-        from inventaire.models import stock_suivi_du_produit
-
-        stock_du_fut = stock_suivi_du_produit(produit)
-        if stock_du_fut is not None:
+        le_produit_a_un_stock = hasattr(produit, "stock_inventaire")
+        if le_produit_a_un_stock:
             from inventaire.services import StockService
 
             try:
                 with transaction.atomic():
                     StockService.decrementer_pour_vente(
-                        stock=stock_du_fut,
+                        stock=produit.stock_inventaire,
                         contenance=volume_cl,
                         qty=1,
                         ligne_article=ligne_du_tirage,
@@ -847,6 +843,7 @@ def facturer_tirage(
                 # après le commit de la facture. / Notify POS terminals after commit.
                 from wsocket.broadcast import broadcast_etat_stock
 
+                stock_du_fut = produit.stock_inventaire
                 transaction.on_commit(lambda: broadcast_etat_stock(stock_du_fut))
             except Exception:
                 logger.exception(

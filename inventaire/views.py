@@ -135,11 +135,6 @@ class DebitMetreViewSet(viewsets.ViewSet):
             )
 
         stock = product.stock_inventaire
-        if not stock.suivi_actif:
-            return Response(
-                {"detail": _("Le suivi du stock de ce produit est en pause.")},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         if stock.unite != UniteStock.CL:
             return Response(
                 {"detail": _("Le stock de ce produit n'est pas en centilitres.")},
