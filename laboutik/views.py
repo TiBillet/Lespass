@@ -167,7 +167,7 @@ from laboutik.serializers import (
     RechargeMontantLibreSerializer,
 )
 from laboutik.reports import MOYENS_HORS_ARGENT
-from inventaire.models import Stock, TypeMouvement
+from inventaire.models import Stock, TypeMouvement, stock_suivi_du_produit_ou_none
 from inventaire.serializers import MouvementRapideSerializer
 from inventaire.services import StockService
 from wsocket.broadcast import broadcast_stock_update, donnees_badge_stock
@@ -847,9 +847,17 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         autoriser_hors_stock_pm = True
         if a_poids_mesure:
             try:
+                # L'unité se lit même sur un stock non suivi (actif=False) :
+                # elle dit si l'article se vend en kg ou en L.
+                # La quantité et le blocage ne comptent que si le stock est suivi.
+                # / The unit is read even on an untracked stock; quantity and
+                # blocking only count when the stock is tracked.
                 stock_du_produit_pm = product.stock_inventaire
-                stock_disponible_pm = stock_du_produit_pm.quantite
-                autoriser_hors_stock_pm = stock_du_produit_pm.autoriser_vente_hors_stock
+                if stock_du_produit_pm.actif:
+                    stock_disponible_pm = stock_du_produit_pm.quantite
+                    autoriser_hors_stock_pm = (
+                        stock_du_produit_pm.autoriser_vente_hors_stock
+                    )
                 if stock_du_produit_pm.unite == "GR":
                     unite_saisie_label = "g"
                     prix_reference_label = "/kg"
@@ -935,12 +943,13 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         }
 
         # --- Données stock pour l'affichage dans la tuile POS ---
-        # Si le produit a un Stock lié, on enrichit le dict avec l'état du stock.
-        # Sinon, stock_quantite=None signifie "pas de gestion de stock".
-        # / If the product has a linked Stock, enrich the dict with stock state.
+        # Si le produit a un Stock suivi, on enrichit le dict avec l'état du stock.
+        # Sinon (pas de Stock, ou Stock non suivi), stock_quantite=None
+        # signifie "pas de gestion de stock".
+        # / If the product has a tracked Stock, enrich the dict with stock state.
         # Otherwise, stock_quantite=None means "no stock management".
-        try:
-            stock_du_produit = product.stock_inventaire
+        stock_du_produit = stock_suivi_du_produit_ou_none(product)
+        if stock_du_produit is not None:
             est_en_rupture = stock_du_produit.est_en_rupture()
             article_dict["stock_quantite"] = stock_du_produit.quantite
             article_dict["stock_unite"] = stock_du_produit.unite
@@ -952,10 +961,13 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             article_dict["stock_autoriser_hors_stock"] = (
                 stock_du_produit.autoriser_vente_hors_stock
             )
+            article_dict["stock_afficher_en_caisse"] = (
+                stock_du_produit.afficher_en_caisse
+            )
             article_dict["stock_quantite_lisible"] = _formater_stock_lisible(
                 stock_du_produit.quantite, stock_du_produit.unite
             )
-        except Stock.DoesNotExist:
+        else:
             article_dict["stock_quantite"] = None
 
         articles.append(article_dict)
@@ -7041,11 +7053,10 @@ def _valider_stock_panier(articles_panier):
         if produit.methode_caisse == Product.RETOUR_CONSIGNE:
             continue
 
-        try:
-            stock = produit.stock_inventaire
-        except Stock.DoesNotExist:
-            # Pas de gestion de stock pour ce produit, rien a verifier
-            # / No stock management for this product, nothing to check
+        stock = stock_suivi_du_produit_ou_none(produit)
+        if stock is None:
+            # Pas de stock suivi pour ce produit, rien a verifier
+            # / No tracked stock for this product, nothing to check
             continue
 
         if stock.autoriser_vente_hors_stock:
@@ -7364,17 +7375,14 @@ def _creer_lignes_articles(
                 **champs_de_la_ligne_de_la_vente,
             )
         # --- Décrémentation stock inventaire ---
-        # Si le produit a un Stock lié, on décrémente automatiquement.
+        # Si le produit a un Stock suivi, on décrémente automatiquement.
         # Après décrémentation, on relit le stock depuis la DB
         # (F() ne met pas à jour l'instance en mémoire).
         # / If the product has a linked Stock, auto-decrement.
         # After decrement, re-read stock from DB (F() doesn't update in-memory instance).
-        try:
-            stock_du_produit = produit.stock_inventaire
-        except Stock.DoesNotExist:
-            # Pas de gestion de stock pour ce produit — comportement normal
-            # / No stock management for this product — normal behavior
-            stock_du_produit = None
+        # None : pas de stock, ou stock non suivi (actif=False) — comportement normal
+        # / None: no stock, or untracked stock — normal behavior
+        stock_du_produit = stock_suivi_du_produit_ou_none(produit)
 
         # Un retour de consigne ne sort rien du stock : le gobelet REVIENT. Décrémenter
         # ici retirerait un gobelet de l'inventaire au moment même où le client en
@@ -7411,9 +7419,11 @@ def _creer_lignes_articles(
 
             # Si le stock vient de passer en negatif, prevenir le caissier
             # via une alerte sur l'ecran de validation de la vente.
+            # Pas d'alerte si le stock est masque en caisse : l'alerte montre
+            # la quantite, et revient a chaque vente tant que le stock est negatif.
             # / If stock just went negative, warn the cashier via an alert
-            # on the sale validation screen.
-            if stock_devenu_negatif:
+            # on the sale validation screen. No alert when the stock is hidden.
+            if stock_devenu_negatif and stock_du_produit.afficher_en_caisse:
                 produits_stock_negatif.append(
                     {
                         "name": produit.name,
@@ -7712,12 +7722,9 @@ def _creer_lignes_articles_cascade(
         # (le poids saisi pour une pesée). La ligne sert de référence au mouvement.
         # / Stock decrement: once per item; the line is the movement's reference.
         # ---------------------------------------------------------- #
-        try:
-            stock_du_produit = produit.stock_inventaire
-        except Stock.DoesNotExist:
-            # Pas de gestion de stock pour ce produit — comportement normal
-            # / No stock management for this product — normal behavior
-            stock_du_produit = None
+        # None : pas de stock, ou stock non suivi (actif=False) — comportement normal
+        # / None: no stock, or untracked stock — normal behavior
+        stock_du_produit = stock_suivi_du_produit_ou_none(produit)
 
         if stock_du_produit is not None:
             if weight_amount:
@@ -7743,9 +7750,11 @@ def _creer_lignes_articles_cascade(
             # / Re-read stock from DB to get updated quantity
             stock_du_produit.refresh_from_db()
 
-            # Si le stock vient de passer en negatif, prevenir le caissier
-            # / If stock just went negative, warn the cashier
-            if stock_devenu_negatif:
+            # Si le stock vient de passer en negatif, prevenir le caissier.
+            # Pas d'alerte si le stock est masque en caisse (meme regle que
+            # _creer_lignes_articles).
+            # / If stock just went negative, warn the cashier, unless hidden.
+            if stock_devenu_negatif and stock_du_produit.afficher_en_caisse:
                 produits_stock_negatif.append(
                     {
                         "name": produit.name,
@@ -8943,10 +8952,7 @@ class PaiementViewSet(viewsets.ViewSet):
         produit = get_object_or_404(
             Product, uuid=serializer.validated_data["product_uuid"]
         )
-        try:
-            stock = produit.stock_inventaire
-        except Stock.DoesNotExist:
-            stock = None
+        stock = stock_suivi_du_produit_ou_none(produit)
 
         # Pas de stock gere, ou vente hors stock autorisee : l'ajout etait permis.
         # Le badge de la tuile etait en retard sur la base.
@@ -15606,7 +15612,9 @@ class ArticlePanelViewSet(viewsets.ViewSet):
         / GET — Main menu of the context panel.
         """
         product = get_object_or_404(Product, uuid=product_uuid)
-        stock = Stock.objects.filter(product=product).first()
+        # Un stock non suivi (actif=False) grise le bouton Stock, comme sans stock
+        # / An untracked stock greys out the Stock button, like no stock
+        stock = Stock.objects.filter(product=product, actif=True).first()
 
         context = {
             "product": product,
@@ -15620,7 +15628,7 @@ class ArticlePanelViewSet(viewsets.ViewSet):
         / GET — Detailed stock view with action form.
         """
         product = get_object_or_404(Product, uuid=product_uuid)
-        stock = get_object_or_404(Stock, product=product)
+        stock = get_object_or_404(Stock, product=product, actif=True)
         context = _build_stock_context(product, stock)
         return render(request, "laboutik/partial/article_panel_stock.html", context)
 
@@ -15635,7 +15643,7 @@ class ArticlePanelViewSet(viewsets.ViewSet):
             return HttpResponse("Action invalide", status=400)
 
         product = get_object_or_404(Product, uuid=product_uuid)
-        stock = get_object_or_404(Stock, product=product)
+        stock = get_object_or_404(Stock, product=product, actif=True)
 
         # L'ajustement utilise AjustementSerializer (stock_reel >= 0)
         # Les autres utilisent MouvementRapideSerializer (quantite >= 1)
@@ -15714,7 +15722,7 @@ class ArticlePanelViewSet(viewsets.ViewSet):
         / POST — Toggle autoriser_vente_hors_stock on stock.
         """
         product = get_object_or_404(Product, uuid=product_uuid)
-        stock = get_object_or_404(Stock, product=product)
+        stock = get_object_or_404(Stock, product=product, actif=True)
 
         stock.autoriser_vente_hors_stock = not stock.autoriser_vente_hors_stock
         stock.save(update_fields=["autoriser_vente_hors_stock"])

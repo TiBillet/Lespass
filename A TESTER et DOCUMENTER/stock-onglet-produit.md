@@ -56,5 +56,6 @@ docker exec lespass_django poetry run pytest tests/e2e/test_admin_stock_fiche_pr
 ## Compatibilité
 - Aucune migration. Les stocks existants s'affichent tels quels.
 - `StockInline` n'existe plus : la page d'ajout utilise la section Stock.
-- Pour arrêter de suivre le stock d'un produit, il n'y a toujours pas de bouton
-  (un stock supprimé effacerait son journal) : comportement inchangé.
+- Pour arrêter de suivre le stock d'un produit : bouton « Désactiver le suivi » du
+  panneau d'opérations (chantier INVENTAIRE 01, `Stock.actif`). Le stock n'est jamais
+  supprimé : son journal et son unité sont conservés.

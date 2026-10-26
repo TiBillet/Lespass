@@ -57,6 +57,7 @@ REGLES_CONDITIONNELLES_SECTION_STOCK = {
     "stock_unite": "stock_suivi == true",
     "stock_seuil_alerte": "stock_suivi == true",
     "stock_vente_hors_stock": "stock_suivi == true",
+    "stock_afficher_en_caisse": "stock_suivi == true",
 }
 
 
@@ -112,7 +113,7 @@ class ChampsStockFicheProduitMixin(forms.Form):
         label=_("Suivre le stock"),
         help_text=_(
             "Cochez pour compter le stock de cet article. "
-            "La caisse affichera le stock restant sur la tuile."
+            "La caisse affichera le stock restant sur la tuile (réglable ci-dessous)."
         ),
         widget=UnfoldBooleanSwitchWidget(),
     )
@@ -154,6 +155,17 @@ class ChampsStockFicheProduitMixin(forms.Form):
         widget=UnfoldBooleanSwitchWidget(),
     )
 
+    stock_afficher_en_caisse = forms.BooleanField(
+        required=False,
+        initial=True,
+        label=_("Afficher le stock sur la tuile"),
+        help_text=_(
+            "Décoché : la tuile n'affiche plus le stock restant. Le stock est toujours "
+            "compté. Un article bloqué affiche quand même « Épuisé »."
+        ),
+        widget=UnfoldBooleanSwitchWidget(),
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -170,6 +182,9 @@ class ChampsStockFicheProduitMixin(forms.Form):
         self.fields[
             "stock_vente_hors_stock"
         ].initial = stock_existant.autoriser_vente_hors_stock
+        self.fields[
+            "stock_afficher_en_caisse"
+        ].initial = stock_existant.afficher_en_caisse
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +260,10 @@ def fieldset_section_stock(produit):
         ),
     )
 
+    # stock_afficher_en_caisse est dans LES DEUX listes, comme stock_vente_hors_stock :
+    # enregistrer_section_stock lit ces réglages, et un BooleanField non rendu
+    # vaut False. Absent d'une liste, chaque enregistrement masquerait le stock.
+    # / Present in BOTH lists: an unrendered BooleanField reads as False.
     stock_existant = stock_du_produit_ou_none(produit)
     if stock_existant is None:
         champs_de_la_section = (
@@ -253,12 +272,14 @@ def fieldset_section_stock(produit):
             "stock_unite",
             "stock_seuil_alerte",
             "stock_vente_hors_stock",
+            "stock_afficher_en_caisse",
         )
     else:
         champs_de_la_section = (
             "stock_unite",
             "stock_seuil_alerte",
             "stock_vente_hors_stock",
+            "stock_afficher_en_caisse",
             panneau_operations_stock,
         )
 
@@ -288,7 +309,7 @@ def enregistrer_section_stock(request, produit, donnees_validees):
 
     - Pas de stock et « Suivre le stock » coché :
       StockService.creer_stock_initial (stock + mouvement « Stock initial »).
-    - Stock existant : met à jour les 3 réglages s'ils ont changé,
+    - Stock existant : met à jour les 4 réglages s'ils ont changé,
       puis prévient les caisses (la tuile peut se débloquer).
       Aucun mouvement : la quantité ne change jamais ici.
     - Pas de stock et case décochée : rien.
@@ -303,6 +324,7 @@ def enregistrer_section_stock(request, produit, donnees_validees):
     unite_choisie = donnees_validees.get("stock_unite") or UniteStock.UN
     seuil_choisi = donnees_validees.get("stock_seuil_alerte")
     vente_hors_stock_choisie = bool(donnees_validees.get("stock_vente_hors_stock"))
+    afficher_en_caisse_choisi = bool(donnees_validees.get("stock_afficher_en_caisse"))
 
     stock_existant = stock_du_produit_ou_none(produit)
 
@@ -320,6 +342,7 @@ def enregistrer_section_stock(request, produit, donnees_validees):
             seuil_alerte=seuil_choisi,
             autoriser_vente_hors_stock=vente_hors_stock_choisie,
             utilisateur=request.user,
+            afficher_en_caisse=afficher_en_caisse_choisi,
         )
         return
 
@@ -334,6 +357,9 @@ def enregistrer_section_stock(request, produit, donnees_validees):
     if stock_existant.autoriser_vente_hors_stock != vente_hors_stock_choisie:
         stock_existant.autoriser_vente_hors_stock = vente_hors_stock_choisie
         reglages_modifies.append("autoriser_vente_hors_stock")
+    if stock_existant.afficher_en_caisse != afficher_en_caisse_choisi:
+        stock_existant.afficher_en_caisse = afficher_en_caisse_choisi
+        reglages_modifies.append("afficher_en_caisse")
 
     if not reglages_modifies:
         return
@@ -356,6 +382,7 @@ STYLE_BADGE_PAR_ETAT = {
     "rupture": "background-color: #fef2f2; color: #991b1b;",
     "alerte": "background-color: #fffbeb; color: #92400e;",
     "ok": "background-color: #dcfce7; color: #166534;",
+    "non_suivi": "background-color: #f3f4f6; color: #4b5563;",
 }
 
 
@@ -380,7 +407,9 @@ def html_badge_stock_avec_lien(produit, nom_url_fiche_produit):
 
     LOCALISATION : Administration/admin/stock_fiche_produit.py
 
-    - Pas de stock suivi : « — », pas de lien.
+    - Pas de stock : « — », pas de lien.
+    - Stock non suivi (actif=False) : badge gris « Non suivi », avec le lien.
+      C'est dans la section Stock qu'on reprend le suivi.
     - Sinon : quantité lisible (ex : « 1.5 L ») dans un badge coloré.
       Rouge = épuisé, orange = sous le seuil, vert = ok.
     - Épuisé mais vente hors stock autorisée : badge rouge avec le chiffre
@@ -402,7 +431,11 @@ def html_badge_stock_avec_lien(produit, nom_url_fiche_produit):
 
     etat = etat_du_stock(stock)
     vente_encore_possible = stock.autoriser_vente_hors_stock
-    if etat == "rupture" and vente_encore_possible:
+    if not stock.actif:
+        etat = "non_suivi"
+        texte_du_badge = _("Non suivi")
+        texte_pour_lecteur_ecran = _("Stock non suivi")
+    elif etat == "rupture" and vente_encore_possible:
         # Vente hors stock autorisée : la caisse continue de vendre sous 0.
         # La pastille montre le chiffre réel (ex : « -12 ») plutôt que « Épuisé ».
         # / Out-of-stock sales allowed: show the real (negative) quantity.
@@ -462,7 +495,10 @@ class EtatStockFilter(admin.SimpleListFilter):
 
     Mêmes règles que Stock.est_en_rupture() et Stock.est_en_alerte(),
     écrites en requête pour filtrer en base.
+    Un stock non suivi (actif=False) sort dans « Non suivi », jamais dans
+    « Épuisé », « Stock bas » ou « OK ».
     / Same rules as the model methods, written as queries.
+    An untracked stock only shows under "Non suivi".
     """
 
     title = _("État du stock")
@@ -482,11 +518,15 @@ class EtatStockFilter(admin.SimpleListFilter):
         # Rupture : quantité à 0 ou négative
         # / Out of stock: quantity 0 or less
         if valeur_choisie == "rupture":
-            return queryset.filter(stock_inventaire__quantite__lte=0)
+            return queryset.filter(
+                stock_inventaire__actif=True,
+                stock_inventaire__quantite__lte=0,
+            )
 
         # Alerte : un seuil existe, et 0 < quantité <= seuil
         # / Alert: a threshold exists, and 0 < quantity <= threshold
         condition_alerte = Q(
+            stock_inventaire__actif=True,
             stock_inventaire__seuil_alerte__isnull=False,
             stock_inventaire__quantite__gt=0,
             stock_inventaire__quantite__lte=F("stock_inventaire__seuil_alerte"),
@@ -498,13 +538,15 @@ class EtatStockFilter(admin.SimpleListFilter):
         # / OK: stock exists, not out, not in alert
         if valeur_choisie == "ok":
             return queryset.filter(
-                stock_inventaire__isnull=False,
+                stock_inventaire__actif=True,
                 stock_inventaire__quantite__gt=0,
             ).exclude(condition_alerte)
 
-        # Non suivi : le produit n'a pas de stock
-        # / Not tracked: the product has no stock
+        # Non suivi : le produit n'a pas de stock, ou son stock n'est pas suivi
+        # / Not tracked: no stock, or an untracked stock
         if valeur_choisie == "non_suivi":
-            return queryset.filter(stock_inventaire__isnull=True)
+            return queryset.filter(
+                Q(stock_inventaire__isnull=True) | Q(stock_inventaire__actif=False)
+            )
 
         return queryset

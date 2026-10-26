@@ -188,7 +188,11 @@ def tireusebec_pre_save(sender, instance, **kwargs):
         try:
             from inventaire.models import Stock
 
-            stock = Stock.objects.filter(product_id=instance.fut_actif_id).first()
+            # Un stock non suivi (actif=False) compte comme « fût sans stock »
+            # / An untracked stock counts as "keg without stock"
+            stock = Stock.objects.filter(
+                product_id=instance.fut_actif_id, actif=True
+            ).first()
             if stock and stock.quantite > 0:
                 # Stock en centilitres → ml (×10)
                 # / Stock in centiliters → ml (×10)

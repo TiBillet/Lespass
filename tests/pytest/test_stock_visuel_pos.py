@@ -346,6 +346,163 @@ def test_article_stock_rupture_bloquante(tenant):
 
 
 # ===========================================================================
+# PARTIE 2 bis : Stock masque sur la tuile (Stock.afficher_en_caisse)
+# Masque = aucune pastille, sauf « Épuisé » si l'article est bloquant.
+# Les data-* du badge restent rendus (garde JS).
+# / PART 2 bis: hidden stock on the tile. No badge except "Épuisé" when blocking.
+# ===========================================================================
+
+
+def html_de_la_tuile(article):
+    """
+    Rend la grille des tuiles (cotton/articles.html) avec un seul article.
+    Le contexte est celui de tests/e2e/test_garde_stock_au_clic.py : en test,
+    une variable absente du contexte leve une erreur au rendu.
+    / Renders the tile grid with a single article. Same context as the E2E test:
+    a missing variable raises at render time under tests.
+    """
+    from django.template.loader import render_to_string
+
+    contexte = {
+        "pv": {"id": "PV-TEST", "comportement": "D", "articles": [article]},
+        "card": {"tag_id": "CARTE-PRIMAIRE", "name": "Caissier"},
+        "currency_data": {"symbol": "€"},
+        "hostname_client": "",
+    }
+    return render_to_string("cotton/articles.html", contexte)
+
+
+def html_du_badge_websocket(stock):
+    """
+    Rend le badge envoye par WebSocket (hx_stock_badge.html) pour un stock.
+    / Renders the WebSocket badge for a stock.
+    """
+    from django.template.loader import render_to_string
+    from wsocket.broadcast import donnees_badge_stock
+
+    return render_to_string(
+        "laboutik/partial/hx_stock_badge.html",
+        {"produits_stock": [donnees_badge_stock(stock)]},
+    )
+
+
+def article_de_test_avec_stock(nom, quantite, seuil_alerte, vente_hors_stock, afficher):
+    """
+    Cree un produit, son tarif, son stock et un point de vente, puis renvoie
+    le dict de l'article construit par _construire_donnees_articles et le stock.
+    / Creates a product with stock and returns its tile dict and the stock.
+    """
+    from BaseBillet.models import Product, Price
+    from inventaire.models import Stock
+    from laboutik.views import _construire_donnees_articles
+
+    nom_complet = f"{TEST_PREFIX} {nom}"
+    product = Product.objects.create(name=nom_complet, methode_caisse=Product.VENTE)
+    Price.objects.create(
+        product=product, name=f"{nom_complet} tarif", prix=Decimal("2.00")
+    )
+    stock = Stock.objects.create(
+        product=product,
+        quantite=quantite,
+        unite="UN",
+        seuil_alerte=seuil_alerte,
+        autoriser_vente_hors_stock=vente_hors_stock,
+        afficher_en_caisse=afficher,
+    )
+    pdv = creer_pdv_avec_produit(nom, product)
+    articles = _construire_donnees_articles(pdv)
+    article = next(a for a in articles if a["name"] == nom_complet)
+    return article, stock
+
+
+def test_tuile_stock_masque_en_alerte_sans_pastille(tenant):
+    """
+    Stock sous le seuil d'alerte, masque : pas de pastille orange.
+    La quantite reste dans data-stock-quantite pour la garde JS.
+    / Hidden stock in alert: no orange badge, data-stock-quantite still rendered.
+    """
+    with schema_context(TENANT_SCHEMA):
+        article, _stock = article_de_test_avec_stock(
+            "Masque Alerte", quantite=2, seuil_alerte=5,
+            vente_hors_stock=True, afficher=False,
+        )
+        assert article["stock_afficher_en_caisse"] is False
+
+        html = html_de_la_tuile(article)
+        assert 'data-testid="stock-badge-alerte"' not in html
+        assert 'data-stock-quantite="2"' in html
+
+
+def test_tuile_stock_affiche_en_alerte_avec_pastille(tenant):
+    """
+    Meme stock, affiche : la pastille orange est la. Temoin du test precedent.
+    / Same stock, shown: the orange badge is there.
+    """
+    with schema_context(TENANT_SCHEMA):
+        article, _stock = article_de_test_avec_stock(
+            "Affiche Alerte", quantite=2, seuil_alerte=5,
+            vente_hors_stock=True, afficher=True,
+        )
+        html = html_de_la_tuile(article)
+        assert 'data-testid="stock-badge-alerte"' in html
+
+
+def test_tuile_stock_masque_en_rupture_non_bloquante_sans_epuise(tenant):
+    """
+    Rupture, vente hors stock autorisee, masque : pas de « Épuisé ».
+    / Hidden, out of stock but sale allowed: no "Épuisé".
+    """
+    with schema_context(TENANT_SCHEMA):
+        article, _stock = article_de_test_avec_stock(
+            "Masque Rupture", quantite=0, seuil_alerte=None,
+            vente_hors_stock=True, afficher=False,
+        )
+        html = html_de_la_tuile(article)
+        assert 'data-testid="stock-badge-rupture"' not in html
+        assert 'data-stock-bloquant="true"' not in html
+
+
+def test_tuile_stock_masque_bloquant_garde_epuise(tenant):
+    """
+    Rupture, vente hors stock interdite, masque : « Épuisé » reste affiché.
+    Sinon la tuile refuserait la vente sans explication.
+    / Hidden but blocking: "Épuisé" is still shown.
+    """
+    with schema_context(TENANT_SCHEMA):
+        article, _stock = article_de_test_avec_stock(
+            "Masque Bloquant", quantite=0, seuil_alerte=None,
+            vente_hors_stock=False, afficher=False,
+        )
+        html = html_de_la_tuile(article)
+        assert 'data-testid="stock-badge-rupture"' in html
+        assert 'data-stock-bloquant="true"' in html
+
+
+def test_badge_websocket_suit_les_memes_regles_que_la_tuile(tenant):
+    """
+    Le badge envoye par WebSocket applique les memes regles que la tuile :
+    masque en alerte → pas de pastille ; masque bloquant → « Épuisé ».
+    / The WebSocket badge follows the same rules as the tile.
+    """
+    with schema_context(TENANT_SCHEMA):
+        _article, stock_alerte = article_de_test_avec_stock(
+            "WS Masque Alerte", quantite=2, seuil_alerte=5,
+            vente_hors_stock=True, afficher=False,
+        )
+        html_alerte = html_du_badge_websocket(stock_alerte)
+        assert 'data-testid="stock-badge-alerte"' not in html_alerte
+        assert 'data-stock-quantite="2"' in html_alerte
+
+        _article, stock_bloquant = article_de_test_avec_stock(
+            "WS Masque Bloquant", quantite=0, seuil_alerte=None,
+            vente_hors_stock=False, afficher=False,
+        )
+        html_bloquant = html_du_badge_websocket(stock_bloquant)
+        assert 'data-testid="stock-badge-rupture"' in html_bloquant
+        assert 'data-stock-bloquant="true"' in html_bloquant
+
+
+# ===========================================================================
 # PARTIE 3 : Test broadcast WebSocket apres decrementation stock
 # / PART 3: WebSocket broadcast test after stock decrement
 # ===========================================================================

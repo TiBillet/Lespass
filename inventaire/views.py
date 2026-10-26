@@ -18,14 +18,26 @@ from rest_framework.response import Response
 
 from BaseBillet.models import Product
 from BaseBillet.permissions import HasLaBoutikAccess
-from inventaire.models import MouvementStock, Stock, TypeMouvement, UniteStock
+from inventaire.models import (
+    MouvementStock,
+    Stock,
+    TypeMouvement,
+    UniteStock,
+    stock_suivi_du_produit_ou_none,
+)
 from inventaire.serializers import (
     DebitMetreSerializer,
     MouvementRapideSerializer,
+    ReprendreSuiviSerializer,
     StockActionSerializer,
 )
 from inventaire.services import StockService
 from laboutik.views import _formater_stock_lisible
+
+
+# Message des opérations refusées sur un stock non suivi (Stock.actif faux).
+# / Message for operations refused on an untracked stock.
+MESSAGE_SUIVI_DESACTIVE = _("Le suivi de stock est désactivé pour ce produit.")
 
 
 class StockViewSet(viewsets.ViewSet):
@@ -40,6 +52,10 @@ class StockViewSet(viewsets.ViewSet):
     def reception(self, request, pk=None):
         """Ajouter du stock (livraison). / Add stock (delivery)."""
         stock = get_object_or_404(Stock, pk=pk)
+        if not stock.actif:
+            return Response(
+                {"detail": MESSAGE_SUIVI_DESACTIVE}, status=status.HTTP_400_BAD_REQUEST
+            )
         serializer = MouvementRapideSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -63,6 +79,10 @@ class StockViewSet(viewsets.ViewSet):
     def perte(self, request, pk=None):
         """Retirer du stock (perte/casse). / Remove stock (loss/breakage)."""
         stock = get_object_or_404(Stock, pk=pk)
+        if not stock.actif:
+            return Response(
+                {"detail": MESSAGE_SUIVI_DESACTIVE}, status=status.HTTP_400_BAD_REQUEST
+            )
         serializer = MouvementRapideSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -86,6 +106,10 @@ class StockViewSet(viewsets.ViewSet):
     def offert(self, request, pk=None):
         """Retirer du stock (offert). / Remove stock (offered)."""
         stock = get_object_or_404(Stock, pk=pk)
+        if not stock.actif:
+            return Response(
+                {"detail": MESSAGE_SUIVI_DESACTIVE}, status=status.HTTP_400_BAD_REQUEST
+            )
         serializer = MouvementRapideSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -126,15 +150,16 @@ class DebitMetreViewSet(viewsets.ViewSet):
 
         product = get_object_or_404(Product, uuid=product_uuid)
 
-        # Verifier que le produit a un stock en centilitres
-        # / Check the product has stock in centiliters
-        if not hasattr(product, "stock_inventaire"):
+        # Verifier que le produit a un stock suivi, en centilitres.
+        # Un stock non suivi (actif=False) est refuse comme une absence de stock.
+        # / Check the product has a tracked stock in centiliters
+        stock = stock_suivi_du_produit_ou_none(product)
+        if stock is None:
             return Response(
                 {"detail": _("Ce produit n'a pas de stock inventaire.")},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        stock = product.stock_inventaire
         if stock.unite != UniteStock.CL:
             return Response(
                 {"detail": _("Le stock de ce produit n'est pas en centilitres.")},
@@ -182,6 +207,14 @@ def stock_action_view(request, stock_uuid):
     5. Rend le partial stock_actions_partial.html
     """
     stock = get_object_or_404(Stock, pk=stock_uuid)
+
+    # Stock non suivi : aucune opération. Le panneau renvoyé est celui de
+    # l'état non suivi (formulaire « Suivre le stock »).
+    # / Untracked stock: no operation, the resume form is shown.
+    if not stock.actif:
+        return _rendre_panneau_stock(
+            request, stock, erreur_feedback=MESSAGE_SUIVI_DESACTIVE
+        )
 
     serializer = StockActionSerializer(data=request.POST)
 
@@ -233,6 +266,26 @@ def stock_action_view(request, stock_uuid):
         erreur_feedback = " ".join(messages_erreur)
         stock.refresh_from_db()
 
+    return _rendre_panneau_stock(
+        request,
+        stock,
+        message_feedback=message_feedback,
+        erreur_feedback=erreur_feedback,
+    )
+
+
+def _rendre_panneau_stock(request, stock, message_feedback=None, erreur_feedback=None):
+    """
+    Rend le panneau d'opérations de stock (stock_actions_partial.html).
+    / Renders the stock operations panel.
+
+    LOCALISATION : inventaire/views.py
+
+    Utilisée par les trois vues qui répondent au panneau en HTMX :
+    stock_action_view, stock_desactiver_suivi_view, stock_reprendre_suivi_view.
+    Le partial choisit son état (suivi / non suivi) d'après stock.actif.
+    / Used by the three views answering the panel. The partial picks its state.
+    """
     # Derniers mouvements manuels pour l'aperçu (pas les ventes/débits auto)
     # / Recent manual movements for preview (not auto sales/meter debits)
     derniers_mouvements = (
@@ -259,3 +312,84 @@ def stock_action_view(request, stock_uuid):
         request=request,
     )
     return HttpResponse(html)
+
+
+def stock_desactiver_suivi_view(request, stock_uuid):
+    """
+    Désactive le suivi d'un stock depuis le panneau d'opérations de l'admin.
+    / Deactivates stock tracking from the admin operations panel.
+
+    LOCALISATION : inventaire/views.py
+
+    FLUX :
+    1. Reçoit le POST du bouton « Désactiver le suivi » (stock_actions_partial.html)
+    2. StockService.desactiver_suivi : actif=False, aucun mouvement, caisses prévenues
+    3. Rend le panneau dans l'état « non suivi »
+
+    Routée par StockAdmin.get_urls (Administration/admin/inventaire.py),
+    derrière admin_view : mêmes droits que les opérations de stock.
+    """
+    if request.method != "POST":
+        return HttpResponse(status=405)
+
+    stock = get_object_or_404(Stock, pk=stock_uuid)
+    if stock.actif:
+        StockService.desactiver_suivi(stock)
+
+    return _rendre_panneau_stock(
+        request,
+        stock,
+        message_feedback=_("Suivi du stock désactivé. Le journal est conservé."),
+    )
+
+
+def stock_reprendre_suivi_view(request, stock_uuid):
+    """
+    Reprend le suivi d'un stock depuis le panneau d'opérations de l'admin.
+    / Resumes stock tracking from the admin operations panel.
+
+    LOCALISATION : inventaire/views.py
+
+    FLUX :
+    1. Reçoit le POST du formulaire « Suivre le stock — quantité comptée »
+    2. Valide avec ReprendreSuiviSerializer (quantité obligatoire, 0 accepté)
+    3. StockService.reprendre_suivi : actif=True + ajustement « Reprise du suivi »
+    4. Rend le panneau dans l'état « suivi », ou l'erreur dans l'état « non suivi »
+
+    Routée par StockAdmin.get_urls (Administration/admin/inventaire.py).
+    """
+    if request.method != "POST":
+        return HttpResponse(status=405)
+
+    stock = get_object_or_404(Stock, pk=stock_uuid)
+
+    # Déjà suivi (double clic, deux onglets) : rien à reprendre
+    # / Already tracked: nothing to resume
+    if stock.actif:
+        return _rendre_panneau_stock(request, stock)
+
+    serializer = ReprendreSuiviSerializer(data=request.POST)
+    if not serializer.is_valid():
+        messages_erreur = []
+        for champ, erreurs in serializer.errors.items():
+            for erreur in erreurs:
+                messages_erreur.append(str(erreur))
+        return _rendre_panneau_stock(
+            request, stock, erreur_feedback=" ".join(messages_erreur)
+        )
+
+    utilisateur = request.user if request.user.is_authenticated else None
+    StockService.reprendre_suivi(
+        stock=stock,
+        quantite_comptee=serializer.validated_data["quantite_comptee"],
+        utilisateur=utilisateur,
+    )
+    stock.refresh_from_db()
+
+    stock_lisible = _formater_stock_lisible(stock.quantite, stock.unite)
+    return _rendre_panneau_stock(
+        request,
+        stock,
+        message_feedback=_("Le stock est suivi. Stock actuel : %(stock)s")
+        % {"stock": stock_lisible},
+    )

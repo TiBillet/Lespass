@@ -348,6 +348,48 @@ class TestCreerLignesArticlesRetourTuple(FastTenantTestCase):
         assert len(lignes) == 1
         assert produits_stock_negatif == []
 
+    def test_pas_d_alerte_stock_negatif_si_le_stock_est_masque_en_caisse(self):
+        """Stock masque sur la tuile (afficher_en_caisse=False) : la vente qui fait
+        passer le stock sous 0 ne remonte pas d'alerte. L'alerte montrerait la
+        quantite au caissier. Le stock est quand meme decompte.
+        / Hidden stock: no negative-stock alert, but the stock is still decremented."""
+        from django.db import transaction as db_transaction
+
+        from laboutik.views import _creer_lignes_articles
+
+        # Stock 200g masque, on vend 500g — vente hors stock autorisee
+        # / Hidden 200g stock, sell 500g — out-of-stock allowed
+        stock_masque = Stock.objects.create(
+            product=self.produit,
+            quantite=200,
+            unite=UniteStock.GR,
+            autoriser_vente_hors_stock=True,
+            afficher_en_caisse=False,
+        )
+
+        articles_panier = [
+            {
+                "product": self.produit,
+                "price": self.prix,
+                "quantite": 1,
+                "prix_centimes": 600,  # 500g a 12€/kg = 6€
+                "weight_amount": 500,
+            }
+        ]
+
+        with db_transaction.atomic():
+            lignes, produits_stock_negatif = _creer_lignes_articles(
+                articles_panier, "espece"
+            )
+
+        assert len(lignes) == 1
+        assert produits_stock_negatif == []
+
+        # Le stock masque est toujours compte : 200 - 500 = -300
+        # / The hidden stock is still counted
+        stock_masque.refresh_from_db()
+        assert stock_masque.quantite == -300
+
 
 class TestFlowPaiementStock(FastTenantTestCase):
     """Tests du flow HTTP complet : blocage 400 et alerte 200.

@@ -462,10 +462,17 @@ function tarifAjouterPoids(zone, btn) {
 	// (hx_stock_badge.html). Si le badge n'existe pas, on garde l'ancienne valeur.
 	// / data-tarifs stock is frozen at page load. Prefer the live quantity from the
 	// tile stock badge (updated by WebSocket), fall back to the frozen value.
+	// Un badge SANS data-stock-quantite = stock non suivi (desactive pendant que la
+	// caisse etait ouverte) : pas de garde, meme regle que articles.js.
+	// / A badge WITHOUT data-stock-quantite = untracked stock: no guard.
 	let stockDisponibleStr = btn.dataset.stockDisponible
 	const badgeStockDeLaTuile = document.querySelector(`#stock-badge-${btn.dataset.productUuid}`)
-	if (badgeStockDeLaTuile && badgeStockDeLaTuile.dataset.stockQuantite !== undefined) {
-		stockDisponibleStr = badgeStockDeLaTuile.dataset.stockQuantite
+	if (badgeStockDeLaTuile) {
+		if (badgeStockDeLaTuile.dataset.stockQuantite !== undefined) {
+			stockDisponibleStr = badgeStockDeLaTuile.dataset.stockQuantite
+		} else {
+			stockDisponibleStr = ''
+		}
 	}
 	const stockDisponible = (stockDisponibleStr === '' || stockDisponibleStr === undefined)
 		? null

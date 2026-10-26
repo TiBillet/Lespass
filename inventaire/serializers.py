@@ -109,3 +109,25 @@ class StockActionSerializer(serializers.Serializer):
         allow_blank=True,
         max_length=200,
     )
+
+
+class ReprendreSuiviSerializer(serializers.Serializer):
+    """
+    Validation de la reprise du suivi d'un stock désactivé.
+    La quantité comptée est obligatoire : pendant la désactivation, les ventes
+    n'ont pas été décomptées, l'ancienne quantité est fausse. 0 est accepté.
+    / Validation for resuming a deactivated stock. The counted quantity is
+    required (0 accepted).
+
+    LOCALISATION : inventaire/serializers.py
+    """
+
+    quantite_comptee = serializers.IntegerField(
+        min_value=0,
+        error_messages={
+            "required": _("Indiquez la quantité comptée pour suivre le stock."),
+            "null": _("Indiquez la quantité comptée pour suivre le stock."),
+            "invalid": _("Indiquez la quantité comptée pour suivre le stock."),
+            "min_value": _("La quantité doit être positive ou nulle."),
+        },
+    )

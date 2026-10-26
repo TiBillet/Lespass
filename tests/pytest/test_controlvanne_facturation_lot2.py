@@ -162,6 +162,43 @@ class TestFacturationLot2:
         # 200 ml à 5 €/L = 1,00 € facturé / billed
         assert reponse.json()["montant_centimes"] == 100
 
+    def test_04b_tirage_sur_un_fut_au_stock_non_suivi_ne_decompte_rien(
+        self, billing_client, billing_headers, tireuse_billing, tenant, asset_tlf
+    ):
+        """
+        Stock du fût non suivi (actif=False) : le tirage est facturé,
+        mais StockService.decrementer_pour_vente n'est jamais appelé.
+        / Untracked keg stock: the pour is billed, the stock is not decremented.
+        """
+        from inventaire.models import Stock, UniteStock
+
+        carte = _nouvelle_carte(tenant, asset_tlf, 1000)
+        with tenant_context(tenant):
+            fut = tireuse_billing.fut_actif
+            stock_du_fut, _cree = Stock.objects.get_or_create(
+                product=fut,
+                defaults={"quantite": 0, "unite": UniteStock.CL, "seuil_alerte": 0},
+            )
+            stock_du_fut.actif = False
+            stock_du_fut.save(update_fields=["actif"])
+
+        donnees = {"tireuse_uuid": str(tireuse_billing.uuid), "uid": carte.tag_id}
+        assert _poster(
+            billing_client, billing_headers, "authorize", donnees
+        ).json()["authorized"]
+        with mock.patch(
+            "inventaire.services.StockService.decrementer_pour_vente"
+        ) as decrementer:
+            reponse = _poster(
+                billing_client,
+                billing_headers,
+                "event",
+                {**donnees, "event_type": "pour_end", "volume_ml": "200.00"},
+            )
+        assert reponse.status_code == 200, reponse.content
+        assert reponse.json()["montant_centimes"] == 100
+        decrementer.assert_not_called()
+
     def test_05_reservoir_decremente_sur_la_valeur_a_jour(
         self, tireuse_billing, tenant, asset_tlf
     ):

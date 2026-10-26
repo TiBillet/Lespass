@@ -141,6 +141,7 @@ class StockService:
         seuil_alerte=None,
         autoriser_vente_hors_stock=True,
         utilisateur=None,
+        afficher_en_caisse=True,
     ):
         """
         Crée le stock d'un produit, avec sa quantité de départ tracée.
@@ -166,6 +167,7 @@ class StockService:
         :param seuil_alerte: int ou None (None = pas d'alerte)
         :param autoriser_vente_hors_stock: bool
         :param utilisateur: TibilletUser ou None
+        :param afficher_en_caisse: bool. Faux = pas de pastille sur la tuile.
         :return: l'instance Stock créée, relue depuis la base
         """
         from django.utils.translation import gettext
@@ -176,6 +178,7 @@ class StockService:
             unite=unite,
             seuil_alerte=seuil_alerte,
             autoriser_vente_hors_stock=autoriser_vente_hors_stock,
+            afficher_en_caisse=afficher_en_caisse,
         )
 
         il_y_a_une_quantite_de_depart = quantite_initiale and quantite_initiale > 0
@@ -232,6 +235,67 @@ class StockService:
         _prevenir_les_caisses_apres_commit(stock)
 
 
+    @staticmethod
+    def desactiver_suivi(stock):
+        """
+        Arrête le suivi du stock : il n'est plus décompté, plus affiché, plus bloquant.
+        / Stops stock tracking: no more decrement, badge or blocking.
+
+        LOCALISATION : inventaire/services.py
+
+        Aucun mouvement : rien n'entre ni ne sort. La quantité reste figée en base.
+        La ligne Stock est gardée : son journal (MouvementStock en CASCADE) et son
+        unité (ventes au poids ou au volume) restent utiles.
+        Les caisses ouvertes sont prévenues : le badge disparaît de la tuile.
+        / No movement. The row is kept for its log and its unit. POS terminals notified.
+
+        Appelée par stock_desactiver_suivi_view (inventaire/views.py).
+
+        :param stock: instance Stock
+        """
+        stock.actif = False
+        stock.save(update_fields=["actif"])
+
+        logger.info(f"Suivi du stock désactivé : {stock.product.name}")
+
+        _prevenir_les_caisses_apres_commit(stock)
+
+    @staticmethod
+    def reprendre_suivi(stock, quantite_comptee, utilisateur=None):
+        """
+        Reprend le suivi d'un stock désactivé, à partir de la quantité comptée.
+        / Resumes tracking of a deactivated stock, from the counted quantity.
+
+        LOCALISATION : inventaire/services.py
+
+        Pendant la désactivation, les ventes n'ont pas été décomptées :
+        l'ancienne quantité est fausse. On repart de la quantité comptée,
+        enregistrée comme un ajustement (AJ) « Reprise du suivi » dans le journal.
+        ajuster_inventaire prévient les caisses après le commit : le stock relu
+        est déjà actif, le badge revient avec la nouvelle quantité.
+        / Old quantity is wrong after deactivation: restart from the counted one,
+        traced as an AJ movement. ajuster_inventaire notifies POS terminals.
+
+        Appelée par stock_reprendre_suivi_view (inventaire/views.py).
+
+        :param stock: instance Stock (inactif)
+        :param quantite_comptee: int >= 0
+        :param utilisateur: TibilletUser ou None
+        """
+        from django.utils.translation import gettext
+
+        with transaction.atomic():
+            stock.actif = True
+            stock.save(update_fields=["actif"])
+
+            StockService.ajuster_inventaire(
+                stock=stock,
+                stock_reel=quantite_comptee,
+                motif=gettext("Reprise du suivi"),
+                utilisateur=utilisateur,
+            )
+
+
 class ResumeStockService:
     """
     Service pour le résumé stock intégré aux clôtures de caisse.
@@ -279,8 +343,10 @@ class ResumeStockService:
                 donnees["ajustements"] += mouvement.quantite
 
         # Alertes stock bas / Low stock alerts
+        # Un stock non suivi (actif=False) n'a pas d'alerte
+        # / An untracked stock has no alert
         alertes = []
-        for stock in Stock.objects.select_related("product").all():
+        for stock in Stock.objects.select_related("product").filter(actif=True):
             if stock.est_en_alerte() or stock.est_en_rupture():
                 alertes.append(
                     {

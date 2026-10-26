@@ -83,6 +83,7 @@ def _article_a_l_unite(stock, autoriser_hors_stock):
         "stock_bloquant": stock <= 0 and not autoriser_hors_stock,
         "stock_en_alerte": False,
         "stock_en_rupture": stock <= 0,
+        "stock_afficher_en_caisse": True,
         "stock_quantite_lisible": str(stock),
     }
 
@@ -116,6 +117,7 @@ def _article_multi_tarif_en_cl(stock_cl):
         "stock_bloquant": False,
         "stock_en_alerte": False,
         "stock_en_rupture": False,
+        "stock_afficher_en_caisse": True,
         "stock_quantite_lisible": f"{stock_cl} cl",
     }
 

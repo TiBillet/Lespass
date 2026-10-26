@@ -561,6 +561,24 @@ class TestStockViewSet(FastTenantTestCase):
 
         assert response.status_code == 400
 
+    def test_operations_refusees_sur_un_stock_non_suivi(self):
+        """Stock non suivi (actif=False) : réception, perte et offert renvoient 400,
+        sans mouvement ni changement de quantité.
+        / Untracked stock: reception, loss and offered return 400, no change."""
+        from inventaire.models import MouvementStock
+
+        self.stock.actif = False
+        self.stock.save(update_fields=["actif"])
+
+        for action in ["reception", "perte", "offert"]:
+            url = f"/api/inventaire/stock/{self.stock.pk}/{action}/"
+            response = self.client.post(url, {"quantite": 10}, format="json")
+            assert response.status_code == 400, action
+
+        self.stock.refresh_from_db()
+        assert self.stock.quantite == 3000
+        assert MouvementStock.objects.filter(stock=self.stock).count() == 0
+
 
 class TestDebitMetreViewSet(FastTenantTestCase):
     """Tests pour l'endpoint DebitMetreViewSet (capteur debit metre).
@@ -669,6 +687,29 @@ class TestDebitMetreViewSet(FastTenantTestCase):
 
         assert response.status_code == 400
 
+    def test_debit_metre_refuse_sur_un_stock_non_suivi(self):
+        """Stock en CL non suivi (actif=False) : 400, aucun mouvement.
+        / Untracked CL stock: 400, no movement."""
+        from inventaire.models import MouvementStock
+
+        self.stock.actif = False
+        self.stock.save(update_fields=["actif"])
+
+        response = self.client.post(
+            "/api/inventaire/debit-metre/",
+            {
+                "product_uuid": str(self.product.uuid),
+                "quantite_cl": 850,
+                "capteur_id": "pi-tireuse-01",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        self.stock.refresh_from_db()
+        assert self.stock.quantite == 5000
+        assert MouvementStock.objects.filter(stock=self.stock).count() == 0
+
 
 class TestResumeStockCloture(FastTenantTestCase):
     """Tests pour ResumeStockService (résumé stock dans clôture de caisse).
@@ -748,6 +789,27 @@ class TestResumeStockCloture(FastTenantTestCase):
         assert produit["receptions"] == 0
         assert produit["debit_metre"] == 0
         assert produit["ajustements"] == 0
+
+    def test_stock_non_suivi_absent_des_alertes_du_resume(self):
+        """Un stock non suivi (actif=False) sous son seuil n'a pas d'alerte.
+        Témoin : le même stock suivi en a une.
+        / An untracked stock below its threshold has no alert."""
+        from inventaire.models import MouvementStock
+        from inventaire.services import ResumeStockService
+
+        self.stock.quantite = 100
+        self.stock.save(update_fields=["quantite"])
+        mouvements = MouvementStock.objects.filter(cloture__isnull=True)
+
+        resume_suivi = ResumeStockService.generer_resume(mouvements)
+        noms_en_alerte = [alerte["nom"] for alerte in resume_suivi["alertes"]]
+        assert "Bière résumé clôture" in noms_en_alerte
+
+        self.stock.actif = False
+        self.stock.save(update_fields=["actif"])
+        resume_non_suivi = ResumeStockService.generer_resume(mouvements)
+        noms_en_alerte = [alerte["nom"] for alerte in resume_non_suivi["alertes"]]
+        assert "Bière résumé clôture" not in noms_en_alerte
 
     def test_rattacher_mouvements_a_cloture(self):
         """rattacher_a_cloture lie les mouvements orphelins à la clôture.

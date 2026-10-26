@@ -1,9 +1,9 @@
 # Chantier 01 — Désactiver le suivi de stock d'un produit
 
 **Date :** 2026-10-23
-**Statut :** spec relue (Fable 5, 2026-10-23) et corrigée, rien de codé
-**Migration :** Oui — `inventaire/migrations/0002_stock_actif.py` (`AddField`, `default=True`).
-`0003` si le chantier 02 (`afficher_en_caisse`) est livré avant.
+**Statut :** **codé le 2026-10-24, non commité** (migration appliquée en dev). D10 validée
+par le mainteneur le 2026-10-24. CHANGELOG : `CHANGELOG/2026-10-24-stock-desactivation.md`.
+**Migration :** Oui — `inventaire/migrations/0003_stock_actif.py` (`AddField`, `default=True`).
 Interaction avec le chantier 02 : un stock inactif n'a pas de badge, quel que soit
 `afficher_en_caisse` (voir `CHANTIER-02-afficher-en-caisse.md`, D6).
 
@@ -49,7 +49,7 @@ On veut pouvoir **désactiver** le suivi, puis le **reprendre** plus tard.
 | D7 | Sur un stock inactif, **toutes les opérations manuelles sont refusées** (réception, perte, offert, ajustement, débitmètre, API, panel caisse). | Ajouter des mouvements à un stock non suivi n'a pas de sens. La reprise passe par D5. |
 | D8 | Un **fût branché** peut être désactivé. Il se comporte comme un fût sans stock (cf. § 7.2). | Comportement déjà géré par controlvanne. |
 | D9 | Désactiver ou reprendre **prévient les caisses ouvertes** par WebSocket : le badge apparaît ou disparaît sans recharger. | Même règle que les autres changements de stock hors vente. |
-| D10 | Le stock créé automatiquement par `save_related` (fût, tarif au poids) est créé **inactif**. | Sinon, décocher « Suivre le stock » sur un fût neuf donne quand même un stock suivi : le flux principal du chantier contredirait D3. `save_related` passe après `save_model` : si la case était cochée, `enregistrer_section_stock` a déjà créé le stock suivi et `save_related` ne fait rien. **Changement de comportement** : un produit au poids n'est plus décompté d'office (voir § 10). |
+| D10 | **(validée 2026-10-24)** Le stock créé automatiquement par `save_related` (fût, tarif au poids) est créé **inactif**. | Sinon, décocher « Suivre le stock » sur un fût neuf donne quand même un stock suivi : le flux principal du chantier contredirait D3. `save_related` passe après `save_model` : si la case était cochée, `enregistrer_section_stock` a déjà créé le stock suivi et `save_related` ne fait rien. **Changement de comportement** assumé : un produit au poids garde son unité (kg / L) mais n'est plus décompté d'office. Les stocks déjà créés restent suivis (`default=True`). |
 
 **Alternative écartée** : porter la bascule par la case « Suivre le stock » du formulaire
 produit (trois états). Écartée après relecture : le `clean()` du mixin ne serait jamais
@@ -316,12 +316,22 @@ suivi », texte de confirmation (et variante fût), « Le suivi de stock est dé
 quantité, « Non suivi », message `save_related`. Le workflow i18n sera à lancer par le
 mainteneur.
 
+## 9 bis. Écarts entre la spec et le code livré (2026-10-24)
+
+- **URLs de bascule** : construites dans `stock_actions_partial.html` avec la balise `url`,
+  au lieu d'être passées dans les cinq contextes (§ 7.5). Même résultat, aucun contexte à
+  modifier.
+- **Rendu du panneau** : une fonction `_rendre_panneau_stock` (`inventaire/views.py`)
+  sert les trois vues HTMX (opération, désactiver, reprendre).
+- **Test du panel d'appui long** (§ 8, test 8) : les méthodes `stock_action` et
+  `toggle_bloquant` sont appelées directement (pas de client HTTP de terminal en pytest).
+- **Non couvert par un test** : la correction de `tarif.js` (§ 7.4) et
+  `reservoir_max_ml` (§ 7.2). L'E2E « caisse ouverte, le badge disparaît en direct »
+  (§ 8) n'est pas écrit : le badge WebSocket est vérifié par pytest (HTML rendu).
+
 ## 10. Hors périmètre — questions ouvertes
 
-- **D10 change le comportement des produits au poids** : aujourd'hui décomptés d'office,
-  ils ne le seront plus qu'après « Suivre le stock ». Les stocks **déjà** créés ne changent
-  pas (la migration met `actif=True` partout). À confirmer par le mainteneur avant de coder ;
-  si refusé, retirer D10 et documenter qu'un fût neuf est toujours suivi.
 - **Historique des désactivations** : aucune trace de qui a désactivé et quand (D4).
   Un champ date ou un journal d'admin serait possible si le besoin apparaît.
+- **Écartés par le mainteneur (2026-10-24)** : filtre « Actifs » par défaut dans Inventaire > Stocks, et retrait du bouton « Ajouter un stock ». La liste montre tous les stocks avec la colonne « Suivi actif ».
 - **Panel caisse (appui long)** : pas de bascule depuis la caisse, seulement depuis l'admin.

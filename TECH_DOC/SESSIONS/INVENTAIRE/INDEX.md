@@ -11,11 +11,11 @@ La section Stock de la fiche produit est décrite dans
 
 | # | Chantier | Statut | Spec |
 |---|---|---|---|
-| 01 | Désactiver le suivi de stock d'un produit (booléen `actif`) | Spec relue (Fable) et corrigée, à valider (D10) | [SPEC.md](SPEC.md) |
-| 02 | Afficher ou masquer le stock sur la tuile de caisse (booléen `afficher_en_caisse`) | Spec relue (Fable) et corrigée, à valider (D7) | [CHANTIER-02-afficher-en-caisse.md](CHANTIER-02-afficher-en-caisse.md) |
+| 01 | Désactiver le suivi de stock d'un produit (booléen `actif`) | **Codé 2026-10-24, non commité** (migration `0003` appliquée en dev) — CHANGELOG `2026-10-24-stock-desactivation.md` | [SPEC.md](SPEC.md) |
+| 02 | Afficher ou masquer le stock sur la tuile de caisse (booléen `afficher_en_caisse`) | **Codé 2026-10-24, non commité** (migration `0002` appliquée en dev) — CHANGELOG `2026-10-24-stock-afficher-en-caisse.md` | [CHANTIER-02-afficher-en-caisse.md](CHANTIER-02-afficher-en-caisse.md) |
 
-Les deux chantiers sont indépendants. Le 02 est le plus court et sans décision en attente.
-Le premier livré prend la migration `inventaire 0002`, l'autre la `0003`.
+Les deux chantiers sont indépendants. Migrations : `inventaire 0002` (chantier 02),
+`inventaire 0003` (chantier 01).
 
 ## Ajouter un chantier
 

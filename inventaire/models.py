@@ -104,6 +104,35 @@ class Stock(models.Model):
         help_text=_("Si coché, la vente reste possible même en rupture de stock"),
     )
 
+    # Afficher le stock sur la tuile de la caisse. Décoché : le stock est toujours
+    # compté, mais la tuile n'affiche plus de pastille. Un article bloqué
+    # (rupture + vente hors stock interdite) affiche quand même « Épuisé ».
+    # / Show stock on the POS tile. Unchecked: still counted, no badge shown,
+    # except "Épuisé" when the item is blocked.
+    afficher_en_caisse = models.BooleanField(
+        default=True,
+        verbose_name=_("Afficher le stock sur la tuile"),
+        help_text=_(
+            "Décoché : la tuile n'affiche plus le stock restant. Le stock est toujours "
+            "compté. Un article bloqué affiche quand même « Épuisé ». "
+            "Le panel d'appui long et l'admin montrent toujours le stock."
+        ),
+    )
+
+    # Suivi du stock actif. Faux = le produit se comporte comme un produit sans stock :
+    # pas de décompte, pas de badge, pas de blocage. La ligne est gardée pour son
+    # journal (MouvementStock en CASCADE) et pour son unité (ventes au poids/volume).
+    # Basculer : StockService.desactiver_suivi / reprendre_suivi (inventaire/services.py).
+    # / Stock tracking on. False = behaves like a product without stock; the row is
+    # kept for its movement log and its unit.
+    actif = models.BooleanField(
+        default=True,
+        verbose_name=_("Suivi actif"),
+        help_text=_(
+            "Décoché : le stock n'est plus compté, mais son journal est conservé"
+        ),
+    )
+
     class Meta:
         verbose_name = _("Stock")
         verbose_name_plural = _("Stocks")
@@ -126,6 +155,29 @@ class Stock(models.Model):
 
     def __str__(self):
         return f"{self.product.name} — {self.quantite} {self.get_unite_display()}"
+
+
+def stock_suivi_du_produit_ou_none(produit):
+    """
+    Renvoie le Stock du produit s'il est suivi (actif), sinon None.
+    / Returns the product's Stock if tracked (active), else None.
+
+    LOCALISATION : inventaire/models.py
+
+    À utiliser partout où l'on DÉCOMPTE, BLOQUE ou AFFICHE le stock.
+    Ne pas l'utiliser pour lire l'UNITÉ d'une vente au poids : un stock
+    inactif garde son unité (kg ou L). Les lecteurs d'unité lisent
+    produit.stock_inventaire directement.
+    / Use wherever stock is DECREMENTED, BLOCKS or is SHOWN. Not for reading the
+    unit of a weight sale: an inactive stock keeps its unit.
+    """
+    try:
+        stock_du_produit = produit.stock_inventaire
+    except Stock.DoesNotExist:
+        return None
+    if not stock_du_produit.actif:
+        return None
+    return stock_du_produit
 
 
 class MouvementStock(models.Model):

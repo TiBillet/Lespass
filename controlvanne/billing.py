@@ -816,8 +816,9 @@ def facturer_tirage(
         # 7. Décrémenter le stock inventaire si le produit en a un
         # / Decrement inventory stock if the product has one
         #
-        # Pas de stock pour ce fût : rien à faire (cas normal). On le teste
-        # avec hasattr, sans try/except qui cacherait les vraies erreurs.
+        # Pas de stock suivi pour ce fût : rien à faire (cas normal). On le teste
+        # avec stock_suivi_du_produit_ou_none, sans try/except large qui cacherait
+        # les vraies erreurs. Un stock non suivi (actif=False) compte comme absent.
         # Stock présent : on le décrémente dans un SAVEPOINT (atomic imbriqué).
         # Si StockService échoue en base, seul le savepoint est annulé : la
         # facture (transactions, LigneArticle, session) reste valide, et
@@ -826,14 +827,16 @@ def facturer_tirage(
         # une erreur et TOUTE la facture était annulée (audit 2026-09-26, point 2.1).
         # / No stock: nothing to do. Stock: decrement inside a SAVEPOINT, so a
         # stock DB error only rolls back the savepoint; the bill stays valid.
-        le_produit_a_un_stock = hasattr(produit, "stock_inventaire")
-        if le_produit_a_un_stock:
+        from inventaire.models import stock_suivi_du_produit_ou_none
+
+        stock_suivi_du_fut = stock_suivi_du_produit_ou_none(produit)
+        if stock_suivi_du_fut is not None:
             from inventaire.services import StockService
 
             try:
                 with transaction.atomic():
                     StockService.decrementer_pour_vente(
-                        stock=produit.stock_inventaire,
+                        stock=stock_suivi_du_fut,
                         contenance=volume_cl,
                         qty=1,
                         ligne_article=ligne_du_tirage,
@@ -843,8 +846,7 @@ def facturer_tirage(
                 # après le commit de la facture. / Notify POS terminals after commit.
                 from wsocket.broadcast import broadcast_etat_stock
 
-                stock_du_fut = produit.stock_inventaire
-                transaction.on_commit(lambda: broadcast_etat_stock(stock_du_fut))
+                transaction.on_commit(lambda: broadcast_etat_stock(stock_suivi_du_fut))
             except Exception:
                 logger.exception(
                     f"Stock non décrémenté pour le tirage (tireuse={tireuse.nom_tireuse}, "

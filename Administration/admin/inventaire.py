@@ -73,7 +73,8 @@ LABELS_TYPE_MOUVEMENT = {
 
 
 # ---------------------------------------------------------------------------
-# Admin Stock — liste et modification du seuil d'alerte / vente hors stock.
+# Admin Stock — liste et modification du seuil d'alerte / vente hors stock /
+# affichage sur la tuile.
 # Article, quantité et unité sont en lecture seule (modifiés par les mouvements).
 # Aussi utilisé pour l'autocomplete dans MouvementStockAdmin.
 # / Stock admin — list and edit alert threshold / out-of-stock sales flag.
@@ -102,10 +103,11 @@ class StockAdmin(ModelAdmin):
     """
     Admin des stocks produits.
     L'article, la quantité et l'unité sont en lecture seule.
-    Le seuil d'alerte et le flag de vente hors stock sont modifiables.
+    Le seuil d'alerte, la vente hors stock et l'affichage sur la tuile
+    sont modifiables.
     / Product stock admin.
     Article, quantity and unit are read-only.
-    Alert threshold and out-of-stock flag are editable.
+    Alert threshold, out-of-stock flag and tile display are editable.
 
     LOCALISATION : Administration/admin/inventaire.py
     """
@@ -145,8 +147,18 @@ class StockAdmin(ModelAdmin):
         display_stock_unite,
         "seuil_alerte",
         "autoriser_vente_hors_stock",
+        "afficher_en_caisse",
+        "actif",
     ]
-    list_editable = ["seuil_alerte", "autoriser_vente_hors_stock"]
+    # « Suivi actif » est en lecture seule : on le bascule dans le panneau
+    # d'opérations (la reprise demande la quantité comptée).
+    # / "Tracking on" is read-only here: toggled from the operations panel.
+    list_filter = ["actif"]
+    list_editable = [
+        "seuil_alerte",
+        "autoriser_vente_hors_stock",
+        "afficher_en_caisse",
+    ]
     list_display_links = [display_stock_article]
 
     fields = [
@@ -155,6 +167,7 @@ class StockAdmin(ModelAdmin):
         "unite",
         "seuil_alerte",
         "autoriser_vente_hors_stock",
+        "afficher_en_caisse",
     ]
 
     def lien_vers_pos_product(self, obj):
@@ -194,6 +207,7 @@ class StockAdmin(ModelAdmin):
                 "unite",
                 "seuil_alerte",
                 "autoriser_vente_hors_stock",
+                "afficher_en_caisse",
             ]
         return [
             "product",
@@ -201,6 +215,7 @@ class StockAdmin(ModelAdmin):
             "unite",
             "seuil_alerte",
             "autoriser_vente_hors_stock",
+            "afficher_en_caisse",
         ]
 
     def get_readonly_fields(self, request, obj=None):
@@ -227,7 +242,7 @@ class StockAdmin(ModelAdmin):
         Dans les deux cas, les caisses ouvertes sont prévenues par WebSocket
         (badge stock de la tuile) :
         - création : via StockService.creer_mouvement ;
-        - modification (vente hors stock, seuil, unité) : directement ici.
+        - modification (vente hors stock, seuil, unité, affichage) : directement ici.
         / In both cases open POS terminals are notified by WebSocket.
         """
         from django.db import transaction
@@ -247,6 +262,7 @@ class StockAdmin(ModelAdmin):
                 seuil_alerte=obj.seuil_alerte,
                 autoriser_vente_hors_stock=obj.autoriser_vente_hors_stock,
                 utilisateur=request.user,
+                afficher_en_caisse=obj.afficher_en_caisse,
             )
             # L'admin redirige avec obj.pk : on reprend celui du stock créé
             # / The admin redirects using obj.pk: reuse the created stock's
@@ -289,16 +305,31 @@ class StockAdmin(ModelAdmin):
 
     def get_urls(self):
         """
-        Ajoute l'URL pour les actions manuelles de stock (HTMX partial).
-        / Adds the URL for manual stock actions (HTMX partial).
+        Ajoute les URLs du panneau d'opérations (HTMX partial) :
+        actions manuelles, désactiver le suivi, reprendre le suivi.
+        / Adds the operations panel URLs: manual actions, deactivate, resume.
         """
-        from inventaire.views import stock_action_view
+        from inventaire.views import (
+            stock_action_view,
+            stock_desactiver_suivi_view,
+            stock_reprendre_suivi_view,
+        )
 
         custom_urls = [
             path(
                 "<uuid:stock_uuid>/action/",
                 self.admin_site.admin_view(stock_action_view),
                 name="inventaire_stock_action",
+            ),
+            path(
+                "<uuid:stock_uuid>/desactiver-suivi/",
+                self.admin_site.admin_view(stock_desactiver_suivi_view),
+                name="inventaire_stock_desactiver_suivi",
+            ),
+            path(
+                "<uuid:stock_uuid>/reprendre-suivi/",
+                self.admin_site.admin_view(stock_reprendre_suivi_view),
+                name="inventaire_stock_reprendre_suivi",
             ),
         ]
         return custom_urls + super().get_urls()

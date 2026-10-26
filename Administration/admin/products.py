@@ -2069,10 +2069,11 @@ class POSProductAdmin(ProductAdmin):
 
     def save_related(self, request, form, formsets, change):
         """Apres sauvegarde des inlines : si un tarif a poids_mesure=True
-        et que le produit n'a pas de Stock, en creer un vide.
+        et que le produit n'a pas de Stock, en creer un vide et NON SUIVI
+        (actif=False) : il ne sert qu'a porter l'unite (g).
         Si le Stock existe mais est en unite UN (pieces), avertir.
         / After saving inlines: if a price has poids_mesure=True
-        and the product has no Stock, create an empty one.
+        and the product has no Stock, create an empty, untracked one.
         If Stock exists but uses UN (pieces), warn."""
         super().save_related(request, form, formsets, change)
         produit = form.instance
@@ -2103,18 +2104,26 @@ class POSProductAdmin(ProductAdmin):
         except Exception:
             # Pas de stock → en creer un vide en grammes
             # / No stock → create an empty one in grams
+            # Le stock créé ici n'est PAS suivi (actif=False) : il porte l'unité
+            # (g ou cl) des ventes au poids/volume, sans décompte. Si « Suivre le
+            # stock » était coché, enregistrer_section_stock (save_model, avant
+            # save_related) a déjà créé un stock suivi et on n'arrive pas ici.
+            # / The stock created here is NOT tracked: it carries the weight/volume
+            # unit only. A checked "Track stock" already created a tracked one.
             Stock.objects.create(
                 product=produit,
                 quantite=0,
                 unite=UniteStock.GR,
                 seuil_alerte=0,
                 autoriser_vente_hors_stock=True,
+                actif=False,
             )
             messages.info(
                 request,
                 _(
-                    "Stock automatically created in grams (quantity=0). "
-                    "Remember to add stock via a reception."
+                    "Unité de vente enregistrée en grammes. Le stock n'est pas "
+                    "suivi : pour le compter, utilisez « Suivre le stock » dans "
+                    "la section Stock."
                 ),
             )
 
@@ -2576,18 +2585,26 @@ class FutProductAdmin(ProductAdmin):
         except Exception:
             # Pas de stock → en creer un vide en centilitres (futs = liquides)
             # / No stock → create an empty one in centiliters (kegs = liquids)
+            # Le stock créé ici n'est PAS suivi (actif=False) : il porte l'unité
+            # (g ou cl) des ventes au poids/volume, sans décompte. Si « Suivre le
+            # stock » était coché, enregistrer_section_stock (save_model, avant
+            # save_related) a déjà créé un stock suivi et on n'arrive pas ici.
+            # / The stock created here is NOT tracked: it carries the weight/volume
+            # unit only. A checked "Track stock" already created a tracked one.
             Stock.objects.create(
                 product=produit,
                 quantite=0,
                 unite=UniteStock.CL,
                 seuil_alerte=0,
                 autoriser_vente_hors_stock=True,
+                actif=False,
             )
             messages.info(
                 request,
                 _(
-                    "Stock automatically created in centiliters (quantity=0). "
-                    "Remember to add stock via a reception."
+                    "Unité de vente enregistrée en centilitres. Le stock n'est pas "
+                    "suivi : pour le compter, utilisez « Suivre le stock » dans "
+                    "la section Stock."
                 ),
             )
 

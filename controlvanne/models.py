@@ -337,7 +337,11 @@ class TireuseBec(models.Model):
             try:
                 from inventaire.models import Stock
 
-                stock = Stock.objects.filter(product=self.fut_actif).first()
+                # Stock non suivi (actif=False) : même repli qu'un fût sans stock
+                # / Untracked stock: same fallback as a keg without stock
+                stock = Stock.objects.filter(
+                    product=self.fut_actif, actif=True
+                ).first()
                 if stock and stock.quantite > 0:
                     # Stock en centilitres → conversion en ml
                     # / Stock in centiliters → convert to ml

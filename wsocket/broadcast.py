@@ -216,10 +216,16 @@ def donnees_badge_stock(stock):
     - data-stock-quantite : quantité disponible ;
     - data-autoriser-hors-stock : "false" si la vente hors stock est interdite ;
     - data-stock-bloquant : rupture ET vente hors stock interdite.
+    afficher_en_caisse ne pilote que la pastille visible : les data-* restent
+    rendus, pour que la garde JS bloque comme le serveur.
+    / afficher_en_caisse only drives the visible badge; data-* are always rendered.
+    suivi (Stock.actif) faux : badge vide, SANS data-* : la tuile se comporte
+    comme un produit sans stock (pas de garde, pas de blocage).
+    / suivi false: empty badge without data-*, like a product without stock.
 
     :param stock: instance inventaire.models.Stock
     :return: dict {product_uuid, quantite, unite, en_alerte, en_rupture, bloquant,
-             autoriser_vente_hors_stock, quantite_lisible}
+             autoriser_vente_hors_stock, afficher_en_caisse, suivi, quantite_lisible}
     """
     # Import local : laboutik.views importe ce module (évite l'import circulaire)
     # / Local import: laboutik.views imports this module (avoids circular import)
@@ -233,6 +239,8 @@ def donnees_badge_stock(stock):
         "en_rupture": stock.est_en_rupture(),
         "bloquant": stock.est_en_rupture() and not stock.autoriser_vente_hors_stock,
         "autoriser_vente_hors_stock": stock.autoriser_vente_hors_stock,
+        "afficher_en_caisse": stock.afficher_en_caisse,
+        "suivi": stock.actif,
         "quantite_lisible": _formater_stock_lisible(stock.quantite, stock.unite),
     }
 

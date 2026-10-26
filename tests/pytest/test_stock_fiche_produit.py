@@ -148,6 +148,7 @@ class TestEnregistrerSectionStock:
                     "stock_unite": "UN",
                     "stock_seuil_alerte": 5,
                     "stock_vente_hors_stock": False,
+                    "stock_afficher_en_caisse": True,
                 },
             )
             produit_caisse_sans_stock.refresh_from_db()
@@ -209,14 +210,81 @@ class TestEnregistrerSectionStock:
                     "stock_unite": "UN",
                     "stock_seuil_alerte": 4,
                     "stock_vente_hors_stock": False,
+                    "stock_afficher_en_caisse": True,
                 },
             )
             stock.refresh_from_db()
             assert stock.quantite == 7
             assert stock.seuil_alerte == 4
             assert stock.autoriser_vente_hors_stock is False
+            assert stock.afficher_en_caisse is True
 
         assert _nombre_de_mouvements(tenant, produit_caisse_sans_stock) == 0
+
+    def test_05b_masquer_le_stock_sur_la_tuile_sans_toucher_la_quantite(
+        self, tenant, produit_caisse_sans_stock, admin_user
+    ):
+        """
+        Stock existant, case « Afficher le stock sur la tuile » décochée :
+        afficher_en_caisse passe à False, la quantité ne bouge pas, aucun mouvement.
+        / Hiding the stock on the tile: flag off, quantity untouched, no movement.
+        """
+        from types import SimpleNamespace
+
+        stock = _creer_stock(tenant, produit_caisse_sans_stock, quantite=10)
+
+        with tenant_context(tenant):
+            from Administration.admin.stock_fiche_produit import (
+                enregistrer_section_stock,
+            )
+
+            enregistrer_section_stock(
+                SimpleNamespace(user=admin_user),
+                produit_caisse_sans_stock,
+                {
+                    "stock_unite": stock.unite,
+                    "stock_seuil_alerte": stock.seuil_alerte,
+                    "stock_vente_hors_stock": stock.autoriser_vente_hors_stock,
+                    "stock_afficher_en_caisse": False,
+                },
+            )
+            stock.refresh_from_db()
+            assert stock.afficher_en_caisse is False
+            assert stock.quantite == 10
+
+        assert _nombre_de_mouvements(tenant, produit_caisse_sans_stock) == 0
+
+    def test_05c_stock_cree_masque_quand_la_case_est_decochee(
+        self, tenant, produit_caisse_sans_stock, admin_user
+    ):
+        """
+        Création du stock avec « Afficher le stock sur la tuile » décochée :
+        le stock est créé masqué.
+        / Stock created with the display switch off is created hidden.
+        """
+        from types import SimpleNamespace
+
+        with tenant_context(tenant):
+            from Administration.admin.stock_fiche_produit import (
+                enregistrer_section_stock,
+            )
+
+            enregistrer_section_stock(
+                SimpleNamespace(user=admin_user),
+                produit_caisse_sans_stock,
+                {
+                    "stock_suivi": True,
+                    "stock_quantite_initiale": 8,
+                    "stock_unite": "UN",
+                    "stock_seuil_alerte": None,
+                    "stock_vente_hors_stock": True,
+                    "stock_afficher_en_caisse": False,
+                },
+            )
+            produit_caisse_sans_stock.refresh_from_db()
+            stock = produit_caisse_sans_stock.stock_inventaire
+            assert stock.afficher_en_caisse is False
+            assert stock.quantite == 8
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -259,6 +327,10 @@ class TestFicheProduitSectionStock:
         assert 'form="stock-operations-hors-formulaire"' in contenu
         assert 'name="stock_seuil_alerte"' in contenu
         assert 'name="stock_quantite_initiale"' not in contenu
+        # Rendu obligatoire : un BooleanField non rendu vaut False à l'envoi,
+        # chaque enregistrement de la fiche masquerait alors le stock.
+        # / Must be rendered: an unrendered BooleanField posts as False.
+        assert 'name="stock_afficher_en_caisse"' in contenu
 
     def test_08_page_d_ajout_affiche_la_section_stock(self, admin_client):
         """Création d'un produit : section Stock présente, plus d'inline Stock."""
@@ -266,6 +338,7 @@ class TestFicheProduitSectionStock:
         assert reponse.status_code == 200
         contenu = reponse.content.decode()
         assert 'name="stock_suivi"' in contenu
+        assert 'name="stock_afficher_en_caisse"' in contenu
         assert "stock_inventaire-TOTAL_FORMS" not in contenu
 
     def test_09_reception_depuis_le_panneau_ajoute_au_stock(
@@ -482,6 +555,7 @@ class TestCreationProduitAvecStock:
                 "stock_unite": "UN",
                 "stock_seuil_alerte": "6",
                 "stock_vente_hors_stock": "on",
+                "stock_afficher_en_caisse": "on",
                 "prices-TOTAL_FORMS": "0",
                 "prices-INITIAL_FORMS": "0",
                 "prices-MIN_NUM_FORMS": "0",
@@ -503,6 +577,7 @@ class TestCreationProduitAvecStock:
                 stock = produit_cree.stock_inventaire
                 assert stock.quantite == 24
                 assert stock.seuil_alerte == 6
+                assert stock.afficher_en_caisse is True
                 assert stock.mouvements.count() == 1
             finally:
                 if produit_cree is not None:

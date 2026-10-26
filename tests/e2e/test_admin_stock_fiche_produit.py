@@ -153,6 +153,7 @@ def test_champs_stock_caches_tant_que_suivre_le_stock_n_est_pas_coche(
         "#id_stock_unite",
         "#id_stock_seuil_alerte",
         "#id_stock_vente_hors_stock",
+        "#id_stock_afficher_en_caisse",
     ]
     for selecteur in champs_dependants:
         assert not page.locator(selecteur).is_visible(), selecteur
@@ -179,3 +180,59 @@ def test_champs_stock_visibles_quand_le_produit_a_deja_un_stock(
     assert page.locator("#id_stock_suivi").count() == 0
     assert page.locator("#id_stock_unite").is_visible()
     assert page.locator("#id_stock_seuil_alerte").is_visible()
+
+
+def test_desactiver_puis_reprendre_le_suivi_depuis_la_fiche_produit(
+    page, login_as_admin, produit_caisse_avec_stock
+):
+    """
+    Parcours complet du chantier INVENTAIRE 01 (Stock.actif) :
+    1. « Désactiver le suivi » (confirmation acceptée) → le panneau passe en
+       « non suivi », sans recharger la page ;
+    2. la colonne Stock de la liste affiche « Non suivi » ;
+    3. « Suivre le stock » sans quantité → refus ;
+    4. avec 12 → le panneau revient avec les opérations et 12 en stock.
+    / Full flow: deactivate, list shows "Non suivi", resume refused without
+    quantity, resume with 12.
+    """
+    login_as_admin(page)
+    url_de_la_fiche = (
+        f"/admin/BaseBillet/posproduct/{produit_caisse_avec_stock.pk}/change/"
+    )
+    page.goto(url_de_la_fiche)
+
+    # 1. Désactiver : hx-confirm ouvre une boîte de confirmation, on l'accepte
+    # / 1. Deactivate: hx-confirm opens a confirm dialog, accepted
+    textes_de_confirmation = []
+    page.once(
+        "dialog",
+        lambda boite: (textes_de_confirmation.append(boite.message), boite.accept()),
+    )
+    page.locator('[data-testid="stock-btn-desactiver-suivi"]').click()
+    page.locator('[data-testid="stock-suivi-desactive"]').wait_for(timeout=10000)
+    assert "Le journal est conservé" in textes_de_confirmation[0]
+    assert page.locator('[data-testid="btn-reception"]').count() == 0
+    assert url_de_la_fiche in page.url
+
+    # 2. Liste des produits : « Non suivi »
+    # / 2. Product list: "Non suivi"
+    page.goto(f"/admin/BaseBillet/posproduct/?q={produit_caisse_avec_stock.name}")
+    badge = page.locator(
+        f'[data-testid="product-list-stock-{produit_caisse_avec_stock.pk}"]'
+    )
+    assert "Non suivi" in badge.inner_text()
+
+    # 3. Reprendre sans quantité : refus
+    # / 3. Resume without quantity: refused
+    page.goto(url_de_la_fiche)
+    page.locator('[data-testid="stock-btn-reprendre-suivi"]').click()
+    page.locator('[data-testid="stock-action-error"]').wait_for(timeout=10000)
+    assert page.locator('[data-testid="stock-suivi-desactive"]').is_visible()
+
+    # 4. Reprendre avec 12 : opérations de retour, stock à 12
+    # / 4. Resume with 12: operations back, stock at 12
+    page.locator('[data-testid="stock-input-quantite-comptee"]').fill("12")
+    page.locator('[data-testid="stock-btn-reprendre-suivi"]').click()
+    page.locator('[data-testid="btn-reception"]').wait_for(timeout=10000)
+    assert "12" in page.locator('[data-testid="stock-actuel-quantite"]').inner_text()
+    assert url_de_la_fiche in page.url

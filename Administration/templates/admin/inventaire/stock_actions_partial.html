@@ -1,7 +1,14 @@
 <!--
 PARTIAL HTMX — formulaire d'actions stock + feedback
-Renvoyé par stock_action_view() après chaque action.
+Renvoyé par stock_action_view(), stock_desactiver_suivi_view() et
+stock_reprendre_suivi_view() (inventaire/views.py) après chaque action.
 / HTMX partial — stock actions form + feedback.
+
+DEUX ÉTATS (Stock.actif) :
+- stock suivi : stock actuel, 4 opérations, bouton « Désactiver le suivi » ;
+- stock non suivi : message + formulaire « Suivre le stock — quantité comptée ».
+  Reprendre le suivi enregistre un ajustement « Reprise du suivi ».
+/ TWO STATES: tracked (operations + deactivate) / untracked (resume form).
 
 LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.html
 
@@ -30,6 +37,21 @@ qui entoure les boutons.
         {% translate "Opérations de stock" %} — {{ product_name }}
     </h3>
 
+    {% if message_feedback %}
+    <div style="padding: 10px 14px; margin-bottom: 16px; border-radius: 6px; background-color: #dcfce7; color: #166534; font-weight: 500;"
+         data-testid="stock-action-success">
+        {{ message_feedback }}
+    </div>
+    {% endif %}
+    {% if erreur_feedback %}
+    <div style="padding: 10px 14px; margin-bottom: 16px; border-radius: 6px; background-color: #fef2f2; color: #991b1b; font-weight: 500;"
+         data-testid="stock-action-error">
+        {{ erreur_feedback }}
+    </div>
+    {% endif %}
+
+    {% if stock.actif %}
+
     {% comment %}
     Stock actuel + état. Relu à chaque réponse HTMX : toujours à jour après une opération.
     / Current stock + state. Refreshed by each HTMX response.
@@ -49,19 +71,6 @@ qui entoure les boutons.
                   data-testid="stock-actuel-etat">{% translate "OK" %}</span>
         {% endif %}
     </p>
-
-    {% if message_feedback %}
-    <div style="padding: 10px 14px; margin-bottom: 16px; border-radius: 6px; background-color: #dcfce7; color: #166534; font-weight: 500;"
-         data-testid="stock-action-success">
-        {{ message_feedback }}
-    </div>
-    {% endif %}
-    {% if erreur_feedback %}
-    <div style="padding: 10px 14px; margin-bottom: 16px; border-radius: 6px; background-color: #fef2f2; color: #991b1b; font-weight: 500;"
-         data-testid="stock-action-error">
-        {{ erreur_feedback }}
-    </div>
-    {% endif %}
 
     <details open style="margin-bottom: 16px;">
         <summary style="cursor: pointer; font-size: 13px; color: var(--color-base-500, #6b7280); user-select: none;">
@@ -165,6 +174,75 @@ qui entoure les boutons.
             {% translate "Perte/casse" %}
         </button>
     </div>
+
+    {% comment %}
+    DÉSACTIVER LE SUIVI — le stock n'est plus décompté, son journal est gardé.
+    Le texte de confirmation dit l'effet. Pour un fût (categorie_article "U"),
+    il dit aussi ce qui se passe sur la tireuse.
+    / Deactivate tracking — no more decrement, the log is kept.
+    {% endcomment %}
+    <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--color-base-200, #e5e7eb);">
+        <button type="button"
+                hx-post="{% url 'staff_admin:inventaire_stock_desactiver_suivi' stock.pk %}"
+                hx-target="#stock-actions-container"
+                hx-swap="innerHTML"
+                {% if stock.product.categorie_article == "U" %}
+                hx-confirm="{% translate 'Désactiver le suivi du stock ? Les ventes ne seront plus décomptées et la caisse n’affichera plus le stock. Le journal est conservé. Sur la tireuse, le tirage continue sur la réserve en cours ; au prochain changement de fût, le réservoir repartira à 0.' %}"
+                {% else %}
+                hx-confirm="{% translate 'Désactiver le suivi du stock ? Les ventes ne seront plus décomptées et la caisse n’affichera plus le stock. Le journal est conservé.' %}"
+                {% endif %}
+                {% if csrf_token %}hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% endif %}
+                style="padding: 6px 14px; background-color: transparent; color: var(--color-base-600, #4b5563); border: 1px solid var(--color-base-300, #d1d5db); border-radius: 6px; cursor: pointer; font-size: 13px;"
+                data-testid="stock-btn-desactiver-suivi">
+            {% translate "Désactiver le suivi" %}
+        </button>
+    </div>
+
+    {% else %}
+
+    {% comment %}
+    STOCK NON SUIVI — pas de décompte, pas de badge en caisse.
+    Reprendre le suivi demande la quantité réellement comptée : pendant la
+    désactivation, les ventes n'ont pas été décomptées. Champ sans formulaire
+    propriétaire (form=...) : Entrée ne soumet pas la fiche.
+    / Untracked stock. Resuming asks for the counted quantity.
+    {% endcomment %}
+    <div style="padding: 12px 14px; margin-bottom: 16px; border-radius: 6px; background: var(--color-base-50, #f9fafb); font-size: 14px; line-height: 1.6; color: var(--color-base-600, #4b5563);"
+         data-testid="stock-suivi-desactive">
+        <p style="margin: 0 0 4px 0; font-weight: 600;">{% translate "Le suivi de stock est désactivé." %}</p>
+        <p style="margin: 0;">
+            {% translate "Les ventes ne sont plus décomptées et la caisse n’affiche pas le stock. L’unité reste utilisée pour les ventes au poids ou au volume." %}
+            {% translate "Dernière quantité connue" %} : {{ stock.quantite }} {{ stock.get_unite_display|lower }}.
+        </p>
+    </div>
+
+    <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;"
+         data-testid="stock-form-reprendre-suivi">
+        <div>
+            <label for="id_quantite_comptee" style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">
+                {% translate "Suivre le stock — quantité comptée" %}
+            </label>
+            <input type="number" name="quantite_comptee" id="id_quantite_comptee" required min="0"
+                   form="stock-operations-hors-formulaire"
+                   style="padding: 8px 12px; border: 1px solid var(--color-base-300, #d1d5db); border-radius: 6px; width: 160px; font-size: 14px;"
+                   data-testid="stock-input-quantite-comptee">
+        </div>
+        <button type="button"
+                hx-post="{% url 'staff_admin:inventaire_stock_reprendre_suivi' stock.pk %}"
+                hx-include="#id_quantite_comptee"
+                hx-target="#stock-actions-container"
+                hx-swap="innerHTML"
+                {% if csrf_token %}hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% endif %}
+                style="padding: 8px 18px; background-color: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
+                data-testid="stock-btn-reprendre-suivi">
+            {% translate "Suivre le stock" %}
+        </button>
+    </div>
+    <p style="margin: 8px 0 0 0; font-size: 13px; font-style: italic; color: var(--color-base-500, #6b7280);">
+        {% translate "La quantité comptée est enregistrée comme un ajustement « Reprise du suivi » dans le journal." %}
+    </p>
+
+    {% endif %}
 
     {% if derniers_mouvements %}
     <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-base-200, #e5e7eb);">

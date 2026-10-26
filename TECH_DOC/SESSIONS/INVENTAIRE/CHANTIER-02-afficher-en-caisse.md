@@ -43,7 +43,7 @@ Le `<div id="stock-badge-…">` porte aussi les `data-*` lus par la garde JS
 | D4 | Rien d'autre ne change : décompte, mouvements, récap quotidien, badges et filtres de l'admin, panel d'appui long de la caisse (« Stock actuel », `article_panel_stock.html`), jauge en % de l'écran de la tireuse (`controlvanne/models.py:330-352`). | Le lieu compte toujours son stock. Il le consulte dans l'admin ou dans le panel. |
 | D5 | Le réglage se modifie dans la section Stock de la fiche produit (à côté de « Autoriser vente hors stock ») et dans la liste `StockAdmin`. | Même mécanisme que les 3 réglages actuels. |
 | D6 | Avec le chantier 01 : un stock **inactif** n'a pas de badge, quel que soit `afficher_en_caisse`. La valeur est gardée et reprend effet au retour du suivi. | Côté vue, rien à coder : le chantier 01 renvoie `stock_quantite = None`. Côté `hx_stock_badge.html`, le **second** chantier livré emboîte sa condition dans celle du premier. |
-| D7 | Stock masqué : **pas d'alerte « Stock négatif »** sur l'écran de succès de la vente. | Cette alerte (`hx_return_payment_success.html:153-161`) affiche le nom et la quantité **à chaque vente** tant que le stock reste négatif. C'est justement le cas d'usage du chantier (compté, vente hors stock autorisée, masqué) : le caissier verrait le stock qu'on a voulu lui cacher. |
+| D7 | **(retenue 2026-10-24)** Stock masqué : **pas d'alerte « Stock négatif »** sur l'écran de succès de la vente. | Cette alerte (`hx_return_payment_success.html:153-161`) affiche le nom et la quantité **à chaque vente** tant que le stock reste négatif. C'est justement le cas d'usage du chantier (compté, vente hors stock autorisée, masqué) : le caissier verrait le stock qu'on a voulu lui cacher. |
 
 ## 4. Modèle
 

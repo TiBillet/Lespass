@@ -12,6 +12,12 @@ et remplace le contenu du conteneur #stock-actions-container.
 Aussi rendu dans la section Stock de la fiche produit
 (Administration/admin/stock_fiche_produit.py : panneau_operations_stock).
 
+Deux états, choisis par le partial d'après stock.actif : stock suivi
+(opérations + « Désactiver le suivi ») ou non suivi (« Suivre le stock —
+quantité comptée »). Les URLs de bascule sont construites dans le partial
+avec la balise url de Django.
+/ Two states picked by the partial from stock.actif.
+
 CONTEXT :
 - stock : instance Stock (via original dans Unfold)
 - product_name : nom du produit
