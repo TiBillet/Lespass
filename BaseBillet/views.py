@@ -4267,6 +4267,10 @@ class EventMVT(viewsets.ViewSet):
 
         filters_are_active = bool(email_filter or ticket_status_filter or question_filters)
 
+        # Au premier chargement de la page, si aucun filtre n'est actif, on affiche seulement les billets actif et non scanné.
+        if not request.htmx and not filters_are_active:
+            ticket_status_filter=Ticket.NOT_SCANNED
+
         # Les réservations qui passent les filtres email et questions.
         # / Reservations matching the email and question filters.
         matching_reservations = []

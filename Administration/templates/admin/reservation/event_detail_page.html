@@ -23,5 +23,6 @@ admin_site.each_context(request) : sans lui, la barre latérale de l'admin serai
 {% block title %}{{ title }} | {{ site_title|default:_('Admin panel') }}{% endblock %}
 
 {% block content %}
+    {% include "commun/loading.html" %}
     {% include "admin/reservation/event_detail.html" %}
 {% endblock %}
