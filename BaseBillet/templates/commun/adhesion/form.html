@@ -658,79 +658,36 @@
         subscribe + a real secondary button that opens login offcanvas.
         {% endcomment %}
         {% if user.is_authenticated %}
-            {% if panier.count > 0 %}
-                {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
-                {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
-                {# / Cart non-empty: both buttons end at cart. #}
-                {# 1) Add to cart. 2) Add + pay: chain to checkout. #}
-                <button type="button"
-                        class="btn btn-primary w-100 mb-2"
-                        hx-post="/panier/add/membership/"
-                        hx-include="closest form"
-                        hx-target="#adhesion-erreurs"
-                        hx-swap="innerHTML"
-                        data-loading-disable
-                        data-testid="membership-add-to-cart"
-                        aria-label="{% translate 'Add this membership to your cart' %}">
-                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                    {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
-                </button>
-                <button type="button"
-                        class="btn btn-outline-primary w-100"
-                        hx-post="/panier/add/membership/"
-                        hx-include="closest form"
-                        hx-vals='{"then": "checkout"}'
-                        hx-target="#adhesion-erreurs"
-                        hx-swap="innerHTML"
-                        data-loading-disable
-                        data-testid="membership-add-and-pay"
-                        aria-label="{% translate 'Add to cart and pay all items' %}">
-                    <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                    {% translate "Add to cart and pay" %}
-                </button>
-            {% else %}
-                <button type="button"
-                        class="btn btn-primary w-100 mb-2"
-                        hx-post="/panier/add/membership/"
-                        hx-include="closest form"
-                        hx-target="#adhesion-erreurs"
-                        hx-swap="innerHTML"
-                        data-loading-disable
-                        data-testid="membership-add-to-cart"
-                        aria-label="{% translate 'Add this membership to your cart' %}">
-                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                    {% translate "Add to cart" %}
-                </button>
-                <button id="membership-submit" type="submit"
-                        class="btn btn-outline-primary w-100"
-                        data-loading-disable
-                        data-testid="membership-submit"
-                        aria-label="{% translate 'Pay this membership now' %}">
-                    <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                    {% if product.validate_button_text %}
-                        {{ product.validate_button_text }} ({% translate 'Payer maintenant' %})
-                    {% else %}
-                        {% translate 'Payer maintenant' %}
-                    {% endif %}
-                </button>
-            {% endif %}
-        {% else %}
-            <button id="membership-submit" type="submit"
+            <button type="submit"
                     class="btn btn-primary w-100 mb-2"
                     data-loading-disable
-                    data-testid="membership-submit">
-                <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
-                {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
-                    {% translate 'Send my subscription request' %}{% endif %}
+                    data-testid="booking-submit">
+                <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                {% translate "Payer maintenant" %}
             </button>
             <button type="button"
-                    class="btn btn-outline-primary w-100"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#loginPanel"
-                    data-testid="membership-add-to-cart-login"
-                    aria-label="{% translate 'Log in to add this membership to your cart' %}">
+                    class="btn btn-secondary w-100 mb-2"
+                    hx-post="/panier/add/membership/"
+                    hx-include="closest form"
+                    hx-target="#adhesion-erreurs"
+                    hx-swap="innerHTML"
+                    data-loading-disable
+                    data-testid="membership-add-to-cart"
+                    aria-label="{% trans 'Add this membership to your cart' %}">
                 <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                {% translate "Log in to add to cart" %}
+                {% if panier.count > 0 %}
+                    {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
+                {% else %}
+                    {% translate "Add to cart" %}
+                {% endif %}            </button>
+        {% else %}
+            {# Anonyme : "Réserver" en primary (flow direct) #}
+            <button type="submit"
+                    class="btn btn-primary w-100 mb-2"
+                    data-loading-disable
+                    data-testid="booking-submit">
+                <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                {% translate "Payer maintenant" %}
             </button>
         {% endif %}
         <button type="button" class="btn btn-link text-muted d-block mt-2 w-100 test-membership-bt-cancel" data-bs-dismiss="offcanvas" aria-label="Annuler" data-testid="membership-cancel">
