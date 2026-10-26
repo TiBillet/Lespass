@@ -268,15 +268,6 @@ def _construire_sections_modules(request):
                     "link": _safe_rev("staff_admin:AuthBillet_humanuser_changelist"),
                     "permission": admin_permission,
                 },
-                # This menu option is here only for debug purpose
-                # {
-                #     "title": _("Produit"),
-                #     "icon": "sports_bar",
-                #     "link": _safe_rev(
-                #         "staff_admin:BaseBillet_product_changelist"
-                #     ),
-                #     "permission": admin_permission,
-                # }
             ],
         },
     ]
@@ -1184,6 +1175,15 @@ def _construire_sections_modules(request):
                     ),
                     "permission": root_permission,
                 },
+                # This menu option is here only for debug purpose
+                # {
+                #     "title": _("Produits"),
+                #     "icon": "sports_bar",
+                #     "link": _safe_rev(
+                #         "staff_admin:BaseBillet_product_changelist"
+                #     ),
+                #     "permission": admin_permission,
+                # },
                 # {
                 #     "title": _("Virements pot central"),
                 #     "icon": "account_balance",

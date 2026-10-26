@@ -155,6 +155,9 @@ def libelle_prix(tarifs, type_objet):
             montants_payants.append(montant)
     if not montants_payants:
         if type_objet == TYPE_EVENEMENT:
+            # S'il y a un prix gratuit, on change le libellé
+            if len(montants) >= 1:
+                return gettext("Réservation gratuite")
             return gettext("Entrée libre")
         return gettext("Gratuit")
 

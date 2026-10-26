@@ -91,11 +91,14 @@ def test_une_adhesion_sans_tarif_affiche_gratuit():
     assert _libelle_en_francais([], TYPE_ADHESION) == "Gratuit"
 
 
-def test_des_tarifs_tous_a_zero_comptent_comme_gratuit():
+def test_un_evenement_avec_des_tarifs_tous_a_zero_affiche_reservation_gratuite():
     tarifs = [_tarif("0"), _tarif("0")]
-    assert _libelle_en_francais(tarifs, TYPE_EVENEMENT) == "Entrée libre"
-    assert _libelle_en_francais(tarifs, TYPE_RESSOURCE) == "Gratuit"
+    assert _libelle_en_francais(tarifs, TYPE_EVENEMENT) == "Réservation gratuite"
 
+
+def test_une_ressource_avec_des_tarifs_tous_a_zero_affiche_gratuit():
+    tarifs = [_tarif("0"), _tarif("0")]
+    assert _libelle_en_francais(tarifs, TYPE_RESSOURCE) == "Gratuit"
 
 def test_des_tarifs_en_points_seulement_n_affichent_aucun_prix():
     tarifs = [_tarif("3", asset_id="un-asset"), _tarif("1", non_fiduciaire=True)]
