@@ -72,6 +72,8 @@ demain. Rien n'est perdu, rien n'est envoyé deux fois.
 
 ### 3.2 Les rubriques (v1)
 
+> **Remplacé par le chantier 02** ([CHANTIER-02-recap-allege.md](CHANTIER-02-recap-allege.md), 2026-10-22) : plus de stocks, rubriques regroupées.
+
 Une rubrique n'apparaît que si elle a au moins une ligne.
 
 | Rubrique | Modèle | Filtre | Date |
@@ -171,6 +173,8 @@ Le statut à la main dans l'admin (vérifié le 2026-10-18) :
 l'affiche ni ne l'écrit.
 
 ### 3.5 Pas de mail pour rien
+
+> **Remplacé par le chantier 02** ([CHANTIER-02-recap-allege.md](CHANTIER-02-recap-allege.md), 2026-10-22) : plus de stocks, rubriques regroupées.
 
 Le récap part si **au moins une** de ces conditions est vraie :
 - une rubrique « nouveau » a au moins une ligne (toutes les rubriques du §3.2 sauf les stocks) ;

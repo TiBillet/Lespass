@@ -71,6 +71,7 @@ from booking.models import Booking, InscriptionBenevole, PlanningBenevole  # noq
 from comptabilite.models import ClotureCaisse  # noqa: E402
 from comptabilite.ventilation import ecritures_de_l_export  # noqa: E402
 from Customers.models import Client  # noqa: E402
+from fabriques_vente import abonner_aux_envois_des_rapports  # noqa: E402
 from laboutik.models import LaboutikConfiguration  # noqa: E402
 
 
@@ -143,8 +144,6 @@ class TestDemoRecapDeLaVeille(FastTenantTestCase):
         configuration.vat_taxe = Decimal("0")
         configuration.language = "fr"
         configuration.email = "lieu@example.org"
-        configuration.rapport_emails = ""
-        configuration.rapport_periodicite = Configuration.PERIODICITE_NONE
         configuration.save()
 
         call_command("create_test_pos_data", schema=self.tenant.schema_name)
@@ -183,6 +182,10 @@ class TestDemoRecapDeLaVeille(FastTenantTestCase):
             defaults={"username": EMAIL_DE_L_ADMIN_DU_LIEU, "is_active": True},
         )
         administrateur.client_admin.add(self.tenant)
+        # Comme `demo_data_v2` : l'admin du lieu est inscrit aux envois (le fabrique
+        # le met aussi dans `client_achat`, sans quoi la liste ne le rendrait pas).
+        # / Like demo_data_v2: the venue admin is subscribed to the mails.
+        abonner_aux_envois_des_rapports(EMAIL_DE_L_ADMIN_DU_LIEU)
 
         FauxMailer.appels = []
 
@@ -271,7 +274,7 @@ class TestDemoRecapDeLaVeille(FastTenantTestCase):
             "nouvelles_reservations",
             "nouvelles_reservations_de_ressources",
             "nouvelles_inscriptions_benevoles",
-            "annulations",
+            "annulations_et_remboursements",
         ]:
             assert cle_attendue in cles_des_rubriques, cle_attendue
         assert len(recap["clotures"]) == 1

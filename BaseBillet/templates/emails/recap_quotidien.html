@@ -26,16 +26,16 @@ Styles inline (clients mail). Textes en français, traduits par {% translate %}.
                     </td>
                 </tr>
 
+                {% comment %}
+                Le titre de la rubrique est le lien vers sa liste dans l'admin.
+                / The section title is the link to its admin list.
+                {% endcomment %}
                 {% for rubrique in rubriques %}
                     <tr>
                         <td style="padding: 0 0 24px 0;">
                             <h2 style="color:#1d1d1b;font:bold 16px/24px Arial, Helvetica, sans-serif;margin: 0 0 4px;">
-                                {{ rubrique.titre }} ({{ rubrique.nombre }})</h2>
-                            {% if rubrique.est_un_stock and rubrique.nombre_de_nouveaux > 0 %}
-                                <p style="color:#70706d;font:13px/20px Arial, Helvetica, sans-serif;margin: 0 0 8px;">
-                                    {% blocktrans count nombre=rubrique.nombre_de_nouveaux %}dont {{ nombre }} nouvelle hier{% plural %}dont {{ nombre }} nouvelles hier{% endblocktrans %}
-                                </p>
-                            {% endif %}
+                                <a href="{{ rubrique.lien }}" target="_blank"
+                                   style="color:#2d76a6;text-decoration:none;">{{ rubrique.titre }} ({{ rubrique.nombre }})</a></h2>
                             {% for ligne in rubrique.lignes %}
                                 <p style="color:#70706d;font:14px/22px Arial, Helvetica, sans-serif;margin: 0;">
                                     {{ ligne }}</p>
@@ -45,11 +45,6 @@ Styles inline (clients mail). Textes en français, traduits par {% translate %}.
                                     {% blocktrans count nombre=rubrique.nombre_de_lignes_cachees %}et {{ nombre }} autre{% plural %}et {{ nombre }} autres{% endblocktrans %}
                                 </p>
                             {% endif %}
-                            <p style="margin: 10px 0 0;">
-                                <a href="{{ rubrique.lien }}" target="_blank"
-                                   style="background:#2d76a6;color:#ffffff;text-decoration:none;display:inline-block;padding:8px 16px;border-radius:3px;font:13px/16px Arial, Helvetica, sans-serif;">
-                                    {% translate "Ouvrir l’administration" %}</a>
-                            </p>
                         </td>
                     </tr>
                 {% endfor %}
@@ -92,6 +87,20 @@ Styles inline (clients mail). Textes en français, traduits par {% translate %}.
                         <a href="{{ lien_admin }}" target="_blank"
                            style="color:#2d76a6;font:14px/24px Arial, Helvetica, sans-serif;">
                             {% translate "Ouvrir l’administration" %}</a>
+                    </td>
+                </tr>
+
+                {% comment %}
+                Désabonnement : la page des réglages des envois, réservée aux admins du lieu.
+                / Unsubscribe: the mail settings page, for the venue's admins.
+                {% endcomment %}
+                <tr>
+                    <td>
+                        <p style="color:#70706d;font:12px/18px Arial, Helvetica, sans-serif;margin: 0;"
+                           data-testid="recap-desabonnement">
+                            {% translate "Vous pouvez vous désabonner de cette lettre d'information :" %}
+                            <a href="{{ lien_des_reglages_des_envois }}" target="_blank"
+                               style="color:#2d76a6;">{% translate "réglages des envois" %}</a></p>
                     </td>
                 </tr>
             </table>

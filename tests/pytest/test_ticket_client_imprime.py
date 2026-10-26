@@ -200,7 +200,6 @@ class TestTicketClientImprime(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.module_monnaie_locale = True
         configuration.module_caisse = True
-        configuration.rapport_emails = ""
         configuration.fuseau_horaire = FUSEAU_DU_LIEU
         configuration.save()
 

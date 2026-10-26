@@ -101,6 +101,7 @@ from fabriques_panier import (  # noqa: E402
     taches_celery_enregistrees,
 )
 from fabriques_vente import (  # noqa: E402
+    abonner_aux_envois_des_rapports,
     creer_tarif_vendu,
     fabriquer_vente_encaissee,
     verifier_egalites,
@@ -193,7 +194,6 @@ class TestComptabiliteExports(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
         configuration.postal_address = adresse_du_lieu
         configuration.postal_code = 69001
         configuration.city = "Lyon"
@@ -826,9 +826,7 @@ class TestComptabiliteExports(FastTenantTestCase):
         / The closure email shows the revenue incl. tax under its true label
         (requested sending: a J has no automatic one).
         """
-        configuration = Configuration.get_solo()
-        configuration.rapport_emails = "tresorerie@example.com"
-        configuration.save()
+        abonner_aux_envois_des_rapports("tresorerie@example.com")
 
         with patch("comptabilite.tasks.CeleryMailerClass") as faux_envoi_de_mail:
             faux_envoi_de_mail.return_value = MagicMock()
@@ -1113,8 +1111,8 @@ class TestComptabiliteExports(FastTenantTestCase):
         fuseau_de_la_martinique = ZoneInfo("America/Martinique")
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "America/Martinique"
-        configuration.rapport_emails = "tresorerie@example.com"
         configuration.save()
+        abonner_aux_envois_des_rapports("tresorerie@example.com")
 
         with patch("comptabilite.tasks.CeleryMailerClass") as faux_envoi_de_mail:
             faux_envoi_de_mail.return_value = MagicMock()

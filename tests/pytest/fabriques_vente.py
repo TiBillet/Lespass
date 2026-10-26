@@ -327,3 +327,50 @@ def verifier_egalites(vente):
         f"Vente.total_tva ({vente_relue.total_tva}) doit valoir "
         f"Σ TVA des articles ({somme_des_totaux_tva})."
     )
+
+
+def abonner_aux_envois_des_rapports(
+    *adresses,
+    recap_quotidien=True,
+    hebdomadaire=True,
+    mensuel=True,
+    annuel=True,
+):
+    """
+    Règle les envois du lieu courant (`ConfigurationDesRapports`) : les quatre cases,
+    TOUJOURS écrites, puis une personne du lieu par adresse, ajoutée aux destinataires.
+    / Sets the current venue's mail settings: the four ticks, always written, then one
+    venue person per address, added to the recipients.
+
+    LOCALISATION : tests/pytest/fabriques_vente.py
+
+    Les quatre cases sont écrites à chaque appel : le cache de django-solo survit au
+    rollback d'un test, une case décochée par un test précédent resterait sinon en cache.
+    Chaque personne est mise dans `client_achat` du lieu : le M2M vise le proxy
+    HumanUser, dont le manager ne rend que les personnes du lieu.
+    / The four ticks are always written: the solo cache survives a test's rollback.
+    Each person joins the venue's client_achat: the M2M targets HumanUser.
+
+    :return: la liste des personnes créées / the created people
+    """
+    from django.db import connection
+
+    from AuthBillet.models import TibilletUser
+    from comptabilite.models import ConfigurationDesRapports
+
+    reglages_des_envois = ConfigurationDesRapports.get_solo()
+    reglages_des_envois.envoyer_le_recap_quotidien = recap_quotidien
+    reglages_des_envois.envoyer_le_rapport_hebdomadaire = hebdomadaire
+    reglages_des_envois.envoyer_le_rapport_mensuel = mensuel
+    reglages_des_envois.envoyer_le_rapport_annuel = annuel
+    reglages_des_envois.save()
+
+    personnes = []
+    for adresse in adresses:
+        personne, _cree = TibilletUser.objects.get_or_create(
+            email=adresse, defaults={"username": adresse}
+        )
+        personne.client_achat.add(connection.tenant)
+        reglages_des_envois.destinataires.add(personne.pk)
+        personnes.append(personne)
+    return personnes

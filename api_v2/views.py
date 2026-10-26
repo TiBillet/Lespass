@@ -1891,12 +1891,19 @@ class AccountViewSet(viewsets.ViewSet):
 
     def list(self, request):
         from laboutik.models import CompteComptable
-        from laboutik.plan_comptable import s_assurer_que_le_plan_existe
+        from laboutik.plan_comptable import (
+            numeros_des_comptes_de_tresorerie,
+            s_assurer_que_le_plan_existe,
+        )
 
         # Le filet : un lieu sans aucun compte recoit le plan par defaut.
         # / The safety net: a venue without any account gets the default chart.
         s_assurer_que_le_plan_existe()
 
         comptes = CompteComptable.objects.order_by("numero_de_compte")
-        serializer = CompteComptableSerializer(comptes, many=True)
+        serializer = CompteComptableSerializer(
+            comptes,
+            many=True,
+            context={"numeros_de_tresorerie": numeros_des_comptes_de_tresorerie()},
+        )
         return Response({"results": serializer.data})

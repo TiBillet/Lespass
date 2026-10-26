@@ -5,7 +5,8 @@ Le récap du matin des admins : un mail par lieu qui résume la veille.
 
 LOCALISATION : tests/pytest/test_recap_quotidien.py
 
-Spécification : TECH_DOC/SESSIONS/RECAP_QUOTIDIEN/SPEC.md
+Spécifications : TECH_DOC/SESSIONS/RECAP_QUOTIDIEN/SPEC.md (chantier 01)
+et TECH_DOC/SESSIONS/RECAP_QUOTIDIEN/CHANTIER-02-recap-allege.md (chantier 02).
 
 Dates de référence : le mardi 13 octobre 2026, heure de Paris (CEST, UTC+2).
 « La veille » = lundi 12 octobre.
@@ -43,8 +44,10 @@ from Administration.admin.site import staff_admin_site  # noqa: E402
 from Administration.recap_quotidien import (  # noqa: E402
     _nom_de_l_objet_rembourse,
     clotures_j_a_joindre,
+    compteurs_de_la_periode,
     destinataires_du_recap,
     envoyer_le_recap_du_lieu_si_c_est_l_heure,
+    lien_des_reglages_des_envois,
     fenetre_de_la_veille,
     le_recap_a_du_contenu,
     rubriques_de_la_veille,
@@ -86,8 +89,13 @@ from crowds.models import (  # noqa: E402
     Participation,
     Vote,
 )
-from fabriques_vente import creer_tarif_vendu, fabriquer_vente_encaissee  # noqa: E402
-from comptabilite.models import ClotureCaisse  # noqa: E402
+from fabriques_vente import (  # noqa: E402
+    abonner_aux_envois_des_rapports,
+    creer_tarif_vendu,
+    fabriquer_vente_encaissee,
+)
+from comptabilite.models import ClotureCaisse, ConfigurationDesRapports  # noqa: E402
+from inventaire.models import MouvementStock, Stock, TypeMouvement  # noqa: E402
 from laboutik.models import LaboutikConfiguration  # noqa: E402
 import comptabilite.tasks  # noqa: E402
 from django.core.management import call_command  # noqa: E402
@@ -141,10 +149,13 @@ class RecapQuotidienTestCase(FastTenantTestCase):
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
         configuration.language = "fr"
-        configuration.rapport_emails = ""
-        configuration.rapport_periodicite = Configuration.PERIODICITE_NONE
         configuration.email = "lieu@example.org"
         configuration.save()
+
+        # Les réglages des envois : tout coché, aucun destinataire. Les cases sont
+        # réécrites ici, leur cache survit au rollback (comme celui de la configuration).
+        # / Mail settings: all ticked, no recipient; rewritten because of the cache.
+        abonner_aux_envois_des_rapports()
 
 
 class TestLesDatesDeCreation(RecapQuotidienTestCase):
@@ -472,8 +483,6 @@ class TestLesRubriques(RecapQuotidienTestCase):
         self._adhesion(self.aujourd_hui)
         rubrique = self._rubrique("nouvelles_adhesions")
         assert rubrique["nombre"] == 1
-        assert rubrique["nombre_de_nouveaux"] == 1
-        assert rubrique["est_un_stock"] is False
         assert rubrique["lien"] == f"https://{self.DOMAINE}/admin/BaseBillet/membership/"
 
     def test_nouvelles_adhesions_ignore_les_statuts_exclus(self):
@@ -487,17 +496,16 @@ class TestLesRubriques(RecapQuotidienTestCase):
                 self._adhesion(self.hier, status=statut)
                 assert self._rubrique("nouvelles_adhesions") is None
 
-    # --- Adhésions en attente (stock) ---
+    # --- Adhésions en attente ---
 
-    def test_adhesions_en_attente_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
-        # Un stock garde tout ce qui attend ; seule la part « nouvelle » dépend de la fenêtre.
+    def test_adhesions_en_attente_ne_montre_que_les_demandes_d_hier(self):
+        # Même en attente, un objet n'est dans le récap que le lendemain de sa création.
         self._adhesion(self.hier, status=Membership.ADMIN_WAITING)
         self._adhesion(self.avant_hier, status=Membership.ADMIN_WAITING)
         self._adhesion(self.aujourd_hui, status=Membership.ADMIN_WAITING)
         rubrique = self._rubrique("adhesions_en_attente")
-        assert rubrique["est_un_stock"] is True
-        assert rubrique["nombre"] == 3
-        assert rubrique["nombre_de_nouveaux"] == 1
+        assert rubrique["nombre"] == 1
+        assert rubrique["lien"] == f"https://{self.DOMAINE}/admin/BaseBillet/membership/"
 
     def test_adhesions_en_attente_ignore_les_autres_statuts(self):
         for statut in [Membership.ONCE, Membership.ADMIN_VALID, Membership.CANCELED]:
@@ -505,18 +513,24 @@ class TestLesRubriques(RecapQuotidienTestCase):
                 self._adhesion(self.hier, status=statut)
                 assert self._rubrique("adhesions_en_attente") is None
 
-    def test_une_demande_d_adhesion_d_hier_est_dans_le_stock_et_pas_dans_les_nouvelles(self):
+    def test_une_demande_d_adhesion_d_hier_est_en_attente_et_pas_dans_les_nouvelles(self):
         self._adhesion(self.hier, status=Membership.ADMIN_WAITING)
         assert self._rubrique("nouvelles_adhesions") is None
-        rubrique = self._rubrique("adhesions_en_attente")
-        assert rubrique["nombre"] == 1
-        assert rubrique["nombre_de_nouveaux"] == 1
+        assert self._rubrique("adhesions_en_attente")["nombre"] == 1
 
-    def test_une_vieille_demande_en_attente_est_dans_le_stock_sans_etre_nouvelle(self):
+    def test_une_vieille_demande_en_attente_n_est_plus_dans_le_recap(self):
         self._adhesion(self.avant_hier, status=Membership.ADMIN_WAITING)
-        rubrique = self._rubrique("adhesions_en_attente")
-        assert rubrique["nombre"] == 1
-        assert rubrique["nombre_de_nouveaux"] == 0
+        assert self._rubrique("adhesions_en_attente") is None
+
+    def test_une_demande_en_attente_n_ecrit_pas_son_statut(self):
+        # Le titre de la rubrique dit déjà « en attente ».
+        adherent = creer_utilisateur(prenom="Lea", nom="Martin")
+        adhesion = self._adhesion(
+            self.hier, status=Membership.ADMIN_WAITING, user=adherent
+        )
+        with translation.override("fr"):
+            ligne = self._rubrique("adhesions_en_attente")["lignes"][0]
+        assert ligne == f"Lea Martin — {adhesion.price.product.name}"
 
     def test_une_adhesion_sans_personne_ne_fait_pas_planter(self):
         self._adhesion(self.hier, user=None)
@@ -526,13 +540,42 @@ class TestLesRubriques(RecapQuotidienTestCase):
             rubrique = self._rubrique("nouvelles_adhesions")
         assert "(sans nom)" in rubrique["lignes"][0]
 
-    def test_une_rubrique_de_douze_lignes_en_montre_dix(self):
-        for _numero in range(12):
+    def test_une_rubrique_de_six_lignes_en_montre_cinq(self):
+        for _numero in range(6):
             self._adhesion(self.hier)
         rubrique = self._rubrique("nouvelles_adhesions")
-        assert rubrique["nombre"] == 12
-        assert len(rubrique["lignes"]) == 10
-        assert rubrique["nombre_de_lignes_cachees"] == 2
+        assert rubrique["nombre"] == 6
+        assert len(rubrique["lignes"]) == 5
+        assert rubrique["nombre_de_lignes_cachees"] == 1
+
+    # --- Le statut sur une ligne ---
+
+    def test_une_adhesion_au_statut_normal_n_ecrit_pas_son_statut(self):
+        adhesion = self._adhesion(self.hier, status=Membership.ONCE)
+        with translation.override("fr"):
+            ligne = self._rubrique("nouvelles_adhesions")["lignes"][0]
+            statut = adhesion.get_status_display()
+        assert statut not in ligne
+        assert ligne.count(" — ") == 1
+
+    def test_une_adhesion_au_statut_intermediaire_ecrit_son_statut(self):
+        adhesion = self._adhesion(self.hier, status=Membership.PAYMENT_PENDING)
+        with translation.override("fr"):
+            ligne = self._rubrique("nouvelles_adhesions")["lignes"][0]
+            statut = adhesion.get_status_display()
+        assert ligne.endswith(f" — {statut}")
+
+    def test_une_reservation_confirmee_n_ecrit_pas_son_statut(self):
+        self._reservation(self.hier, status=Reservation.VALID)
+        ligne = self._rubrique("nouvelles_reservations")["lignes"][0]
+        assert ligne.count(" — ") == 1
+
+    def test_une_reservation_gratuite_non_confirmee_ecrit_son_statut(self):
+        reservation = self._reservation(self.hier, status=Reservation.FREERES)
+        with translation.override("fr"):
+            ligne = self._rubrique("nouvelles_reservations")["lignes"][0]
+            statut = reservation.get_status_display()
+        assert ligne.endswith(f" — {statut}")
 
     # --- Nouvelles réservations ---
 
@@ -575,27 +618,22 @@ class TestLesRubriques(RecapQuotidienTestCase):
                 self._booking(self.hier, status=statut)
                 assert self._rubrique("nouvelles_reservations_de_ressources") is None
 
-    # --- Demandes de réservation en attente (stock) ---
+    # --- Demandes de réservation en attente ---
 
-    def test_une_demande_de_reservation_d_hier_est_dans_le_stock_et_pas_dans_les_nouvelles(self):
+    def test_une_demande_de_reservation_d_hier_est_en_attente_et_pas_dans_les_nouvelles(self):
         self._booking(self.hier, status=Booking.ADMIN_WAITING)
         assert self._rubrique("nouvelles_reservations_de_ressources") is None
         rubrique = self._rubrique("demandes_de_reservation_en_attente")
-        assert rubrique["est_un_stock"] is True
         assert rubrique["nombre"] == 1
-        assert rubrique["nombre_de_nouveaux"] == 1
         assert rubrique["lien"] == (
             f"https://{self.DOMAINE}/admin/booking/booking/?status__exact=WA"
         )
 
-    def test_demandes_de_reservation_en_attente_garde_tout_le_stock(self):
-        # Un stock garde tout ce qui attend ; seule la part « nouvelle » dépend de la fenêtre.
+    def test_demandes_de_reservation_en_attente_ne_montre_que_celles_d_hier(self):
         self._booking(self.hier, status=Booking.ADMIN_WAITING)
         self._booking(self.avant_hier, status=Booking.ADMIN_WAITING)
         self._booking(self.aujourd_hui, status=Booking.ADMIN_WAITING)
-        rubrique = self._rubrique("demandes_de_reservation_en_attente")
-        assert rubrique["nombre"] == 3
-        assert rubrique["nombre_de_nouveaux"] == 1
+        assert self._rubrique("demandes_de_reservation_en_attente")["nombre"] == 1
 
     def test_demandes_de_reservation_en_attente_ignore_les_autres_statuts(self):
         for statut in [
@@ -638,29 +676,19 @@ class TestLesRubriques(RecapQuotidienTestCase):
         assert any("brouillon" in ligne for ligne in lignes)
 
     def test_une_proposition_creee_et_validee_hier_est_dans_les_nouveaux_evenements(self):
-        self._evenement(self.hier, published=True, is_proposal=False)
-        with translation.override("fr"):
-            rubrique = self._rubrique("nouveaux_evenements")
+        # Publié est l'état normal : la ligne ne porte que le nom.
+        evenement = self._evenement(self.hier, published=True, is_proposal=False)
+        rubrique = self._rubrique("nouveaux_evenements")
         assert rubrique["nombre"] == 1
-        assert "publié" in rubrique["lignes"][0]
+        assert rubrique["lignes"][0] == evenement.name
 
-    # --- Propositions en attente (stock) ---
-
-    def test_propositions_en_attente_compte_tout_le_stock_dont_les_nouvelles(self):
+    def test_une_proposition_d_hier_n_a_pas_de_rubrique_a_part(self):
+        # Elle est dans « Nouveaux événements », marquée « proposition en attente ».
         self._evenement(self.hier, published=False, is_proposal=True)
-        self._evenement(self.avant_hier, published=False, is_proposal=True)
-        self._evenement(self.aujourd_hui, published=False, is_proposal=True)
-        rubrique = self._rubrique("propositions_en_attente")
-        assert rubrique["est_un_stock"] is True
-        assert rubrique["nombre"] == 3
-        assert rubrique["nombre_de_nouveaux"] == 1
-
-    def test_propositions_en_attente_ignore_les_evenements_publies_ou_non_proposes(self):
-        cas = [(True, True), (False, False), (True, False)]
-        for publie, proposition in cas:
-            with self.subTest(publie=publie, proposition=proposition):
-                self._evenement(self.hier, published=publie, is_proposal=proposition)
-                assert self._rubrique("propositions_en_attente") is None
+        cles = []
+        for rubrique in rubriques_de_la_veille(self.debut, self.fin, self.DOMAINE):
+            cles.append(rubrique["cle"])
+        assert cles == ["nouveaux_evenements"]
 
     def test_nouveaux_evenements_ignore_les_actions_enfants(self):
         # Les actions s'affichent dans leur événement parent, pas à part.
@@ -685,14 +713,98 @@ class TestLesRubriques(RecapQuotidienTestCase):
         assert "Apresmidi" in rubrique["lignes"][0]
         assert "Matin" in rubrique["lignes"][1]
 
+    # --- Tombés en rupture hier ---
+
+    def _mouvement(self, moment, avant, variation, type_mouvement=TypeMouvement.VE, stock=None):
+        """
+        Un mouvement de stock écrit à `moment` : de `avant` à `avant + variation`.
+        / A stock movement written at `moment`.
+        """
+        if stock is None:
+            produit = creer_tarif_vendu(nom="TEST_recap Biere").productsold.product
+            stock = Stock.objects.create(product=produit, quantite=avant + variation)
+        mouvement = MouvementStock.objects.create(
+            stock=stock,
+            type_mouvement=type_mouvement,
+            quantite=variation,
+            quantite_avant=avant,
+        )
+        MouvementStock.objects.filter(pk=mouvement.pk).update(cree_le=moment)
+        return stock
+
+    def test_un_article_passe_de_3_a_0_hier_est_tombe_en_rupture(self):
+        stock = self._mouvement(self.hier, avant=3, variation=-3)
+        rubrique = self._rubrique("ruptures_de_stock")
+        assert rubrique["nombre"] == 1
+        assert rubrique["lignes"] == [stock.product.name]
+        assert rubrique["nombre_de_lignes_cachees"] == 0
+        assert rubrique["lien"] == f"https://{self.DOMAINE}/admin/inventaire/stock/"
+
+    def test_un_article_passe_de_3_a_moins_2_hier_est_tombe_en_rupture(self):
+        self._mouvement(self.hier, avant=3, variation=-5)
+        assert self._rubrique("ruptures_de_stock")["nombre"] == 1
+
+    def test_un_article_deja_a_zero_n_est_pas_tombe_hier(self):
+        self._mouvement(self.hier, avant=0, variation=-1)
+        assert self._rubrique("ruptures_de_stock") is None
+
+    def test_une_rupture_d_avant_hier_ou_d_aujourd_hui_n_est_pas_dans_le_recap(self):
+        self._mouvement(self.avant_hier, avant=3, variation=-3)
+        self._mouvement(self.aujourd_hui, avant=3, variation=-3)
+        assert self._rubrique("ruptures_de_stock") is None
+
+    def test_un_article_tombe_deux_fois_hier_n_est_nomme_qu_une_fois(self):
+        stock = self._mouvement(self.hier, avant=2, variation=-2)
+        self._mouvement(self.hier, avant=5, variation=-5, stock=stock)
+        rubrique = self._rubrique("ruptures_de_stock")
+        assert rubrique["nombre"] == 1
+        assert rubrique["lignes"] == [stock.product.name]
+
+    def test_un_ajustement_d_inventaire_n_est_pas_une_rupture(self):
+        self._mouvement(self.hier, avant=5, variation=-5, type_mouvement=TypeMouvement.AJ)
+        assert self._rubrique("ruptures_de_stock") is None
+
+    def test_sept_ruptures_tiennent_sur_une_ligne_avec_et_2_autres(self):
+        noms = []
+        for _numero in range(7):
+            noms.append(self._mouvement(self.hier, avant=1, variation=-1).product.name)
+        with translation.override("fr"):
+            rubrique = self._rubrique("ruptures_de_stock")
+        noms_tries = sorted(noms)
+        assert rubrique["nombre"] == 7
+        assert rubrique["lignes"] == [", ".join(noms_tries[:5]) + " et 2 autres"]
+        assert rubrique["nombre_de_lignes_cachees"] == 0
+
+    # --- Les compteurs des rapports H et M ---
+
+    def test_les_compteurs_de_la_periode_lisent_les_memes_sources_que_le_recap(self):
+        self._adhesion(self.hier)
+        self._adhesion(self.hier)
+        self._adhesion(self.avant_hier)
+        self._evenement(self.hier, published=False, is_proposal=True)
+        self._evenement(self.hier)
+        self._mouvement(self.hier, avant=1, variation=-1)
+        with translation.override("fr"):
+            compteurs = compteurs_de_la_periode(self.debut, self.fin)
+        assert compteurs == [
+            "2 nouvelles adhésions",
+            "2 nouveaux événements (dont 1 proposition)",
+            "1 article tombé en rupture",
+        ]
+
+    def test_sans_activite_il_n_y_a_aucun_compteur(self):
+        self._adhesion(self.avant_hier)
+        assert compteurs_de_la_periode(self.debut, self.fin) == []
+
 
 def _assert_argent_rendu(ligne, montant_attendu):
     """
-    La ligne d'un remboursement finit par le montant en positif : jamais de signe moins.
-    / A refund line ends with the positive amount: never a minus sign.
+    La ligne d'un remboursement finit par « remboursé » et le montant en positif :
+    jamais de signe moins.
+    / A refund line ends with "remboursé" and the positive amount: never a minus sign.
     """
     montant_de_la_ligne = ligne.split(" — ")[-1]
-    assert montant_de_la_ligne == f"{montant_attendu}\u00a0€"
+    assert montant_de_la_ligne == f"remboursé {montant_attendu}\u00a0€"
     assert "\u2212" not in montant_de_la_ligne
     assert "-" not in montant_de_la_ligne
 
@@ -723,16 +835,22 @@ class TestLesRubriquesSuite(RecapQuotidienTestCase):
                 return rubrique
         return None
 
-    def _projet(self, moment, devise="€"):
-        return Initiative.objects.create(
-            name=f"TEST_recap projet {identifiant_unique()}",
-            created_at=moment,
-            currency=devise,
-        )
+    def _projet(self, moment, devise="€", nom=None):
+        if nom is None:
+            nom = f"TEST_recap projet {identifiant_unique()}"
+        return Initiative.objects.create(name=nom, created_at=moment, currency=devise)
 
-    def _ligne_de_budget(self, moment, state=BudgetItem.State.REQUESTED, devise="€"):
+    def _ancien_projet(self, projet, devise="€"):
+        """Le projet donné, sinon un projet d'avant-hier. / Given project or an old one."""
+        if projet is None:
+            return self._projet(self.avant_hier, devise)
+        return projet
+
+    def _ligne_de_budget(
+        self, moment, state=BudgetItem.State.REQUESTED, devise="€", projet=None
+    ):
         return BudgetItem.objects.create(
-            initiative=self._projet(self.avant_hier, devise),
+            initiative=self._ancien_projet(projet, devise),
             contributor=creer_utilisateur(),
             description="TEST_recap sono",
             amount=5000,
@@ -747,11 +865,12 @@ class TestLesRubriquesSuite(RecapQuotidienTestCase):
         contributeur="par defaut",
         nom_du_contributeur="Camille",
         devise="€",
+        projet=None,
     ):
         if contributeur == "par defaut":
             contributeur = creer_utilisateur()
         return Contribution.objects.create(
-            initiative=self._projet(self.avant_hier, devise),
+            initiative=self._ancien_projet(projet, devise),
             contributor=contributeur,
             contributor_name=nom_du_contributeur,
             amount=2500,
@@ -760,16 +879,16 @@ class TestLesRubriquesSuite(RecapQuotidienTestCase):
             created_at=self.avant_hier,
         )
 
-    def _vote(self, moment):
+    def _vote(self, moment, projet=None):
         return Vote.objects.create(
-            initiative=self._projet(self.avant_hier),
+            initiative=self._ancien_projet(projet),
             user=creer_utilisateur(),
             created_at=moment,
         )
 
-    def _participation(self, moment, state=Participation.State.REQUESTED):
+    def _participation(self, moment, state=Participation.State.REQUESTED, projet=None):
         return Participation.objects.create(
-            initiative=self._projet(self.avant_hier),
+            initiative=self._ancien_projet(projet),
             participant=creer_utilisateur(),
             description="TEST_recap aide",
             amount=1000,
@@ -874,164 +993,205 @@ class TestLesRubriquesSuite(RecapQuotidienTestCase):
             )
         return tarif_vendu
 
-    # --- Nouveaux projets ---
+    # --- Financement participatif ---
 
-    def test_nouveaux_projets_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
-        self._projet(self.hier)
+    def _ligne_du_projet(self, projet):
+        """La ligne d'un projet dans la rubrique, en français. / A project's line."""
+        with translation.override("fr"):
+            rubrique = self._rubrique("financement_participatif")
+        for ligne in rubrique["lignes"]:
+            if ligne.startswith(f"{projet.name} — "):
+                return ligne
+        return None
+
+    def test_un_projet_cree_hier_est_un_nouveau_projet(self):
+        projet = self._projet(self.hier)
         self._projet(self.avant_hier)
         self._projet(self.aujourd_hui)
-        rubrique = self._rubrique("nouveaux_projets")
+        rubrique = self._rubrique("financement_participatif")
         assert rubrique["nombre"] == 1
         assert rubrique["lien"] == f"https://{self.DOMAINE}/admin/crowds/initiative/"
+        assert self._ligne_du_projet(projet) == f"{projet.name} — nouveau projet"
 
-    # --- Nouvelles lignes de budget ---
+    def test_un_projet_sans_activite_hier_n_est_pas_dans_le_recap(self):
+        projet = self._projet(self.avant_hier)
+        self._vote(self.avant_hier, projet=projet)
+        self._contribution(self.aujourd_hui, projet=projet)
+        assert self._rubrique("financement_participatif") is None
 
-    def test_nouvelles_lignes_de_budget_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
-        self._ligne_de_budget(self.hier)
-        self._ligne_de_budget(self.avant_hier)
-        self._ligne_de_budget(self.aujourd_hui)
-        rubrique = self._rubrique("nouvelles_lignes_de_budget")
-        assert rubrique["nombre"] == 1
+    def test_les_votes_et_contributions_d_un_projet_tiennent_sur_une_ligne(self):
+        projet = self._projet(self.avant_hier)
+        self._vote(self.hier, projet=projet)
+        self._vote(self.hier, projet=projet)
+        self._contribution(self.hier, projet=projet)
+        assert self._rubrique("financement_participatif")["nombre"] == 1
+        assert self._ligne_du_projet(projet) == (
+            f"{projet.name} — 1 contribution (25,00\u00a0€), 2 votes"
+        )
 
-    def test_une_ligne_de_budget_montre_son_montant(self):
-        self._ligne_de_budget(self.hier)
-        with translation.override("fr"):
-            rubrique = self._rubrique("nouvelles_lignes_de_budget")
-        assert "50,00" in rubrique["lignes"][0]
+    def test_les_lignes_de_budget_disent_combien_sont_a_valider(self):
+        projet = self._projet(self.avant_hier)
+        self._ligne_de_budget(self.hier, projet=projet)
+        self._ligne_de_budget(self.hier, state=BudgetItem.State.APPROVED, projet=projet)
+        assert self._ligne_du_projet(projet) == (
+            f"{projet.name} — 2 lignes de budget dont 1 à valider"
+        )
 
-    def test_une_ligne_de_budget_montre_son_etat(self):
-        self._ligne_de_budget(self.hier)
-        with translation.override("fr"):
-            rubrique = self._rubrique("nouvelles_lignes_de_budget")
-        assert rubrique["lignes"][0].endswith(str(BudgetItem.State.REQUESTED.label))
-
-    def test_une_ligne_de_budget_en_heures_s_ecrit_en_heures(self):
-        self._ligne_de_budget(self.hier, devise="heures")
-        with translation.override("fr"):
-            rubrique = self._rubrique("nouvelles_lignes_de_budget")
-        assert "50,00\u00a0heures" in rubrique["lignes"][0]
-        assert "€" not in rubrique["lignes"][0]
-
-    # --- Lignes de budget en attente (stock) ---
-
-    def test_lignes_de_budget_en_attente_compte_tout_le_stock_dont_les_nouvelles(self):
-        self._ligne_de_budget(self.hier)
-        self._ligne_de_budget(self.avant_hier)
-        self._ligne_de_budget(self.aujourd_hui)
-        rubrique = self._rubrique("lignes_de_budget_en_attente")
-        assert rubrique["est_un_stock"] is True
-        assert rubrique["nombre"] == 3
-        assert rubrique["nombre_de_nouveaux"] == 1
-
-    def test_lignes_de_budget_en_attente_ignore_les_autres_statuts(self):
-        for etat in [BudgetItem.State.APPROVED, BudgetItem.State.REJECTED]:
-            with self.subTest(etat=etat):
-                self._ligne_de_budget(self.hier, state=etat)
-                assert self._rubrique("lignes_de_budget_en_attente") is None
-
-    # --- Contributions payées ---
-
-    def test_contributions_payees_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
-        self._contribution(self.hier)
-        self._contribution(self.avant_hier)
-        self._contribution(self.aujourd_hui)
-        rubrique = self._rubrique("contributions_payees")
-        assert rubrique["nombre"] == 1
-
-    def test_contributions_payees_accepte_paye_et_indique_comme_paye(self):
-        self._contribution(self.hier, statut=Contribution.PaymentStatus.PAID)
-        self._contribution(self.hier, statut=Contribution.PaymentStatus.PAID_ADMIN)
-        assert self._rubrique("contributions_payees")["nombre"] == 2
-
-    def test_contributions_payees_ignore_les_statuts_exclus(self):
-        self._contribution(self.hier, statut=Contribution.PaymentStatus.PENDING)
-        assert self._rubrique("contributions_payees") is None
-
-    def test_une_contribution_creee_avant_hier_et_payee_hier_compte(self):
-        self._contribution(self.hier)
-        assert self._rubrique("contributions_payees")["nombre"] == 1
-
-    def test_une_contribution_en_attente_ne_compte_pas(self):
-        self._contribution(None, statut=Contribution.PaymentStatus.PENDING)
-        assert self._rubrique("contributions_payees") is None
-
-    def test_une_contribution_sans_contributeur_ne_fait_pas_planter(self):
-        self._contribution(self.hier, contributeur=None, nom_du_contributeur=None)
-        with translation.override("fr"):
-            rubrique = self._rubrique("contributions_payees")
-        assert "(sans nom)" in rubrique["lignes"][0]
-        assert "25,00" in rubrique["lignes"][0]
-
-    def test_une_contribution_montre_son_statut_de_paiement(self):
-        self._contribution(self.hier, statut=Contribution.PaymentStatus.PAID_ADMIN)
-        with translation.override("fr"):
-            rubrique = self._rubrique("contributions_payees")
-        assert rubrique["lignes"][0].endswith(
-            str(Contribution.PaymentStatus.PAID_ADMIN.label)
+    def test_les_participations_disent_combien_sont_a_valider(self):
+        projet = self._projet(self.avant_hier)
+        self._participation(self.hier, projet=projet)
+        assert self._ligne_du_projet(projet) == (
+            f"{projet.name} — 1 participation dont 1 à valider"
         )
 
     def test_une_contribution_en_heures_s_ecrit_en_heures(self):
-        self._contribution(self.hier, devise="heures")
-        with translation.override("fr"):
-            rubrique = self._rubrique("contributions_payees")
-        assert "25,00\u00a0heures" in rubrique["lignes"][0]
-        assert "€" not in rubrique["lignes"][0]
+        projet = self._projet(self.avant_hier, devise="heures")
+        self._contribution(self.hier, projet=projet)
+        ligne = self._ligne_du_projet(projet)
+        assert "25,00\u00a0heures" in ligne
+        assert "€" not in ligne
 
-    def test_une_contribution_en_euros_s_ecrit_en_euros(self):
+    def test_contributions_payees_accepte_paye_et_indique_comme_paye(self):
+        projet = self._projet(self.avant_hier)
+        self._contribution(self.hier, statut=Contribution.PaymentStatus.PAID, projet=projet)
+        self._contribution(
+            self.hier, statut=Contribution.PaymentStatus.PAID_ADMIN, projet=projet
+        )
+        assert "2 contributions (50,00\u00a0€)" in self._ligne_du_projet(projet)
+
+    def test_une_contribution_en_attente_ne_compte_pas(self):
+        self._contribution(None, statut=Contribution.PaymentStatus.PENDING)
+        assert self._rubrique("financement_participatif") is None
+
+    def test_une_contribution_creee_avant_hier_et_payee_hier_compte(self):
         self._contribution(self.hier)
+        assert self._rubrique("financement_participatif")["nombre"] == 1
+
+    def test_les_projets_les_plus_actifs_d_abord(self):
+        projet_calme = self._projet(self.avant_hier, nom="TEST_recap A calme")
+        projet_actif = self._projet(self.avant_hier, nom="TEST_recap B actif")
+        self._vote(self.hier, projet=projet_calme)
+        for _numero in range(3):
+            self._vote(self.hier, projet=projet_actif)
+        lignes = self._rubrique("financement_participatif")["lignes"]
+        assert lignes[0].startswith(projet_actif.name)
+        assert lignes[1].startswith(projet_calme.name)
+
+    # --- Annulations et remboursements ---
+
+    def _rubrique_des_annulations(self):
         with translation.override("fr"):
-            rubrique = self._rubrique("contributions_payees")
-        assert "25,00\u00a0€" in rubrique["lignes"][0]
+            return self._rubrique("annulations_et_remboursements")
 
-    # --- Nouveaux votes ---
-
-    def test_nouveaux_votes_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
-        self._vote(self.hier)
-        self._vote(self.avant_hier)
-        self._vote(self.aujourd_hui)
-        assert self._rubrique("nouveaux_votes")["nombre"] == 1
-
-    # --- Nouvelles participations ---
-
-    def test_nouvelles_participations_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
-        self._participation(self.hier)
-        self._participation(self.avant_hier)
-        self._participation(self.aujourd_hui)
-        assert self._rubrique("nouvelles_participations")["nombre"] == 1
-
-    # --- Participations en attente (stock) ---
-
-    def test_participations_en_attente_compte_tout_le_stock_dont_les_nouvelles(self):
-        self._participation(self.hier)
-        self._participation(self.avant_hier)
-        rubrique = self._rubrique("participations_en_attente")
-        assert rubrique["est_un_stock"] is True
-        assert rubrique["nombre"] == 2
-        assert rubrique["nombre_de_nouveaux"] == 1
-
-    def test_participations_en_attente_ignore_les_autres_statuts(self):
-        for etat in [
-            Participation.State.REJECTED,
-            Participation.State.APPROVED_ADMIN,
-            Participation.State.COMPLETED_USER,
-            Participation.State.VALIDATED_ADMIN,
-        ]:
-            with self.subTest(etat=etat):
-                self._participation(self.hier, state=etat)
-                assert self._rubrique("participations_en_attente") is None
-
-    # --- Remboursements ---
-
-    def test_remboursements_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
-        self._ligne_de_caisse_remboursee(self.hier)
-        self._ligne_de_caisse_remboursee(self.avant_hier)
-        self._ligne_de_caisse_remboursee(self.aujourd_hui)
-        rubrique = self._rubrique("remboursements")
+    def test_annulations_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
+        for moment in [self.hier, self.avant_hier, self.aujourd_hui]:
+            reservation = self._reservation_payee_en_especes()
+            Reservation.objects.filter(pk=reservation.pk).update(annulee_le=moment)
+        rubrique = self._rubrique("annulations_et_remboursements")
         assert rubrique["nombre"] == 1
         assert rubrique["lien"] == f"https://{self.DOMAINE}/admin/BaseBillet/vente/"
 
-    def test_remboursements_ignore_les_statuts_exclus(self):
-        # Une vente d'hier (ligne VALID, pas un avoir) n'est pas un remboursement.
+    def test_annulations_ne_liste_pas_ce_qui_n_a_pas_de_date_d_annulation(self):
+        # Statut annulé mais `annulee_le` vide (annulation automatique) : exclu.
+        reservation = self._reservation_payee_en_especes()
+        Reservation.objects.filter(pk=reservation.pk).update(
+            status=Reservation.CANCELED, annulee_le=None
+        )
+        assert self._rubrique("annulations_et_remboursements") is None
+
+    def test_annulations_reunit_reservations_bookings_et_adhesions_avec_leur_statut(self):
+        reservation = self._reservation_payee_en_especes()
+        Reservation.objects.filter(pk=reservation.pk).update(annulee_le=self.hier)
+        ressource = creer_ressource_avec_tarif()
+        booking = Booking.objects.create(
+            resource=ressource.ressource,
+            user=creer_utilisateur(),
+            start_datetime=ressource.debut_du_creneau,
+            slot_duration_minutes=60,
+            slot_count=1,
+            status=Booking.USER_CANCELED,
+        )
+        Booking.objects.filter(pk=booking.pk).update(annulee_le=self.hier)
+        adhesion = Membership.objects.create(
+            price=creer_adhesion().tarif,
+            user=creer_utilisateur(),
+            status=Membership.ADMIN_CANCELED,
+        )
+        Membership.objects.filter(pk=adhesion.pk).update(annulee_le=self.hier)
+        rubrique = self._rubrique_des_annulations()
+        assert rubrique["nombre"] == 3
+        texte_des_lignes = "\n".join(rubrique["lignes"])
+        assert reservation.event.name in texte_des_lignes
+        assert ressource.ressource.name in texte_des_lignes
+        assert adhesion.price.product.name in texte_des_lignes
+        # Le statut réel dit qui a annulé.
+        # / The real status tells who cancelled.
+        with translation.override("fr"):
+            assert booking.get_status_display() in texte_des_lignes
+            assert adhesion.get_status_display() in texte_des_lignes
+
+    def test_annulations_les_plus_recentes_d_abord(self):
+        reservation = self._reservation_payee_en_especes()
+        Reservation.objects.filter(pk=reservation.pk).update(
+            annulee_le=heure_de_paris(2026, 10, 12, 9, 10)
+        )
+        adhesion = Membership.objects.create(
+            price=creer_adhesion().tarif,
+            user=creer_utilisateur(),
+            status=Membership.ADMIN_CANCELED,
+        )
+        Membership.objects.filter(pk=adhesion.pk).update(
+            annulee_le=heure_de_paris(2026, 10, 12, 15, 10)
+        )
+        rubrique = self._rubrique("annulations_et_remboursements")
+        assert adhesion.price.product.name in rubrique["lignes"][0]
+        assert reservation.event.name in rubrique["lignes"][1]
+
+    def test_une_annulation_remboursee_hier_tient_sur_une_seule_ligne(self):
+        reservation = self._reservation_payee_en_especes()
+        self._annuler_avec_avoir_hier(reservation)
+        rubrique = self._rubrique_des_annulations()
+        assert rubrique["nombre"] == 1
+        assert reservation.event.name in rubrique["lignes"][0]
+        _assert_argent_rendu(rubrique["lignes"][0], "10,00")
+
+    def test_le_montant_rembourse_est_l_argent_rendu(self):
+        # 10 € dont 4 € offerts : l'argent rendu est 6 €, pas 10 €.
+        reservation = self._reservation_payee_en_especes(part_offerte=400)
+        self._annuler_avec_avoir_hier(reservation)
+        rubrique = self._rubrique_des_annulations()
+        _assert_argent_rendu(rubrique["lignes"][0], "6,00")
+        assert "10,00" not in rubrique["lignes"][0]
+
+    def test_une_annulation_sans_argent_ecrit_son_statut_sans_rembourse(self):
+        reservation = self._reservation_gratuite_annulee_hier()
+        rubrique = self._rubrique_des_annulations()
+        assert rubrique["nombre"] == 1
+        assert "remboursé" not in rubrique["lignes"][0]
+        with translation.override("fr"):
+            statut = Reservation.objects.get(pk=reservation.pk).get_status_display()
+        assert rubrique["lignes"][0].endswith(f" — {statut}")
+
+    def test_un_avoir_d_hier_sur_un_objet_annule_avant_hier_a_sa_ligne(self):
+        # L'objet n'est pas annulé hier : la ligne d'avoir d'hier le nomme quand même.
+        reservation = self._reservation_payee_en_especes()
+        self._annuler_avec_avoir_hier(reservation)
+        Reservation.objects.filter(pk=reservation.pk).update(annulee_le=self.avant_hier)
+        rubrique = self._rubrique_des_annulations()
+        assert rubrique["nombre"] == 1
+        assert rubrique["lignes"][0].startswith(reservation.event.name)
+        _assert_argent_rendu(rubrique["lignes"][0], "10,00")
+
+    def test_un_avoir_de_caisse_d_hier_nomme_l_article(self):
+        tarif_vendu = self._ligne_de_caisse_remboursee(self.hier)
+        self._ligne_de_caisse_remboursee(self.avant_hier)
+        self._ligne_de_caisse_remboursee(self.aujourd_hui)
+        rubrique = self._rubrique_des_annulations()
+        assert rubrique["nombre"] == 1
+        assert tarif_vendu.productsold.product.name in rubrique["lignes"][0]
+        _assert_argent_rendu(rubrique["lignes"][0], "5,00")
+
+    def test_une_vente_d_hier_n_est_pas_un_remboursement(self):
         tarif_vendu = creer_tarif_vendu(nom="Biere", prix_en_euros="5.00")
         with patch("django.utils.timezone.now", return_value=self.hier):
             fabriquer_vente_encaissee(
@@ -1053,32 +1213,7 @@ class TestLesRubriquesSuite(RecapQuotidienTestCase):
                 LigneArticle.objects.filter(pricesold=tarif_vendu).update(
                     status=statut, datetime=self.hier
                 )
-                assert self._rubrique("remboursements") is None
-
-    def test_un_remboursement_d_hier_nomme_la_reservation_et_le_montant(self):
-        reservation = self._reservation_payee_en_especes()
-        self._annuler_avec_avoir_hier(reservation)
-        with translation.override("fr"):
-            rubrique = self._rubrique("remboursements")
-        assert rubrique["nombre"] == 1
-        assert reservation.event.name in rubrique["lignes"][0]
-        _assert_argent_rendu(rubrique["lignes"][0], "10,00")
-
-    def test_un_remboursement_d_un_article_de_caisse_nomme_l_article(self):
-        tarif_vendu = self._ligne_de_caisse_remboursee(self.hier)
-        with translation.override("fr"):
-            rubrique = self._rubrique("remboursements")
-        assert tarif_vendu.productsold.product.name in rubrique["lignes"][0]
-        _assert_argent_rendu(rubrique["lignes"][0], "5,00")
-
-    def test_le_montant_rembourse_est_l_argent_rendu(self):
-        # 10 € dont 4 € offerts : l'argent rendu est 6 €, pas 10 €.
-        reservation = self._reservation_payee_en_especes(part_offerte=400)
-        self._annuler_avec_avoir_hier(reservation)
-        with translation.override("fr"):
-            rubrique = self._rubrique("remboursements")
-        _assert_argent_rendu(rubrique["lignes"][0], "6,00")
-        assert "10,00" not in rubrique["lignes"][0]
+                assert self._rubrique("annulations_et_remboursements") is None
 
     def test_le_nom_d_un_remboursement_d_adhesion_est_le_produit_d_adhesion(self):
         ligne_d_avoir = SimpleNamespace(
@@ -1098,100 +1233,18 @@ class TestLesRubriquesSuite(RecapQuotidienTestCase):
         )
         assert _nom_de_l_objet_rembourse(ligne_d_avoir) == "TEST_recap Salle"
 
-    # --- Annulations ---
-
-    def test_annulations_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
-        for moment in [self.hier, self.avant_hier, self.aujourd_hui]:
-            reservation = self._reservation_payee_en_especes()
-            Reservation.objects.filter(pk=reservation.pk).update(annulee_le=moment)
-        rubrique = self._rubrique("annulations")
-        assert rubrique["nombre"] == 1
-        assert rubrique["lien"] == f"https://{self.DOMAINE}/admin/BaseBillet/reservation/"
-
-    def test_annulations_ne_liste_pas_ce_qui_n_a_pas_de_date_d_annulation(self):
-        # Statut annulé mais `annulee_le` vide (annulation automatique) : exclu.
-        reservation = self._reservation_payee_en_especes()
-        Reservation.objects.filter(pk=reservation.pk).update(
-            status=Reservation.CANCELED, annulee_le=None
-        )
-        assert self._rubrique("annulations") is None
-
-    def test_annulations_reunit_reservations_bookings_et_adhesions(self):
-        reservation = self._reservation_payee_en_especes()
-        Reservation.objects.filter(pk=reservation.pk).update(annulee_le=self.hier)
-        ressource = creer_ressource_avec_tarif()
-        booking = Booking.objects.create(
-            resource=ressource.ressource,
-            user=creer_utilisateur(),
-            start_datetime=ressource.debut_du_creneau,
-            slot_duration_minutes=60,
-            slot_count=1,
-            status=Booking.ADMIN_CANCELED,
-        )
-        Booking.objects.filter(pk=booking.pk).update(annulee_le=self.hier)
-        adhesion = Membership.objects.create(
-            price=creer_adhesion().tarif,
-            user=creer_utilisateur(),
-            status=Membership.ADMIN_CANCELED,
-        )
-        Membership.objects.filter(pk=adhesion.pk).update(annulee_le=self.hier)
-        rubrique = self._rubrique("annulations")
-        assert rubrique["nombre"] == 3
-        assert len(rubrique["lignes"]) == 3
-        texte_des_lignes = "\n".join(rubrique["lignes"])
-        assert reservation.event.name in texte_des_lignes
-        assert ressource.ressource.name in texte_des_lignes
-        assert adhesion.price.product.name in texte_des_lignes
-
-    def test_annulations_les_plus_recentes_d_abord(self):
-        reservation = self._reservation_payee_en_especes()
-        Reservation.objects.filter(pk=reservation.pk).update(
-            annulee_le=heure_de_paris(2026, 10, 12, 9, 10)
-        )
-        adhesion = Membership.objects.create(
-            price=creer_adhesion().tarif,
-            user=creer_utilisateur(),
-            status=Membership.ADMIN_CANCELED,
-        )
-        Membership.objects.filter(pk=adhesion.pk).update(
-            annulee_le=heure_de_paris(2026, 10, 12, 15, 10)
-        )
-        rubrique = self._rubrique("annulations")
-        assert adhesion.price.product.name in rubrique["lignes"][0]
-        assert reservation.event.name in rubrique["lignes"][1]
-
-    def test_une_annulation_remboursee_est_marquee_rembourse(self):
-        reservation = self._reservation_payee_en_especes()
-        self._annuler_avec_avoir_hier(reservation)
-        with translation.override("fr"):
-            rubrique = self._rubrique("annulations")
-        assert rubrique["nombre"] == 1
-        assert "remboursé" in rubrique["lignes"][0]
-
-    def test_une_annulation_sans_argent_est_listee(self):
-        self._reservation_gratuite_annulee_hier()
-        with translation.override("fr"):
-            rubrique = self._rubrique("annulations")
-        assert rubrique["nombre"] == 1
-        assert "remboursé" not in rubrique["lignes"][0]
-
-    def test_une_rubrique_d_annulations_de_douze_lignes_en_montre_dix(self):
-        for _numero in range(12):
+    def test_une_rubrique_d_annulations_de_six_lignes_en_montre_cinq(self):
+        for _numero in range(6):
             reservation = self._reservation_payee_en_especes()
             Reservation.objects.filter(pk=reservation.pk).update(annulee_le=self.hier)
-        rubrique = self._rubrique("annulations")
-        assert rubrique["nombre"] == 12
-        assert len(rubrique["lignes"]) == 10
-        assert rubrique["nombre_de_lignes_cachees"] == 2
+        rubrique = self._rubrique("annulations_et_remboursements")
+        assert rubrique["nombre"] == 6
+        assert len(rubrique["lignes"]) == 5
+        assert rubrique["nombre_de_lignes_cachees"] == 1
 
-
-def une_rubrique(cle, est_un_stock, nombre_de_nouveaux):
+def une_rubrique(cle):
     """Une rubrique minimale pour `le_recap_a_du_contenu`. / A minimal section."""
-    return {
-        "cle": cle,
-        "est_un_stock": est_un_stock,
-        "nombre_de_nouveaux": nombre_de_nouveaux,
-    }
+    return {"cle": cle}
 
 
 class TestZContenuDestinataires(RecapQuotidienTestCase):
@@ -1353,16 +1406,13 @@ class TestZContenuDestinataires(RecapQuotidienTestCase):
     def test_sans_rubrique_ni_z_il_n_y_a_pas_de_contenu(self):
         assert le_recap_a_du_contenu([], []) is False
 
-    def test_un_stock_sans_nouveau_n_est_pas_du_contenu(self):
-        rubriques = [une_rubrique("adhesions_en_attente", True, 0)]
-        assert le_recap_a_du_contenu(rubriques, []) is False
-
-    def test_un_stock_avec_un_nouveau_est_du_contenu(self):
-        rubriques = [une_rubrique("adhesions_en_attente", True, 1)]
+    def test_une_rubrique_en_attente_est_du_contenu(self):
+        # Elle ne porte que des demandes d'hier : elle suffit à envoyer le récap.
+        rubriques = [une_rubrique("adhesions_en_attente")]
         assert le_recap_a_du_contenu(rubriques, []) is True
 
-    def test_une_rubrique_qui_n_est_pas_un_stock_est_du_contenu(self):
-        rubriques = [une_rubrique("reservations", False, 0)]
+    def test_une_rubrique_de_nouveautes_est_du_contenu(self):
+        rubriques = [une_rubrique("nouvelles_reservations")]
         assert le_recap_a_du_contenu(rubriques, []) is True
 
     def test_un_z_seul_est_du_contenu(self):
@@ -1370,70 +1420,53 @@ class TestZContenuDestinataires(RecapQuotidienTestCase):
 
     # --- Les destinataires / Recipients ---
 
-    def test_les_destinataires_sont_les_admins_du_lieu(self):
-        self._creer_un_admin("premier@example.org")
-        self._creer_un_admin("second@example.org")
+    def test_les_destinataires_sont_la_liste_des_reglages_des_envois(self):
+        abonner_aux_envois_des_rapports("second@example.org", "premier@example.org")
+        assert destinataires_du_recap() == ["premier@example.org", "second@example.org"]
 
-        destinataires = destinataires_du_recap(self.tenant, Configuration.get_solo())
-
-        assert sorted(destinataires) == ["premier@example.org", "second@example.org"]
-
-    def test_sans_admin_le_mail_du_lieu_sert_de_secours(self):
-        destinataires = destinataires_du_recap(self.tenant, Configuration.get_solo())
-        assert destinataires == ["lieu@example.org"]
-
-    def test_un_seul_admin_a_email_vide_laisse_le_mail_du_lieu(self):
-        admin = self._creer_un_admin("a-effacer@example.org")
-        TibilletUser.objects.filter(pk=admin.pk).update(email="")
-
-        destinataires = destinataires_du_recap(self.tenant, Configuration.get_solo())
-
-        assert destinataires == ["lieu@example.org"]
-
-    def test_sans_admin_ni_mail_du_lieu_il_n_y_a_aucun_destinataire(self):
-        configuration = Configuration.get_solo()
-        configuration.email = ""
-        configuration.save()
-
-        assert destinataires_du_recap(self.tenant, configuration) == []
-
-    def test_rapport_emails_ajoute_en_periodicite_journaliere(self):
+    def test_un_admin_hors_de_la_liste_ne_recoit_rien(self):
+        # Plus d'admin d'office, plus de repli sur l'e-mail du lieu.
         self._creer_un_admin("admin@example.org")
-        configuration = Configuration.get_solo()
-        configuration.rapport_periodicite = Configuration.PERIODICITE_JOURNALIER
-        configuration.rapport_emails = "compta@example.org, autre@example.org"
-        configuration.save()
+        assert destinataires_du_recap() == []
 
-        destinataires = destinataires_du_recap(self.tenant, configuration)
+    def test_les_adresses_sont_en_minuscules_sans_espaces_ni_doublon_ni_vide(self):
+        compta, sans_adresse = abonner_aux_envois_des_rapports(
+            "compta@example.org", "vide@example.org"
+        )
+        TibilletUser.objects.filter(pk=compta.pk).update(email=" Compta@Example.org ")
+        TibilletUser.objects.filter(pk=sans_adresse.pk).update(email="")
+        assert destinataires_du_recap() == ["compta@example.org"]
 
-        assert destinataires == [
-            "admin@example.org",
-            "compta@example.org",
-            "autre@example.org",
-        ]
+    def test_une_personne_qui_n_est_plus_du_lieu_ne_recoit_plus_rien(self):
+        # La liste passe par le manager de HumanUser, filtré sur `client_achat`.
+        (personne,) = abonner_aux_envois_des_rapports("partie@example.org")
+        personne.client_achat.remove(self.tenant)
+        assert destinataires_du_recap() == []
 
-    def test_rapport_emails_ignore_hors_periodicite_journaliere(self):
-        self._creer_un_admin("admin@example.org")
-        configuration = Configuration.get_solo()
-        configuration.rapport_periodicite = Configuration.PERIODICITE_MENSUEL
-        configuration.rapport_emails = "compta@example.org"
-        configuration.save()
+    def test_le_formulaire_refuse_une_personne_d_un_autre_lieu(self):
+        # Le queryset du champ (HumanUser.objects, filtré sur le lieu) valide les pk
+        # postés : un pk forcé vers une personne d'ailleurs est refusé.
+        from django.forms import modelform_factory
 
-        assert destinataires_du_recap(self.tenant, configuration) == [
-            "admin@example.org"
-        ]
+        personne_d_ailleurs = TibilletUser.objects.create(
+            email="ailleurs@example.org", username="ailleurs@example.org"
+        )
+        (personne_du_lieu,) = abonner_aux_envois_des_rapports("ici@example.org")
+        Formulaire = modelform_factory(ConfigurationDesRapports, fields=["destinataires"])
+        reglages_des_envois = ConfigurationDesRapports.get_solo()
 
-    def test_un_admin_aussi_dans_rapport_emails_n_est_compte_qu_une_fois(self):
-        self._creer_un_admin("admin@example.org")
-        configuration = Configuration.get_solo()
-        configuration.rapport_periodicite = Configuration.PERIODICITE_JOURNALIER
-        configuration.rapport_emails = " Admin@Example.org ,, compta@example.org"
-        configuration.save()
+        formulaire_d_ailleurs = Formulaire(
+            data={"destinataires": [str(personne_d_ailleurs.pk)]},
+            instance=reglages_des_envois,
+        )
+        formulaire_du_lieu = Formulaire(
+            data={"destinataires": [str(personne_du_lieu.pk)]},
+            instance=reglages_des_envois,
+        )
 
-        assert destinataires_du_recap(self.tenant, configuration) == [
-            "admin@example.org",
-            "compta@example.org",
-        ]
+        assert formulaire_d_ailleurs.is_valid() is False
+        assert "destinataires" in formulaire_d_ailleurs.errors
+        assert formulaire_du_lieu.is_valid() is True
 
 
 class TestEnvoiDuRecap(RecapQuotidienTestCase):
@@ -1461,6 +1494,7 @@ class TestEnvoiDuRecap(RecapQuotidienTestCase):
         configuration.module_billetterie = True
         configuration.module_adhesion = True
         configuration.save()
+        abonner_aux_envois_des_rapports("destinataire@example.org")
         self.tarif_du_jus = creer_tarif_vendu(
             nom="Jus",
             prix_en_euros="3.50",
@@ -1537,7 +1571,7 @@ class TestEnvoiDuRecap(RecapQuotidienTestCase):
         assert resultat is True
         assert mailer.call_count == 1
         arguments = mailer.call_args.kwargs
-        assert arguments["email"] == ["lieu@example.org"]
+        assert arguments["email"] == ["destinataire@example.org"]
         assert arguments["template"] == "emails/recap_quotidien.html"
         assert "12/10/2026" in arguments["title"]
         assert mailer.return_value.send.call_count == 1
@@ -1576,9 +1610,9 @@ class TestEnvoiDuRecap(RecapQuotidienTestCase):
 
     def test_sans_contenu_aucun_pdf_n_est_genere(self):
         """
-        Un stock en attente sans nouveau + un Z d'avant-hier (hors fenêtre) :
+        Une vieille demande en attente + un Z d'avant-hier (hors fenêtre) :
         ni mail, ni PDF, mais le marqueur est posé.
-        / A stock without new items + a Z from the day before yesterday.
+        / An old pending request + a Z from the day before yesterday.
         """
         adhesion = Membership.objects.create(
             price=creer_adhesion().tarif, user=None, status=Membership.ADMIN_WAITING
@@ -1604,9 +1638,7 @@ class TestEnvoiDuRecap(RecapQuotidienTestCase):
         assert self._le_marqueur() == date(2026, 10, 13)
 
     def test_sans_destinataire_pas_de_mail_un_avertissement_et_le_marqueur(self):
-        configuration = Configuration.get_solo()
-        configuration.email = ""
-        configuration.save()
+        ConfigurationDesRapports.get_solo().destinataires.clear()
         self._faire_un_z_hier_soir()
 
         with self.assertLogs("Administration.recap_quotidien", level="WARNING"):
@@ -1616,6 +1648,17 @@ class TestEnvoiDuRecap(RecapQuotidienTestCase):
         assert mailer.call_count == 0
         assert pdf.call_count == 0
         assert self._le_marqueur() == date(2026, 10, 13)
+
+    def test_recap_decoche_rien_ne_part_et_le_marqueur_n_est_pas_pose(self):
+        abonner_aux_envois_des_rapports("destinataire@example.org", recap_quotidien=False)
+        self._faire_un_z_hier_soir()
+
+        resultat, mailer, pdf = self._appeler_a(heure_de_paris(2026, 10, 13, 7, 10))
+
+        assert resultat is False
+        assert mailer.call_count == 0
+        assert pdf.call_count == 0
+        assert self._le_marqueur() is None
 
     # --- Le marqueur / The marker ---
 
@@ -1739,10 +1782,8 @@ class TestEnvoiDuRecap(RecapQuotidienTestCase):
         rubrique_de_test = {
             "cle": "nouvelles_adhesions",
             "titre": "Nouvelles adhésions",
-            "est_un_stock": True,
             "nombre": 12,
-            "nombre_de_nouveaux": 3,
-            "lignes": ["Alice — Cotisation — Valide"],
+            "lignes": ["Alice — Cotisation"],
             "nombre_de_lignes_cachees": 11,
             "lien": "https://exemple.test/admin/BaseBillet/membership/",
         }
@@ -1765,22 +1806,27 @@ class TestEnvoiDuRecap(RecapQuotidienTestCase):
 
         page = pages_rendues[0]
         assert "Nouvelles adhésions (12)" in page
-        assert "dont 3 nouvelles hier" in page
         assert "Alice" in page
         assert "et 11 autres" in page
-        assert "https://exemple.test/admin/BaseBillet/membership/" in page
         assert "Ticket Z n°" in page
         assert "3,50" in page
+        # Le titre est le lien de la rubrique. Plus de bouton par rubrique : le fond
+        # bleu du bouton a disparu du gabarit.
+        # / The title is the section link. No more per-section button.
+        assert 'href="https://exemple.test/admin/BaseBillet/membership/"' in page
+        assert "background:#2d76a6" not in page
+        # Le pied porte le lien de désabonnement : la page des réglages des envois.
+        # / The footer carries the unsubscribe link.
+        assert 'data-testid="recap-desabonnement"' in page
+        assert "/admin/comptabilite/configurationdesrapports/" in page
 
     def test_le_gabarit_echappe_les_noms_saisis(self):
         self._faire_un_z_hier_soir()
         rubrique_de_test = {
             "cle": "nouvelles_adhesions",
             "titre": "Nouvelles adhésions",
-            "est_un_stock": False,
             "nombre": 1,
-            "nombre_de_nouveaux": 1,
-            "lignes": ["<b>x</b> — Cotisation — Valide"],
+            "lignes": ["<b>x</b> — Cotisation"],
             "nombre_de_lignes_cachees": 0,
             "lien": "https://exemple.test/admin/",
         }
@@ -1830,6 +1876,7 @@ class TestBranchementEtFusion(RecapQuotidienTestCase):
         configuration.module_billetterie = True
         configuration.module_adhesion = True
         configuration.save()
+        abonner_aux_envois_des_rapports("destinataire@example.org")
         self.tarif_du_jus = creer_tarif_vendu(
             nom="Jus",
             prix_en_euros="3.50",
@@ -1837,15 +1884,19 @@ class TestBranchementEtFusion(RecapQuotidienTestCase):
             methode_caisse=Product.VENTE,
         )
 
-    def _regler_les_rapports(self, periodicite):
+    def _regler_les_rapports(self, niveau):
         """
-        Un destinataire de rapport et une périodicité.
-        / A report recipient and a periodicity.
+        Un destinataire de rapport, et seul l'envoi de ce niveau coché (J = le récap du
+        matin, H, M ou A = le rapport de clôture).
+        / A report recipient, and only this level's mail ticked.
         """
-        configuration = Configuration.get_solo()
-        configuration.rapport_emails = "compta@example.org"
-        configuration.rapport_periodicite = periodicite
-        configuration.save()
+        abonner_aux_envois_des_rapports(
+            "compta@example.org",
+            recap_quotidien=niveau == ClotureCaisse.NIVEAU_JOURNALIER,
+            hebdomadaire=niveau == ClotureCaisse.NIVEAU_HEBDOMADAIRE,
+            mensuel=niveau == ClotureCaisse.NIVEAU_MENSUEL,
+            annuel=niveau == ClotureCaisse.NIVEAU_ANNUEL,
+        )
 
     def _lancer_la_tache_horaire_avec_le_mailer_remplace_a(self, moment):
         """
@@ -1906,13 +1957,13 @@ class TestBranchementEtFusion(RecapQuotidienTestCase):
 
     def test_une_j_ne_demande_plus_de_mail_separe(self):
         """
-        Périodicité journalière avec un destinataire : une J ne demande aucune tâche
-        de mail (son Z part dans le récap du matin).
-        / Daily periodicity with a recipient: a J requests no mail task.
+        Récap du matin coché, avec un destinataire : une J ne demande aucune tâche de
+        mail (son Z part dans le récap du matin).
+        / Morning recap ticked, with a recipient: a J requests no mail task.
         """
         self._vendre_des_jus_a(heure_de_paris(2026, 10, 12, 20, 0))
         j_d_hier_soir = self._cloturer_a(heure_de_paris(2026, 10, 12, 23, 0))
-        self._regler_les_rapports(Configuration.PERIODICITE_JOURNALIER)
+        self._regler_les_rapports(ClotureCaisse.NIVEAU_JOURNALIER)
 
         with taches_celery_enregistrees() as taches_demandees:
             comptabilite.tasks.demander_l_email_automatique_si_configure(
@@ -1923,14 +1974,14 @@ class TestBranchementEtFusion(RecapQuotidienTestCase):
 
     def test_une_h_demande_toujours_son_mail(self):
         """
-        Périodicité hebdomadaire avec un destinataire : la clôture de la semaine
-        demande toujours son mail.
-        / Weekly periodicity with a recipient: the week closure still requests its mail.
+        Rapport hebdomadaire coché, avec un destinataire : la clôture de la semaine
+        demande son mail.
+        / Weekly report ticked, with a recipient: the week closure requests its mail.
         """
         self._vendre_des_jus_a(heure_de_paris(2026, 10, 7, 12, 0))
         self._lancer_la_tache_horaire_a(heure_de_paris(2026, 10, 12, 4, 10))
         semaine = ClotureCaisse.objects.get(niveau=ClotureCaisse.NIVEAU_HEBDOMADAIRE)
-        self._regler_les_rapports(Configuration.PERIODICITE_HEBDOMADAIRE)
+        self._regler_les_rapports(ClotureCaisse.NIVEAU_HEBDOMADAIRE)
 
         with taches_celery_enregistrees() as taches_demandees:
             comptabilite.tasks.demander_l_email_automatique_si_configure(
@@ -1940,3 +1991,218 @@ class TestBranchementEtFusion(RecapQuotidienTestCase):
         assert taches_demandees == [
             ("envoyer_email_cloture", (self.tenant.schema_name, str(semaine.uuid))),
         ]
+
+    def test_une_h_decochee_ne_demande_pas_son_mail(self):
+        """
+        Seul le rapport mensuel est coché : la clôture de la semaine ne demande rien.
+        / Only the monthly report is ticked: the week closure requests nothing.
+        """
+        self._vendre_des_jus_a(heure_de_paris(2026, 10, 7, 12, 0))
+        self._lancer_la_tache_horaire_a(heure_de_paris(2026, 10, 12, 4, 10))
+        semaine = ClotureCaisse.objects.get(niveau=ClotureCaisse.NIVEAU_HEBDOMADAIRE)
+        self._regler_les_rapports(ClotureCaisse.NIVEAU_MENSUEL)
+
+        with taches_celery_enregistrees() as taches_demandees:
+            comptabilite.tasks.demander_l_email_automatique_si_configure(
+                self.tenant.schema_name, semaine
+            )
+
+        assert taches_demandees == []
+
+    def test_une_h_cochee_sans_destinataire_ne_demande_pas_son_mail(self):
+        self._vendre_des_jus_a(heure_de_paris(2026, 10, 7, 12, 0))
+        self._lancer_la_tache_horaire_a(heure_de_paris(2026, 10, 12, 4, 10))
+        semaine = ClotureCaisse.objects.get(niveau=ClotureCaisse.NIVEAU_HEBDOMADAIRE)
+        ConfigurationDesRapports.get_solo().destinataires.clear()
+
+        with taches_celery_enregistrees() as taches_demandees:
+            comptabilite.tasks.demander_l_email_automatique_si_configure(
+                self.tenant.schema_name, semaine
+            )
+
+        assert taches_demandees == []
+
+
+class TestCompteursDesRapportsHebdomadairesEtMensuels(RecapQuotidienTestCase):
+    """
+    Le mail de la clôture H ou M porte les compteurs de l'activité de sa période,
+    sans détail. Il est rendu dans la langue du lieu.
+    / The H or M closure mail carries its period's activity counters, without
+    detail, in the venue's language.
+
+    LOCALISATION : tests/pytest/test_recap_quotidien.py
+    """
+
+    # Les outils de la classe des Z : mêmes clôtures fabriquées par le vrai moteur.
+    # / Same helpers as the Z test class.
+    _vendre_des_jus_a = TestZContenuDestinataires._vendre_des_jus_a
+    _lancer_la_tache_horaire_a = TestZContenuDestinataires._lancer_la_tache_horaire_a
+    _regler_les_rapports = TestBranchementEtFusion._regler_les_rapports
+
+    def setUp(self):
+        super().setUp()
+        Configuration.objects.update(recap_quotidien_traite_le=None)
+        Configuration.clear_cache()
+        self.tarif_du_jus = creer_tarif_vendu(
+            nom="Jus",
+            prix_en_euros="3.50",
+            taux_tva="20.00",
+            methode_caisse=Product.VENTE,
+        )
+        # La semaine du lundi 5 au lundi 12 octobre : une vente le mercredi, puis la
+        # tâche horaire du lundi 12 à 4 h 10 crée la clôture de la semaine.
+        # / The week of 5-12 October, closed by Monday's 4:10 hourly task.
+        self._vendre_des_jus_a(heure_de_paris(2026, 10, 7, 12, 0))
+        self._lancer_la_tache_horaire_a(heure_de_paris(2026, 10, 12, 4, 10))
+        self.semaine = ClotureCaisse.objects.get(
+            niveau=ClotureCaisse.NIVEAU_HEBDOMADAIRE
+        )
+        self._regler_les_rapports(ClotureCaisse.NIVEAU_HEBDOMADAIRE)
+
+    def _adhesion_creee_a(self, moment):
+        adhesion = Membership.objects.create(
+            price=creer_adhesion().tarif, user=None, status=Membership.ONCE
+        )
+        Membership.objects.filter(pk=adhesion.pk).update(date_added=moment)
+
+    def _envoyer_le_mail_de_la_semaine(self):
+        """
+        Envoie le mail de la semaine, avec le mailer et le PDF remplacés.
+        Rend (pages rendues, langues actives à la construction du mailer).
+        / Sends the week's mail, mailer and PDF mocked.
+        """
+        pages_rendues = []
+        langues_a_la_construction = []
+
+        def construire_le_mailer(**arguments):
+            pages_rendues.append(
+                render_to_string(arguments["template"], arguments["context"])
+            )
+            langues_a_la_construction.append(translation.get_language())
+            return SimpleNamespace(send=lambda: 1)
+
+        with patch(
+            "comptabilite.pdf.generer_pdf_cloture",
+            return_value=(b"pdf", "cloture-test.pdf", "application/pdf"),
+        ):
+            with patch(
+                "comptabilite.tasks.CeleryMailerClass", side_effect=construire_le_mailer
+            ):
+                mail_envoye = comptabilite.tasks.envoyer_email_cloture(
+                    self.tenant.schema_name, str(self.semaine.uuid)
+                )
+        assert mail_envoye is True
+        return pages_rendues, langues_a_la_construction
+
+    def test_le_mail_de_la_semaine_compte_l_activite_de_sa_periode_seulement(self):
+        self._adhesion_creee_a(heure_de_paris(2026, 10, 8, 12, 0))
+        self._adhesion_creee_a(heure_de_paris(2026, 10, 12, 14, 0))
+
+        pages_rendues, _langues = self._envoyer_le_mail_de_la_semaine()
+
+        assert "1 nouvelle adhésion" in pages_rendues[0]
+        assert "2 nouvelles adhésions" not in pages_rendues[0]
+
+    def test_le_mail_de_la_semaine_porte_le_lien_de_desabonnement(self):
+        pages_rendues, _langues = self._envoyer_le_mail_de_la_semaine()
+        lien = lien_des_reglages_des_envois(self.tenant.get_primary_domain().domain)
+        assert 'data-testid="cloture-desabonnement"' in pages_rendues[0]
+        assert f'href="{lien}"' in pages_rendues[0]
+
+    def test_le_mail_de_la_semaine_decoche_n_est_pas_envoye(self):
+        self._regler_les_rapports(ClotureCaisse.NIVEAU_MENSUEL)
+        with patch("comptabilite.tasks.CeleryMailerClass") as mailer_remplace:
+            mail_envoye = comptabilite.tasks.envoyer_email_cloture(
+                self.tenant.schema_name, str(self.semaine.uuid)
+            )
+        assert mail_envoye is False
+        assert mailer_remplace.call_count == 0
+
+    def test_sans_activite_le_mail_de_la_semaine_n_a_pas_de_bloc(self):
+        pages_rendues, _langues = self._envoyer_le_mail_de_la_semaine()
+        assert "activité de la période" not in pages_rendues[0]
+
+    def test_le_mail_de_cloture_est_dans_la_langue_du_lieu(self):
+        configuration = Configuration.get_solo()
+        configuration.language = "en"
+        configuration.save()
+
+        _pages, langues_a_la_construction = self._envoyer_le_mail_de_la_semaine()
+
+        assert langues_a_la_construction == ["en"]
+
+
+class TestPageDesReglagesDesEnvois(RecapQuotidienTestCase):
+    """
+    La page « Envoi des rapports » de l'admin, et sa recherche de destinataires
+    limitée aux personnes du lieu.
+    / The "Envoi des rapports" admin page, and its recipient search limited to the
+    venue's people.
+
+    LOCALISATION : tests/pytest/test_recap_quotidien.py
+    """
+
+    def setUp(self):
+        super().setUp()
+        # `TibilletUser` vit dans le schéma public ; il est annulé avec le test.
+        # / TibilletUser lives in the public schema; rolled back with the test.
+        self.administrateur = TibilletUser.objects.create(
+            email="admin-reglages-envois@example.org",
+            username="admin-reglages-envois@example.org",
+            is_staff=True,
+            is_active=True,
+        )
+        self.administrateur.client_admin.add(self.tenant)
+        self.administrateur.client_achat.add(self.tenant)
+        self.client_de_l_admin = TenantClient(self.tenant, HTTP_ACCEPT_LANGUAGE="fr")
+        self.client_de_l_admin.force_login(self.administrateur)
+
+    def test_la_page_des_reglages_s_ouvre_pour_un_admin_du_lieu(self):
+        reponse = self.client_de_l_admin.get(
+            reverse("staff_admin:comptabilite_configurationdesrapports_changelist")
+        )
+        assert reponse.status_code == 200
+        page = reponse.content.decode()
+        assert 'name="envoyer_le_recap_quotidien"' in page
+        assert 'name="destinataires"' in page
+
+    def test_le_lien_des_mails_est_l_adresse_de_la_page(self):
+        lien = lien_des_reglages_des_envois("exemple.test")
+        chemin = reverse("staff_admin:comptabilite_configurationdesrapports_changelist")
+        assert lien == f"https://exemple.test{chemin}"
+
+    def test_la_liste_des_clotures_propose_le_bouton_des_reglages(self):
+        reponse = self.client_de_l_admin.get(
+            reverse("staff_admin:comptabilite_cloturecaisse_changelist")
+        )
+        assert reponse.status_code == 200
+        assert 'data-testid="comptabilite-bouton-reglages-des-envois"' in (
+            reponse.content.decode()
+        )
+
+    def test_la_recherche_ne_propose_que_les_personnes_du_lieu(self):
+        personne_du_lieu = TibilletUser.objects.create(
+            email="autocompletion-ici@example.org",
+            username="autocompletion-ici@example.org",
+        )
+        personne_du_lieu.client_achat.add(self.tenant)
+        TibilletUser.objects.create(
+            email="autocompletion-ailleurs@example.org",
+            username="autocompletion-ailleurs@example.org",
+        )
+
+        reponse = self.client_de_l_admin.get(
+            "/admin/autocomplete/",
+            {
+                "app_label": "comptabilite",
+                "model_name": "configurationdesrapports",
+                "field_name": "destinataires",
+                "term": "autocompletion",
+            },
+        )
+
+        assert reponse.status_code == 200
+        identifiants_proposes = []
+        for resultat in reponse.json()["results"]:
+            identifiants_proposes.append(resultat["id"])
+        assert identifiants_proposes == [str(personne_du_lieu.pk)]
