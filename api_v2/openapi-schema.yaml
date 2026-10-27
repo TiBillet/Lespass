@@ -775,6 +775,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
   /api/v2/reservations/:
+    get:
+      operationId: listReservations
+      summary: List Reservations (schema.org/Reservation)
+      description: |
+        FR: Liste les reservations du lieu, les plus recentes d'abord, annulees comprises
+        (voir `reservationStatus`). Avec `event`, c'est la liste des inscrits a un evenement.
+        Cette route requiert une cle API avec permission `reservation`.
+
+        EN: Lists the venue's reservations, most recent first, cancelled ones included
+        (see `reservationStatus`). With `event`, it is the attendee list of one event.
+        This route requires an API key with `reservation` permission.
+      tags: [Reservation]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: event
+          in: query
+          required: false
+          description: Keep only the reservations of this event (event UUID).
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reservation'
+        "400":
+          description: "`event` is not a valid UUID."
     post:
       operationId: createReservation
       summary: Create Reservation (schema.org/Reservation)
@@ -2787,8 +2823,20 @@ components:
             email:
               type: string
               format: email
+            givenName:
+              type: string
+              nullable: true
+              description: First name of the account that booked (null if not filled).
+            familyName:
+              type: string
+              nullable: true
+              description: Last name of the account that booked (null if not filled).
         reservationStatus:
           type: string
+          enum:
+            - https://schema.org/ReservationConfirmed
+            - https://schema.org/ReservationPending
+            - https://schema.org/ReservationCancelled
           example: https://schema.org/ReservationConfirmed
         reservedTicket:
           type: array
@@ -2803,6 +2851,34 @@ components:
                 format: uuid
               ticketQuantity:
                 type: integer
+        totalPrice:
+          type: string
+          description: >
+            Amount paid, in euros, two decimals. Credit notes and refunds are deducted.
+            "0.00" for a free or unpaid reservation.
+          example: "12.50"
+        priceCurrency:
+          type: string
+          example: EUR
+        additionalProperty:
+          type: array
+          nullable: true
+          description: >
+            `customForm`: answers to the event's dynamic form, keyed by question label.
+            null when there is none.
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: PropertyValue
+              name:
+                type: string
+                example: customForm
+              value:
+                type: object
+                additionalProperties: true
+                example: {"Régime alimentaire": "Végétarien"}
     ProgramMembershipCreate:
       type: object
       description: schema.org/ProgramMembership input for creation
