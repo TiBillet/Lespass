@@ -343,6 +343,13 @@ class Command(BaseCommand):
         # / 2bis. Demo kiosk: a SIMULATED Stripe reader + a KI device.
         self._seed_kiosk_demo(options)
 
+        # 2bis-2. Caisse de demonstration de l'admin : un Terminal LaBoutik lie au compte
+        # admin, equipe de l'imprimante mock. L'admin qui tient la caisse dans son
+        # navigateur voit alors ses tickets dans les logs Celery.
+        # / 2bis-2. Admin demo till: a LaBoutik Terminal linked to the admin account,
+        # with the mock printer. Tickets show up in the Celery logs.
+        self._seed_caisse_admin_demo(options)
+
         # 2ter. Ventes d'hier par le vrai moteur + leur clôture J : de quoi tester
         # l'export comptable (FEC, API, Dolibarr) juste après un flush. Après le seed
         # POS : il faut le point de vente Bar, ses produits et leur TVA.
@@ -734,6 +741,97 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.WARNING(
                 f"Borne kiosk démo non créée (Stripe injoignable ?) : {e}"
+            ))
+
+    def _seed_caisse_admin_demo(self, options):
+        """
+        Seede la caisse de demonstration de l'admin sur le tenant 'lespass' :
+        un Terminal LaBoutik dont le compte est l'admin humain (ADMIN_EMAIL), et dont
+        l'imprimante est la mock « Console (mock) » creee par create_test_pos_data.
+        / Seeds the admin's demo till on 'lespass': a LaBoutik Terminal whose account
+        is the human admin (ADMIN_EMAIL), with the mock printer.
+
+        LOCALISATION : Administration/management/commands/demo_data_v2.py
+
+        POURQUOI : une imprimante appartient a un TERMINAL (imprimante_du_terminal,
+        laboutik/views.py). Un humain en session admin n'en a pas, donc rien ne
+        s'imprime. Ici, l'admin DEVIENT le compte d'un terminal : la regle de prod
+        s'applique telle quelle, ticket de vente comme websocket d'impression.
+        L'admin garde tous ses droits : le garde des sessions terminal
+        (TerminalSessionGuardMiddleware) se base sur l'espece du compte, pas sur
+        l'existence d'un terminal.
+        / Why: a printer belongs to a TERMINAL. Here the admin BECOMES a terminal's
+        account, so the production rule applies unchanged. The admin keeps all rights.
+
+        ATTENTION : l'action admin « Générer un nouveau code PIN » sur ce terminal
+        desactive son compte (is_active=False), c'est-a-dire le compte admin.
+        / WARNING: "Generate a new PIN" on this terminal deactivates the admin account.
+
+        Doit tourner APRES create_test_pos_data (qui cree l'imprimante mock) et APRES
+        _handle_full / _handle_quick (qui creent le compte admin).
+        Idempotent (get_or_create) et non bloquant pour le flush.
+        / Must run AFTER create_test_pos_data and after the admin account exists.
+        Idempotent and non-blocking.
+        """
+        from Customers.models import Client as TenantClient
+        from django_tenants.utils import tenant_context
+
+        tenant = TenantClient.objects.filter(schema_name='lespass').first()
+        if tenant is None:
+            return
+
+        try:
+            with tenant_context(tenant):
+                from laboutik.models import Printer, Terminal
+
+                # 1. Le compte admin, cree plus tot par les fixtures.
+                # / 1. The admin account, created earlier by the fixtures.
+                admin_email = os.environ['ADMIN_EMAIL']
+                compte_admin = TibilletUser.objects.filter(email__iexact=admin_email).first()
+                if compte_admin is None:
+                    self.stdout.write(self.style.WARNING(
+                        f"Caisse admin démo non créée : compte {admin_email} introuvable."
+                    ))
+                    return
+
+                # 2. L'imprimante mock, creee par create_test_pos_data.
+                # / 2. The mock printer, created by create_test_pos_data.
+                imprimante_mock = Printer.objects.filter(
+                    printer_type=Printer.MOCK,
+                    active=True,
+                ).first()
+                if imprimante_mock is None:
+                    self.stdout.write(self.style.WARNING(
+                        "Caisse admin démo non créée : aucune imprimante mock active."
+                    ))
+                    return
+
+                # 3. Le terminal de caisse, lie au compte admin et a l'imprimante mock.
+                # / 3. The till terminal, linked to the admin account and the mock printer.
+                caisse_admin, _cree = Terminal.objects.get_or_create(
+                    name='Caisse admin (démo)',
+                    defaults={
+                        'terminal_role': TibilletUser.ROLE_LABOUTIK,
+                        'term_user': compte_admin,
+                        'printer': imprimante_mock,
+                    },
+                )
+                champs_a_completer = []
+                if caisse_admin.term_user_id is None:
+                    caisse_admin.term_user = compte_admin
+                    champs_a_completer.append('term_user')
+                if caisse_admin.printer_id is None:
+                    caisse_admin.printer = imprimante_mock
+                    champs_a_completer.append('printer')
+                if champs_a_completer:
+                    caisse_admin.save(update_fields=champs_a_completer)
+
+            self.stdout.write(self.style.SUCCESS(
+                "Caisse admin démo créée sur lespass (imprimante mock → logs Celery)."
+            ))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(
+                f"Caisse admin démo non créée : {e}"
             ))
 
     def _seed_cartes_nfc_fedow(self, options):
