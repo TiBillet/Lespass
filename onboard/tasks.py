@@ -498,16 +498,15 @@ def create_tenant_from_draft(self, wc_uuid):
     # === 3ter. Transfert long_description + logo du wizard vers Configuration ===
     # La step "Presentation" du wizard collecte une description longue et un
     # logo. La chaine BaseBillet `wc.create_tenant()` ne les copie PAS (elle
-    # ecrit un texte par defaut "Bienvenue dans votre nouvel espace..." sur
-    # `config.long_description`). On les transfere ici pour que le tenant ait
-    # bien le contenu saisi par l'utilisateur.
+    # laisse `config.long_description` vide). On les transfere ici pour que
+    # le tenant ait bien le contenu saisi par l'utilisateur.
     #
     # Memes precautions que pour PostalAddress (cf. piege #23 : try/except
     # sans re-raise, le tenant existe deja et la suite de la task doit
     # aboutir).
     # / Transfer wizard long_description + logo to Configuration. The
-    # BaseBillet chain `wc.create_tenant()` doesn't copy them (writes a
-    # default welcome text). Same try/except precaution as PostalAddress:
+    # BaseBillet chain `wc.create_tenant()` doesn't copy them (leaves the
+    # long description empty). Same try/except precaution as PostalAddress:
     # the tenant already exists and the rest of the task must complete.
     if wc.long_description or wc.logo:
         try:

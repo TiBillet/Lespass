@@ -1473,7 +1473,6 @@ class TenantCreateValidator:
             config.organisation = name
             config.site_web = waiting_config.site_web
             config.short_description = waiting_config.short_description
-            config.long_description = """<div><strong>Bienvenue dans votre nouvel espace !</strong><br>Pour changer ce texte visible par tout le monde, allez découvrir votre panneau d\'administration dans votre espace "Mon Compte".<br><br>Hésitez surtout pas à venir discuter avec nous sur l\'un de nos canaux :<br>- <a href="https://discord.gg/7FJvtYx">Discord</a><br>- <a href="https://matrix.to/#/#tibillet:tiers-lieux.org">Matrix</a><br>- <a href="https://pouet.chapril.org/@tibillet">Mastodon</a><br><br>Nous vous accompagnerons avec plaisir !</div>"""
             config.slug = slugify(name)
             config.email = user.email
 

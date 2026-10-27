@@ -79,11 +79,12 @@ def noindex_context(request):
     return {"noindex_seo": should_noindex()}
 
 
-# Debut du texte de bienvenue ecrit dans Configuration.long_description a la
-# creation d'un lieu (BaseBillet/validators.py, create_tenant). Tant qu'il est
-# la, l'admin du lieu n'a pas ecrit sa propre description.
-# / Start of the welcome text written at venue creation; while present, the
-# venue admin has not written their own description.
+# Debut du texte de bienvenue que portent encore les lieux crees avant le
+# 2026-10-27 dans Configuration.long_description. Tant qu'il est la, l'admin
+# du lieu n'a pas ecrit sa propre description. Les lieux recents demarrent
+# avec une description vide.
+# / Start of the welcome text still held by venues created before 2026-10-27;
+# while present, the venue admin has not written their own description.
 DEBUT_DU_TEXTE_DE_BIENVENUE = "Bienvenue dans votre nouvel espace"
 
 
