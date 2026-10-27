@@ -77,6 +77,23 @@ def textes_des_messages(reponse):
     return [str(message) for message in get_messages(reponse.wsgi_request)]
 
 
+def traduit_comme_la_requete(texte_source):
+    """
+    Le texte source (msgid, en français) traduit dans la langue de la requête du test.
+    / The source text (French msgid) translated into the test request's language.
+
+    client_connecte() envoie « Accept-Language: en ». Le message est figé à la fin de la
+    requête (MessageMiddleware), donc dans cette langue. Comparer au texte source échoue
+    dès que le .po anglais le traduit ; comparer à la traduction écrite en dur casse à
+    chaque retouche du .po. On traduit donc le msgid ici, dans la même langue.
+    / The message is frozen in the request language (en): translate the msgid the same way.
+    """
+    from django.utils import translation
+
+    with translation.override("en"):
+        return translation.gettext(texte_source)
+
+
 def test_visiteur_anonyme_avec_un_email_deja_valide_revient_sur_l_evenement(lieu):
     """
     Visiteur NON connecté, e-mail d'un compte déjà validé : les billets partent par mail.
@@ -94,7 +111,7 @@ def test_visiteur_anonyme_avec_un_email_deja_valide_revient_sur_l_evenement(lieu
     assert reponse.status_code == 200
     assert reponse["HX-Redirect"] == f"/event/{concert.evenement.slug}/"
     assert textes_des_messages(reponse) == [
-        "Réservation reçue ! Vos billets arrivent par e-mail."
+        traduit_comme_la_requete("Réservation reçue ! Vos billets arrivent par e-mail.")
     ]
 
 

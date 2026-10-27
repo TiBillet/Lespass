@@ -1,5 +1,5 @@
 {% extends "booking/booking_base.html" %}
-{% load i18n static %}
+{% load i18n static pages_tags %}
 
 <!--
 PAGE PUBLIQUE D'UN PLANNING DE BÉNÉVOLES
@@ -25,7 +25,30 @@ Reçoit du serveur (en-têtes HX-Trigger*) :
 - ouvrirLaConnexion     → ouvre le panneau de connexion (#loginPanel), session expirée
 -->
 
+{# PARTAGE ET MOTEURS : chaque bloc og_* a son jumeau twitter_* (un bloc Django ne #}
+{# se rend qu'une fois). Sans surcharge, le shell sert ceux de l'accueil. Un planning #}
+{# n'a pas d'image : on garde celle du lieu (bloc og_image du shell). #}
+{# / SHARING: each og_* block has its twitter_* twin. No planning image: the venue's. #}
 {% block title %}{{ planning.name }}{% endblock %}
+{% block meta_description %}{{ description_du_planning }}{% endblock %}
+{% block og_title %}{{ planning.name }} | {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{{ planning.name }} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ description_du_planning }}{% endblock %}
+{% block twitter_description %}{{ description_du_planning }}{% endblock %}
+
+{# Fil d'Ariane structuré (Accueil > Bénévolat > le planning), construit en Python. #}
+{# Avec un seul planning à venir, /booking/benevolat/ redirige ici : le maillon #}
+{# « Bénévolat » est omis. #}
+{# extra_meta n'existe que dans le <head> du shell : absent en navigation htmx. #}
+{# / Structured breadcrumb; the list crumb is dropped when the list redirects here. #}
+{% block extra_meta %}
+    {% if plusieurs_plannings_a_venir %}
+        {% url 'benevolat-liste' as adresse_de_la_liste %}
+        {% jsonld_fil_ariane config.benevolat_menu_name|default:_("Bénévolat") adresse_de_la_liste planning.name %}
+    {% else %}
+        {% jsonld_fil_ariane "" "" planning.name %}
+    {% endif %}
+{% endblock %}
 
 {# benevolat.css est chargé dans le <head> du shell (pages/<skin>/shell.html). #}
 {# / benevolat.css is loaded in the shell <head>. #}

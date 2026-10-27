@@ -11,6 +11,7 @@ import calendar
 import datetime
 import html
 import logging
+import re
 from collections import defaultdict
 from urllib.parse import urlencode
 
@@ -48,6 +49,35 @@ from ApiBillet.permissions import TenantAdminPermissionWithRequest
 
 
 logger = logging.getLogger(__name__)
+
+
+def texte_brut_d_un_texte_riche(texte_riche):
+    """
+    Transforme un texte riche (HTML de l'éditeur de l'admin) en texte brut d'une ligne,
+    pour la meta description et les cartes de partage.
+    / Turns rich text (admin editor HTML) into single-line plain text, for metas.
+
+    LOCALISATION : booking/views.py
+    Utilisée par : BookingViewSet.list, BookingViewSet.resource_page,
+    booking/views_benevolat.py (BenevolatViewSet.list).
+
+    Retirer les balises sans précaution colle la fin d'un paragraphe au début du
+    suivant (« …6 prises.Réservez… ») : on pose d'abord une espace à chaque fin de
+    bloc et à chaque <br>, comme jsonld_page (pages/templatetags/pages_tags.py).
+    html.unescape remet les entités (&amp; -> &) : le gabarit échappe UNE seule fois.
+    / Insert a space at each block end before stripping, then unescape entities.
+
+    :param texte_riche: str ou None
+    :return: str, espaces multiples ramenées à une seule
+    """
+    texte_avec_espaces = re.sub(
+        r"<br\s*/?>|</(p|li|div|h[1-6])\s*>",
+        " ",
+        texte_riche or "",
+        flags=re.IGNORECASE,
+    )
+    texte_sans_balises = html.unescape(strip_tags(texte_avec_espaces))
+    return " ".join(texte_sans_balises.split())
 
 
 # ── Affichage des créneaux / Slot display ───────────────────────────────────
@@ -488,9 +518,33 @@ class BookingViewSet(viewsets.ViewSet):
                 resource.published_prices(), TYPE_RESSOURCE,
             )
 
+        # Texte de partage et des moteurs (meta description, og, twitter) : le texte
+        # d'introduction de la page en texte brut (texte_brut_d_un_texte_riche),
+        # coupé à 20 mots. / Sharing and search text: the intro as plain text, 20 words.
+        config = context['config']
+        introduction_en_texte_brut = texte_brut_d_un_texte_riche(config.description_booking_page)
+        description_de_la_page_ressources = Truncator(introduction_en_texte_brut).words(20)
+        if not description_de_la_page_ressources:
+            description_de_la_page_ressources = _("Réservez une ressource en ligne.")
+
+        # Image de partage : celle de la première ressource qui en a une.
+        # Aucune : le gabarit garde l'image du lieu (bloc og_image du shell).
+        # Son nom sert de texte alternatif à l'image (og:image:alt).
+        # / Sharing image: the first resource that has one, else the venue's; its name is the alt.
+        image_de_partage_des_ressources = None
+        nom_de_la_ressource_de_partage = None
+        for resource in toutes_les_ressources:
+            if resource.img:
+                image_de_partage_des_ressources = resource.img.social_card.url
+                nom_de_la_ressource_de_partage = resource.name
+                break
+
         context.update({
             'resources_groups': resources_groups,
             'ungrouped_resources':  ungrouped_resources,
+            'description_de_la_page_ressources': description_de_la_page_ressources,
+            'image_de_partage_des_ressources': image_de_partage_des_ressources,
+            'nom_de_la_ressource_de_partage': nom_de_la_ressource_de_partage,
         })
         return render(request, 'booking/views/resources_list.html', context)
 
@@ -689,11 +743,11 @@ class BookingViewSet(viewsets.ViewSet):
         context['resource_choices'] = resource_choices
         context['plusieurs_ressources'] = nombre_de_ressources > 1
 
-        # Meta description : la description sans balises ni entités HTML (« &amp; »
-        # redevient « & »). Le gabarit l'échappe ensuite UNE seule fois.
-        # Avec |striptags dans le gabarit, « & » sortirait « &amp;amp; ».
-        # / Meta description: tags stripped and entities decoded; escaped once by the template.
-        description_en_texte_brut = html.unescape(strip_tags(resource.description or ""))
+        # Meta description : la description en texte brut (texte_brut_d_un_texte_riche).
+        # Le gabarit l'échappe ensuite UNE seule fois : avec |striptags dans le
+        # gabarit, « & » sortirait « &amp;amp; ».
+        # / Meta description: plain text, escaped once by the template.
+        description_en_texte_brut = texte_brut_d_un_texte_riche(resource.description)
         context['meta_description_de_la_ressource'] = Truncator(description_en_texte_brut).words(20)
         return render(request, 'booking/views/resource.html', context)
 

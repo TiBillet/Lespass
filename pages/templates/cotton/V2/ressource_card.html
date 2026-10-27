@@ -47,7 +47,9 @@ FLUX DU CLIC SUR « Réserver » : lien HTMX vers /booking/<pk>/resource/
                hx-push-url="true"
                class="btn btn--secondary btn--sm"
                data-testid="booking-resource-link-{{ ressource.pk }}">
-                {% translate 'Réserver' %}
+                {# Nom masqué : un lecteur d'écran qui liste les liens entend « Réserver : Salle 1 », #}
+                {# pas six « Réserver » identiques. / Hidden name: distinguishes the links. #}
+                {% translate 'Réserver' %}<span class="visually-hidden"> : {{ ressource.name }}</span>
             </a>
 {#            {% if embed %}#}
 {#                <a class="btn btn-primaire btn--sm"#}

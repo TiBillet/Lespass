@@ -110,6 +110,11 @@ def _sections_du_sitemap(tenant, lieux_entrants_du_cache, afficher_lieux_entrant
             patch("seo.views_common.get_seo_cache", return_value=cache_entrants),
         ):
             fausse_config.return_value.module_federation = True
+            # Un attribut de MagicMock est toujours « vrai » : sans ces deux lignes,
+            # les sections booking calculeraient les plannings avec un faux fuseau.
+            # / A MagicMock attribute is always truthy: switch the booking sections off.
+            fausse_config.return_value.module_booking = False
+            fausse_config.return_value.module_benevolat = False
             faux_fed.return_value.afficher_lieux_entrants = afficher_lieux_entrants
             faux_fed.return_value.tags_federation.all.return_value = []
             return StaticViewSitemap().items()
