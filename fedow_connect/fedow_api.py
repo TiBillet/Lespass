@@ -219,7 +219,12 @@ class AssetFedow():
                 return serialized_assets.validated_data
             logger.error(serialized_assets.errors)
             raise Exception(f"{serialized_assets.errors}")
-        logger.warning(response_asset)
+        if response_asset.status_code == 404:
+            # Pas forcément une anomalie : get_or_create_* s'en sert pour savoir s'il faut créer.
+            # / Not necessarily an anomaly: get_or_create_* relies on it to know whether to create.
+            logger.info(f"Asset {uuid} absent de Fedow (404)")
+        else:
+            logger.warning(f"Asset {uuid} : réponse Fedow inattendue {response_asset}")
         raise Exception(f"{response_asset.status_code}")
 
     def get_accepted_assets(self):
