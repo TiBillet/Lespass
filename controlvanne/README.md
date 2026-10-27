@@ -219,7 +219,7 @@ A la sauvegarde, un code PIN d'appairage et un `PointDeVente` de type TIREUSE so
 Puis sur le Raspberry Pi en SSH, lancer le script d'installation avec ce PIN :
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/controlvanne/Pi/install_pi.sh \
+wget https://raw.githubusercontent.com/TiBillet/Lespass/main/controlvanne/Pi/install_pi.sh \
   && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
@@ -327,7 +327,7 @@ Telecharger [Raspberry Pi Imager](https://www.raspberrypi.com/software/) puis :
 Connectez-vous en SSH au Pi puis executez :
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/controlvanne/Pi/install_pi.sh \
+wget https://raw.githubusercontent.com/TiBillet/Lespass/main/controlvanne/Pi/install_pi.sh \
   && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
@@ -368,7 +368,7 @@ GPIO_FLOW_SENSOR=23
 FLOW_CALIBRATION_FACTOR=6.5
 SYSTEMD_NOTIFY=True
 GIT_REPO=https://github.com/TiBillet/Lespass.git
-GIT_BRANCH=main-fedow-import
+GIT_BRANCH=main
 ```
 
 **Changer l'adresse du serveur ou du tenant** : editer ces deux lignes dans le

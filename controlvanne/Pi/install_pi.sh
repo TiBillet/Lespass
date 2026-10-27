@@ -18,9 +18,7 @@ REPO_DIR="/home/$SYSUSER/tibeer"
 TARGET_DIR="$REPO_DIR/controlvanne/Pi"
 
 DEFAULT_REPO="https://github.com/TiBillet/Lespass.git"
-# NOTE : à repointer vers la branche stable après merge de main-fedow-import.
-# / NOTE: re-target to the stable branch once main-fedow-import is merged.
-DEFAULT_BRANCH="main-fedow-import"
+DEFAULT_BRANCH="main"
 
 echo "=== INSTALLATION TIBEER ==="
 echo ""
