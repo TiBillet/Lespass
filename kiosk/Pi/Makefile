@@ -5,7 +5,7 @@
 #
 #  Usage :
 #     sudo apt-get update && sudo apt-get install -y make curl
-#     curl -O https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/kiosk/Pi/Makefile
+#     curl -O https://raw.githubusercontent.com/TiBillet/Lespass/main/kiosk/Pi/Makefile
 #     make conf              # ecrit tibillet.conf (valeurs par defaut)
 #     make install           # clone + systeme + correctifs + ecran + node + service
 #     sudo reboot            # la borne demarre sur la page d'appairage
@@ -58,7 +58,7 @@ ROTATE      ?= 0
 NFC         ?= gpio
 
 GIT_REPO    ?= https://github.com/TiBillet/Lespass.git
-GIT_BRANCH  ?= main-fedow-import
+GIT_BRANCH  ?= main
 
 # --- Chemins calcules / Computed paths ---------------------------------------
 

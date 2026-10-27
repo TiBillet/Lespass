@@ -170,7 +170,7 @@ puis applique les correctifs nécessaires. Le code du client n'est pas modifié.
 # make et curl ne sont pas dans l'image Lite
 sudo apt-get update && sudo apt-get install -y make curl
 
-curl -O https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/kiosk/Pi/Makefile
+curl -O https://raw.githubusercontent.com/TiBillet/Lespass/main/kiosk/Pi/Makefile
 
 make conf     # écrit tibillet.conf avec les valeurs par défaut, puis l'affiche
 make install  # clone + système + correctifs + écran + node + service
@@ -186,7 +186,7 @@ SCREEN_WIDTH=1920              # Waveshare 7" : 1024x600 — 13" : 1920x1080
 SCREEN_HEIGHT=1080
 ROTATE=0                       # 0 = paysage. Pilote aussi la calibration du tactile
 NFC=gpio                       # gpio (RC522 sur les broches) ou usb (ACR122U)
-GIT_BRANCH=main-fedow-import
+GIT_BRANCH=main
 ```
 
 **Le code PIN n'est pas dans ce fichier** : il se saisit sur l'écran tactile de la borne (§5.4).

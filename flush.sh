@@ -41,8 +41,8 @@ if [ "$DEBUG" = "1" ]; then
   poetry run python manage.py migrate_schemas
   poetry run python manage.py install
 
-  # Mode light par défaut (1 tenant, 3 events, 2 adhésions).
-  # Ajouter --full pour charger toutes les données de démo (5 tenants, initiatives, fédérations).
+  # Charge toutes les données de démo (5 tenants, initiatives, fédérations).
+  # --quick restaure à la place le dump SQL d'une exécution précédente.
   poetry run python manage.py demo_data_v2
 
   poetry run python manage.py collectstatic --no-input

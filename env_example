@@ -71,6 +71,9 @@ EMAIL_USE_TLS="False"                             # "True" / "False"
 EMAIL_HOST_USER="noreply@tibillet.localhost"      # login SMTP (obligatoire)
 # EMAIL_HOST_PASSWORD=""                          # mot de passe SMTP (inutile avec Mailpit)
 DEFAULT_FROM_EMAIL="noreply@tibillet.localhost"   # adresse d'expedition
+# DEFAULT_FROM_EMAIL : la remplir ou la commenter, jamais la laisser VIDE.
+# Absente, c'est EMAIL_HOST_USER qui sert. Vide (""), elle le remplace par une
+# adresse vide : aucun e-mail ne part.
 # EMAIL_TIMEOUT="30"                              # delai max d'un echange SMTP, en secondes
 
 # Usefull for dev/test
