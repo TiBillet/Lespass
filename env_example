@@ -61,21 +61,17 @@ ADMIN_EMAIL='admin@admin.com'
 #   festival). Optional: falls back to ADMIN_EMAIL if unset.
 ADMIN_LABOUTIK='admin+fest@admin.com'
 
-# For transactionnal email :
-# Adresse d'expedition des e-mails. Absente, c'est EMAIL_HOST_USER qui sert :
-# l'un des deux doit etre rempli, sinon aucun e-mail ne part. Ne pas la laisser
-# VIDE (DEFAULT_FROM_EMAIL="") : une valeur vide remplace EMAIL_HOST_USER.
-# DEFAULT_FROM_EMAIL="noreply@tibillet.localhost"
-# EMAIL_USE_SSL / EMAIL_USE_TLS : "True" ou "False" (defaut : SSL oui, TLS non).
-# EMAIL_TIMEOUT : attente maximale, en secondes, de chaque echange avec le
-# serveur SMTP (defaut 30).
-#
-# EN DEV : utiliser Mailpit (service du docker-compose.yml), qui recoit les e-mails
-# sans les envoyer. Lecture sur https://mailpit.tibillet.localhost
-EMAIL_HOST="mailpit"
-EMAIL_PORT="1025"
-EMAIL_USE_SSL="False"
-EMAIL_USE_TLS="False"
+# Transactional email
+# Valeurs de dev : Mailpit recoit les e-mails sans les envoyer.
+# Lecture sur https://mailpit.tibillet.localhost
+EMAIL_HOST="mailpit"                              # serveur SMTP
+EMAIL_PORT="1025"                                 # port SMTP
+EMAIL_USE_SSL="False"                             # "True" / "False"
+EMAIL_USE_TLS="False"                             # "True" / "False"
+EMAIL_HOST_USER="noreply@tibillet.localhost"      # login SMTP (obligatoire)
+# EMAIL_HOST_PASSWORD=""                          # mot de passe SMTP (inutile avec Mailpit)
+DEFAULT_FROM_EMAIL="noreply@tibillet.localhost"   # adresse d'expedition
+# EMAIL_TIMEOUT="30"                              # delai max d'un echange SMTP, en secondes
 
 # Usefull for dev/test
 # Auto login for admin, no https cert' verification, demonstration data, auto database flush, etc ...
