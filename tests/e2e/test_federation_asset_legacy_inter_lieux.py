@@ -32,8 +32,8 @@ B4. En base, `festival` passe des invitations aux lieux federes ; sur le Fedow,
 
 LA SUITE (test C, meme lancement, meme asset) / THE FOLLOW-UP (test C)
 -----------------------------------------------------------------------
-C1. Chez `lespass` : le produit adhesion E2E (un seul, reutilise par son nom ; il doit
-    exister sur le Fedow) et un tarif neuf qui verse 5,00 de la monnaie du test.
+C1. Chez `lespass` : le produit adhesion E2E (un seul, reutilise par son nom) et un
+    tarif neuf qui verse 5,00 de la monnaie du test.
 C2. Un adherent neuf adhere chez `lespass` ; l'admin enregistre la cotisation en especes
     (`/memberships/<pk>/ajouter_paiement/`). On attend le versement SUR LE FEDOW (500
     jetons), puis on relit sans cache son solde depensable chez `festival` (500).
@@ -479,7 +479,8 @@ def test_parcours_monnaie_federee_entre_deux_lieux(
     # ------------------------------------------------------------------
     # C1. Le tarif de test chez `lespass` : le produit adhesion E2E (reutilise par son
     #     nom, cree au premier lancement) et un tarif neuf qui verse la monnaie du test.
-    #     Le produit doit exister sur le Fedow : sinon la recompense echoue en silence.
+    #     Le produit n'a pas besoin d'exister sur le Fedow : la recompense verse la
+    #     monnaie du test, et le Fedow ne lit l'uuid du produit que dans les metadonnees.
     #     / The test price: the reused E2E membership product and a fresh price.
     # ------------------------------------------------------------------
     suffixe_du_lancement = nom_de_l_asset.rsplit(" ", 1)[-1]
@@ -489,7 +490,6 @@ def test_parcours_monnaie_federee_entre_deux_lieux(
         "from decimal import Decimal\n"
         "from BaseBillet.models import Price, Product\n"
         "from fedow_public.models import AssetFedowPublic\n"
-        "from fedow_connect.fedow_api import FedowAPI\n"
         "produit = Product.objects.filter(\n"
         f"    name={NOM_DU_PRODUIT_ADHESION_E2E!r}, categorie_article=Product.ADHESION\n"
         ").first()\n"
@@ -497,11 +497,6 @@ def test_parcours_monnaie_federee_entre_deux_lieux(
         "    produit = Product.objects.create(\n"
         f"        name={NOM_DU_PRODUIT_ADHESION_E2E!r},\n"
         "        categorie_article=Product.ADHESION, publish=False)\n"
-        "try:\n"
-        "    FedowAPI().asset.retrieve(uuid=str(produit.uuid))\n"
-        "    produit_sur_le_fedow = True\n"
-        "except Exception:\n"
-        "    produit_sur_le_fedow = False\n"
         "tarif = Price.objects.create(\n"
         f"    product=produit, name='E2E {suffixe_du_lancement}',\n"
         f"    prix=Decimal({PRIX_DE_L_ADHESION!r}), subscription_type=Price.YEAR,\n"
@@ -510,16 +505,8 @@ def test_parcours_monnaie_federee_entre_deux_lieux(
         f"    fedow_reward_amount=Decimal({RECOMPENSE_DE_L_ADHESION!r}))\n"
         "print('RESULTAT_JSON=' + json.dumps({\n"
         "    'uuid_du_produit': str(produit.uuid),\n"
-        "    'produit_sur_le_fedow': produit_sur_le_fedow,\n"
         "    'uuid_du_tarif': str(tarif.uuid),\n"
         "}))\n",
-    )
-    assert tarif_de_test["produit_sur_le_fedow"], (
-        f"Le produit adhesion « {NOM_DU_PRODUIT_ADHESION_E2E} » "
-        f"({tarif_de_test['uuid_du_produit']}) n'existe pas sur le Fedow : la "
-        "recompense echouerait en silence. Le signal post_save de Product "
-        "(send_membership_and_badge_product_to_fedow, BaseBillet/signals.py) le cree : "
-        "regarder les logs du serveur (« ERREUR Fedow »)."
     )
 
     # ------------------------------------------------------------------

@@ -406,7 +406,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         # (`/api/v2/memberships/by-wallet/`), qui est la source de vérité : c'est lui qui
         # porte la deadline et donc la VALIDITÉ, que Fedow n'a jamais connue.
         # L'asset d'adhésion, lui, reste déclaré à Fedow
-        # (`BaseBillet.signals.send_membership_and_badge_product_to_fedow`) : c'est par lui
+        # (`BaseBillet.signals.send_membership_product_to_fedow`) : c'est par lui
         # qu'un comptoir V1 peut encore VENDRE une adhésion.
         # / The membership is NO LONGER pushed to Fedow. That push existed so LaBoutik V1
         #   could read it as a SUB token; LaBoutik now queries Lespass directly, which is

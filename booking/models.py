@@ -181,11 +181,6 @@ class ResourceGroup(models.Model):
         default='',
         verbose_name=_('Description'),
     )
-    image = models.URLField(
-        blank=True,
-        default='',
-        verbose_name=_('Image URL'),
-    )
 
     class Meta:
         verbose_name = _('Resource group')

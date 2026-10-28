@@ -177,7 +177,7 @@ class TestPosAdhesionFusionWalletFedow(FastTenantTestCase):
 
         # --- Le produit adhesion vendu au comptoir ---
         # La creation d'un Product ADHESION declenche
-        # `BaseBillet.signals.send_membership_and_badge_product_to_fedow`, qui appelle le
+        # `BaseBillet.signals.send_membership_product_to_fedow`, qui appelle le
         # VRAI Fedow. On le neutralise : ce test ne parle pas de l'asset d'adhesion, et un
         # appel reseau reel polluerait la base Fedow de dev.
         # / Creating an ADHESION Product fires a signal that calls the REAL Fedow. Neutralize

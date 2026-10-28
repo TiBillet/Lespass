@@ -3654,9 +3654,10 @@ Sous la marque, `transaction.on_commit` ne part plus : utiliser la fixture
 `django_capture_on_commit_callbacks` si le comportement testé en dépend.
 Preuve : un objet créé par un test marqué n'existe plus après le run.
 
-**13.2 — Créer un `Product` adhésion appelle Fedow en HTTP, hors de la transaction.**
-Le signal `send_membership_and_badge_product_to_fedow` crée l'asset chez Fedow : le rollback
-ne l'annule pas. Dans un test : `patch("BaseBillet.signals.AssetFedow")`, avec
+**13.2 — Créer un `Product` adhésion sur un lieu avec LaBoutik V1 appelle Fedow en HTTP, hors de la transaction.**
+Le signal `send_membership_product_to_fedow` crée l'asset chez Fedow : le rollback
+ne l'annule pas. Il ne part que pour une adhésion, et seulement si `server_cashless` et `key_cashless`
+sont remplis. Dans un test : `patch("BaseBillet.signals.AssetFedow")`, avec
 `get_or_create_membership_asset.return_value = (MagicMock(), True)` pour que le signal ne
 journalise pas d'erreur.
 

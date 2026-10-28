@@ -906,12 +906,6 @@ def _construire_sections_modules(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Groupe de ressources"),
-                        "icon": "stacks",
-                        "link": _safe_rev("staff_admin:booking_resourcegroup_changelist"),
-                        "permission": admin_permission,
-                    },
-                    {
                         "title": _("Calendriers"),
                         "icon": "calendar_month",
                         "link": _safe_rev("staff_admin:booking_calendar_changelist"),
@@ -1506,7 +1500,6 @@ DESCRIPTION_DES_PAGES = {
     "booking.booking": _("Les réservations de salles et de matériel."),
     "BaseBillet.resourceproduct": _("Les ressources mises à la réservation."),
     "booking.resource": _("Ce qui peut être réservé."),
-    "booking.resourcegroup": _("Le rangement des ressources."),
     "booking.calendar": _("Les calendriers de disponibilité."),
     "booking.weeklyopening": _("Les horaires d'ouverture habituels."),
     "booking.planningbenevole": _("Les jours où vous avez besoin de bénévoles."),
@@ -1581,7 +1574,6 @@ CATEGORIE_DES_PAGES = {
     "booking.booking": "gerer",
     "BaseBillet.resourceproduct": "configurer",
     "booking.resource": "configurer",
-    "booking.resourcegroup": "configurer",
     "booking.calendar": "configurer",
     "booking.weeklyopening": "configurer",
     "booking.planningbenevole": "gerer",
