@@ -692,13 +692,48 @@ class ProductViewSet(viewsets.ViewSet):
 
 class ReservationViewSet(viewsets.ViewSet):
     """
-    Semantic Reservation API (create + retrieve).
-    API Reservation semantique (creation + detail).
+    Semantic Reservation API (list + create + retrieve).
+    API Reservation semantique (liste + creation + detail).
     """
 
     permission_classes = [SemanticApiKeyPermission]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     lookup_field = "uuid"
+
+    def list(self, request):
+        """
+        Liste les reservations du lieu, les plus recentes d'abord.
+        / Lists the venue's reservations, most recent first.
+
+        Parametre facultatif : `event=<uuid>` pour ne garder que les reservations
+        d'un evenement. C'est la liste des inscrits a cet evenement.
+        / Optional `event=<uuid>`: only the reservations of one event.
+
+        Toutes les reservations sont renvoyees, annulees comprises : leur
+        `reservationStatus` permet de les trier.
+        / Every reservation is returned, cancelled ones included.
+        """
+        reservations = Reservation.objects.select_related(
+            "event", "user_commande",
+        ).prefetch_related(
+            "tickets__pricesold__price",
+        ).order_by("-datetime")
+
+        uuid_de_l_evenement = request.GET.get("event", None)
+        if uuid_de_l_evenement:
+            if not _ressemble_uuid(uuid_de_l_evenement):
+                return Response(
+                    {"detail": f"Invalid event identifier: {uuid_de_l_evenement}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            reservations = reservations.filter(event__uuid=uuid_de_l_evenement)
+
+        # TODO : totalPrice relit en base les lignes de vente de chaque reservation
+        # (Reservation.total_paid). A optimiser si un evenement depasse quelques
+        # centaines de reservations.
+        # / totalPrice queries each reservation's sale lines (N+1).
+        serializer = ReservationSchemaSerializer(reservations, many=True)
+        return Response({"results": serializer.data})
 
     def create(self, request):
         input_serializer = ReservationCreateSerializer(data=request.data, context={"request": request})

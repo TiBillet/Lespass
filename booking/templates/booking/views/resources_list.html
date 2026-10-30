@@ -1,5 +1,5 @@
 {% extends "booking/booking_base.html" %}
-{% load i18n static %}
+{% load i18n static pages_tags %}
 
 <!--
 LOCALISATION : booking/templates/booking/views/home.html
@@ -9,20 +9,42 @@ Page d'accueil du module booking — liste des ressources réservables.
 
 Flux / Flow:
   GET /booking/
-  Contexte / Context: resources_groups, ungrouped_resources
+  Contexte / Context: resources_groups, ungrouped_resources,
+                      description_de_la_page_ressources, image_de_partage_des_ressources,
+                      nom_de_la_ressource_de_partage
 
 Affiche les ressources sous forme de cartes, groupées par ResourceGroup.
 / Shows resources as cards, grouped by ResourceGroup.
+
+PARTAGE ET MOTEURS : chaque bloc og_* a son jumeau twitter_* (un bloc Django ne se
+rend qu'une fois). Sans surcharge, le shell sert ceux de l'accueil.
+/ SHARING: each og_* block has its twitter_* twin; otherwise the shell serves the home ones.
 -->
 
 {% block title %}{% if config.booking_menu_name %}{{ config.booking_menu_name }}{% else %}{% translate "Ressources" %}{% endif %}{% endblock %}
-{% block meta_description %}{% translate "Réservez une ressource en ligne." %}{% endblock %}
+{% block meta_description %}{{ description_de_la_page_ressources }}{% endblock %}
+{% block og_title %}{% if config.booking_menu_name %}{{ config.booking_menu_name }}{% else %}{% translate "Ressources" %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{% if config.booking_menu_name %}{{ config.booking_menu_name }}{% else %}{% translate "Ressources" %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ description_de_la_page_ressources }}{% endblock %}
+{% block twitter_description %}{{ description_de_la_page_ressources }}{% endblock %}
+{% block og_image %}{% if image_de_partage_des_ressources %}https://{{ request.get_host }}{{ image_de_partage_des_ressources }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image %}{% if image_de_partage_des_ressources %}https://{{ request.get_host }}{{ image_de_partage_des_ressources }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_image_alt %}{% if image_de_partage_des_ressources %}{{ nom_de_la_ressource_de_partage }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image_alt %}{% if image_de_partage_des_ressources %}{{ nom_de_la_ressource_de_partage }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+
+{# Fil d'Ariane structuré (Accueil > Ressources), construit en Python. #}
+{# extra_meta n'existe que dans le <head> du shell : absent en navigation htmx. #}
+{# / Structured breadcrumb, built in Python; extra_meta only lives in the shell <head>. #}
+{% block extra_meta %}
+    {% url 'booking-list' as adresse_de_la_liste %}
+    {% jsonld_fil_ariane config.booking_menu_name|default:_("Ressources") adresse_de_la_liste %}
+{% endblock %}
 
 {% block booking_content %}
 
 {# Titre masqué à l'écran : lu par les lecteurs d'écran et les moteurs de recherche. #}
 {# / Visually hidden title: read by screen readers and search engines. #}
-<h1 class="visually-hidden">{% if config.booking_menu_name %}{{ config.booking_menu_name }}{% else %}{% translate "Réservations" %}{% endif %}</h1>
+<h1 class="visually-hidden">{% if config.booking_menu_name %}{{ config.booking_menu_name }}{% else %}{% translate "Ressources" %}{% endif %}</h1>
 
 {# Texte d'introduction (Configuration.description_booking_page). #}
 {# |safe : nettoyé (clean_html) à l'enregistrement dans l'admin Configuration. #}

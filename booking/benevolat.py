@@ -459,6 +459,39 @@ def construire_le_planning(planning, user, user_est_admin=False, semaine=None):
     }
 
 
+def plannings_publies_avec_des_besoins_a_venir():
+    """
+    Les plannings publiés qui ont au moins un besoin pas encore passé : ceux que la
+    page liste (/booking/benevolat/) affiche en cartes. Même règle que
+    resumes_des_plannings_a_venir sans horizon, sans calculer les cartes.
+    / Published plannings with at least one upcoming need: the list page's cards.
+
+    LOCALISATION : booking/benevolat.py
+    Appelée par :
+    - booking/sitemap.py (PlanningSitemap) : un planning sans besoin à venir est une
+      page quasi vide, il n'est pas déclaré ;
+    - BaseBillet/sitemap.py (StaticViewSitemap) et BenevolatViewSet.retrieve : la page
+      liste n'existe qu'à partir de deux plannings (avec un seul, elle redirige).
+
+    :return: liste de PlanningBenevole
+    """
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    aujourd_hui_au_lieu = timezone.now().astimezone(fuseau_du_lieu).date()
+    hier_au_lieu = aujourd_hui_au_lieu - datetime.timedelta(days=1)
+
+    # Pré-filtre en base (un besoin depuis hier), puis la vraie règle de fin en Python.
+    # / Database pre-filter (a need since yesterday), then the real end rule in Python.
+    plannings_avec_des_besoins_recents = PlanningBenevole.objects.filter(
+        published=True, besoins__date__gte=hier_au_lieu,
+    ).distinct().order_by("name")
+
+    plannings_retenus = []
+    for planning in plannings_avec_des_besoins_recents:
+        if besoins_a_venir(planning, fuseau_du_lieu):
+            plannings_retenus.append(planning)
+    return plannings_retenus
+
+
 def resumes_des_plannings_a_venir(nombre_max, horizon_en_jours=None):
     """
     Les cartes « Coups de main » : une par planning publié qui a au moins un besoin à

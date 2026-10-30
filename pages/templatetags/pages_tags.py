@@ -612,6 +612,70 @@ def jsonld_organisation(context):
     return mark_safe(f'<script type="application/ld+json">{json_str}</script>')
 
 
+@register.simple_tag(takes_context=True)
+def jsonld_fil_ariane(context, nom_de_la_liste, adresse_de_la_liste, nom_de_la_page=""):
+    """
+    Rend le fil d'Ariane JSON-LD (schema.org/BreadcrumbList) d'une page liste ou
+    d'une page détail : Accueil > la liste > la page. Google l'affiche à la place
+    de l'adresse dans ses résultats (résultat enrichi « fil d'Ariane »).
+    / Renders the BreadcrumbList JSON-LD of a list or detail page:
+    Home > the list > the page. Google shows it instead of the URL in results.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    Utilisé par les pages du module booking (ressources et bénévolat) :
+    - liste  : {% jsonld_fil_ariane nom_de_la_liste adresse_de_la_liste %}
+    - détail : {% jsonld_fil_ariane nom_de_la_liste adresse_de_la_liste resource.name %}
+    - détail dont la liste redirige (un seul élément) : {% jsonld_fil_ariane "" "" resource.name %}
+      Le maillon de la liste est alors omis : il mènerait à une redirection vers la page
+      elle-même. Le fil devient Accueil > la page.
+    Le dernier maillon (la page détail) a pour adresse le chemin demandé, SANS les
+    paramètres (?semaine=), comme le canonical du shell.
+    / An empty list name drops the list crumb (the list would redirect to the page).
+    / The last crumb uses the requested path WITHOUT query parameters, like the canonical.
+    """
+    request = context.get("request")
+    if not request:
+        return ""
+
+    # json.dumps ne sait pas sérialiser une traduction différée. Or un libellé
+    # passé par le gabarit (`|default:_("Ressources")`) en est une : str() le
+    # traduit maintenant, dans la langue active.
+    # / json.dumps cannot serialise a lazy translation; a template `_()` is one.
+    maillons = [{"nom": _("Accueil"), "adresse": "/"}]
+    if nom_de_la_liste:
+        maillons.append({"nom": str(nom_de_la_liste), "adresse": adresse_de_la_liste})
+    if nom_de_la_page:
+        maillons.append({"nom": str(nom_de_la_page), "adresse": request.path})
+
+    elements_du_fil = []
+    for rang, maillon in enumerate(maillons, start=1):
+        elements_du_fil.append({
+            "@type": "ListItem",
+            "position": rang,
+            "name": maillon["nom"],
+            # URL absolue : un fil d'Ariane structuré se lit hors du site.
+            # / Absolute URL: a structured breadcrumb is read off-site.
+            "item": request.build_absolute_uri(maillon["adresse"]),
+        })
+
+    donnees = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": elements_du_fil,
+    }
+
+    # Même échappement que jsonld_event (neutralise </script> et commentaires).
+    # / Same escaping as jsonld_event (neutralizes </script> and comments).
+    json_str = (
+        json.dumps(donnees, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+    return mark_safe(f'<script type="application/ld+json">{json_str}</script>')
+
+
 @register.filter
 def rendre_bloc_markdown(bloc):
     """

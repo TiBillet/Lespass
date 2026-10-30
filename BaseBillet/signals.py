@@ -529,11 +529,21 @@ def unpublish_if_archived(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Product) # Attention, les post_save depuis l'admin sont atomic
-def send_membership_and_badge_product_to_fedow(sender, instance: Product, created, **kwargs):
+def send_membership_product_to_fedow(sender, instance: Product, created, **kwargs):
     logger.info(f"send_membership_product_to_fedow")
-    # Est ici pour éviter les double imports
-    if instance.categorie_article in [Product.ADHESION, Product.BADGE]:
-        # vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
+    # Seule une ADHESION a un asset Fedow. Cet asset ne sert qu'a une caisse
+    # LaBoutik V1 : elle vend l'adhesion au comptoir sur cet asset, puis Fedow
+    # previent Lespass (fedow_connect/views.py, Membership_fwh). Sans V1, on
+    # n'envoie rien.
+    # / Only a MEMBERSHIP has a Fedow asset, used by a LaBoutik V1 POS only:
+    #   without V1, nothing is sent.
+    if instance.categorie_article == Product.ADHESION:
+        config = Configuration.get_solo()
+        laboutik_v1_est_configure = bool(config.server_cashless and config.key_cashless)
+        if not laboutik_v1_est_configure:
+            return
+
+        # vérifie l'existante du produit Adhésion dans Fedow et le créé si besoin
         # Un échec Fedow ne doit jamais bloquer la sauvegarde du produit
         try:
             fedow_config = FedowConfig.get_solo()
@@ -577,7 +587,7 @@ def trigger_product_update(sender, instance: Product, created, **kwargs):
 # source) and the guard test checks these connections.
 for _proxy_product in PROXYS_PRODUCT:
     pre_save.connect(unpublish_if_archived, sender=_proxy_product)
-    post_save.connect(send_membership_and_badge_product_to_fedow, sender=_proxy_product)
+    post_save.connect(send_membership_product_to_fedow, sender=_proxy_product)
     post_save.connect(trigger_product_update, sender=_proxy_product)
 
 

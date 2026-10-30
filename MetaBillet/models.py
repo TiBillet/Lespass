@@ -189,10 +189,10 @@ class WaitingConfiguration(models.Model):
     def logo_variations(self):
         if self.logo:
             return {
-                'fhd': self.img.fhd.url,
-                'hdr': self.img.hdr.url,
-                'med': self.img.med.url,
-                'thumbnail': self.img.thumbnail.url,
+                'fhd': self.logo.fhd.url,
+                'hdr': self.logo.hdr.url,
+                'med': self.logo.med.url,
+                'thumbnail': self.logo.thumbnail.url,
             }
         else:
             return []

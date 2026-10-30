@@ -660,10 +660,10 @@ class Configuration(SingletonModel):
     def logo_variations(self):
         if self.logo:
             return {
-                'fhd': self.img.fhd.url,
-                'hdr': self.img.hdr.url,
-                'med': self.img.med.url,
-                'thumbnail': self.img.thumbnail.url,
+                'fhd': self.logo.fhd.url,
+                'hdr': self.logo.hdr.url,
+                'med': self.logo.med.url,
+                'thumbnail': self.logo.thumbnail.url,
             }
         else:
             return []
@@ -1959,9 +1959,9 @@ for _proxy_product in PROXYS_PRODUCT:
 
 
 """
-Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow
+Un autre post save existe dans .signals.py : send_membership_product_to_fedow
 Dans fichier signals pour éviter les doubles imports
-Il vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
+Il vérifie l'existence du produit Adhésion dans Fedow et le crée si besoin (lieux avec LaBoutik V1 seulement)
 Les proxys de Product y sont connectes aussi (voir PROXYS_PRODUCT ci-dessus).
 """
 

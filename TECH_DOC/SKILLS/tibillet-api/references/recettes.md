@@ -113,7 +113,8 @@ l'endpoint. **Lire la section avant de composer le corps** (ne pas deviner les n
 champs). Repères :
 - **Products** : `POST /api/v2/products/` (openapi l.598).
 - **Memberships** : `POST /api/v2/memberships/` (l.749).
-- **Reservations** : `POST /api/v2/reservations/` (l.682).
+- **Reservations** : `POST /api/v2/reservations/` ; liste des inscrits d'un événement
+  `GET /api/v2/reservations/?event=<uuid>` (l.777).
 - **Crowds/initiatives** : `POST /api/v2/initiatives/` + sous-ressources budget-items /
   votes / participations (l.268+).
 - **Wallet-refills** : `POST /api/v2/wallet-refills/` (l.985) — nécessite une clé avec

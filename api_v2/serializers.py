@@ -1741,11 +1741,37 @@ class ReservationSchemaSerializer(serializers.Serializer):
                 "ticketQuantity": qty,
             })
 
+        # Statut TiBillet -> statut schema.org. Payee ou e-mail verifie : confirmee.
+        # Annulee : annulee. Le reste (creee, paiement ou e-mail en attente) : en attente.
+        # / TiBillet status -> schema.org status. Paid or e-mail verified: confirmed.
         status_map = {
             Reservation.VALID: "https://schema.org/ReservationConfirmed",
-            Reservation.FREERES: "https://schema.org/ReservationPending",
+            Reservation.PAID: "https://schema.org/ReservationConfirmed",
+            Reservation.PAID_ERROR: "https://schema.org/ReservationConfirmed",
+            Reservation.PAID_NOMAIL: "https://schema.org/ReservationConfirmed",
+            Reservation.FREERES_USERACTIV: "https://schema.org/ReservationConfirmed",
+            Reservation.CANCELED: "https://schema.org/ReservationCancelled",
+            Reservation.CREATED: "https://schema.org/ReservationPending",
             Reservation.UNPAID: "https://schema.org/ReservationPending",
+            Reservation.FREERES: "https://schema.org/ReservationPending",
         }
+
+        # Montant paye, en euros : lignes payees, moins les avoirs et les remboursements.
+        # total_paid() renvoie l'entier 0 quand rien n'est paye : Decimal() le
+        # ramene au format "0.00" des autres montants.
+        # / Amount paid, in euros, credit notes and refunds deducted.
+        montant_paye_en_euros = Decimal(instance.total_paid()).quantize(Decimal("0.01"))
+
+        # Reponses au formulaire dynamique de l'evenement, rangees par libelle de question.
+        # Meme nom "customForm" qu'a la creation (ReservationCreateSerializer).
+        # / Dynamic form answers, keyed by question label. Same "customForm" name as on creation.
+        proprietes_additionnelles = []
+        if instance.custom_form:
+            proprietes_additionnelles.append({
+                "@type": "PropertyValue",
+                "name": "customForm",
+                "value": instance.custom_form,
+            })
 
         return {
             "@context": "https://schema.org",
@@ -1759,9 +1785,14 @@ class ReservationSchemaSerializer(serializers.Serializer):
             "underName": {
                 "@type": "Person",
                 "email": instance.user_commande.email,
+                "givenName": instance.user_commande.first_name or None,
+                "familyName": instance.user_commande.last_name or None,
             },
             "reservationStatus": status_map.get(instance.status, "https://schema.org/ReservationPending"),
             "reservedTicket": reserved_ticket,
+            "totalPrice": str(montant_paye_en_euros),
+            "priceCurrency": "EUR",
+            "additionalProperty": proprietes_additionnelles or None,
         }
 
 

@@ -257,8 +257,14 @@ class ResourceInline(TabularInline):
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    # INDISPENSABLE : on ne crée jamais une ressource depuis la fiche d'un groupe.
+    # Une ressource exige un produit, absent de cet inline : la ligne partirait en
+    # base sans produit et la page planterait. On crée la ressource dans l'admin
+    # Ressources, et on y choisit son groupe.
+    # / A resource is never created from a group page: it needs a product, which
+    # this inline does not show. Create it from the Resource admin.
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -267,6 +273,12 @@ class ResourceInline(TabularInline):
         return TenantAdminPermissionWithRequest(request)
 
 
+# Pas d'entrée dans le menu latéral : on gère les groupes depuis le formulaire
+# d'une ressource. Le menu « ⋮ » à côté du champ « Groupe » ouvre cet admin en
+# fenêtre pour ajouter ou modifier un groupe. INDISPENSABLE : sans cet
+# enregistrement, ce menu disparaît.
+# / Not in the sidebar: groups are managed from the resource form, whose "Group"
+# field menu opens this admin in a popup. Keep it registered.
 @admin.register(ResourceGroup, site=staff_admin_site)
 class ResourceGroupAdmin(ModelAdmin):
     inlines = [ResourceInline]

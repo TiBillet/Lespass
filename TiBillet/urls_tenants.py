@@ -8,6 +8,7 @@ from Administration.admin_tenant import staff_admin_site
 from ApiBillet.views import Webhook_stripe
 from BaseBillet.sitemap import EventSitemap, StaticViewSitemap
 from pages.sitemap import PageSitemap
+from booking.sitemap import PlanningSitemap, RessourceSitemap
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -32,6 +33,8 @@ urlpatterns = [
         'events': EventSitemap,
         'static': StaticViewSitemap,
         'pages': PageSitemap,
+        'ressources': RessourceSitemap,
+        'plannings': PlanningSitemap,
     }, 'template_name': 'sitemaps/sitemap.xml'}, name='django.contrib.sitemaps.views.sitemap'),
 
     # ------------------------------------------------------------------

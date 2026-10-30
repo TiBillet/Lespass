@@ -1,5 +1,5 @@
 {% extends "booking/booking_base.html" %}
-{% load i18n %}
+{% load i18n pages_tags %}
 
 <!--
 LISTE DES PLANNINGS DE BÉNÉVOLES À VENIR
@@ -14,7 +14,24 @@ qui affiche aussi l'état vide). benevolat.css est chargé dans le <head> du she
 / Target of the site menu entry; reuses the home block cards.
 -->
 
+{# PARTAGE ET MOTEURS : chaque bloc og_* a son jumeau twitter_* (un bloc Django ne #}
+{# se rend qu'une fois). Sans surcharge, le shell sert ceux de l'accueil. L'image #}
+{# reste celle du lieu (bloc og_image du shell). #}
+{# / SHARING: each og_* block has its twitter_* twin. The image stays the venue's. #}
 {% block title %}{% if config.benevolat_menu_name %}{{ config.benevolat_menu_name }}{% else %}{% translate "Bénévolat" %}{% endif %}{% endblock %}
+{% block meta_description %}{{ description_de_la_page_benevolat }}{% endblock %}
+{% block og_title %}{% if config.benevolat_menu_name %}{{ config.benevolat_menu_name }}{% else %}{% translate "Bénévolat" %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{% if config.benevolat_menu_name %}{{ config.benevolat_menu_name }}{% else %}{% translate "Bénévolat" %}{% endif %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ description_de_la_page_benevolat }}{% endblock %}
+{% block twitter_description %}{{ description_de_la_page_benevolat }}{% endblock %}
+
+{# Fil d'Ariane structuré (Accueil > Bénévolat), construit en Python. #}
+{# extra_meta n'existe que dans le <head> du shell : absent en navigation htmx. #}
+{# / Structured breadcrumb, built in Python; extra_meta only lives in the shell <head>. #}
+{% block extra_meta %}
+    {% url 'benevolat-liste' as adresse_de_la_liste %}
+    {% jsonld_fil_ariane config.benevolat_menu_name|default:_("Bénévolat") adresse_de_la_liste %}
+{% endblock %}
 
 {% block booking_content %}
 <div class="benevolat" data-testid="benevolat-liste">

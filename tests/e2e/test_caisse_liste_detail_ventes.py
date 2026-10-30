@@ -217,9 +217,11 @@ def test_le_bouton_reimprimer_envoie_l_uuid_de_la_vente(
 
     donnees_envoyees = requete_d_impression.value.post_data or ""
     assert f"uuid_vente={vente['uuid']}" in donnees_envoyees, donnees_envoyees
-    # Une session admin n'est pas un terminal : il n'a pas d'imprimante. La route
-    # le dit, dans la zone de retour sous les boutons.
-    # / An admin session is not a terminal: no printer; the route says so.
+    # Le compte admin est celui du terminal « Caisse admin (démo) », seede par
+    # demo_data_v2 avec l'imprimante mock : l'impression part, et la route le dit
+    # dans la zone de retour sous les boutons.
+    # / The admin account owns the "Caisse admin (démo)" terminal, seeded with the
+    # mock printer: printing starts and the route says so.
     expect(detail.locator('[data-testid="reimpression-feedback"]')).to_contain_text(
-        "Aucune imprimante configurée pour ce terminal"
+        "Impression lancée"
     )

@@ -108,6 +108,7 @@ from laboutik.models import (  # noqa: E402
 )
 from laboutik.printing.escpos_builder import build_escpos_from_ticket_data  # noqa: E402
 from laboutik.printing.formatters import formatter_ticket_vente  # noqa: E402
+from laboutik.printing.mock import _decode_escpos_to_text  # noqa: E402
 from laboutik.printing.sunmi_inner import ticket_data_to_json_commands  # noqa: E402
 from laboutik.printing.tasks import imprimer_async  # noqa: E402
 
@@ -1170,3 +1171,77 @@ class TestTicketClientImprime(FastTenantTestCase):
                 cadeau_imprime = True
         assert especes_imprimees, textes
         assert cadeau_imprime, textes
+
+    def test_la_sunmi_interne_imprime_les_memes_lignes_que_l_imprimante_escpos(self):
+        """
+        Un ticket complet (mentions legales, DUPLICATA, SIMULATION, detail des
+        moyens, ventilation TVA, pied) donne LES MEMES lignes de texte, dans le meme
+        ordre, sur la Sunmi interne (commandes JSON) et sur l'imprimante ESC/POS
+        (reseau, cloud, mock). Les deux traductions du ticket sont ecrites a la main :
+        ce test echoue des qu'un bloc n'existe que d'un cote.
+        / A full receipt prints the SAME text lines, in the same order, on the Sunmi
+        built-in printer and on the ESC/POS printer.
+        """
+        vente = self._payer_trois_vins_carte_puis_especes()
+        ticket = self._ticket(vente)
+        ticket["legal"] = {
+            "business_name": "Bar associatif du quartier",
+            "address": "1 rue de la Paix 69100 Villeurbanne",
+            "siret": "123 456 789 00012",
+            "tva_number": "FR12345678901",
+        }
+        ticket["is_duplicata"] = True
+        ticket["is_simulation"] = True
+
+        # Le ticket doit vraiment porter une ventilation TVA, sinon le test ne
+        # compare rien sur ce bloc.
+        # / The receipt must carry a VAT breakdown, or the test compares nothing there.
+        assert ticket["tva_breakdown"], ticket
+
+        # Les lignes de l'imprimante ESC/POS, decodees comme le fait la mock. La coupe
+        # du papier n'est pas une ligne de texte.
+        # / ESC/POS lines, decoded like the mock does. The paper cut is not a text line.
+        lignes_escpos = []
+        octets_escpos = build_escpos_from_ticket_data(576, ticket)
+        for ligne in _decode_escpos_to_text(octets_escpos):
+            ligne_nettoyee = ligne.strip()
+            if not ligne_nettoyee or ligne_nettoyee.startswith("✂"):
+                continue
+            lignes_escpos.append(ligne_nettoyee)
+
+        # Les lignes de la Sunmi interne : la valeur de chaque commande de texte.
+        # / Sunmi built-in printer lines: the value of each text command.
+        lignes_sunmi = []
+        for commande in ticket_data_to_json_commands(ticket):
+            if commande["type"] != "text":
+                continue
+            ligne_nettoyee = str(commande.get("value", "")).strip()
+            if not ligne_nettoyee:
+                continue
+            lignes_sunmi.append(ligne_nettoyee)
+
+        assert lignes_sunmi == lignes_escpos
+
+    def test_la_sunmi_interne_envoie_le_qr_code_au_format_de_l_application(self):
+        """
+        Le QR code part dans une commande que l'application Android sait lire :
+        `manageSunmiPrint.js` attend le type « qrCode » et la taille dans
+        « modulesize ». Une commande d'un autre type est ignoree sans erreur : le QR
+        code ne sortirait pas.
+        / The QR code is sent in a command the Android app reads: type "qrCode",
+        size in "modulesize". Any other type is silently skipped.
+        """
+        vente = self._payer_trois_vins_carte_puis_especes()
+        ticket = self._ticket(vente)
+        ticket["qrcode"] = "https://lespass.tibillet.localhost/qr/test/"
+
+        commandes_qr_code = []
+        for commande in ticket_data_to_json_commands(ticket):
+            if commande.get("value") == ticket["qrcode"]:
+                commandes_qr_code.append(commande)
+
+        assert len(commandes_qr_code) == 1, commandes_qr_code
+        commande_qr_code = commandes_qr_code[0]
+        assert commande_qr_code["type"] == "qrCode"
+        assert commande_qr_code["modulesize"] > 0
+        assert commande_qr_code["align"] == "center"

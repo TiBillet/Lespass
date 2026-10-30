@@ -906,12 +906,6 @@ def _construire_sections_modules(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Groupe de ressources"),
-                        "icon": "stacks",
-                        "link": _safe_rev("staff_admin:booking_resourcegroup_changelist"),
-                        "permission": admin_permission,
-                    },
-                    {
                         "title": _("Calendriers"),
                         "icon": "calendar_month",
                         "link": _safe_rev("staff_admin:booking_calendar_changelist"),
@@ -1506,7 +1500,6 @@ DESCRIPTION_DES_PAGES = {
     "booking.booking": _("Les réservations de salles et de matériel."),
     "BaseBillet.resourceproduct": _("Les ressources mises à la réservation."),
     "booking.resource": _("Ce qui peut être réservé."),
-    "booking.resourcegroup": _("Le rangement des ressources."),
     "booking.calendar": _("Les calendriers de disponibilité."),
     "booking.weeklyopening": _("Les horaires d'ouverture habituels."),
     "booking.planningbenevole": _("Les jours où vous avez besoin de bénévoles."),
@@ -1581,7 +1574,6 @@ CATEGORIE_DES_PAGES = {
     "booking.booking": "gerer",
     "BaseBillet.resourceproduct": "configurer",
     "booking.resource": "configurer",
-    "booking.resourcegroup": "configurer",
     "booking.calendar": "configurer",
     "booking.weeklyopening": "configurer",
     "booking.planningbenevole": "gerer",
@@ -2971,8 +2963,13 @@ def _build_pos_card_context(configuration):
 
 
 def _build_taches_referencement_context(configuration):
-    """Liste des informations manquantes qui penalisent le referencement du site.
-    / List of missing settings that hurt the website's search-engine visibility.
+    """Liste des informations manquantes dans la configuration du lieu.
+    / List of missing settings in the venue configuration.
+
+    Deux familles de taches : le compte Stripe (paiement en ligne) et les
+    informations qui penalisent le referencement du site.
+    / Two task families: the Stripe account (online payment) and the settings
+    that hurt the website's search-engine visibility.
 
     Chaque entree decrit UNE information a completer dans la page Configuration.
     La liste est vide quand tout est rempli : l'encart disparait alors du dashboard.
@@ -2997,6 +2994,24 @@ def _build_taches_referencement_context(configuration):
     )
 
     taches = []
+
+    # Compte Stripe : c'est lui qui encaisse les paiements en ligne. Meme
+    # condition que le bouton « Link your stripe account » de l'onglet
+    # « Paiement (Stripe) » de la Configuration (Configuration.onboard_stripe).
+    # / Stripe account: it collects online payments. Same condition as the
+    # onboarding button in the Configuration's Stripe tab.
+    if not configuration.stripe_payouts_enabled:
+        taches.append({
+            "testid": "tache-stripe",
+            "icone": "credit_card",
+            "titre": _("Connecter votre compte Stripe"),
+            "explication": _(
+                "Stripe n'est pas nécessaire pour tout ce qui est gratuit. "
+                "Il est indispensable pour vendre en ligne : billetterie, "
+                "adhésions et réservations de ressources. La caisse peut s'en "
+                "passer si vous n'utilisez pas le cashless."
+            ),
+        })
 
     # Image de partage : elle alimente la balise og:image (apercu sur les
     # reseaux sociaux et dans les messageries). Sans elle, aucune vignette.
@@ -3040,22 +3055,6 @@ def _build_taches_referencement_context(configuration):
             ),
         })
 
-    # Mentions legales / CGV : obligation legale des qu'on vend en ligne.
-    # On accepte DEUX sources : le lien externe historique (legal_documents)
-    # ou une page interne dediee. Si l'une des deux existe, la tache disparait.
-    # / Legal notice / T&C: accepts either the legacy external link or an
-    # internal page. Task disappears as soon as one of them exists.
-    if not configuration.legal_documents and not _page_legale_existe():
-        taches.append({
-            "testid": "tache-mentions-legales",
-            "icone": "gavel",
-            "titre": _("Renseigner vos mentions légales"),
-            "explication": _(
-                "Obligatoire dès que vous vendez en ligne. Renseignez le lien "
-                "vers vos conditions générales dans la configuration."
-            ),
-        })
-
     # Identite legale : necessaire pour generer des mentions legales completes
     # et pour les tickets de caisse.
     # / Legal identity: required for complete legal notices and POS receipts.
@@ -3088,26 +3087,6 @@ def _build_taches_referencement_context(configuration):
         "lien_configuration": lien_configuration,
         "taches": taches,
     }
-
-
-def _page_legale_existe():
-    """Vrai si une page interne de mentions legales est publiee sur ce tenant.
-    / True if an internal legal-notice page is published on this tenant.
-
-    Import local : l'app `pages` n'est pas toujours chargee au moment ou le
-    module admin est importe. On tolere son absence sans casser le dashboard.
-    / Local import: the `pages` app may not be loaded when this admin module is
-    imported. Tolerate its absence without breaking the dashboard.
-    """
-    try:
-        from pages.models import Page
-    except ImportError:
-        return False
-
-    return Page.objects.filter(
-        slug__in=["mentions-legales", "cgv", "cgu", "confidentialite"],
-        publie=True,
-    ).exists()
 
 
 def dashboard_callback(request, context):

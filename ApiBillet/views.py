@@ -31,7 +31,7 @@ from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSe
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
-    OptionGenerale, Membership, PaymentMethod, LigneArticle, MembershipProduct
+    OptionGenerale, Membership, PaymentMethod, LigneArticle
 from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik, send_payment_refused_user
 from BaseBillet.tasks import send_membership_sepa_pending_user
 from Customers.models import Client, lieu_en_moteur_legacy
@@ -223,30 +223,6 @@ class TenantViewSet(viewsets.ViewSet):
         else:
             return get_permission_Api_LR_Any_CU_Admin(self)
         # permission_classes = [permissions.AllowAny]
-
-
-class HereViewSet(DeprecatedV1Mixin, viewsets.ViewSet):
-
-    def list(self, request):
-        config = Configuration.get_solo()
-        place_serialized = ConfigurationSerializer(config, context={'request': request})
-
-        dict_return = {'uuid': f"{connection.tenant.uuid}"}
-        dict_return.update(place_serialized.data)
-
-        products_adhesion = MembershipProduct.objects.filter(
-            prices__archived=False,
-            publish=True,
-        ).distinct()
-
-        if len(products_adhesion) > 0:
-            products_serializer = ProductSerializer(products_adhesion, many=True)
-            dict_return['membership_products'] = products_serializer.data
-
-        return Response(dict_return)
-
-    def get_permissions(self):
-        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class EventsSlugViewSet(DeprecatedV1Mixin, viewsets.ViewSet):

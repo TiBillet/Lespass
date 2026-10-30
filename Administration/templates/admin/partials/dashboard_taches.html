@@ -6,8 +6,9 @@
 {# LOCALISATION : Administration/templates/admin/partials/dashboard_taches.html #}
 {#                                                                        #}
 {# Affiche tout en haut du dashboard la liste des informations manquantes #}
-{# qui penalisent le referencement du site public. L'encart disparait     #}
-{# automatiquement quand tout est rempli.                                 #}
+{# de la configuration : compte Stripe, et informations qui penalisent le #}
+{# referencement du site public. L'encart disparait automatiquement quand #}
+{# tout est rempli.                                                       #}
 {# Recoit `taches_referencement` :                                        #}
 {#   - taches : liste {testid, icone, titre, explication}                 #}
 {#   - lien_configuration : URL de la page Configuration du tenant        #}
@@ -28,9 +29,10 @@
             </h2>
             <p class="text-sm text-base-500 dark:text-base-400 mt-1">
                 {% blocktranslate trimmed %}
-                    Pour que votre site soit bien référencé sur les moteurs de recherche
-                    et correctement affiché lorsqu'il est partagé, il reste quelques
-                    informations à compléter dans votre page de configuration.
+                    Pour accepter les paiements en ligne, et pour que votre site soit bien
+                    référencé sur les moteurs de recherche et correctement affiché lorsqu'il
+                    est partagé, il reste quelques informations à compléter dans votre page
+                    de configuration.
                 {% endblocktranslate %}
             </p>
         </div>

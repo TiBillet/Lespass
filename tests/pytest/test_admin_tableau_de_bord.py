@@ -24,6 +24,7 @@ Meme pattern que les autres tests d'admin : base de dev vivante.
 """
 
 import re
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -236,6 +237,58 @@ def test_l_encart_des_taches_reste_hors_du_bloc_des_modules(navigateur):
 
     assert 'data-testid="dashboard-taches-referencement"' in contenu
     assert contenu.index('dashboard-taches-referencement') < contenu.index('id="dashboard-modules"')
+
+
+def _configuration_complete(**champs_modifies):
+    """
+    Une fausse Configuration ou tout est rempli. Chaque test vide un seul champ.
+    On n'utilise pas la vraie Configuration du lieu : la vider toucherait le
+    site live (cache memcached partage).
+    / A fake, fully filled Configuration. Each test empties one field only.
+    """
+    champs = {
+        "pk": 1,
+        "img": "images/lieu.jpg",
+        "short_description": "Un lieu.",
+        "long_description": "<p>Un lieu associatif.</p>",
+        "siren": "123456789",
+        "tva_number": "",
+        "phone": "0262000000",
+        "stripe_payouts_enabled": True,
+        "legal_documents": None,
+    }
+    champs.update(champs_modifies)
+    return SimpleNamespace(**champs)
+
+
+def _testids_des_taches(configuration):
+    """Les testid des taches proposees. / Testids of the proposed tasks."""
+    contexte = dashboard._build_taches_referencement_context(configuration)
+    testids = []
+    for tache in contexte["taches"]:
+        testids.append(tache["testid"])
+    return testids
+
+
+def test_sans_stripe_l_encart_invite_a_connecter_stripe():
+    """Un lieu sans compte Stripe connecte voit l'invitation a le brancher."""
+    configuration = _configuration_complete(stripe_payouts_enabled=False)
+    assert _testids_des_taches(configuration) == ["tache-stripe"]
+
+
+def test_avec_stripe_connecte_l_invitation_stripe_disparait():
+    """Une configuration complete, Stripe compris, ne propose aucune tache."""
+    assert _testids_des_taches(_configuration_complete()) == []
+
+
+def test_l_encart_ne_propose_plus_les_mentions_legales():
+    """
+    Le lien des conditions generales (`legal_documents`) n'est pas modifiable
+    dans l'admin : une tache qui y renvoie ne menerait nulle part.
+    / The T&C link cannot be edited in the admin: no task may point to it.
+    """
+    configuration = _configuration_complete(legal_documents=None)
+    assert "tache-mentions-legales" not in _testids_des_taches(configuration)
 
 
 # --------------------------------------------------------------------------- #
