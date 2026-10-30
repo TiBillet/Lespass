@@ -268,32 +268,38 @@ def fabriquer_le_miroir_de_la_carte(fiche_fedow, fedow_config):
 
 def relier_la_copie_locale_de_la_carte(fiche_fedow, utilisateur, ip="0.0.0.0"):
     """
-    Après une liaison chez l'ancien Fedow, met la copie locale de la carte d'accord :
-    elle porte la même personne.
-    / After a link on the old Fedow, brings the local card copy in line: same person.
+    Met la copie locale de la carte d'accord avec l'ancien Fedow : elle porte la même
+    personne. La fiche reçue vient de Fedow, qui fait foi : elle dit que la carte est à
+    `utilisateur`.
+    / Brings the local card copy in line with the old Fedow: same person. The record
+    comes from Fedow, which is authoritative: the card belongs to `utilisateur`.
 
     LOCALISATION : QrcodeCashless/services.py
 
     FLUX :
     1. La carte existe ici : `CarteService.lier_a_user` pose la personne, fusionne le
        portefeuille éphémère local et rattrape les adhésions anonymes.
-    2. Elle n'existe pas ici, dans un lieu V2 : on fabrique sa copie locale
+    2. La copie locale garde un ancien porteur : Fedow a détaché la carte sans prévenir
+       Lespass (VOID de la caisse V1). On la détache de lui, puis on la lie. Son argent,
+       ses jetons et ses adhésions ne bougent pas.
+    3. Elle n'existe pas ici, dans un lieu V2 : on fabrique sa copie locale
        (`fabriquer_le_miroir_de_la_carte`), qui porte la personne d'après la fiche.
-    3. Lieu legacy, ou carte d'un lieu legacy ou inconnu : pas de copie locale, ses
+    4. Lieu legacy, ou carte d'un lieu legacy ou inconnu : pas de copie locale, ses
        cartes vivent dans LaBoutik V1.
-    / 1. Local card: link it. 2. Missing in a V2 venue: build its copy. 3. Legacy: none.
+    / 1. Local card: link it. 2. Former holder on the copy: detach, then link.
+      3. Missing in a V2 venue: build its copy. 4. Legacy: none.
 
-    APPELÉE PAR : `BaseBillet/views.py`, `ScanQrCode.link` (liaison par QR code) et
-    `Administration/admin_tenant.py`, `lier_la_carte_a_l_adherent_chez_fedow` (adhésion
-    saisie dans l'admin).
+    APPELÉE PAR : `BaseBillet/views.py`, `ScanQrCode.link` (liaison par QR code),
+    `aligner_les_cartes_locales_sur_fedow` et `Administration/admin_tenant.py`,
+    `lier_la_carte_a_l_adherent_chez_fedow` (adhésion saisie dans l'admin).
 
-    :param fiche_fedow: fiche de la carte rendue par la liaison (CardValidator)
-    :param utilisateur: TibilletUser qui vient d'être lié chez l'ancien Fedow
+    :param fiche_fedow: fiche de la carte rendue par Fedow (CardValidator)
+    :param utilisateur: TibilletUser à qui Fedow attribue la carte
     :param ip: str, IP de la requête
     :return: CarteCashless, ou None (pas de copie locale)
-    :raises CarteDejaLiee, UserADejaCarte: la base locale refuse la liaison
+    :raises UserADejaCarte: la personne a déjà une autre carte en local
     """
-    from fedow_core.exceptions import CarteIntrouvable
+    from fedow_core.exceptions import CarteDejaLiee, CarteIntrouvable
     from fedow_core.services import CarteService
 
     try:
@@ -302,6 +308,22 @@ def relier_la_copie_locale_de_la_carte(fiche_fedow, utilisateur, ip="0.0.0.0"):
         )
     except CarteIntrouvable:
         pass
+    except CarteDejaLiee:
+        carte_locale = CarteCashless.objects.select_related("user").get(
+            uuid=fiche_fedow["qrcode_uuid"],
+        )
+        ancien_porteur = carte_locale.user
+        logger.warning(
+            f"Carte {carte_locale.number} à {utilisateur.email} chez Fedow, encore à "
+            f"{ancien_porteur.email} en local : détachée de cet ancien porteur."
+        )
+        carte_detachee = CarteService.declarer_perdue(
+            user=ancien_porteur, number_printed=carte_locale.number,
+        )
+        retirer_la_carte_des_cartes_primaires(carte_detachee)
+        return CarteService.lier_a_user(
+            qrcode_uuid=fiche_fedow["qrcode_uuid"], user=utilisateur, ip=ip
+        )
 
     if lieu_en_moteur_legacy():
         logger.info(
@@ -332,8 +354,9 @@ def retirer_la_carte_des_cartes_primaires(carte):
     leurs tables : on les saute. Un lieu en erreur n'empêche pas de traiter les autres.
     / CartePrimaire lives in each venue's schema: walk them all, skip the empty pool slots.
 
-    APPELÉE PAR : `BaseBillet/views.py`, `declarer_la_carte_perdue`, et
-    `aligner_les_cartes_locales_sur_fedow` (carte détachée chez Fedow).
+    APPELÉE PAR : `BaseBillet/views.py`, `declarer_la_carte_perdue`,
+    `aligner_les_cartes_locales_sur_fedow` (carte détachée chez Fedow) et
+    `relier_la_copie_locale_de_la_carte` (carte passée à une autre personne chez Fedow).
 
     :param carte: CarteCashless qui ne doit plus ouvrir de caisse
     """
@@ -380,9 +403,10 @@ def aligner_les_cartes_locales_sur_fedow(utilisateur, cartes_chez_fedow, ip="0.0
        fait EN PREMIER : une fiche illisible lève une erreur avant tout détachement.
     2. Une carte liée à la personne en local, absente chez Fedow : on la détache.
     3. Une carte de la personne chez Fedow, pas liée à elle en local : on la relie
-       (`relier_la_copie_locale_de_la_carte`).
+       (`relier_la_copie_locale_de_la_carte`), même si la copie locale garde un ancien
+       porteur.
     / 1. Read Fedow's card list first. 2. Detach local cards Fedow no longer has.
-      3. Link Fedow cards missing locally.
+      3. Link Fedow cards missing locally, even from a former holder.
 
     APPELÉE PAR : `BaseBillet/views.py`, `ScanQrCode.link` et `MyAccount.list`.
     L'appelant ne la lance qu'avec une réponse de Fedow réussie : une liste vide veut
@@ -391,7 +415,7 @@ def aligner_les_cartes_locales_sur_fedow(utilisateur, cartes_chez_fedow, ip="0.0
     :param utilisateur: TibilletUser
     :param cartes_chez_fedow: liste des fiches rendues par `retrieve_card_by_signature`
     :param ip: str, IP de la requête
-    :raises CarteDejaLiee, UserADejaCarte: la base locale refuse une liaison
+    :raises UserADejaCarte: la personne a déjà une autre carte en local
     """
     from fedow_core.services import CarteService
 

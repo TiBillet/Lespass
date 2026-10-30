@@ -696,6 +696,105 @@ def test_carte_liee_localement_a_un_autre_usager_reste_a_lui_et_alerte(
     assert alertes, "La divergence Fedow/Lespass doit lever une alerte (logger.error)."
 
 
+def test_mon_compte_rend_la_carte_au_porteur_de_fedow_sans_toucher_aux_soldes_de_l_ancien(
+    tenant, detail_des_cartes, caplog,
+):
+    """
+    Fedow dit que la carte est au porteur, la copie locale garde un ancien porteur. Le
+    porteur ouvre /my_account/ : la copie locale passe a son nom, sans alerte. L'ancien
+    porteur garde ses soldes (Fedow et local V2) : rien ne bouge, sauf le nom sur la carte.
+    / Fedow says the card is the holder's, the local copy keeps a former holder. Opening
+    /my_account/ fixes the copy. The former holder keeps every balance.
+    """
+    from fedow_core.models import Token
+
+    porteur, carte = _carte_liee_et_son_porteur(tenant, detail_des_cartes, "repris")
+    ancien_porteur = _adherent_avec_wallet_fedow(tenant, "ancien")
+    monnaie_v2 = _crediter_en_jetons_locaux_v2(tenant, ancien_porteur, CREDIT_LOCAL_V2_CENTIMES)
+    _crediter_chez_fedow_en_monnaie_locale(tenant, ancien_porteur, CREDIT_FEDOW_CENTIMES)
+    with tenant_context(tenant):
+        carte.user = ancien_porteur
+        carte.save(update_fields=["user"])
+
+    navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
+    navigateur.force_login(porteur)
+    with caplog.at_level(logging.WARNING), override_settings(DEBUG=True):
+        reponse = navigateur.get("/my_account/")
+    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+
+    with tenant_context(tenant):
+        carte.refresh_from_db()
+        assert carte.user_id == porteur.pk, "La copie locale n'a pas suivi Fedow."
+        jeton_v2 = Token.objects.get(wallet=ancien_porteur.wallet, asset=monnaie_v2)
+        assert jeton_v2.value == CREDIT_LOCAL_V2_CENTIMES, "Les jetons V2 de l'ancien ont bouge."
+    assert _solde_chez_fedow(tenant, ancien_porteur) == CREDIT_FEDOW_CENTIMES, (
+        "Le solde Fedow de l'ancien porteur a bouge."
+    )
+    alertes = [r.getMessage() for r in caplog.records if "Divergence" in r.getMessage()]
+    assert not alertes, f"Alerte de divergence inattendue : {alertes}"
+
+
+def test_mon_compte_retire_des_cartes_primaires_une_carte_reprise_a_un_ancien_porteur(
+    tenant, detail_des_cartes,
+):
+    """
+    La carte de caissier d'un ancien porteur, passee a quelqu'un d'autre chez Fedow, ne
+    doit plus ouvrir la caisse quand le nouveau porteur ouvre /my_account/.
+    / A former holder's cashier card, now someone else's on Fedow, stops opening the POS.
+    """
+    from laboutik.models import CartePrimaire
+
+    porteur, carte = _carte_liee_et_son_porteur(tenant, detail_des_cartes, "repriscaisse")
+    ancien_porteur = _adherent_avec_wallet_fedow(tenant, "anciencaisse")
+    with tenant_context(tenant):
+        carte.user = ancien_porteur
+        carte.save(update_fields=["user"])
+        CartePrimaire.objects.create(carte=carte)
+
+    navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
+    navigateur.force_login(porteur)
+    with override_settings(DEBUG=True):
+        reponse = navigateur.get("/my_account/")
+    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+
+    with tenant_context(tenant):
+        assert not CartePrimaire.objects.filter(carte=carte).exists(), (
+            "La carte reprise a un ancien porteur ouvre encore la caisse du lieu."
+        )
+
+
+def test_liaison_par_qrcode_d_une_carte_videe_ailleurs_passe_au_nouveau_porteur(
+    tenant, detail_des_cartes, caplog,
+):
+    """
+    Une carte videe en caisse V1 est libre chez Fedow, mais sa copie locale garde l'ancien
+    porteur. Une autre personne la lie par /qr/link/ : la copie locale passe a son nom,
+    sans alerte de divergence.
+    / A card voided on the V1 register is free on Fedow, its local copy keeps the former
+    holder. Someone else links it through /qr/link/: the local copy follows.
+    """
+    ancien_porteur, carte = _carte_liee_et_son_porteur(tenant, detail_des_cartes, "videe")
+    _perte_declaree_par_un_autre_client_fedow(tenant, ancien_porteur, carte, admin_user=None)
+    nouveau_porteur = _adherent_avec_wallet_fedow(tenant, "nouveau")
+
+    navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
+    with caplog.at_level(logging.WARNING), override_settings(DEBUG=True), \
+            mock.patch("BaseBillet.views.get_or_create_user", return_value=nouveau_porteur):
+        reponse = navigateur.post("/qr/link/", {
+            "email": nouveau_porteur.email,
+            "emailConfirmation": nouveau_porteur.email,
+            "cgu": True,
+            "qrcode_uuid": str(carte.uuid),
+        })
+    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+
+    with tenant_context(tenant):
+        carte.refresh_from_db()
+        assert carte.user_id == nouveau_porteur.pk, "La copie locale n'a pas suivi Fedow."
+    alertes = [r.getMessage() for r in caplog.records if "Divergence" in r.getMessage()]
+    assert not alertes, f"Alerte de divergence inattendue : {alertes}"
+
+
 def test_une_carte_primaire_de_caissier_perdue_n_ouvre_plus_la_caisse(
     tenant, detail_des_cartes, navigateur_admin_du_lieu,
 ):

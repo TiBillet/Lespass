@@ -821,8 +821,8 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             )
         except Exception as erreur_liaison_locale:
             # INCOHERENCE : Fedow a accepte la liaison, la base locale la refuse
-            # (`CarteDejaLiee`, `UserADejaCarte`, ou autre). Les deux bases divergent sur le
-            # proprietaire de la carte, et c'est la version LOCALE que lit le point de vente.
+            # (`UserADejaCarte`, ou autre). Les deux bases divergent sur le proprietaire
+            # de la carte, et c'est la version LOCALE que lit le point de vente.
             # A remonter, pas seulement a journaliser.
             # / INCONSISTENCY: Fedow accepted the link, the local database refuses it. The
             #   two bases disagree on who owns the card, and the POS reads the LOCAL one.
