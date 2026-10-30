@@ -49,12 +49,11 @@ Ids are prefixed with addition- so a returning footer would not collide.
 	      data-testid="addition-total-affiche">0.00 {{ currency_data.symbol }}</span>
 </div>
 
-{# Mode restaurant : pas de boutons ici. Vider, « Ajouter a la table » et le       #}
-{# paiement sont des touches de la zone bas-droite (partial/win_bottom_right.html), #}
-{# avec les memes id (#addition-vider, #addition-bt-valider) : addition.js les      #}
-{# active et les desactive de la meme facon. Check carte est en bas a gauche.       #}
-{# / Restaurant mode: no buttons here, they are keys of the bottom-right area.      #}
-{% if not mode_restaurant %}
+{# Mode restaurant : pas de CHECK CARTE.                                          #}
+{# Avec une table choisie, le bouton principal devient « Ajouter a la table ».    #}
+{# Il garde l'id #addition-bt-valider : addition.js le grise panier vide.         #}
+{# Il porte son propre hx-post : footer.js n'y branche pas le paiement.           #}
+{# / Restaurant mode: no card check. With a table, the main button adds to it.    #}
 <div class="addition-actions">
     <button type="button"
             id="addition-vider"
@@ -68,6 +67,7 @@ Ids are prefixed with addition- so a returning footer would not collide.
         <span class="addition-vider-label">{% translate "Vider" %}</span>
     </button>
 
+	{% if not mode_restaurant %}
     <button type="button"
 	        id="addition-bt-check-card"
 	        class="addition-act addition-act-card"
@@ -79,7 +79,39 @@ Ids are prefixed with addition- so a returning footer would not collide.
 		<span class="material-symbols-outlined" aria-hidden="true">contactless</span>
 		<span>{% translate "CHECK" %} {% translate "CARTE" %}</span>
 	</button>
+	{% endif %}
 
+	{% if addition_de_table %}
+	{# Envoi prepa : ajoute le panier s'il y en a un, puis envoie en preparation   #}
+	{# tout ce que la table n'a pas encore envoye (tickets cuisine / bar).          #}
+	{# CommandeViewSet.envoyer_en_preparation (views.py).                          #}
+	{# / Send to prep: adds the cart if any, then sends what was not sent yet.     #}
+	<button type="button"
+	        class="addition-act addition-act-card addition-act-prepa"
+	        hx-post="{% url 'laboutik-commande-envoyer_en_preparation' %}"
+	        hx-include="#addition-form"
+	        hx-target="#messages"
+	        hx-swap="outerHTML"
+	        data-loading-disable
+	        data-testid="resto-touche-envoyer-prepa">
+		<span class="material-symbols-outlined" aria-hidden="true">soup_kitchen</span>
+		<span>{% translate "Envoi prépa" %}</span>
+	</button>
+
+	<button type="button"
+	        id="addition-bt-valider"
+	        class="addition-act addition-act-valid"
+	        hx-post="{% url 'laboutik-commande-ajouter_a_la_table' %}"
+	        hx-include="#addition-form"
+	        hx-target="#messages"
+	        hx-swap="outerHTML"
+	        data-loading-disable
+	        data-testid="addition-ajouter-a-la-table"
+	        disabled>
+		<span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
+		<span>{% translate "Ajouter à la table" %}</span>
+	</button>
+	{% else %}
 	<button type="button"
 	        id="addition-bt-valider"
 	        class="addition-act addition-act-valid"
@@ -88,6 +120,6 @@ Ids are prefixed with addition- so a returning footer would not collide.
 		<span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
 		<span>{% translate "VALIDER" %}</span>
 	</button>
+	{% endif %}
 </div>
-{% endif %}
 <script src="{% static 'js/footer.js' %}"></script>

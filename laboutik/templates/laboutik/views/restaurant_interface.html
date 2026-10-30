@@ -10,23 +10,35 @@ STYLE : laboutik/static/css/restaurant_interface.css
 Rendu par CaisseViewSet.point_de_vente (laboutik/views.py) quand le point de vente
 n'est pas en service direct.
 
+La mise en page est celle du service direct (views/common_user_interface.html) :
+categories a gauche, articles au centre, ticket a droite.
+
 FLUX :
-1. L'ecran de vente (en-tete, articles, addition, zones du bas) est construit.
+1. L'ecran de vente est construit.
 2. Sans id_table : par-dessus, sous l'en-tete, la grille des tables
    (cotton/tables_definition.html).
 3. Clic sur une table -> rechargement avec id_table -> meme ecran, sans la grille.
-   Le ticket montre le bandeau de la table (partial/_addition_de_table.html) et
-   son bouton « Ajouter a la table ». Les touches du bas paient l'addition.
+   Le ticket montre le bandeau de la table (partial/_addition_de_table.html), et ses
+   boutons « Envoi prepa » et « Ajouter a la table » (cotton/addition_footer.html).
+
+TODO : partial/win_bottom_left.html et win_bottom_right.html ne sont plus inclus.
+Ils portent les touches par moyen de paiement, Check carte, CB / Especes et Table.
+Ces touches sont cachees en attendant la suite du mode resto. L'addition d'une table
+s'encaisse avec le bouton de son bandeau (partial/_addition_de_table.html).
+/ Both bottom partials are no longer included: their keys are hidden for now.
 -->
 {% block content %}
   <c-header :title="title" />
-  <c-articles />
-  <c-addition />
-  {% include "laboutik/partial/win_bottom_left.html" %}
-  {% include "laboutik/partial/win_bottom_right.html" %}
+  <main data-testid="caisse-pv-interface">
+    <c-categories direction="column" />
+    <div id="products-container">
+      <c-articles />
+      <c-addition />
+    </div>
+  </main>
   <div id="win-under"></div>
-  {# Message « aucun article » des touches de paiement et de VALIDER #}
-  {# / "No article" message for the payment keys and VALIDER          #}
+  {# Message « aucun article » de VALIDER #}
+  {# / "No article" message for VALIDER #}
   {% include "laboutik/partial/no_articles.html" %}
   {% if not id_table %}
     <c-tables-definition />

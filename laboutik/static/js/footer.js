@@ -118,12 +118,9 @@ function changeMethodOfValidateButton(event) {
 * 2. Custom event listener 'updateBtValider' on #bt-valider
 */
 document.addEventListener('DOMContentLoaded', () => {
-  // Mode restaurant sans table : pas de #addition-bt-valider (le paiement passe
-  // par les touches de partial/win_bottom_right.html).
-  // Table choisie : #addition-bt-valider est la touche « Ajouter a la table »,
-  // qui porte son propre hx-post : elle n'ouvre pas les moyens de paiement.
-  // / Restaurant mode without table: no validate button. With a table: the
-  // add-to-table key has its own hx-post, no payment methods on top.
+  // Table choisie (mode restaurant) : #addition-bt-valider est le bouton « Ajouter
+  // a la table », qui porte son propre hx-post : il n'ouvre pas les moyens de paiement.
+  // / Table chosen: the add-to-table button has its own hx-post, no payment methods.
   const boutonValider = document.querySelector('#addition-bt-valider')
   if (!boutonValider) {
     return

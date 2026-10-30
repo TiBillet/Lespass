@@ -344,8 +344,9 @@ class TestRestoAdditionTable(FastTenantTestCase):
 
     def test_l_ecran_de_la_table_garde_l_ecran_restaurant(self):
         """
-        Table choisie : ecran restaurant (zones du bas), pas de grille, bandeau de
-        la table et bouton « Ajouter a la table ».
+        Table choisie : ecran restaurant, categories a gauche dans main comme le
+        service direct, sans zones du bas ni grille. Bandeau de la table et bouton
+        « Ajouter a la table ».
         / Chosen table: restaurant screen, no grid, banner and add-to-table button.
         """
         self._ajouter_a_la_table([(self.burger, self.prix_du_burger, 1)])
@@ -355,8 +356,10 @@ class TestRestoAdditionTable(FastTenantTestCase):
 
         self.assertEqual(reponse.status_code, 200)
         self.assertTemplateUsed(reponse, "laboutik/views/restaurant_interface.html")
-        self.assertIn('id="win-bottom-left"', html)
-        self.assertIn('id="win-bottom-right"', html)
+        self.assertIn('data-testid="caisse-pv-interface"', html)
+        self.assertIn('id="categories"', html)
+        self.assertNotIn('id="win-bottom-left"', html)
+        self.assertNotIn('id="win-bottom-right"', html)
         self.assertNotIn('data-testid="resto-tables-screen"', html)
         self.assertIn('data-testid="resto-addition-table"', html)
         self.assertIn('data-testid="resto-addition-table-envoye"', html)
@@ -382,87 +385,68 @@ class TestRestoAdditionTable(FastTenantTestCase):
         self.assertIn('data-testid="resto-tables-screen"', html)
         self.assertNotIn('data-testid="resto-addition-table"', html)
 
-    def test_les_touches_suivent_les_moyens_acceptes(self):
+    def test_les_touches_du_bas_sont_cachees(self):
         """
-        PV « especes seules », carte sans mode gerant : Especes et Cashless, pas de
-        CB, Cheque, Mixte ni Offrir. Ticket de caisse, voyants, VALIDER et
-        « Poser carte » ont disparu ; « Check carte » est la.
-        / Cash-only POS: only cash and cashless keys; removed keys are gone.
-        """
-        self.point_de_vente.accepte_carte_bancaire = False
-        self.point_de_vente.accepte_cheque = False
-        self.point_de_vente.save()
-
-        html = self._ecran_de_la_table().content.decode()
-
-        self.assertIn('data-testid="resto-touche-especes"', html)
-        self.assertIn('data-testid="resto-touche-cashless"', html)
-        for touche_absente in [
-            "resto-touche-cb",
-            "resto-touche-cheque",
-            "resto-touche-mixte",
-            "resto-touche-offrir",
-            "resto-touche-ticket",
-            "resto-touche-valider",
-            "resto-statuts",
-            "resto-action-poser-carte",
-        ]:
-            self.assertNotIn(f'data-testid="{touche_absente}"', html, touche_absente)
-        self.assertIn('data-testid="resto-action-check-carte"', html)
-
-    def test_la_touche_mixte_apparait_avec_deux_moyens(self):
-        """Especes + CB : la touche Mixte est la. / Cash + card: the Mixed key shows."""
-        self.point_de_vente.accepte_cheque = False
-        self.point_de_vente.save()
-
-        html = self._ecran_de_la_table().content.decode()
-
-        self.assertIn('data-testid="resto-touche-mixte"', html)
-        self.assertIn('data-testid="resto-touche-cb"', html)
-        self.assertNotIn('data-testid="resto-touche-cheque"', html)
-
-    def test_les_touches_de_paiement_suivent_l_ordre_des_tuiles(self):
-        """
-        Meme ordre que _tuiles_paiement.html : Carte TiBillet, Especes, CB, Cheque,
-        Mixte (Offrir seulement en mode gerant).
-        / Same order as the payment tiles.
+        Touches de paiement, Check carte, CB / Especes et Table : cachees.
+        / Payment keys, card check, currency swap and Table keys are hidden.
         """
         html = self._ecran_de_la_table().content.decode()
 
-        ordre_attendu = [
+        for touche_cachee in [
             "resto-touche-cashless",
             "resto-touche-especes",
             "resto-touche-cb",
             "resto-touche-cheque",
             "resto-touche-mixte",
-        ]
-        positions = []
-        for data_testid in ordre_attendu:
-            positions.append(html.index(f'data-testid="{data_testid}"'))
-        self.assertEqual(positions, sorted(positions))
-        self.assertIn("Carte TiBillet", html)
+            "resto-touche-offrir",
+            "resto-action-check-carte",
+            "resto-action-echange",
+            "resto-action-table",
+            "addition-check-carte",
+        ]:
+            self.assertNotIn(f'data-testid="{touche_cachee}"', html, touche_cachee)
 
-    def test_le_ticket_n_a_plus_de_boutons_en_mode_restaurant(self):
+    def test_les_boutons_de_la_table_sont_dans_le_ticket(self):
         """
-        Mode restaurant : Vider, « Ajouter a la table » et « Envoi prepa » sont des
-        touches de la zone bas-droite. Le ticket garde son total, sans boutons.
-        / Restaurant mode: the ticket keeps its total, no buttons.
+        Avec une table, le bas du ticket montre Vider, « Envoi prepa » et
+        « Ajouter a la table ». Le total reste.
+        / With a table, the ticket bottom shows Empty, send to prep and add to table.
         """
         html = self._ecran_de_la_table().content.decode()
 
-        self.assertNotIn('class="addition-actions"', html)
-        self.assertNotIn('data-testid="addition-check-carte"', html)
         self.assertIn('data-testid="addition-total-affiche"', html)
-        zone_du_bas = html[html.index('id="win-bottom-right"') :]
-        self.assertIn('data-testid="addition-vider"', zone_du_bas)
-        self.assertIn('data-testid="addition-ajouter-a-la-table"', zone_du_bas)
-        self.assertIn('data-testid="resto-touche-envoyer-prepa"', zone_du_bas)
+        bas_du_ticket = html[html.index('class="addition-actions"') :]
+        self.assertIn('data-testid="addition-vider"', bas_du_ticket)
+        self.assertIn('data-testid="resto-touche-envoyer-prepa"', bas_du_ticket)
+        self.assertIn('data-testid="addition-ajouter-a-la-table"', bas_du_ticket)
+        self.assertNotIn('data-testid="addition-valider"', html)
+
+    def test_encaisser_la_table_apparait_quand_la_table_doit_de_l_argent(self):
+        """
+        Le bouton suit le chemin de VALIDER. Il apparait avec une addition.
+        / The button follows the VALIDER path and shows once there is a bill.
+        """
+        self._ajouter_a_la_table([(self.burger, self.prix_du_burger, 1)])
+
+        html = self._ecran_de_la_table().content.decode()
+
+        position_testid = html.index('data-testid="resto-addition-table-encaisser"')
+        balise = html[html.rfind("<button", 0, position_testid) : position_testid]
+        self.assertIn('onclick="displayPaymentTypes()"', balise)
+        self.assertIn('id="addition-table-encaisser"', balise)
+        self.assertIn('data-testid="resto-addition-table-encaisser-aide"', html)
+
+    def test_encaisser_la_table_absent_sans_addition(self):
+        """Table sans addition : pas de bouton. / No bill: no button."""
+        html = self._ecran_de_la_table().content.decode()
+
+        self.assertNotIn('data-testid="resto-addition-table-encaisser"', html)
 
     def test_sans_table_ni_ajout_ni_envoi_prepa(self):
         """
-        « Continuer sans table » : la touche Vider reste, pas d'« Ajouter a la
-        table » ni d'« Envoi prepa ».
-        / Without a table: Empty stays, no add-to-table nor send-to-prep.
+        « Continuer sans table » : Vider et VALIDER du ticket, pas d'« Ajouter a
+        la table » ni d'« Envoi prepa ».
+        / Without a table: Empty and validate, no add-to-table nor send-to-prep.
         """
         html = self.client_http.get(
             "/laboutik/caisse/point_de_vente/",
@@ -470,6 +454,7 @@ class TestRestoAdditionTable(FastTenantTestCase):
         ).content.decode()
 
         self.assertIn('data-testid="addition-vider"', html)
+        self.assertIn('data-testid="addition-valider"', html)
         self.assertNotIn('data-testid="addition-ajouter-a-la-table"', html)
         self.assertNotIn('data-testid="resto-touche-envoyer-prepa"', html)
 

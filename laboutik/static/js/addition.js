@@ -112,6 +112,15 @@ function additionMajEntete() {
 	if (eleValider) {
 		eleValider.disabled = nombreArticles === 0
 	}
+
+	// « Encaisser la table » reste grise tant que le panier n'est pas vide :
+	// le caissier ajoute le panier a la table, ou le vide, avant d'encaisser.
+	// Le bouton est dans le bandeau de table (partial/_addition_de_table.html).
+	// / "Pay the table" stays disabled until the cart is empty.
+	const eleEncaisserLaTable = document.querySelector('#addition-table-encaisser')
+	if (eleEncaisserLaTable) {
+		eleEncaisserLaTable.disabled = nombreArticles > 0
+	}
 }
 
 /**

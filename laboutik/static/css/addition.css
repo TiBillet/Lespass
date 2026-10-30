@@ -473,6 +473,18 @@
 	color: var(--bleu01);
 }
 
+/* ENVOI PREPA (mode restaurant) — meme gabarit que CHECK CARTE, teinte d'alerte
+   / Send to prep — same frame as the card check, warning hue */
+.addition-act-prepa {
+	background-color: var(--warn-wash);
+	color: var(--text);
+	box-shadow: inset 0 0 0 1px var(--warn-edge);
+}
+
+.addition-act-prepa .material-symbols-outlined {
+	color: var(--warn);
+}
+
 /* VALIDER — l'action principale, seule couleur pleine du panneau.
    Relief "touche" de la maquette : une tranche verte foncee de 4 px sous le
    bouton. A l'appui, le bouton descend de 4 px et la tranche disparait.

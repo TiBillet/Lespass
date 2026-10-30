@@ -151,6 +151,80 @@
   outline-offset: 2px;
 }
 
+/* « Encaisser la table » : pleine largeur, sous le resume de l'addition
+   / "Pay the table": full width, under the bill summary */
+.addition-table-encaisser {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  margin: 6px 8px 4px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-ctrl);
+  background-color: var(--valid-deep);
+  box-shadow: 0 3px 0 var(--shade-3);
+  color: var(--valid-ink);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+
+.addition-table-encaisser .material-symbols-outlined {
+  font-size: 22px;
+}
+
+.addition-table-encaisser:active {
+  transition-duration: 0s;
+  transform: translateY(3px);
+  box-shadow: 0 0 0 var(--shade-3);
+}
+
+.addition-table-encaisser:focus-visible {
+  outline: 2px solid var(--nfc);
+  outline-offset: 2px;
+}
+
+/* Panier non vide : bouton grise, aide visible juste dessous
+   / Cart not empty: disabled button, help text shown right below */
+.addition-table-encaisser:disabled {
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text-faint);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.addition-table-encaisser-aide {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 8px 6px;
+  padding: 8px 10px;
+  border-radius: var(--r-ctrl);
+  background-color: var(--warn-wash);
+  box-shadow: inset 0 0 0 1px var(--warn-edge);
+  font-size: var(--fs-min);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.addition-table-encaisser-aide .material-symbols-outlined {
+  flex: none;
+  font-size: 20px;
+  color: var(--warn);
+}
+
+.addition-table-encaisser:disabled + .addition-table-encaisser-aide {
+  display: flex;
+}
+
 /* --- Deja envoye : repliable (details / summary), replie par defaut --- */
 .addition-table-envoye {
   margin: 6px 6px 0;

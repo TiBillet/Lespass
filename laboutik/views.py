@@ -3610,9 +3610,8 @@ class CaisseViewSet(viewsets.ViewSet):
                 + int(pv.accepte_cheque)
             )
             >= 2,
-            # Ecran restaurant : les boutons du ticket sont des touches de la zone
-            # bas-droite (cotton/addition_footer.html ne les affiche pas).
-            # / Restaurant screen: the ticket buttons are bottom-right keys.
+            # Ecran restaurant : cotton/addition_footer.html n'affiche pas CHECK CARTE.
+            # / Restaurant screen: the ticket has no card check button.
             "mode_restaurant": template_name
             == "laboutik/views/restaurant_interface.html",
             # Bandeau de la table en tete du ticket (services_table.resume_de_l_addition)

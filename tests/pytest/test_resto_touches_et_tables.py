@@ -196,7 +196,7 @@ class TestRestoTouchesEtTables(FastTenantTestCase):
         self.assertEqual(reponse.status_code, 200)
         self.assertTemplateUsed(reponse, "laboutik/views/restaurant_interface.html")
         lien_de_la_grille = f"/laboutik/caisse/point_de_vente/?uuid_pv={self.point_de_vente.uuid}&tag_id_cm="
-        for data_testid in ["header-tables", "menu-tables", "resto-action-table"]:
+        for data_testid in ["header-tables", "menu-tables"]:
             position_testid = html.index(f'data-testid="{data_testid}"')
             debut_de_balise = max(html.rfind("<button", 0, position_testid), html.rfind("<a ", 0, position_testid))
             balise = html[debut_de_balise:position_testid]

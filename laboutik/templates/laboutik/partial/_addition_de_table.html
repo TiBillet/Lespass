@@ -89,6 +89,30 @@ replie (details / summary), replie par defaut pour laisser la place au panier.
         {% endfor %}
       </ul>
     </details>
+    {# Encaisser la table : meme chemin que VALIDER du service direct.               #}
+    {# footer.js:displayPaymentTypes() -> addition.js:additionDisplayPaymentTypes()  #}
+    {# -> moyens_paiement, qui compte l'addition et le panier en cours.              #}
+    {# Le bouton vit dans le bandeau : le swap hors bande le retire apres paiement.  #}
+    {# addition.js:additionMajEntete() le grise tant que le panier n'est pas vide,    #}
+    {# et l'aide juste dessous s'affiche alors (addition_table.css).                 #}
+    {# / Same path as direct-service VALIDER; disabled while the cart is not empty.  #}
+    {% if addition_de_table.total_centimes > 0 %}
+      <button type="button"
+              id="addition-table-encaisser"
+              class="addition-table-encaisser"
+              onclick="displayPaymentTypes()"
+              aria-describedby="addition-table-encaisser-aide"
+              data-testid="resto-addition-table-encaisser">
+        <span class="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
+        {% translate "Encaisser la table" %}
+      </button>
+      <p id="addition-table-encaisser-aide"
+         class="addition-table-encaisser-aide"
+         data-testid="resto-addition-table-encaisser-aide">
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        <span>{% translate "Pour encaisser, ajoutez le panier à la table ou videz-le" %}</span>
+      </p>
+    {% endif %}
     <div class="addition-table-separateur">{% translate "Nouvelle commande" %}</div>
   {% endif %}
 </div>

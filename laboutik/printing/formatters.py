@@ -393,9 +393,14 @@ def formatter_ticket_billet(ticket, reservation, event):
     """
     # Date de l'evenement
     # / Event date
+    from BaseBillet.models import Configuration
+
     event_date = ""
     if event.datetime:
-        event_date = timezone.localtime(event.datetime).strftime("%d/%m/%Y %H:%M")
+        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        event_date = timezone.localtime(event.datetime, fuseau_du_lieu).strftime(
+            "%d/%m/%Y %H:%M"
+        )
 
     # Nom du tarif (via le ticket ou la reservation)
     # / Price name (via the ticket or the reservation)
@@ -449,7 +454,13 @@ def formatter_ticket_commande(commande, articles_groupe, printer):
     :param printer: laboutik.Printer
     :return: dict ticket_data
     """
-    now = timezone.localtime(timezone.now())
+    from BaseBillet.models import Configuration
+
+    # L'heure du ticket, dans le fuseau du lieu. Sans fuseau explicite, localtime()
+    # prend settings.TIME_ZONE : UTC dans le worker Celery.
+    # / Ticket time in the venue's time zone. Otherwise localtime() uses UTC in Celery.
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    now = timezone.localtime(timezone.now(), fuseau_du_lieu)
 
     # Nom de la table si disponible
     # / Table name if available
@@ -892,9 +903,8 @@ def formatter_recu_vider_carte(transactions_locales, transactions_ancien_fedow=(
     from BaseBillet.models import Configuration
     from fedow_core.models import Asset
 
-    now = timezone.localtime(timezone.now())
-
     config = Configuration.get_solo()
+    now = timezone.localtime(timezone.now(), config.get_tzinfo())
 
     # Mentions légales du lieu (nom, adresse, SIREN), comme le ticket de vente.
     # / Venue legal mentions, like the sale receipt.
