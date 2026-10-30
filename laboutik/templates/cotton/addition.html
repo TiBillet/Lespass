@@ -123,6 +123,9 @@
 		{# videe par additionReset(). Voir _executer_avec_cle_idempotence (views.py).       #}
 		{# / Idempotency key: filled out-of-band, cleared by additionReset().               #}
 		<input type="hidden" id="addition-cle-idempotence" name="cle_idempotence_paiement" value="" />
+		{# Total annonce d'une addition : rempli par hx_display_type_payment.html (hors bande). #}
+		{# / Announced bill total: filled out-of-band. Voir _refus_si_l_addition_a_change.      #}
+		<input type="hidden" id="addition-total-attendu" name="total_attendu_addition" value="" />
 		<input type="number" id="addition-given-sum" name="given_sum" value="" />
 		<input type="text" id="addition-moyen-complement" name="moyen_complement" value="" />
 	</form>

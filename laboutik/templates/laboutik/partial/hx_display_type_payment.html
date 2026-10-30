@@ -44,6 +44,14 @@ Chaque affichage des moyens de paiement donne une nouvelle cle. Un double appui 
        name="cle_idempotence_paiement"
        value="{{ cle_idempotence_paiement }}"
        hx-swap-oob="true" />
+{# Total annonce d'une addition de table, vide sinon. payer() le compare au sien : #}
+{# un total change pendant le paiement est refuse (_refus_si_l_addition_a_change).  #}
+{# / Announced bill total, empty otherwise. payer() compares it with its own.       #}
+<input type="hidden"
+       id="addition-total-attendu"
+       name="total_attendu_addition"
+       value="{{ total_attendu_addition|unlocalize }}"
+       hx-swap-oob="true" />
 <div id="messages">
   {% if comportement == "C" %}
     <script>

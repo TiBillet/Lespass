@@ -139,13 +139,21 @@ from laboutik.models import (
     HistoriqueFondDeCaisse,
 )
 from laboutik.services_table import (
+    AdditionDejaReglee,
+    AdditionModifiee,
+    TableAvecUnSoldeDu,
     ajouter_le_panier_a_la_table,
     articles_panier_de_l_addition,
     cloturer_l_addition,
+    commandes_a_reimprimer_de_la_table,
     envoyer_l_addition_en_preparation,
+    noms_des_imprimantes_desactivees,
+    produit_demande_une_preparation,
+    quantites_reservees_des_additions,
     raison_du_refus_d_un_article_de_table,
     reprendre_la_vente_de_l_addition,
     resume_de_l_addition,
+    supprimer_la_table,
     vente_de_l_addition_de_la_table,
     vente_reglee_de_l_addition_de_la_table,
 )
@@ -3610,10 +3618,6 @@ class CaisseViewSet(viewsets.ViewSet):
                 + int(pv.accepte_cheque)
             )
             >= 2,
-            # Ecran restaurant : cotton/addition_footer.html n'affiche pas CHECK CARTE.
-            # / Restaurant screen: the ticket has no card check button.
-            "mode_restaurant": template_name
-            == "laboutik/views/restaurant_interface.html",
             # Bandeau de la table en tete du ticket (services_table.resume_de_l_addition)
             # / Table banner on top of the ticket
             "addition_de_table": addition_de_table,
@@ -6973,6 +6977,9 @@ def _rendre_popup_paiement_client_identifie(
         # / MIXED tile: at least two methods can be combined.
         "paiement_mixte_possible": len(moyens_du_paiement_mixte) >= 2,
         "moyens_paiement_mixte_csv": ",".join(moyens_du_paiement_mixte),
+        "total_attendu_addition": _total_attendu_de_l_addition(
+            request.POST, articles_panier
+        ),
         "deposit_is_present": False,
         "comportement": "",
         "panier_a_recharges": panier_a_recharges,
@@ -7081,9 +7088,17 @@ def _valider_stock_panier(articles_panier):
     sur un stock de 100g, meme quand la vente hors stock etait interdite.
     / IMPORTANT: all lines of the same product are summed before comparing.
 
+    Le disponible n'est pas le stock reel : les articles commandes par les tables et
+    pas encore payes sont encore dedans. On les retire
+    (services_table.quantites_reservees_des_additions), pour toutes les ventes.
+    Les articles de l'addition elle-meme (`deja_commande`) ne sont jamais controles :
+    le client les a commandes, une table doit toujours pouvoir etre encaissee.
+    / Availability excludes what tables have ordered but not paid. The bill's own
+    articles are never checked: a table can always be paid.
+
     FLUX :
     1. Pour chaque ligne, calcule la quantite demandee et l'ajoute au total du produit.
-    2. Pour chaque produit, compare le total au stock.
+    2. Pour chaque produit, compare le total au stock moins les reservations.
 
     :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
     :return: liste de dicts {name, demande, disponible, unite}, un par produit en defaut.
@@ -7102,6 +7117,9 @@ def _valider_stock_panier(articles_panier):
         # reviendrait à garder son argent.
         # / A deposit return is never blocked by stock: the customer is bringing one IN.
         if produit.methode_caisse == Product.RETOUR_CONSIGNE:
+            continue
+
+        if article.get("deja_commande", False):
             continue
 
         try:
@@ -7134,17 +7152,29 @@ def _valider_stock_panier(articles_panier):
             }
         total_demande_par_produit[produit.uuid]["demande"] += quantite_demandee
 
-    # --- 2. Comparer chaque total au stock ---
-    # / Compare each total to the stock
+    # --- 2. Comparer chaque total au stock, moins les reservations des tables ---
+    # / Compare each total to the stock, minus the tables' reservations
+    if not total_demande_par_produit:
+        return []
+
+    quantites_reservees = quantites_reservees_des_additions(
+        list(total_demande_par_produit.keys())
+    )
+
     erreurs = []
-    for total_du_produit in total_demande_par_produit.values():
+    for uuid_du_produit, total_du_produit in total_demande_par_produit.items():
         stock = total_du_produit["stock"]
-        if total_du_produit["demande"] > stock.quantite:
+        disponible = stock.quantite
+        quantite_reservee = quantites_reservees.get(uuid_du_produit, 0)
+        if quantite_reservee > 0:
+            disponible = max(disponible - quantite_reservee, 0)
+
+        if total_du_produit["demande"] > disponible:
             erreurs.append(
                 {
                     "name": total_du_produit["name"],
                     "demande": total_du_produit["demande"],
-                    "disponible": stock.quantite,
+                    "disponible": disponible,
                     "unite": stock.unite,
                 }
             )
@@ -8836,6 +8866,181 @@ def _articles_du_panier_et_de_l_addition(donnees_post, point_de_vente):
     return articles_a_encaisser
 
 
+def _total_attendu_de_l_addition(donnees_post, articles_panier):
+    """
+    Le total annonce au caissier, si la table a une addition, sinon "".
+    / The total shown to the cashier if the table has a bill, otherwise "".
+
+    LOCALISATION : laboutik/views.py
+
+    Pose dans #addition-form par hx_display_type_payment.html. payer() le compare
+    au total recalcule (`_refus_si_l_addition_a_change`).
+
+    :param donnees_post: request.POST
+    :param articles_panier: liste de `_articles_du_panier_et_de_l_addition`
+    :return: total en centimes (int), ou ""
+    """
+    _table, vente_de_l_addition = _addition_de_table_postee(donnees_post)
+    if vente_de_l_addition is None:
+        return ""
+    return _calculer_total_panier_centimes(articles_panier)
+
+
+def _refus_si_l_addition_a_change(request, articles_panier):
+    """
+    Refuse le paiement si l'addition n'est plus celle annoncee au caissier.
+    / Refuses the payment if the bill is no longer the one shown to the cashier.
+
+    LOCALISATION : laboutik/views.py
+
+    Un autre terminal peut ajouter un article pendant que les moyens de paiement sont
+    ouverts. Le caissier a alors passe l'ancien montant au TPE : enregistrer le
+    nouveau total fausserait la caisse. Le champ est obligatoire avec une addition.
+    Toucher Retour recharge l'ecran de la table, avec le bon total.
+
+    Appelee par / Called by : _executer_paiement(), _executer_paiement_complementaire()
+
+    :param request: POST de #addition-form
+    :param articles_panier: liste de `_articles_du_panier_et_de_l_addition`
+    :return: reponse d'erreur, ou None si le total est le bon
+    """
+    total_actuel = _total_attendu_de_l_addition(request.POST, articles_panier)
+    if total_actuel == "":
+        return None
+
+    total_annonce_brut = request.POST.get("total_attendu_addition", "")
+    if total_annonce_brut == str(total_actuel):
+        return None
+
+    message_du_refus = _("L'addition a changé : encaissez le nouveau total.")
+    if total_annonce_brut.isdigit():
+        message_du_refus = _(
+            "L'addition a changé : %(ancien)s € → %(nouveau)s €. Encaissez le nouveau total."
+        ) % {
+            "ancien": f"{int(total_annonce_brut) / 100:.2f}",
+            "nouveau": f"{total_actuel / 100:.2f}",
+        }
+
+    context_erreur = {
+        "action": "window.location.reload();",
+        "msg_type": "warning",
+        "msg_content": message_du_refus,
+        "selector_bt_retour": "#messages",
+    }
+    return render(
+        request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+    )
+
+
+def _refus_si_des_articles_restent_a_envoyer(request, articles_panier):
+    """
+    Refuse l'encaissement si des articles de la table n'ont pas ete envoyes.
+    / Refuses the payment if some of the table's articles were not sent.
+
+    LOCALISATION : laboutik/views.py
+
+    Un article paye sans etre envoye ne partirait jamais en cuisine. Cela vaut pour
+    l'addition et pour le panier en cours. Les articles sans preparation (categorie
+    sans imprimante) ne comptent pas.
+
+    Appelee par / Called by : moyens_paiement(), _executer_paiement(),
+    _executer_paiement_complementaire()
+
+    :param request: POST de #addition-form
+    :param articles_panier: liste de `_articles_du_panier_et_de_l_addition`
+    :return: reponse d'erreur, ou None si rien ne reste a envoyer
+    """
+    table, _vente_de_l_addition = _addition_de_table_postee(request.POST)
+    if table is None:
+        return None
+
+    message_du_refus = None
+    if resume_de_l_addition(table)["nombre_a_envoyer"] > 0:
+        message_du_refus = _("Envoyez les articles en préparation avant d'encaisser.")
+
+    for article_du_panier in articles_panier:
+        article_du_panier_en_cours = not article_du_panier.get("deja_commande", False)
+        if article_du_panier_en_cours and produit_demande_une_preparation(
+            article_du_panier["product"]
+        ):
+            message_du_refus = _(
+                "Ajoutez le panier à la table et envoyez-le avant d'encaisser."
+            )
+            break
+
+    if message_du_refus is None:
+        return None
+
+    context_erreur = {
+        "action": "window.location.reload();",
+        "msg_type": "warning",
+        "msg_content": message_du_refus,
+        "selector_bt_retour": "#messages",
+    }
+    return render(
+        request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+    )
+
+
+def _total_de_l_addition_lu(articles_panier):
+    """
+    Le total des articles de l'addition lus par le paiement, sans le panier en cours.
+    / The total of the bill articles read by the payment, without the current cart.
+
+    LOCALISATION : laboutik/views.py
+
+    Compare sous verrou par services_table.reprendre_la_vente_de_l_addition.
+
+    :param articles_panier: liste de `_articles_du_panier_et_de_l_addition`
+    :return: total en centimes (int)
+    """
+    total_de_l_addition_en_centimes = 0
+    for article in articles_panier:
+        if article.get("deja_commande", False):
+            total_de_l_addition_en_centimes += article["prix_centimes"] * article["quantite"]
+    return total_de_l_addition_en_centimes
+
+
+def _reponse_addition_modifiee(request):
+    """
+    Message du paiement refuse : l'addition a change sous le verrou de la table.
+    / Message of a refused payment: the bill changed under the table lock.
+
+    LOCALISATION : laboutik/views.py
+
+    Appelee par / Called by : PaiementViewSet.payer(), payer_complementaire()
+    """
+    context_erreur = {
+        "action": "window.location.reload();",
+        "msg_type": "warning",
+        "msg_content": _("L'addition a changé : encaissez le nouveau total."),
+        "selector_bt_retour": "#messages",
+    }
+    return render(
+        request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+    )
+
+
+def _reponse_table_deja_encaissee(request):
+    """
+    Message de la caisse qui arrive apres un autre terminal, sur la meme table.
+    / Message for the terminal that arrives after another one on the same table.
+
+    LOCALISATION : laboutik/views.py
+
+    Appelee par / Called by : PaiementViewSet.payer(), payer_complementaire()
+    """
+    context_erreur = {
+        "action": "window.location.reload();",
+        "msg_type": "warning",
+        "msg_content": _("Cette table vient d'être encaissée."),
+        "selector_bt_retour": "#messages",
+    }
+    return render(
+        request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+    )
+
+
 def _url_de_la_grille_des_tables(uuid_pv, tag_id_carte_manager, type_app):
     """
     L'adresse du point de vente sans id_table : la grille des tables.
@@ -8941,6 +9146,7 @@ def _ouvrir_la_vente_de_caisse(
     consigne_dans_panier,
     carte_client,
     adherent,
+    articles_panier,
 ):
     """
     Ouvre la vente d'un encaissement à UN moyen de paiement (espèces, CB, chèque,
@@ -8978,10 +9184,14 @@ def _ouvrir_la_vente_de_caisse(
     # Table du mode restaurant avec une addition : on encaisse la vente de
     # l'addition, deja ouverte, au lieu d'en ouvrir une nouvelle.
     # / Restaurant table with a bill: settle the bill's sale instead of a new one.
-    _table, vente_de_l_addition = _addition_de_table_postee(request.POST)
+    table_de_l_addition, vente_de_l_addition = _addition_de_table_postee(
+        request.POST
+    )
     if vente_de_l_addition is not None:
         return reprendre_la_vente_de_l_addition(
+            table_de_l_addition,
             vente_de_l_addition,
+            _total_de_l_addition_lu(articles_panier),
             idempotency_key=str(uuid_transaction),
             client=client_de_la_vente,
             carte=carte_client,
@@ -9365,6 +9575,14 @@ class PaiementViewSet(viewsets.ViewSet):
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
 
+        # --- Une table n'est encaissee qu'une fois ses articles envoyes ---
+        # / A table is paid only once its articles were sent
+        refus_des_articles_a_envoyer = _refus_si_des_articles_restent_a_envoyer(
+            request, articles_panier
+        )
+        if refus_des_articles_a_envoyer is not None:
+            return refus_des_articles_a_envoyer
+
         # --- Vérifier le stock AVANT de proposer les moyens de paiement ---
         # Sans ce contrôle, le caissier choisissait espèces ou CB,
         # et l'erreur "stock insuffisant" n'arrivait qu'au moment de payer.
@@ -9486,6 +9704,14 @@ class PaiementViewSet(viewsets.ViewSet):
             "panier_a_billets": panier_a_billets,
             "panier_necessite_client": panier_necessite_client,
             "moyen_prefere": moyen_prefere,
+            # Panier a 0 € : un seul bouton VALIDER (_tuiles_paiement.html).
+            # / Free cart: a single VALIDER button.
+            "panier_est_gratuit": total_centimes == 0 and len(articles_panier) > 0,
+            # Total annonce d'une addition : payer() le compare au sien.
+            # / Announced bill total: payer() compares it with its own.
+            "total_attendu_addition": _total_attendu_de_l_addition(
+                request.POST, articles_panier
+            ),
             # Nouvelle cle a chaque affichage des moyens de paiement : un double
             # envoi de payer() arrive avec la meme cle (_executer_avec_cle_idempotence).
             # / New key each time payment methods are shown.
@@ -9630,10 +9856,15 @@ class PaiementViewSet(viewsets.ViewSet):
         Sans cle (ancien client) : le paiement s'execute comme avant.
         / Without a key (old client): the payment runs as before.
         """
-        reponse_du_paiement = _executer_avec_cle_idempotence(
-            request,
-            self._executer_paiement,
-        )
+        try:
+            reponse_du_paiement = _executer_avec_cle_idempotence(
+                request,
+                self._executer_paiement,
+            )
+        except AdditionDejaReglee:
+            return _reponse_table_deja_encaissee(request)
+        except AdditionModifiee:
+            return _reponse_addition_modifiee(request)
         # Table payee : on cloture son addition (services_table.py).
         # / Paid table: close its bill.
         return _cloturer_l_addition_payee(request, reponse_du_paiement)
@@ -9734,6 +9965,19 @@ class PaiementViewSet(viewsets.ViewSet):
             return render(
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
+
+        # --- Table : tout est envoye, et le total est celui annonce ---
+        # / Table: everything was sent, and the total is the announced one
+        refus_des_articles_a_envoyer = _refus_si_des_articles_restent_a_envoyer(
+            request, articles_panier
+        )
+        if refus_des_articles_a_envoyer is not None:
+            return refus_des_articles_a_envoyer
+        refus_de_l_addition_changee = _refus_si_l_addition_a_change(
+            request, articles_panier
+        )
+        if refus_de_l_addition_changee is not None:
+            return refus_de_l_addition_changee
 
         # --- Une recharge cadeau se fait à part ---
         # La caisse additionne tous les articles pour la somme à payer : mêlée à
@@ -10230,6 +10474,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     consigne_dans_panier,
                     carte_client,
                     adherent,
+                    articles_panier,
                 )
 
             # Articles normaux (ventes, adhesions) → LigneArticle
@@ -10536,6 +10781,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         consigne_dans_panier,
                         carte_client,
                         adherent,
+                        articles_panier,
                     )
 
                 # Articles normaux (ventes, adhesions) → LigneArticle
@@ -11426,10 +11672,14 @@ class PaiementViewSet(viewsets.ViewSet):
                 # Une addition est toujours en euros (services_table.py refuse
                 # les tarifs en points).
                 # / Table with a bill: settle the bill's sale (always in euros).
-                _table, vente_de_l_addition = _addition_de_table_postee(request.POST)
+                table_de_l_addition, vente_de_l_addition = _addition_de_table_postee(
+                    request.POST
+                )
                 if not panier_vide and vente_de_l_addition is not None:
                     vente = reprendre_la_vente_de_l_addition(
+                        table_de_l_addition,
                         vente_de_l_addition,
+                        _total_de_l_addition_lu(articles_panier),
                         idempotency_key=str(uuid_transaction),
                         client=client_de_la_vente,
                         carte=carte_client,
@@ -12357,10 +12607,15 @@ class PaiementViewSet(viewsets.ViewSet):
         / Same idempotency key as payer(). The "2nd card insufficient" first pass
         writes nothing, so the second pass can reuse the key.
         """
-        reponse_du_paiement = _executer_avec_cle_idempotence(
-            request,
-            self._executer_paiement_complementaire,
-        )
+        try:
+            reponse_du_paiement = _executer_avec_cle_idempotence(
+                request,
+                self._executer_paiement_complementaire,
+            )
+        except AdditionDejaReglee:
+            return _reponse_table_deja_encaissee(request)
+        except AdditionModifiee:
+            return _reponse_addition_modifiee(request)
         # Table payee : on cloture son addition (services_table.py).
         # / Paid table: close its bill.
         return _cloturer_l_addition_payee(request, reponse_du_paiement)
@@ -12421,6 +12676,19 @@ class PaiementViewSet(viewsets.ViewSet):
             return render(
                 request, "laboutik/partial/hx_messages.html", context_erreur, status=400
             )
+
+        # Table : tout est envoye, et le total est celui annonce.
+        # / Table: everything was sent, and the total is the announced one.
+        refus_des_articles_a_envoyer = _refus_si_des_articles_restent_a_envoyer(
+            request, articles_panier
+        )
+        if refus_des_articles_a_envoyer is not None:
+            return refus_des_articles_a_envoyer
+        refus_de_l_addition_changee = _refus_si_l_addition_a_change(
+            request, articles_panier
+        )
+        if refus_de_l_addition_changee is not None:
+            return refus_de_l_addition_changee
 
         # Un panier en points ou en temps ne se complete jamais : il se paie avec
         # une seule carte (le popup « solde insuffisant » ne propose pas de
@@ -12770,12 +13038,14 @@ class PaiementViewSet(viewsets.ViewSet):
                     #   payment id is its idempotency key. Always in euros.
                     # Table avec une addition : on encaisse la vente de l'addition.
                     # / Table with a bill: settle the bill's sale.
-                    _table, vente_de_l_addition = _addition_de_table_postee(
+                    table_de_l_addition, vente_de_l_addition = _addition_de_table_postee(
                         request.POST
                     )
                     if vente_de_l_addition is not None:
                         vente = reprendre_la_vente_de_l_addition(
+                            table_de_l_addition,
                             vente_de_l_addition,
+                            _total_de_l_addition_lu(articles_panier),
                             idempotency_key=str(uuid_transaction),
                             client=carte1.user,
                             carte=carte1,
@@ -13553,12 +13823,14 @@ class PaiementViewSet(viewsets.ViewSet):
                     #   the sale's customer and card.
                     # Table avec une addition : on encaisse la vente de l'addition.
                     # / Table with a bill: settle the bill's sale.
-                    _table, vente_de_l_addition = _addition_de_table_postee(
+                    table_de_l_addition, vente_de_l_addition = _addition_de_table_postee(
                         request.POST
                     )
                     if vente_de_l_addition is not None:
                         vente = reprendre_la_vente_de_l_addition(
+                            table_de_l_addition,
                             vente_de_l_addition,
+                            _total_de_l_addition_lu(articles_panier),
                             idempotency_key=str(uuid_transaction),
                             client=carte1.user,
                             carte=carte1,
@@ -15605,8 +15877,9 @@ class CommandeViewSet(viewsets.ViewSet):
         LOCALISATION : laboutik/views.py
 
         Partage par ajouter_a_la_table() et envoyer_en_preparation().
-        Verifie la carte primaire, et refuse ce qui ne passe pas par une table
-        (services_table.raison_du_refus_d_un_article_de_table), AVANT toute ecriture.
+        Verifie la carte primaire. Refuse, AVANT toute ecriture, ce qui ne passe pas
+        par une table (services_table.raison_du_refus_d_un_article_de_table) et ce
+        qui depasse le stock disponible (_valider_stock_panier).
 
         :param request: POST de #addition-form
         :param panier_vide_accepte: False = un panier vide est une erreur
@@ -15658,16 +15931,54 @@ class CommandeViewSet(viewsets.ViewSet):
             if raison_du_refus is not None:
                 return _erreur(raison_du_refus, 400)
 
+        erreurs_stock = _valider_stock_panier(articles_du_panier)
+        if erreurs_stock:
+            return _erreur(_formater_erreurs_stock(erreurs_stock), 400)
+
         return point_de_vente, table, articles_du_panier, None
 
-    def _reponse_de_succes_de_table(self, request, table, message):
+    def _lire_la_table_postee(self, request):
+        """
+        Lit la table de #addition-form et verifie la carte primaire, sans le panier.
+        / Reads the table from #addition-form and checks the primary card, not the cart.
+
+        Partage par reimprimer() et supprimer_table().
+
+        :param request: POST de #addition-form
+        :return: tuple (table, reponse_d_erreur)
+        """
+        uuid_pv = request.POST.get("uuid_pv")
+        _valider_carte_primaire_pour_pv(request.POST.get("tag_id_cm", ""), uuid_pv)
+
+        try:
+            return (
+                Table.objects.get(uuid=request.POST.get("id_table"), archive=False),
+                None,
+            )
+        except (Table.DoesNotExist, ValueError, DjangoValidationError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Table introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            reponse = render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                context_erreur,
+                status=404,
+            )
+            return None, reponse
+
+    def _reponse_de_succes_de_table(
+        self, request, table, message, msg_type="success"
+    ):
         """
         Message de succes dans #messages + bandeau de table a jour (hors bande).
         Le bouton Retour vide le panier (manageReset) : il est sur l'addition.
         / Success message + up-to-date table banner. Back empties the cart.
         """
         context_du_succes = {
-            "msg_type": "success",
+            "msg_type": msg_type,
             "msg_content": message,
             "action": "manageReset();",
             "selector_bt_retour": "#messages",
@@ -15701,28 +16012,10 @@ class CommandeViewSet(viewsets.ViewSet):
         - id_table : la table choisie
         - repid-<product>--<price> : les articles du panier
 
-        FLUX :
-        1. _lire_la_table_et_le_panier : PV, carte primaire, table, panier, refus.
-        2. services_table.ajouter_le_panier_a_la_table : Vente EN_ATTENTE de
-           l'addition (ouverte au 1er envoi), une commande, table OCCUPEE.
-           Les articles attendent l'envoi en preparation (« Envoi prepa »).
-        3. Message de succes + bandeau de table a jour (hors bande).
+        Le panier part en preparation par defaut : le serveur commande en un appui.
+        Voir _ajouter_le_panier_et_envoyer pour le flux.
         """
-        point_de_vente, table, articles_du_panier, reponse_d_erreur = (
-            self._lire_la_table_et_le_panier(request, panier_vide_accepte=False)
-        )
-        if reponse_d_erreur is not None:
-            return reponse_d_erreur
-
-        ajouter_le_panier_a_la_table(
-            table,
-            point_de_vente,
-            articles_du_panier,
-            _operateur_de_la_caisse(request, request.POST.get("tag_id_cm", "")),
-        )
-        return self._reponse_de_succes_de_table(
-            request, table, _("Ajouté à la table %(nom)s") % {"nom": table.name}
-        )
+        return self._ajouter_le_panier_et_envoyer(request, panier_vide_accepte=False)
 
     @action(
         detail=False,
@@ -15741,19 +16034,41 @@ class CommandeViewSet(viewsets.ViewSet):
         Envoye par la touche « Envoi prepa » (partial/win_bottom_right.html),
         avec tout #addition-form (hx-include).
 
+        Accepte un panier vide : la touche rattrape les articles de l'addition qui
+        n'ont pas encore ete envoyes.
+        Voir _ajouter_le_panier_et_envoyer pour le flux.
+        """
+        return self._ajouter_le_panier_et_envoyer(request, panier_vide_accepte=True)
+
+    def _ajouter_le_panier_et_envoyer(self, request, panier_vide_accepte):
+        """
+        Ajoute le panier a l'addition, puis envoie en preparation ce qui ne l'est pas.
+        / Adds the cart to the bill, then sends to preparation what was not sent yet.
+
+        LOCALISATION : laboutik/views.py
+
+        Partage par ajouter_a_la_table() et envoyer_en_preparation().
+
         FLUX :
-        1. _lire_la_table_et_le_panier (le panier peut etre vide).
-        2. Panier non vide : il est d'abord ajoute a l'addition, comme
-           « Ajouter a la table ». Un seul appui suffit pour commander et envoyer.
-        3. services_table.envoyer_l_addition_en_preparation : EN_ATTENTE → EN_COURS.
-           Rien a envoyer → message, rien ne change.
+        1. _lire_la_table_et_le_panier : PV, carte primaire, table, panier, refus.
+        2. Panier non vide : services_table.ajouter_le_panier_a_la_table (Vente
+           EN_ATTENTE ouverte au 1er envoi, une commande, table OCCUPEE).
+        3. services_table.envoyer_l_addition_en_preparation : EN_ATTENTE → EN_COURS,
+           pour les articles qui demandent une preparation.
+           Rien a envoyer et panier vide → message, rien ne change.
         4. Apres le commit : un ticket par commande envoyee, decoupe par imprimante
            de categorie (printing/tasks.py:imprimer_commande). Une categorie sans
-           imprimante ne produit pas de ticket.
-        5. Message de succes + bandeau de table a jour (hors bande).
+           imprimante ne produit pas de ticket : c'est normal (boissons au bar).
+        5. Message de succes + bandeau de table a jour (hors bande). Le panier est
+           sur l'addition, meme s'il ne contenait rien a preparer. Une imprimante
+           desactivee est signalee dans le message.
+
+        :param request: POST de #addition-form
+        :param panier_vide_accepte: False = un panier vide est une erreur
+        :return: message de succes ou d'erreur, dans #messages
         """
         point_de_vente, table, articles_du_panier, reponse_d_erreur = (
-            self._lire_la_table_et_le_panier(request, panier_vide_accepte=True)
+            self._lire_la_table_et_le_panier(request, panier_vide_accepte)
         )
         if reponse_d_erreur is not None:
             return reponse_d_erreur
@@ -15768,7 +16083,7 @@ class CommandeViewSet(viewsets.ViewSet):
                 )
             commandes_envoyees = envoyer_l_addition_en_preparation(table)
 
-            if not commandes_envoyees:
+            if not commandes_envoyees and not articles_du_panier:
                 context_erreur = {
                     "msg_type": "info",
                     "msg_content": _("Rien à envoyer : tout est déjà en préparation."),
@@ -15792,11 +16107,129 @@ class CommandeViewSet(viewsets.ViewSet):
                     )
                 )
 
+        if not commandes_envoyees:
+            return self._reponse_de_succes_de_table(
+                request, table, _("Ajouté à la table %(nom)s") % {"nom": table.name}
+            )
+
+        noms_desactivees = noms_des_imprimantes_desactivees(commandes_envoyees)
+        if noms_desactivees:
+            return self._reponse_de_succes_de_table(
+                request,
+                table,
+                _(
+                    "Envoyé pour %(nom)s, mais aucun ticket pour : %(imprimantes)s "
+                    "(imprimante désactivée)."
+                )
+                % {"nom": table.name, "imprimantes": ", ".join(noms_desactivees)},
+                msg_type="warning",
+            )
+
         return self._reponse_de_succes_de_table(
             request,
             table,
             _("Envoyé en préparation pour %(nom)s") % {"nom": table.name},
         )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="reimprimer",
+        url_name="reimprimer",
+    )
+    def reimprimer(self, request):
+        """
+        POST /laboutik/commande/reimprimer/
+        Relance les tickets des articles de la table en preparation.
+        / Prints again the tickets of the table's articles in preparation.
+
+        LOCALISATION : laboutik/views.py
+
+        Envoye par le bouton « Réimprimer » du bandeau de table
+        (partial/_addition_de_table.html), avec tout #addition-form (hx-include).
+        Le panier en cours n'est pas touche.
+        """
+        table, reponse_d_erreur = self._lire_la_table_postee(request)
+        if reponse_d_erreur is not None:
+            return reponse_d_erreur
+
+        commandes_a_reimprimer = commandes_a_reimprimer_de_la_table(table)
+        if not commandes_a_reimprimer:
+            context_erreur = {
+                "msg_type": "info",
+                "msg_content": _("Rien à réimprimer."),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                context_erreur,
+                status=400,
+            )
+
+        nom_du_schema = connection.schema_name
+        for commande_a_reimprimer in commandes_a_reimprimer:
+            imprimer_commande.delay(str(commande_a_reimprimer.uuid), nom_du_schema)
+
+        context_du_succes = {
+            "msg_type": "success",
+            "msg_content": _("Tickets relancés pour %(nom)s") % {"nom": table.name},
+            "selector_bt_retour": "#messages",
+        }
+        return render(request, "laboutik/partial/hx_messages.html", context_du_succes)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="supprimer_table",
+        url_name="supprimer_table",
+    )
+    def supprimer_table(self, request):
+        """
+        POST /laboutik/commande/supprimer_table/
+        Retire la table de la salle, puis revient a la grille des tables.
+        / Removes the table from the room, then goes back to the table grid.
+
+        LOCALISATION : laboutik/views.py
+
+        Envoye par le bouton « Supprimer la table » du bandeau
+        (partial/_addition_de_table.html), apres sa confirmation en deux temps
+        (addition.js:additionArmerSuppressionTable).
+
+        FLUX :
+        1. Lit la table et verifie la carte primaire.
+        2. services_table.supprimer_la_table : refus si la table doit de l'argent.
+        3. Reponse HX-Redirect vers la grille des tables : rechargement complet.
+        """
+        table, reponse_d_erreur = self._lire_la_table_postee(request)
+        if reponse_d_erreur is not None:
+            return reponse_d_erreur
+
+        try:
+            supprimer_la_table(table)
+        except TableAvecUnSoldeDu:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Cette table doit encore de l'argent : encaissez-la avant "
+                    "de la supprimer."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                context_erreur,
+                status=400,
+            )
+
+        reponse = HttpResponse(status=204)
+        reponse["HX-Redirect"] = _url_de_la_grille_des_tables(
+            request.POST.get("uuid_pv", ""),
+            request.POST.get("tag_id_cm", ""),
+            request.POST.get("type_app", "unknown"),
+        )
+        return reponse
 
     # ----------------------------------------------------------------------- #
     #  3. Marquer une commande comme servie                                    #
@@ -16192,6 +16625,7 @@ class CommandeViewSet(viewsets.ViewSet):
                 consigne_dans_panier=False,
                 carte_client=None,
                 adherent=None,
+                articles_panier=articles_panier,
             )
 
             _creer_lignes_articles(

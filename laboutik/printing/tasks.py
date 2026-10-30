@@ -167,23 +167,67 @@ def imprimer_async(self, printer_pk, ticket_data, schema_name):
         )
 
 
-@shared_task(bind=True, max_retries=10)
-def imprimer_commande(self, commande_pk, schema_name):
+# Nouveaux essais d'un ticket de commande : le serveur attend son ticket en salle.
+# Apres le dernier essai, les caisses sont alertees (_alerter_les_caisses).
+# / Order ticket retries. After the last one, the POS terminals are alerted.
+NOMBRE_D_ESSAIS_D_UN_TICKET_DE_COMMANDE = 3
+SECONDES_ENTRE_DEUX_ESSAIS_D_UN_TICKET_DE_COMMANDE = 30
+
+
+def _alerter_les_caisses(schema_name, nom_de_la_table, noms_des_imprimantes):
+    """
+    Previent toutes les caisses du lieu qu'un ticket de commande n'est pas sorti.
+    / Tells every POS terminal of the venue that an order ticket did not print.
+
+    LOCALISATION : laboutik/printing/tasks.py
+
+    FLUX :
+    imprimer_commande (dernier essai rate) -> group laboutik-jauges-{schema}
+    -> LaboutikConsumer.notification -> swap hors bande dans #alerte-impression
+    (views/restaurant_interface.html). Une caisse hors ligne ne recoit pas l'alerte.
+
+    Une alerte qui echoue ne doit pas masquer l'erreur d'impression : elle est
+    journalisee, sans plus.
+    """
+    from wsocket.broadcast import broadcast_html
+
+    try:
+        broadcast_html(
+            group_name=f"laboutik-jauges-{schema_name}",
+            template_name="laboutik/partial/hx_alerte_impression.html",
+            context={
+                "nom_de_la_table": nom_de_la_table,
+                "noms_des_imprimantes": ", ".join(noms_des_imprimantes),
+            },
+            message_type="notification",
+        )
+    except Exception as erreur_de_l_alerte:
+        logger.error(f"[PRINT COMMANDE] Alerte non envoyee : {erreur_de_l_alerte}")
+
+
+@shared_task(bind=True, max_retries=NOMBRE_D_ESSAIS_D_UN_TICKET_DE_COMMANDE)
+def imprimer_commande(self, commande_pk, schema_name, uuids_des_imprimantes=None):
     """
     Imprime une commande restaurant en la splitant par imprimante de categorie.
     Chaque categorie de produit peut avoir une imprimante differente
     (ex: cuisine, bar, patisserie).
     Abandon immediat si la commande n'existe plus en DB.
+    Si une imprimante echoue : nouvel essai sur cette imprimante seulement, pour ne
+    pas doubler le ticket des autres. Apres le dernier essai, alerte aux caisses.
     / Prints a restaurant order by splitting it per category printer.
     Each product category can have a different printer
     (e.g. kitchen, bar, pastry).
     Immediate abort if order no longer exists in DB.
+    A failing printer is retried alone. After the last try, the terminals are alerted.
 
     LOCALISATION : laboutik/printing/tasks.py
 
     :param commande_pk: UUID (str) de la CommandeSauvegarde
     :param schema_name: nom du schema tenant (pour schema_context)
+    :param uuids_des_imprimantes: uuids (str) a imprimer, None = toutes (1er essai)
     """
+    nom_de_la_table = ""
+    noms_des_imprimantes_en_echec = []
     try:
         with schema_context(schema_name):
             from laboutik.models import CommandeSauvegarde
@@ -200,6 +244,9 @@ def imprimer_commande(self, commande_pk, schema_name):
                     f"abandon (pas de retry)"
                 )
                 return
+
+            if commande.table is not None:
+                nom_de_la_table = commande.table.name
 
             articles = commande.articles.select_related(
                 'product__categorie_pos',
@@ -224,6 +271,13 @@ def imprimer_commande(self, commande_pk, schema_name):
                     continue
 
                 printer_pk_str = str(printer.pk)
+                imprimante_deja_servie = (
+                    uuids_des_imprimantes is not None
+                    and printer_pk_str not in uuids_des_imprimantes
+                )
+                if imprimante_deja_servie:
+                    continue
+
                 if printer_pk_str not in articles_par_imprimante:
                     articles_par_imprimante[printer_pk_str] = {
                         "printer": printer,
@@ -236,6 +290,7 @@ def imprimer_commande(self, commande_pk, schema_name):
             # (on ne bloque pas la cuisine parce que le bar est en panne).
             # / Print one ticket per printer.
             # If one printer fails, continue with the others.
+            uuids_en_echec = []
             for printer_pk_str, groupe in articles_par_imprimante.items():
                 printer = groupe["printer"]
                 articles_groupe = groupe["articles"]
@@ -251,6 +306,17 @@ def imprimer_commande(self, commande_pk, schema_name):
                         f"printer={printer.name} "
                         f"erreur={result.get('error', '')}"
                     )
+                    uuids_en_echec.append(printer_pk_str)
+                    noms_des_imprimantes_en_echec.append(printer.name)
+
+            if uuids_en_echec:
+                # self.retry() leve une exception, qui stoppe la tache ici.
+                # Essais epuises : MaxRetriesExceededError, traitee plus bas.
+                # / self.retry() raises. Exhausted tries: MaxRetriesExceededError below.
+                raise self.retry(
+                    args=[commande_pk, schema_name, uuids_en_echec],
+                    countdown=SECONDES_ENTRE_DEUX_ESSAIS_D_UN_TICKET_DE_COMMANDE,
+                )
 
             logger.info(
                 f"[PRINT COMMANDE] OK — commande={commande.uuid} "
@@ -261,4 +327,7 @@ def imprimer_commande(self, commande_pk, schema_name):
         logger.error(
             f"[PRINT COMMANDE] Abandon apres {self.max_retries} retries — "
             f"commande_pk={commande_pk}"
+        )
+        _alerter_les_caisses(
+            schema_name, nom_de_la_table, noms_des_imprimantes_en_echec
         )

@@ -113,13 +113,15 @@ function additionMajEntete() {
 		eleValider.disabled = nombreArticles === 0
 	}
 
-	// « Encaisser la table » reste grise tant que le panier n'est pas vide :
-	// le caissier ajoute le panier a la table, ou le vide, avant d'encaisser.
+	// « Encaisser la table » reste grise tant que le panier n'est pas vide, ou que
+	// des articles attendent « Envoi prepa » (data-a-envoyer du bandeau de table).
 	// Le bouton est dans le bandeau de table (partial/_addition_de_table.html).
-	// / "Pay the table" stays disabled until the cart is empty.
+	// / "Pay the table" stays disabled until the cart is empty and everything is sent.
 	const eleEncaisserLaTable = document.querySelector('#addition-table-encaisser')
 	if (eleEncaisserLaTable) {
-		eleEncaisserLaTable.disabled = nombreArticles > 0
+		const bandeauDeTable = document.querySelector('#addition-table')
+		const articlesAEnvoyer = Number(bandeauDeTable.dataset.aEnvoyer) || 0
+		eleEncaisserLaTable.disabled = nombreArticles > 0 || articlesAEnvoyer > 0
 	}
 }
 
@@ -295,6 +297,49 @@ function additionRetirerLigneAnimee(lineId) {
  * Appele par l'attribut onclick du bouton (cotton/addition.html).
  */
 let additionViderTimer = null
+
+let additionSuppressionTableTimer = null
+
+/**
+ * Confirme en deux temps la suppression de la table choisie
+ * / Two-step confirmation of the chosen table's deletion
+ *
+ * LOCALISATION : laboutik/static/js/addition.js
+ *
+ * 1er appui : le libelle devient « Confirmer », pendant 2,6 secondes.
+ * 2e appui : emet l'evenement 'confirme', qui declenche le hx-post du bouton
+ * (partial/_addition_de_table.html -> CommandeViewSet.supprimer_table).
+ *
+ * COMMUNICATION :
+ * Emet : 'confirme' sur #addition-table-supprimer (hx-trigger)
+ */
+function additionDesarmerSuppressionTable() {
+	const bouton = document.querySelector('#addition-table-supprimer')
+	if (!bouton || !bouton.classList.contains('is-armed')) { return }
+	bouton.classList.remove('is-armed')
+	bouton.querySelector('.addition-table-supprimer-label').textContent = bouton.dataset.labelDepart
+}
+
+function additionArmerSuppressionTable() {
+	const bouton = document.querySelector('#addition-table-supprimer')
+	if (!bouton) { return }
+	const libelle = bouton.querySelector('.addition-table-supprimer-label')
+
+	if (!bouton.classList.contains('is-armed')) {
+		bouton.dataset.labelDepart = libelle.textContent
+		bouton.classList.add('is-armed')
+		libelle.textContent = bouton.dataset.labelConfirmer
+		additionSuppressionTableTimer = setTimeout(additionDesarmerSuppressionTable, 2600)
+		return
+	}
+
+	// Apres la reponse, le bouton repart de zero : un refus du serveur ne doit pas
+	// laisser un appui suivant supprimer la table sans nouvelle confirmation.
+	// / After the answer, disarm: a refusal must not skip the next confirmation.
+	clearTimeout(additionSuppressionTableTimer)
+	bouton.addEventListener('htmx:afterRequest', additionDesarmerSuppressionTable, { once: true })
+	htmx.trigger(bouton, 'confirme')
+}
 
 function additionArmerVider() {
 	const bouton = document.querySelector('#addition-vider')
@@ -707,15 +752,15 @@ function additionDisplayPaymentTypes() {
 		}
 	})
 
-	// Mode restaurant : une table qui doit deja de l'argent se paie, meme
-	// panier vide. Le total de l'addition vient du bandeau de table
-	// (partial/_addition_de_table.html, data-addition-total en centimes).
-	// / Restaurant mode: a table that already owes money can be paid with an
-	// empty cart. The bill total comes from the table banner.
+	// Mode restaurant : une table qui a une addition se paie meme panier vide,
+	// meme a 0 €. Le nombre d'articles vient du bandeau de table
+	// (partial/_addition_de_table.html, data-addition-articles).
+	// / Restaurant mode: a table with a bill can be paid with an empty cart, even
+	// at 0 €. The article count comes from the table banner.
 	const bandeauDeTable = document.querySelector('#addition-table')
-	const totalDeLAddition = bandeauDeTable ? Number(bandeauDeTable.dataset.additionTotal) || 0 : 0
+	const articlesDeLAddition = bandeauDeTable ? Number(bandeauDeTable.dataset.additionArticles) || 0 : 0
 
-	if (nbArticles <= 0 && totalDeLAddition <= 0) {
+	if (nbArticles <= 0 && articlesDeLAddition <= 0) {
 		document.querySelector('#message-no-article').classList.remove('hide')
 	} else {
 		/**

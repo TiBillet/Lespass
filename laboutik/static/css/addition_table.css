@@ -61,6 +61,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   min-height: 84px;
   padding: 14px 14px 14px 22px;
@@ -223,6 +224,19 @@
 
 .addition-table-encaisser:disabled + .addition-table-encaisser-aide {
   display: flex;
+}
+
+/* Actions secondaires de la table : memes gabarits que « Changer »
+   / Secondary table actions: same frame as "Change" */
+.addition-table-supprimer.is-armed {
+  background-color: var(--warn-wash);
+  box-shadow: inset 0 0 0 1px var(--warn-edge);
+  color: var(--text);
+}
+
+.addition-table-reimprimer {
+  align-self: center;
+  margin: 2px 8px 6px;
 }
 
 /* --- Deja envoye : repliable (details / summary), replie par defaut --- */

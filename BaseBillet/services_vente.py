@@ -1984,9 +1984,12 @@ def encaisser_vente(vente, datetime_encaissement=None):
 def annuler_vente(vente):
     """
     Annule une vente EN_ATTENTE : elle passe à ANNULEE, sans numéro, sans retour
-    arrière. Seuls un paiement Stripe annulé (CANCELED) et un prélèvement SEPA refusé
-    l'appellent (fiche D) ; une session expirée reste EN_ATTENTE.
-    / Cancels a PENDING sale, for good. Only Stripe CANCELED and a refused SEPA call it.
+    arrière. L'appellent : un paiement Stripe annulé (CANCELED), un prélèvement SEPA
+    refusé (fiche D), et la suppression d'une table de restaurant dont l'addition ne
+    contient que des articles à 0 € (laboutik/services_table.py:supprimer_la_table).
+    Une session expirée reste EN_ATTENTE.
+    / Cancels a PENDING sale, for good. Called on Stripe CANCELED, a refused SEPA, and
+    when a restaurant table with a zero bill is deleted.
 
     LOCALISATION : BaseBillet/services_vente.py
 

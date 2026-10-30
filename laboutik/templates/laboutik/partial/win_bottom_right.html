@@ -137,8 +137,8 @@ function restoPayerAvec(moyenPrefere) {
   // / Nothing to pay (empty cart, no table bill): no request, nothing stored.
   const panierADesArticles = formulaireAddition.querySelector('input[name^="repid-"]') !== null
   const bandeauDeTable = document.querySelector('#addition-table')
-  const totalDeLAddition = bandeauDeTable ? Number(bandeauDeTable.dataset.additionTotal) || 0 : 0
-  if (!panierADesArticles && totalDeLAddition <= 0) {
+  const articlesDeLAddition = bandeauDeTable ? Number(bandeauDeTable.dataset.additionArticles) || 0 : 0
+  if (!panierADesArticles && articlesDeLAddition <= 0) {
     displayPaymentTypes()
     return
   }

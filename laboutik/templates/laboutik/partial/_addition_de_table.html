@@ -12,23 +12,28 @@ htmx remplace alors #addition-table et #addition-table-pastille (hx-swap-oob).
 
 CONTEXTE :
 - addition_de_table : dict de services_table.resume_de_l_addition()
-  (nom, statut_css, statut_libelle, lignes, nombre_d_articles, total_centimes)
+  (nom, statut_css, statut_libelle, lignes, nombre_d_articles, nombre_a_envoyer,
+  articles_en_preparation, total_centimes)
 - url_de_la_grille_des_tables : le point de vente sans id_table
 - hors_bande : True = swap hors bande (reponse htmx)
 
-data-addition-total : total de l'addition en centimes. Lu par
+data-addition-articles : nombre d'articles de l'addition. Lu par
 win_bottom_right.html:restoPayerAvec() et addition.js:additionDisplayPaymentTypes() :
-une table qui doit de l'argent se paie meme avec un panier vide.
+une table qui a une addition se paie meme avec un panier vide, meme a 0 €.
+data-a-envoyer : articles qui attendent « Envoi prepa ». Lu par
+addition.js:additionMajEntete(), qui garde « Encaisser la table » grise.
 
 Les lignes de l'addition sont en lecture seule : pas de bouton moins, on ne
 retire pas ce qui est commande. Chaque ligne dit si elle est partie en preparation
-(coche) ou si elle attend « Envoi prepa » (horloge, « a envoyer »). Le bloc se
+(coche), si elle attend « Envoi prepa » (horloge, « a envoyer ») ou si elle n'a pas
+de preparation (categorie sans imprimante : boisson servie au bar). Le bloc se
 replie (details / summary), replie par defaut pour laisser la place au panier.
 {% endcomment %}
 {% if not hors_bande %}<link rel="stylesheet" href="{% static 'css/addition_table.css' %}" />{% endif %}
 <div id="addition-table"
      class="addition-table table-statut--{{ addition_de_table.statut_css }}"
-     data-addition-total="{{ addition_de_table.total_centimes|unlocalize }}"
+     data-addition-articles="{{ addition_de_table.nombre_d_articles|unlocalize }}"
+     data-a-envoyer="{{ addition_de_table.nombre_a_envoyer|unlocalize }}"
      aria-live="polite"
      {% if hors_bande %}hx-swap-oob="true"{% endif %}
      data-testid="resto-addition-table">
@@ -49,6 +54,26 @@ replie (details / summary), replie par defaut pour laisser la place au panier.
       <span class="material-symbols-outlined" aria-hidden="true">table_restaurant</span>
       {% translate "Changer" %}
     </button>
+    {# Supprimer : seulement si la table ne doit rien. Le serveur le verifie aussi.  #}
+    {# Confirmation en deux temps (addition.js:additionArmerSuppressionTable), puis  #}
+    {# l'evenement « confirme » declenche le POST. Reponse : HX-Redirect vers la      #}
+    {# grille. / Delete: only when nothing is owed. Two-step confirmation.            #}
+    {% if addition_de_table.total_centimes == 0 %}
+      <button type="button"
+              id="addition-table-supprimer"
+              class="addition-table-changer addition-table-supprimer"
+              onclick="additionArmerSuppressionTable()"
+              hx-post="{% url 'laboutik-commande-supprimer_table' %}"
+              hx-include="#addition-form"
+              hx-trigger="confirme"
+              hx-target="#messages"
+              hx-swap="outerHTML"
+              data-label-confirmer="{% translate 'Confirmer' %}"
+              data-testid="resto-addition-table-supprimer">
+        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+        <span class="addition-table-supprimer-label">{% translate "Supprimer la table" %}</span>
+      </button>
+    {% endif %}
   </div>
 
   {% if addition_de_table.lignes %}
@@ -69,16 +94,18 @@ replie (details / summary), replie par defaut pour laisser la place au panier.
       {% translate "Articles de l'addition" as libelle_de_la_liste %}
       <ul class="addition-table-lignes" aria-label="{{ libelle_de_la_liste }}">
         {% for ligne in addition_de_table.lignes %}
-          <li class="addition-line-grid addition-table-ligne{% if not ligne.envoye_en_preparation %} addition-table-ligne--a-envoyer{% endif %}">
+          <li class="addition-line-grid addition-table-ligne{% if not ligne.envoye_en_preparation and not ligne.sans_preparation %} addition-table-ligne--a-envoyer{% endif %}">
             {% if ligne.envoye_en_preparation %}
               <span class="addition-table-ligne-icone material-symbols-outlined" aria-hidden="true">check</span>
+            {% elif ligne.sans_preparation %}
+              <span class="addition-table-ligne-icone material-symbols-outlined" aria-hidden="true">local_bar</span>
             {% else %}
               <span class="addition-table-ligne-icone material-symbols-outlined" aria-hidden="true">schedule</span>
             {% endif %}
             <div class="addition-col-info">
               <span class="addition-col-name">{{ ligne.nom }}</span>
               <span class="addition-col-unit">
-                {{ ligne.prix_unitaire_centimes|euros }}{% if ligne.envoye_en_preparation %}<span class="sr-only"> · {% translate "envoyé en préparation" %}</span>{% else %} · {% translate "à envoyer" %}{% endif %}
+                {{ ligne.prix_unitaire_centimes|euros }}{% if ligne.envoye_en_preparation %}<span class="sr-only"> · {% translate "envoyé en préparation" %}</span>{% elif ligne.sans_preparation %} · {% translate "sans préparation" %}{% else %} · {% translate "à envoyer" %}{% endif %}
               </span>
             </div>
             <div class="addition-col-right">
@@ -93,14 +120,17 @@ replie (details / summary), replie par defaut pour laisser la place au panier.
     {# footer.js:displayPaymentTypes() -> addition.js:additionDisplayPaymentTypes()  #}
     {# -> moyens_paiement, qui compte l'addition et le panier en cours.              #}
     {# Le bouton vit dans le bandeau : le swap hors bande le retire apres paiement.  #}
-    {# addition.js:additionMajEntete() le grise tant que le panier n'est pas vide,    #}
-    {# et l'aide juste dessous s'affiche alors (addition_table.css).                 #}
-    {# / Same path as direct-service VALIDER; disabled while the cart is not empty.  #}
-    {% if addition_de_table.total_centimes > 0 %}
+    {# Grise tant que des articles attendent « Envoi prepa » (serveur et              #}
+    {# addition.js:additionMajEntete()), ou que le panier n'est pas vide. L'aide      #}
+    {# juste dessous s'affiche alors (addition_table.css).                           #}
+    {# Visible des qu'il y a un article, meme a 0 € : sinon la table ne se libere pas. #}
+    {# / Same path as direct-service VALIDER; disabled while items wait or cart full. #}
+    {% if addition_de_table.nombre_d_articles > 0 %}
       <button type="button"
               id="addition-table-encaisser"
               class="addition-table-encaisser"
               onclick="displayPaymentTypes()"
+              {% if addition_de_table.nombre_a_envoyer %}disabled{% endif %}
               aria-describedby="addition-table-encaisser-aide"
               data-testid="resto-addition-table-encaisser">
         <span class="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
@@ -110,8 +140,28 @@ replie (details / summary), replie par defaut pour laisser la place au panier.
          class="addition-table-encaisser-aide"
          data-testid="resto-addition-table-encaisser-aide">
         <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-        <span>{% translate "Pour encaisser, ajoutez le panier à la table ou videz-le" %}</span>
+        {% if addition_de_table.nombre_a_envoyer %}
+          <span>{% translate "Des articles n'ont pas été envoyés : ajoutez un article à la table pour les envoyer" %}</span>
+        {% else %}
+          <span>{% translate "Pour encaisser, ajoutez le panier à la table ou videz-le" %}</span>
+        {% endif %}
       </p>
+    {% endif %}
+    {# Reimprimer : le ticket n'est pas sorti, ou il s'est perdu.                    #}
+    {# CommandeViewSet.reimprimer (views.py). Le panier n'est pas touche.            #}
+    {# / Print again: the ticket did not print or got lost. Cart is untouched.       #}
+    {% if addition_de_table.articles_en_preparation %}
+      <button type="button"
+              class="addition-table-changer addition-table-reimprimer"
+              hx-post="{% url 'laboutik-commande-reimprimer' %}"
+              hx-include="#addition-form"
+              hx-target="#messages"
+              hx-swap="outerHTML"
+              data-loading-disable
+              data-testid="resto-addition-table-reimprimer">
+        <span class="material-symbols-outlined" aria-hidden="true">print</span>
+        {% translate "Réimprimer" %}
+      </button>
     {% endif %}
     <div class="addition-table-separateur">{% translate "Nouvelle commande" %}</div>
   {% endif %}

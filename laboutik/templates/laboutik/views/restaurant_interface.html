@@ -18,8 +18,8 @@ FLUX :
 2. Sans id_table : par-dessus, sous l'en-tete, la grille des tables
    (cotton/tables_definition.html).
 3. Clic sur une table -> rechargement avec id_table -> meme ecran, sans la grille.
-   Le ticket montre le bandeau de la table (partial/_addition_de_table.html), et ses
-   boutons « Envoi prepa » et « Ajouter a la table » (cotton/addition_footer.html).
+   Le ticket montre le bandeau de la table (partial/_addition_de_table.html), et son
+   bouton « Ajouter a la table », qui envoie en preparation (cotton/addition_footer.html).
 
 TODO : partial/win_bottom_left.html et win_bottom_right.html ne sont plus inclus.
 Ils portent les touches par moyen de paiement, Check carte, CB / Especes et Table.
@@ -37,6 +37,10 @@ s'encaisse avec le bouton de son bandeau (partial/_addition_de_table.html).
     </div>
   </main>
   <div id="win-under"></div>
+  {# Alertes d'impression recues par WebSocket (printing/tasks.py) : zone a part,  #}
+  {# pour ne pas ecraser un paiement en cours dans #messages.                      #}
+  {# / Printing alerts from WebSocket: own area, never over a payment in progress. #}
+  <div id="alerte-impression" aria-live="assertive" data-testid="resto-alerte-impression"></div>
   {# Message « aucun article » de VALIDER #}
   {# / "No article" message for VALIDER #}
   {% include "laboutik/partial/no_articles.html" %}

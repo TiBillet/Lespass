@@ -1,0 +1,35 @@
+{% load i18n %}
+{% comment %}
+ALERTE : UN TICKET DE COMMANDE N'EST PAS SORTI
+/ Alert: an order ticket did not print
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_alerte_impression.html
+STYLE : laboutik/static/css/restaurant_interface.css
+ENVOYE PAR : printing/tasks.py:_alerter_les_caisses, par WebSocket, apres le dernier
+essai d'impression. Swap hors bande dans #alerte-impression
+(views/restaurant_interface.html). Un ecran sans cette zone ignore le message.
+
+CONTEXTE :
+- nom_de_la_table : nom de la table, peut etre vide
+- noms_des_imprimantes : noms des imprimantes en echec, separes par des virgules
+{% endcomment %}
+<div id="alerte-impression" hx-swap-oob="beforeend">
+  <div class="alerte-impression" data-testid="resto-alerte-impression-message">
+    <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+    <span class="alerte-impression-texte">
+      {% if nom_de_la_table %}
+        {% blocktrans with table=nom_de_la_table imprimantes=noms_des_imprimantes %}Ticket non imprimé pour {{ table }} : {{ imprimantes }}. Vérifiez l'imprimante, puis réimprimez depuis la table.{% endblocktrans %}
+      {% else %}
+        {% blocktrans with imprimantes=noms_des_imprimantes %}Ticket non imprimé : {{ imprimantes }}. Vérifiez l'imprimante.{% endblocktrans %}
+      {% endif %}
+    </span>
+    {% translate "Fermer" as libelle_fermer %}
+    <button type="button"
+            class="alerte-impression-fermer"
+            aria-label="{{ libelle_fermer }}"
+            onclick="this.closest('.alerte-impression').remove()"
+            data-testid="resto-alerte-impression-fermer">
+      <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    </button>
+  </div>
+</div>
