@@ -453,58 +453,29 @@ DEPENDENCIES :
                 {# Deux blocs : un seul est visible, selon le tarif coché (JS plus haut). #}
                 {# / Two blocks: only one is shown, depending on the checked price. #}
                 <div class="js-boutons-reservation-directe">
-                {% if panier.count > 0 %}
-                    {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
-                    {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
-                    {# / Cart non-empty: both buttons end at cart. #}
-                    {# 1) Add to cart. 2) Add + pay: chain to checkout. #}
-                    <button type="button"
+                    <button type="submit"
                             class="btn btn-primary w-100 mb-2"
-                            hx-post="/panier/add/resource/"
-                            hx-include="closest form"
-                            hx-target="#ressource-erreurs"
-                            hx-swap="innerHTML"
                             data-loading-disable
-                            data-testid="resource-add-to-cart"
-                            aria-label="{% translate 'Add this resource to your cart' %}">
-                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                        {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-primary w-100 mb-2"
-                            hx-post="/panier/add/resource/"
-                            hx-include="closest form"
-                            hx-vals='{"then": "checkout"}'
-                            hx-target="#ressource-erreurs"
-                            hx-swap="innerHTML"
-                            data-loading-disable
-                            data-testid="resource-add-and-pay"
-                            aria-label="{% translate 'Add to cart and pay all items' %}">
-                        <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                        {% translate "Add to cart and pay" %}
-                    </button>
-                {% else %}
-                    <button type="button"
-                            class="btn btn-primary w-100 mb-2"
-                            hx-post="/panier/add/resource/"
-                            hx-include="closest form"
-                            hx-target="#ressource-erreurs"
-                            hx-swap="innerHTML"
-                            data-loading-disable
-                            data-testid="resource-add-to-cart"
-                            aria-label="{% translate 'Add this resource to your cart' %}">
-                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                        {% translate "Add to cart" %}
-                    </button>
-                    <button id="resource-submit" type="submit"
-                            class="btn btn-outline-primary w-100 mb-2"
-                            data-loading-disable
-                            data-testid="resource-submit"
-                            aria-label="{% translate 'Pay this resource now' %}">
+                            data-testid="booking-submit">
                         <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
                         {% translate "Payer maintenant" %}
                     </button>
-                {% endif %}
+                    <button type="button"
+                            class="btn btn-secondary w-100 mb-2"
+                            hx-post="/panier/add/resource/"
+                            hx-include="closest form"
+                            hx-target="#ressource-erreurs"
+                            hx-swap="innerHTML"
+                            data-loading-disable
+                            data-testid="resource-add-to-cart"
+                            aria-label="{% trans 'Add these slots to your cart' %}">
+                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                        {% if panier.count > 0 %}
+                            {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
+                        {% else %}
+                            {% translate "Add to cart" %}
+                        {% endif %}
+                    </button>
                 </div>
 
                 {# Tarif à validation manuelle : une demande, sans paiement ni panier. #}

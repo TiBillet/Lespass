@@ -624,8 +624,11 @@
                     data-testid="booking-add-to-cart"
                     aria-label="{% trans 'Add these tickets to your cart' %}">
                 <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
-            </button>
+                {% if panier.count > 0 %}
+                    {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
+                {% else %}
+                    {% translate "Add to cart" %}
+                {% endif %}            </button>
         {% else %}
             {# Anonyme : "Réserver" en primary (flow direct) #}
             <button type="submit"

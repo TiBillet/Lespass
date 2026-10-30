@@ -1,4 +1,6 @@
 {% load static i18n %}
+
+{# --- Navbar, grand écran : les boutons ici directement, sinon bouton pour ouvrir le menu burger --- #}
 <header class="header-background{% if retour_pv %} header-background--retour{% endif %}">
   {% if mode_ecole %}
     {# Bandeau orange visible en mode ecole (LNE exigence 5) — indique que les ventes sont des simulations #}
@@ -70,9 +72,10 @@
   {# Ecrans Ventes / Sortie : pas de nav (maquette) / Sales screens: no nav (mockup) #}
   {% if not retour_pv %}
   <nav id="menu-large" class="hdr-nav" aria-label="Menu">
-    <button class="hdr-nav-btn" data-dest="preparations">
-      <span class="material-symbols-outlined" aria-hidden="true">assignment</span>Préparations
-    </button>
+{#  TODO : Ajouter une utilité a ce bouton #}
+{#    <button class="hdr-nav-btn" data-dest="preparations">#}
+{#      <span class="material-symbols-outlined" aria-hidden="true">assignment</span> Préparations#}
+{#    </button>#}
     {% if not pv.service_direct %}
       <button class="hdr-nav-btn{% if not id_table %} is-missing{% endif %}" data-id-table="{{ id_table }}" data-dest="tables">
         <span class="material-symbols-outlined" aria-hidden="true">chair</span>
@@ -87,7 +90,8 @@
             hx-push-url="true">
       <span class="material-symbols-outlined" aria-hidden="true">bar_chart</span>Ventes
     </button>
-    <button class="hdr-nav-btn" data-dest="parametres" aria-label="Paramètres">
+      <button type="button" class="hdr-nav-btn menu-burger-icon" data-dest="parametres" aria-label="Paramètres"
+            onclick="toggleMenuBurger(event,'right');showSubMenu(event, '.sub-menu-params')">
       <span class="material-symbols-outlined" aria-hidden="true">settings</span>
     </button>
   </nav>
@@ -108,6 +112,8 @@
   </nav>
   {% endif %}
 </header>
+
+{# --- Menu burger responsive, caché par défaut--- #}
 <div id="menu-burger-overlay"
      data-testid="menu-burger-overlay"
      aria-hidden="true"></div>
@@ -116,15 +122,11 @@
      data-testid="menu-burger">
   <div class="main-menu">
     <span class="menu-panel-title menu-burger-item-content">{% translate "Menu" %}</span>
-    <div class="menu-burger-item menu-burger-item-content"
-         onclick="showSubMenu(event, '.sub-menu-pvs')">
-      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">assignment</span>
-      <div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
-    </div>
-    <div class="menu-burger-item menu-burger-item-content">
-      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">room_service</span>
-      <div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
-    </div>
+{#  TODO : Ajouter une utilité a ce bouton #}
+{#    <div class="menu-burger-item menu-burger-item-content">#}
+{#      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">room_service</span>#}
+{#      <div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>#}
+{#    </div>#}
     {% if not pv.service_direct %}
       <div class="menu-burger-item menu-burger-item-content">
         <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">chair</span>
@@ -178,9 +180,10 @@
   <!-- dev sub menu paramètres -->
   <div class="sub-menu-params sub-menu hide">
     <span class="menu-panel-title menu-burger-item-content">{% translate "Paramètres" %}</span>
-    <div class="menu-burger-item menu-burger-item-content">
-      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">restaurant</span>
-      <div class="menu-burger-item-content">params 1</div>
+    <div class="menu-burger-item menu-burger-item-content"
+         onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ card.pvs_list.0.uuid }}&tag_id_cm={{ card.tag_id }}&type_app={{ type_app }}'">
+      <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">refresh</span>
+      <div class="menu-burger-item-content">{% translate 'Synchroniser' %}</div>
     </div>
     <div class="menu-burger-item menu-burger-item-content">
       <span class="material-symbols-outlined menu-burger-item-content" aria-hidden="true">restaurant</span>
