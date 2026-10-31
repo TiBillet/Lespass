@@ -31,6 +31,7 @@ affiche les mêmes besoins.
                 {{ jour.date|date:"l j F"|capfirst }}
                 <small>{{ jour.etat }}</small>
             </h3>
+            {% include "booking/benevolat/partials/evenements_du_jour.html" with suffixe="mobile-" %}
             {% for case in jour.cases %}
                 {% include "booking/benevolat/partials/besoin.html" with case=case avec_tache=True suffixe="mobile-" %}
             {% endfor %}

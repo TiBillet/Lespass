@@ -29,6 +29,18 @@ La couleur de l'en-tête vient de --remplissage (0 à 100), calculée côté ser
             </tr>
         </thead>
         <tbody>
+            {# Une ligne et non l'en-tête : un lecteur d'écran relit l'en-tête à chaque cellule. #}
+            {# / A row, not the header: screen readers repeat the header on every cell. #}
+            {% if il_y_a_des_evenements_sur_les_jours_affiches %}
+                <tr data-testid="benevolat-ligne-evenements">
+                    <th class="bv-tache" scope="row">
+                        <div class="bv-tache__nom">{% translate "Au programme" %}</div>
+                    </th>
+                    {% for jour in jours %}
+                        <td>{% include "booking/benevolat/partials/evenements_du_jour.html" with suffixe="" %}</td>
+                    {% endfor %}
+                </tr>
+            {% endif %}
             {% for ligne in lignes %}
                 <tr>
                     <th class="bv-tache" scope="row">

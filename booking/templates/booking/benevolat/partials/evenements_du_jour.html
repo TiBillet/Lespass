@@ -1,0 +1,26 @@
+{% load i18n %}
+{% comment %}
+LES ÉVÉNEMENTS D'UN JOUR : horaires et titre
+/ A day's events: times and title
+
+LOCALISATION : booking/templates/booking/benevolat/partials/evenements_du_jour.html
+
+Inclus par grille.html (ligne « Au programme ») et jours_mobile.html.
+Contexte :
+- jour : un jour de construire_le_planning() (booking/benevolat.py), avec jour.evenements
+- suffixe : "" (grille) ou "mobile-" : les deux vues sont dans la page en même temps.
+
+Commentaire de gabarit (pas <!-- -->) : ce bloc est répété pour chaque jour.
+/ Template comment: this block is repeated for every day.
+{% endcomment %}
+{% if jour.evenements %}
+    <ul class="bv-evenements" aria-label="{% translate 'Au programme' %}"
+        data-testid="benevolat-evenements-{{ suffixe }}{{ jour.date|date:'Y-m-d' }}">
+        {% for evenement in jour.evenements %}
+            <li>
+                {% if evenement.horaires %}<span class="bv-evenement__horaires">{{ evenement.horaires }}</span>{% endif %}
+                {{ evenement.titre }}
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}

@@ -163,6 +163,10 @@
 .bv-jour__nom { display: block; font-weight: 700; }
 .bv-jour__etat { display: block; font-size: .75rem; font-weight: 400; color: var(--bv-encre-douce); font-variant-numeric: tabular-nums; }
 
+/* ---------- Les événements d'un jour / A day's events ---------- */
+.bv-evenements { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: .8125rem; }
+.bv-evenement__horaires { display: block; font-weight: 700; font-variant-numeric: tabular-nums; }
+
 /* ---------- Un besoin / One need ---------- */
 .bv-besoin {
     border: 1px solid var(--bv-bord); border-radius: var(--bv-rayon-m);
@@ -210,6 +214,7 @@
     align-items: baseline; gap: 8px; padding: 8px 12px 12px; border-radius: var(--bv-rayon-s); margin: 0;
 }
 .bv-bloc-jour h3 small { font-size: .75rem; font-weight: 400; color: var(--bv-encre-douce); }
+.bv-bloc-jour .bv-evenements { padding-inline: 12px; }
 
 /* ---------- Navigation par semaine (§11.1) / Week navigation ---------- */
 /* Trois colonnes : le titre reste centré même quand un des deux liens est absent.

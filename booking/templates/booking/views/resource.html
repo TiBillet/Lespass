@@ -230,11 +230,11 @@ DEPENDENCIES :
                 opacity: 0.9;
             }
 
-            /* Admin seulement : qui occupe le créneau (booking/views.py,
-               _ajouter_les_infos_admin_aux_creneaux). Le bouton (i) partage la case
+            /* Qui occupe le créneau (booking/views.py,
+               _ajouter_les_infos_aux_creneaux). Le bouton (i) partage la case
                de grille du créneau : en haut à droite, ou sur tout le bloc (-bloc)
                quand le créneau n'est pas réservable.
-               / Admin only: slot occupant label, (i) button and its popover. */
+               / Slot occupant label, (i) button and its popover. */
             .calendar-slot-occupant {
                 font-size: 0.7rem;
                 white-space: nowrap;
@@ -243,7 +243,7 @@ DEPENDENCIES :
                 padding-right: 1.25rem;
             }
 
-            .calendar-slot-infos-admin {
+            .calendar-slot-infos {
                 justify-self: end;
                 align-self: start;
                 z-index: 1;
@@ -264,7 +264,7 @@ DEPENDENCIES :
                pastilles sur photo de la D.A. V2. Les jetons V2 ont un repli Bootstrap
                pour le skin classic.
                / The (i) icon is a round pill; V2 tokens fall back to Bootstrap. */
-            .calendar-slot-infos-admin i {
+            .calendar-slot-infos i {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
@@ -277,7 +277,7 @@ DEPENDENCIES :
                 transition: background-color 0.15s ease;
             }
 
-            .calendar-slot-infos-admin-bloc {
+            .calendar-slot-infos-bloc {
                 justify-self: stretch;
                 align-self: stretch;
                 display: flex;
@@ -291,15 +291,15 @@ DEPENDENCIES :
                pastille se remplit de la couleur d'action (encre dessus : lisible).
                / Hover keeps the slot colour: inner action-colour ring, faint ink veil,
                filled pill. */
-            .calendar-slot-infos-admin:hover,
-            .calendar-slot-infos-admin:focus-visible {
+            .calendar-slot-infos:hover,
+            .calendar-slot-infos:focus-visible {
                 background: var(--color-overlay-hover, rgba(0, 0, 0, 0.04));
                 box-shadow: inset 0 0 0 2px var(--color-action-signal, var(--bs-primary));
                 outline: none;
             }
 
-            .calendar-slot-infos-admin:hover i,
-            .calendar-slot-infos-admin:focus-visible i {
+            .calendar-slot-infos:hover i,
+            .calendar-slot-infos:focus-visible i {
                 background: var(--color-action-signal, var(--bs-primary));
                 color: var(--encre, #fff);
                 box-shadow: none;

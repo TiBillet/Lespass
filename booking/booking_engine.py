@@ -1043,10 +1043,10 @@ class DisplaySlot:
     slot_duration_minutes: int
     is_new_week:           bool = False
     in_cart:               bool = False
-    # Qui occupe le créneau. Rempli pour un admin du lieu seulement
-    # (booking/views.py : _ajouter_les_infos_admin_aux_creneaux). None sinon.
-    # / Who occupies the slot. Filled for venue admins only, None otherwise.
-    infos_admin:           dict = None
+    # Qui occupe le créneau (booking/views.py : _ajouter_les_infos_aux_creneaux).
+    # None pour un créneau que la personne ne voit pas occupé par quelqu'un.
+    # / Who occupies the slot. None when the viewer sees no named occupant.
+    infos_creneau:         dict = None
 
 
 @dataclass

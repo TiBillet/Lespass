@@ -25,7 +25,9 @@ import re
 from types import SimpleNamespace
 
 import pytest
+from django.db import connection
 from django.test import Client, RequestFactory
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django_tenants.utils import tenant_context
 
@@ -369,9 +371,9 @@ def test_un_creneau_bloque_par_un_evenement_est_complet(salle):
 
 
 # ---------------------------------------------------------------------------
-# Infos admin : qui occupe le créneau / Admin info: who occupies the slot
-# Code testé : booking/views.py, _ajouter_les_infos_admin_aux_creneaux()
-#              booking/templates/booking/partials/infos_creneau_admin.html
+# Qui occupe le créneau / Who occupies the slot
+# Code testé : booking/views.py, _ajouter_les_infos_aux_creneaux()
+#              booking/templates/booking/partials/infos_creneau.html
 # ---------------------------------------------------------------------------
 
 def admin_du_lieu(tenant):
@@ -421,11 +423,11 @@ def test_un_admin_voit_l_evenement_et_la_reservation_qui_occupent_les_creneaux(s
 
     # Desktop et mobile : deux fenêtres de détail par créneau occupé.
     # / Desktop and mobile: two detail popovers per occupied slot.
-    assert page.count('data-testid="booking-infos-creneau-admin"') == 4
-    assert page.count('data-testid="booking-calendar-slot-infos-admin"') == 2
+    assert page.count('data-testid="booking-infos-creneau"') == 4
+    assert page.count('data-testid="booking-calendar-slot-infos"') == 2
     # Créneaux complets : le bouton couvre tout le bloc (desktop et mobile).
     # / Full slots: the button covers the whole block (desktop and mobile).
-    assert page.count("calendar-slot-infos-admin calendar-slot-infos-admin-bloc") == 4
+    assert page.count("calendar-slot-infos calendar-slot-infos-bloc") == 4
     assert "TEST concert infos admin" in page
     assert "0 / 80" in page
     assert "Ada Lovelace" in page
@@ -469,17 +471,97 @@ def test_un_admin_voit_dans_la_case_tous_les_evenements_qui_se_chevauchent(salle
     for titre in ["TEST premier evenement", "TEST second evenement"]:
         assert page.count(f'data-testid="booking-calendar-slot-occupant">{titre}</span>') == 1
         assert page.count(f'data-testid="booking-mobile-slot-occupant">{titre}</span>') == 1
-    assert "Événements qui bloquent la ressource" in page
+    # Deux événements dans chacune des deux fenêtres de détail (desktop et mobile).
+    # / Two events in each of the two detail popovers (desktop and mobile).
+    assert page.count('data-testid="booking-infos-creneau-evenement"') == 4
 
 
 @pytest.mark.parametrize("connecte", [False, True])
-def test_un_visiteur_ou_un_membre_non_admin_ne_voit_pas_qui_occupe_les_creneaux(salle, connecte):
+def test_un_visiteur_ou_un_membre_voit_l_evenement_mais_pas_les_reservations(salle, connecte):
     evenement, reservation = occuper_le_lundi_a_10h(salle)
     client = client_connecte(creer_utilisateur()) if connecte else navigateur()
 
     page = client.get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
 
+    # Deux créneaux complets, un seul nommé : celui de l'événement, desktop et mobile.
+    # / Two full slots, only the event's is named, on desktop and mobile.
     assert page.count('data-testid="booking-calendar-slot-busy"') == 2
-    assert 'data-testid="booking-infos-creneau-admin"' not in page
-    assert "TEST concert infos admin" not in page
+    assert page.count('data-testid="booking-infos-creneau"') == 2
+    assert page.count(f'data-testid="booking-calendar-slot-occupant">{evenement.name}</span>') == 1
+    assert page.count(f'data-testid="booking-mobile-slot-occupant">{evenement.name}</span>') == 1
+    assert 'data-testid="booking-infos-creneau-reservation"' not in page
+    assert "Ada Lovelace" not in page
     assert reservation.user.email not in page
+
+
+def test_un_evenement_non_publie_n_est_pas_nomme_au_public_mais_bloque_toujours(salle):
+    evenement, reservation = occuper_le_lundi_a_10h(salle)
+    evenement.published = False
+    evenement.save()
+
+    page = navigateur().get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
+
+    assert page.count('data-testid="booking-calendar-slot-busy"') == 2
+    assert 'data-testid="booking-infos-creneau"' not in page
+    assert evenement.name not in page
+
+
+def test_un_admin_voit_l_evenement_non_publie(salle, tenant):
+    evenement, reservation = occuper_le_lundi_a_10h(salle)
+    evenement.published = False
+    evenement.save()
+    client = client_connecte(admin_du_lieu(tenant))
+
+    page = client.get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
+
+    assert evenement.name in page
+
+
+def test_le_public_ne_voit_la_jauge_que_si_l_evenement_l_affiche(salle):
+    evenement, reservation = occuper_le_lundi_a_10h(salle)
+
+    page_jauge_masquee = navigateur().get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
+    assert "0 / 80" not in page_jauge_masquee
+
+    evenement.show_gauge = True
+    evenement.save()
+    page_jauge_affichee = navigateur().get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
+    assert "0 / 80" in page_jauge_affichee
+
+
+def test_le_public_ne_voit_les_horaires_que_si_l_evenement_les_affiche(salle):
+    evenement, reservation = occuper_le_lundi_a_10h(salle)
+
+    page_horaires_affiches = navigateur().get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
+    assert 'data-testid="booking-infos-creneau-horaires"' in page_horaires_affiches
+
+    evenement.show_time = False
+    evenement.save()
+    page_horaires_masques = navigateur().get(adresse_de_la_salle(salle, salle.semaine(1))).content.decode()
+    assert 'data-testid="booking-infos-creneau-horaires"' not in page_horaires_masques
+
+
+def test_le_nombre_de_requetes_du_public_ne_depend_pas_du_nombre_d_evenements(salle):
+    from BaseBillet.models import Event
+
+    lundi = salle.semaine(1)
+    client = navigateur()
+
+    def nombre_de_requetes():
+        with CaptureQueriesContext(connection) as requetes:
+            reponse = client.get(adresse_de_la_salle(salle, lundi))
+        assert reponse.status_code == 200
+        return len(requetes)
+
+    nombre_de_requetes()  # chauffe les caches / warms the caches
+    sans_evenement = nombre_de_requetes()
+    for numero in range(8):
+        heure = 10 + numero
+        Event.objects.create(
+            name=f"TEST bloque {numero} {salle.ressource.pk}",
+            datetime=timezone.make_aware(datetime.datetime.combine(lundi, datetime.time(heure, 0)), salle.fuseau_du_lieu),
+            end_datetime=timezone.make_aware(datetime.datetime.combine(lundi, datetime.time(heure + 1, 0)), salle.fuseau_du_lieu),
+            ressource_bloquee=salle.ressource,
+        )
+
+    assert nombre_de_requetes() == sans_evenement

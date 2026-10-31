@@ -19,6 +19,7 @@ Lancer / Run : make test ARGS="tests/pytest/test_benevolat_semaines.py"
 import datetime
 from types import SimpleNamespace
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.db import connection
@@ -349,3 +350,214 @@ def test_requetes_et_lectures_de_configuration_constantes(lieu):
 
     cout_de_la_page(10)  # chauffe les caches / warms the caches
     assert cout_de_la_page(300) == cout_de_la_page(10)
+
+
+# ---------------------------------------------------------------------------
+# Les événements du lieu, ligne « Au programme »
+# / The venue's events, "Au programme" row
+# Code testé : booking/benevolat.py (evenements_par_jour_de_la_semaine…),
+#              booking/templates/booking/benevolat/partials/evenements_du_jour.html
+# ---------------------------------------------------------------------------
+
+FUSEAU_DE_PARIS = ZoneInfo("Europe/Paris")
+
+
+def a_paris(jour, heure, minute=0):
+    """Une date et heure à Paris, pour les fonctions pures. / A Paris datetime."""
+    return datetime.datetime.combine(jour, datetime.time(heure, minute), tzinfo=FUSEAU_DE_PARIS)
+
+
+def creer_evenement(jour, heure_de_debut=20, heure_de_fin=23, **champs):
+    """
+    Un événement du lieu, le `jour` donné, aux heures données, au fuseau du lieu.
+    / A venue event, on the given day and hours, in the venue timezone.
+    """
+    from BaseBillet.models import Configuration, Event
+
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    champs.setdefault("name", f"TEST_programme {identifiant_unique()}")
+    return Event.objects.create(
+        datetime=datetime.datetime.combine(jour, datetime.time(heure_de_debut, 0), tzinfo=fuseau_du_lieu),
+        end_datetime=datetime.datetime.combine(jour, datetime.time(heure_de_fin, 0), tzinfo=fuseau_du_lieu),
+        **champs,
+    )
+
+
+def test_un_evenement_de_moins_de_24_heures_reste_sur_son_jour_de_debut():
+    from booking.benevolat import jours_ou_afficher_un_evenement
+
+    debut = a_paris(LUNDI, 21)
+    fin = a_paris(LUNDI + datetime.timedelta(days=1), 2)
+
+    assert jours_ou_afficher_un_evenement(debut, fin) == [LUNDI]
+
+
+def test_un_evenement_sans_fin_reste_sur_son_jour_de_debut():
+    from booking.benevolat import jours_ou_afficher_un_evenement
+
+    assert jours_ou_afficher_un_evenement(a_paris(LUNDI, 21), None) == [LUNDI]
+
+
+def test_un_evenement_de_plusieurs_jours_couvre_chaque_jour():
+    from booking.benevolat import jours_ou_afficher_un_evenement
+
+    debut = a_paris(LUNDI, 18)
+    fin = a_paris(LUNDI + datetime.timedelta(days=2), 23)
+
+    assert jours_ou_afficher_un_evenement(debut, fin) == [
+        LUNDI,
+        LUNDI + datetime.timedelta(days=1),
+        LUNDI + datetime.timedelta(days=2),
+    ]
+
+
+def test_un_evenement_qui_finit_a_minuit_ne_deborde_pas_sur_le_lendemain():
+    from booking.benevolat import jours_ou_afficher_un_evenement
+
+    debut = a_paris(LUNDI, 18)
+    minuit_le_jeudi = a_paris(LUNDI + datetime.timedelta(days=3), 0)
+
+    assert jours_ou_afficher_un_evenement(debut, minuit_le_jeudi) == [
+        LUNDI,
+        LUNDI + datetime.timedelta(days=1),
+        LUNDI + datetime.timedelta(days=2),
+    ]
+
+
+@pytest.mark.parametrize(
+    "debut, fin, afficher_l_heure, attendu",
+    [
+        (a_paris(LUNDI, 19), a_paris(LUNDI, 23), True, "19h–23h"),
+        (a_paris(LUNDI, 19, 30), a_paris(LUNDI, 23), True, "19h30–23h"),
+        (a_paris(LUNDI, 19), None, True, "19h"),
+        (a_paris(LUNDI, 21), a_paris(LUNDI + datetime.timedelta(days=1), 2), True, "21h–2h"),
+        (a_paris(LUNDI, 18), a_paris(LUNDI + datetime.timedelta(days=12), 23), True, "20/10 18h → 1/11 23h"),
+        (a_paris(LUNDI, 19), a_paris(LUNDI, 23), False, ""),
+    ],
+)
+def test_horaires_d_un_evenement(debut, fin, afficher_l_heure, attendu):
+    from booking.benevolat import horaires_d_un_evenement
+
+    assert horaires_d_un_evenement(debut, fin, afficher_l_heure) == attendu
+
+
+def test_le_jour_d_un_evenement_est_celui_du_fuseau_du_lieu(lieu):
+    # 23 h 30 UTC le lundi : à Auckland, c'est déjà mardi midi passé.
+    # / 23:30 UTC on Monday is already past noon on Tuesday in Auckland.
+    from BaseBillet.models import Event
+    from booking.benevolat import evenements_par_jour_de_la_semaine
+
+    lundi = lieu.semaine(200)
+    Event.objects.create(
+        name=f"TEST_programme {identifiant_unique()}",
+        datetime=datetime.datetime.combine(lundi, datetime.time(23, 30), tzinfo=datetime.timezone.utc),
+    )
+    fuseau_d_auckland = ZoneInfo("Pacific/Auckland")
+
+    evenements_par_jour = evenements_par_jour_de_la_semaine(lundi, fuseau_d_auckland)
+
+    assert list(evenements_par_jour) == [lundi + datetime.timedelta(days=1)]
+
+
+def test_la_ligne_au_programme_donne_les_horaires_et_le_titre(lieu):
+    mardi = lieu.semaine(1) + datetime.timedelta(days=1)
+    lieu.besoin(mardi)
+    creer_evenement(mardi, name="TEST_programme concert du mardi")
+
+    html = navigateur().get(adresse_du_planning(lieu.planning, mardi)).content.decode()
+
+    assert 'data-testid="benevolat-ligne-evenements"' in html
+    # Desktop et mobile. / Desktop and mobile.
+    for testid in [f"benevolat-evenements-{mardi}", f"benevolat-evenements-mobile-{mardi}"]:
+        bloc = html.split(f'data-testid="{testid}"')[1].split("</ul>")[0]
+        assert "TEST_programme concert du mardi" in bloc
+        assert "20h–23h" in bloc
+
+
+def test_sans_evenement_il_n_y_a_pas_de_ligne_au_programme(lieu):
+    # Une semaine lointaine : la base de dev contient d'autres événements.
+    # / A far-away week: the dev database holds other events.
+    jour_lointain = lieu.semaine(200)
+    lieu.besoin(jour_lointain)
+
+    html = navigateur().get(adresse_du_planning(lieu.planning, jour_lointain)).content.decode()
+
+    assert 'data-testid="benevolat-ligne-evenements"' not in html
+
+
+def test_un_evenement_d_un_jour_sans_besoin_ne_s_affiche_pas(lieu):
+    lundi = lieu.semaine(200)
+    lieu.besoin(lundi)
+    creer_evenement(lundi + datetime.timedelta(days=2), name="TEST_programme jour sans besoin")
+
+    html = navigateur().get(adresse_du_planning(lieu.planning, lundi)).content.decode()
+
+    assert "TEST_programme jour sans besoin" not in html
+    assert 'data-testid="benevolat-ligne-evenements"' not in html
+
+
+@pytest.mark.parametrize(
+    "champs_qui_le_cachent",
+    [{"published": False}, {"archived": True}, {"categorie": "ACT"}],
+)
+def test_un_evenement_cache_de_l_agenda_ne_s_affiche_pas(lieu, champs_qui_le_cachent):
+    lundi = lieu.semaine(200)
+    lieu.besoin(lundi)
+    creer_evenement(lundi, name="TEST_programme cache", **champs_qui_le_cachent)
+
+    html = navigateur().get(adresse_du_planning(lieu.planning, lundi)).content.decode()
+
+    assert "TEST_programme cache" not in html
+
+
+def test_un_evenement_commence_la_semaine_d_avant_s_affiche_sur_les_jours_couverts(lieu):
+    # Un festival du samedi au mardi : la semaine affichée commence au lundi.
+    # / A Saturday-to-Tuesday festival: the displayed week starts on Monday.
+    from BaseBillet.models import Configuration, Event
+
+    lundi = lieu.semaine(200)
+    samedi_d_avant = lundi - datetime.timedelta(days=2)
+    mardi = lundi + datetime.timedelta(days=1)
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    Event.objects.create(
+        name="TEST_programme festival",
+        datetime=datetime.datetime.combine(samedi_d_avant, datetime.time(18, 0), tzinfo=fuseau_du_lieu),
+        end_datetime=datetime.datetime.combine(mardi, datetime.time(23, 0), tzinfo=fuseau_du_lieu),
+    )
+    lieu.besoin(lundi)
+
+    html = navigateur().get(adresse_du_planning(lieu.planning, lundi)).content.decode()
+
+    bloc = html.split(f'data-testid="benevolat-evenements-{lundi}"')[1].split("</ul>")[0]
+    assert "TEST_programme festival" in bloc
+
+
+def test_un_evenement_sans_affichage_de_l_heure_n_a_que_son_titre(lieu):
+    lundi = lieu.semaine(200)
+    lieu.besoin(lundi)
+    creer_evenement(lundi, name="TEST_programme sans heure", show_time=False)
+
+    html = navigateur().get(adresse_du_planning(lieu.planning, lundi)).content.decode()
+
+    bloc = html.split(f'data-testid="benevolat-evenements-{lundi}"')[1].split("</ul>")[0]
+    assert "TEST_programme sans heure" in bloc
+    assert "20h" not in bloc
+
+
+def test_le_nombre_de_requetes_ne_depend_pas_du_nombre_d_evenements(lieu):
+    lundi = lieu.semaine(200)
+    lieu.besoin(lundi)
+    client = navigateur()
+
+    def nombre_de_requetes():
+        with CaptureQueriesContext(connection) as requetes:
+            reponse = client.get(adresse_du_planning(lieu.planning, lundi))
+        assert reponse.status_code == 200
+        return len(requetes)
+
+    nombre_de_requetes()  # chauffe les caches / warms the caches
+    sans_evenement = nombre_de_requetes()
+    for numero in range(20):
+        creer_evenement(lundi, name=f"TEST_programme {numero} {identifiant_unique()}")
+
+    assert nombre_de_requetes() == sans_evenement

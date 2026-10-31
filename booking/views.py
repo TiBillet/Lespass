@@ -131,42 +131,57 @@ class BookingViewSet(viewsets.ViewSet):
 
         return resources_groups, ungrouped_resources
 
-    def _ajouter_les_infos_admin_aux_creneaux(self, resource, fenetre, slot_groups):
+    def _ajouter_les_infos_aux_creneaux(self, resource, fenetre, slot_groups, utilisateur_est_admin):
         """
-        Pour un admin du lieu : dit QUI occupe chaque créneau de la semaine.
-        / For a venue admin: tells WHO occupies each slot of the week.
+        Dit QUI occupe chaque créneau de la semaine, selon la personne qui regarde.
+        / Tells WHO occupies each slot of the week, depending on the viewer.
 
         LOCALISATION : booking/views.py
 
-        Pose sur chaque créneau occupé (DisplaySlot) un dict `infos_admin` :
+        Pose sur chaque créneau occupé (DisplaySlot) un dict `infos_creneau` :
         - evenements : les événements qui bloquent la ressource (titre, horaires, jauge)
         - reservations : les réservations qui occupent le créneau (personne, statut, horaires)
         - libelles_de_la_case : les lignes écrites dans la case (un titre par événement,
           sinon le nom, sinon « N réservations »)
-        Un créneau que personne n'occupe garde infos_admin à None.
-        Lu par booking/partials/resource_semaine.html et infos_creneau_admin.html.
+        Un créneau sans occupant à montrer garde infos_creneau à None.
+        Lu par booking/partials/resource_semaine.html et infos_creneau.html.
 
-        Deux requêtes pour toute la semaine, quel que soit le nombre de créneaux.
-        Les filtres sont ceux du moteur (booking_engine.py) : réservations par
-        get_existing_bookings_for_resource(), événements comme
+        Ce que voit le public (tout ce qui n'est pas admin du lieu) :
+        - jamais les réservations : elles portent le nom et l'e-mail des personnes ;
+        - jamais un événement non publié, qui bloque pourtant la ressource : son créneau
+          reste « complet », sans titre ;
+        - la jauge et les horaires seulement si l'événement les affiche déjà au public
+          (Event.show_gauge, Event.show_time).
+
+        Deux requêtes pour toute la semaine pour un admin, une pour le public, quel que
+        soit le nombre de créneaux. Les filtres sont ceux du moteur (booking_engine.py) :
+        réservations par get_existing_bookings_for_resource(), événements comme
         get_event_intervals_blocking_resource(). Si ces filtres changent là-bas,
         ils doivent changer ici, sinon l'admin verrait d'autres occupants que
         ceux qui bloquent vraiment le créneau.
-        / Two queries per week. Same filters as the booking engine: keep them in sync.
+        / Two queries per week for an admin, one for the public. The public never gets
+        bookings nor unpublished events. Same filters as the booking engine: keep in sync.
         """
-        reservations_de_la_semaine = list(
-            get_existing_bookings_for_resource(resource, window=fenetre)
-            .select_related('user')
-            .order_by('start_datetime')
-        )
-        evenements_de_la_semaine = list(
-            Event.objects.filter(
-                ressource_bloquee=resource,
-                archived=False,
-                end_datetime__isnull=False,
-                datetime__lt=fenetre.end,
-                end_datetime__gt=fenetre.start,
+        reservations_de_la_semaine = []
+        if utilisateur_est_admin:
+            reservations_de_la_semaine = list(
+                get_existing_bookings_for_resource(resource, window=fenetre)
+                .select_related('user')
+                .order_by('start_datetime')
             )
+
+        evenements_qui_bloquent = Event.objects.filter(
+            ressource_bloquee=resource,
+            archived=False,
+            end_datetime__isnull=False,
+            datetime__lt=fenetre.end,
+            end_datetime__gt=fenetre.start,
+        )
+        if not utilisateur_est_admin:
+            evenements_qui_bloquent = evenements_qui_bloquent.filter(published=True)
+
+        evenements_de_la_semaine = list(
+            evenements_qui_bloquent
             .annotate(
                 nombre_de_billets_valides=Count(
                     'reservation__tickets',
@@ -191,6 +206,8 @@ class BookingViewSet(viewsets.ViewSet):
                             'fin': evenement.end_datetime,
                             'billets_valides': evenement.nombre_de_billets_valides,
                             'jauge_max': evenement.jauge_max,
+                            'afficher_les_horaires': utilisateur_est_admin or evenement.show_time,
+                            'afficher_la_jauge': utilisateur_est_admin or evenement.show_gauge,
                         })
 
                 reservations_du_creneau = []
@@ -232,7 +249,7 @@ class BookingViewSet(viewsets.ViewSet):
                         nombre_de_reservations,
                     ) % {'nombre': nombre_de_reservations})
 
-                slot.infos_admin = {
+                slot.infos_creneau = {
                     'libelles_de_la_case': libelles_de_la_case,
                     'evenements': evenements_du_creneau,
                     'reservations': reservations_du_creneau,
@@ -311,7 +328,7 @@ class BookingViewSet(viewsets.ViewSet):
                     'slot_duration_minutes': slot.slot_duration_minutes,
                     'remaining_capacity': slot.remaining_capacity,
                     'in_cart': slot.in_cart,
-                    'infos_admin': slot.infos_admin,
+                    'infos_creneau': slot.infos_creneau,
                     'row_start': row_start,
                     'row_end': row_end,
                 })
@@ -667,14 +684,16 @@ class BookingViewSet(viewsets.ViewSet):
                         slot.in_cart = True
                         break
 
-        # Un admin du lieu voit qui occupe chaque créneau (événement, réservations).
-        # / A venue admin sees who occupies each slot (event, bookings).
+        # Tout le monde voit les événements qui occupent les créneaux. Un admin du lieu
+        # voit en plus les réservations et les événements non publiés.
+        # / Everyone sees the events; a venue admin also sees bookings and unpublished events.
         utilisateur_est_admin_du_lieu = (
             request.user.is_authenticated
             and request.user.is_tenant_admin(connection.tenant)
         )
-        if utilisateur_est_admin_du_lieu:
-            self._ajouter_les_infos_admin_aux_creneaux(resource, semaine['fenetre'], slot_groups)
+        self._ajouter_les_infos_aux_creneaux(
+            resource, semaine['fenetre'], slot_groups, utilisateur_est_admin_du_lieu,
+        )
 
         calendar_weeks, min_hour, max_hour = self._build_calendar_weeks(slot_groups)
         mobile_days, mobile_time_rows, mobile_min_hour, mobile_max_hour = self._build_mobile_days(slot_groups)

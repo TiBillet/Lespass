@@ -150,7 +150,7 @@ changer : `compute_slots`, `compute_remaining_capacity` et l'affichage admin des
 (`booking/views.py:119`) lisent tous cette fonction.
 
 Sur le calendrier, un créneau demandé apparaît occupé pour tout le monde. L'affichage admin
-(`infos_creneau_admin.html:58`) montre `get_status_display()` (`booking/views.py:168`) : il
+(`infos_creneau.html:58`) montre `get_status_display()` (`booking/views.py:168`) : il
 affichera la traduction de « Waiting for admin validation ». Rien d'autre à faire.
 
 ### 5.3 Le formulaire du créneau — `booking/templates/booking/partials/book_form.html`
