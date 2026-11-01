@@ -7,8 +7,8 @@ Le mainteneur veut retrouver dans la V2 les données de `GET /api/gauge/` (V1), 
 les infos utiles : billets valides, non valides, jauge maximale de l'événement, billets
 scannés, etc. Le tout par l'API des événements et/ou celle du scan.
 
-**But :** alimenter des bases de données et des tableurs de type Grist, pour les
-comptables ou pour des « AoI » (sigle à préciser par le mainteneur).
+**But :** alimenter des bases de données et des tableurs de type Grist, notamment pour
+les comptables.
 
 **Contrainte :** vocabulaire schema.org, API sémantique et RESTful. Pas de format à plat
 sous prétexte que la cible est un tableur.
@@ -57,11 +57,10 @@ GET /api/v2/events/?statistics=true&dateFrom=2026-10-01&dateTo=2026-10-31
 1. **Grain :** les compteurs par événement suffisent-ils, ou faut-il aussi une ligne par
    billet avec nom et e-mail ? Dans ce cas : ressource `schema.org/Ticket` sur
    `GET /api/v2/tickets/?event=<uuid>`, avec des données personnelles à exposer.
-2. **« AoI » :** que recouvre ce sigle, et quelles données ce public attend-il ?
-3. **Festivals :** cumuler les sous-événements dans le parent, ou compter chaque
+2. **Festivals :** cumuler les sous-événements dans le parent, ou compter chaque
    événement seul ?
-4. **Événements non publiés :** à inclure dans le mode statistiques ?
-5. **Fin de vie de `/api/gauge/` :** la route lit la jauge du lieu et la journée en
+3. **Événements non publiés :** à inclure dans le mode statistiques ?
+4. **Fin de vie de `/api/gauge/` :** la route lit la jauge du lieu et la journée en
    cours, la V2 lirait celle de l'événement. À décider une fois la V2 livrée.
 
 ## Points de vigilance
