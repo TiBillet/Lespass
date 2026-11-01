@@ -66,6 +66,25 @@ pas qu'elles passent après celles du projet. Cet ordre doit donc être appliqu�
 - **`/caveman-init` : jamais sans accord.** Il dépose des fichiers de règles dans le dépôt.
 - **`/caveman-commit` rédige un message, rien de plus.** Le commit reste au mainteneur.
 
+### Sorties dans le chat : FALC, courtes et complètes
+
+Caveman coupe le remplissage, **jamais l'explication**. Les sorties suivent les règles FALC :
+mots simples, phrases courtes, une idée par phrase, pas de jargon inutile. Le mainteneur doit
+pouvoir comprendre tous les choix et lire le code modifié sans ouvrir les fichiers.
+
+Quand du code a été modifié, le compte rendu contient, dans cet ordre :
+
+1. **Ce qui a changé** : une phrase par changement.
+2. **Le code modifié** : un extrait par changement, avec `fichier:ligne`. L'extrait montre les
+   lignes changées et une ou deux lignes de contexte, jamais le fichier entier. Si le même
+   changement se répète, un seul extrait suffit, avec le nombre d'endroits touchés.
+3. **Les choix faits** : chaque choix, avec sa raison en une phrase. Si une autre option a été
+   écartée, la nommer.
+4. **Ce qui n'a pas été vérifié** : les tests non lancés et les risques restants.
+
+Pas de récit de session, ni de répétition. Si une phrase n'explique ni un changement, ni un
+choix, ni un risque, elle est supprimée.
+
 ### Subagents
 
 Les subagents reçoivent les règles de caveman, mais **pas ce skill**, sauf si le brief le
