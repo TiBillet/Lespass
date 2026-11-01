@@ -652,6 +652,13 @@ class CancelSubscription(DeprecatedV1Mixin, APIView):
 
 @permission_classes([TenantAdminApiPermission])
 class Gauge(DeprecatedV1Mixin, APIView):
+    # INDISPENSABLE : get_apikey_valid() lit view.basename pour trouver le droit de la clé.
+    # Un routeur le pose sur un ViewSet, mais pas path() sur une APIView. Sans cette ligne,
+    # toute clé valide reçoit un 403. La route expose des comptes de billets : elle suit
+    # donc le droit « ticket ».
+    # / REQUIRED: get_apikey_valid() reads view.basename. path() does not set it on an
+    # APIView, so without this line every valid key gets a 403.
+    basename = "ticket"
 
     # API pour avoir l'état de la jauge (GAUGE in inglishe) et des billets scannés.
     def get(self, request):
