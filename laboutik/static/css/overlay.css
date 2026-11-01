@@ -1630,57 +1630,52 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
 	white-space: nowrap;
 }
 
-/* Une seule monnaie : solde avant | fleche + montant paye | solde apres
-   / Single currency: balance before | arrow + amount paid | balance after */
-.succes-avant-apres {
+/* Ce que la vente a pris, une ligne par monnaie
+   / What the sale took, one row per currency */
+.succes-paiements {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-	align-items: end;
+	gap: calc(4px * var(--k));
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.succes-paiement {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
 	gap: calc(10px * var(--k));
+	color: var(--text-dim);
+	font-size: max(var(--fs-min), calc(14px * var(--k)));
 }
-.succes-solde-bloc { display: grid; gap: calc(2px * var(--k)); min-width: 0; }
-.succes-solde-bloc span {
-	font-size: max(var(--fs-min), calc(11px * var(--k)));
+.succes-paiement span { overflow-wrap: anywhere; }
+.succes-paiement b { font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Solde total : tout ce que la carte peut encore depenser ici
+   / Total balance: everything the card can still spend here */
+.succes-solde-total {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: calc(10px * var(--k));
+	margin-top: calc(8px * var(--k));
 	font-weight: 700;
-	letter-spacing: .06em;
-	text-transform: uppercase;
-	color: var(--text-faint);
-	overflow-wrap: anywhere;
 }
-.succes-solde-bloc b {
+.succes-solde-total b {
+	font-size: calc(36px * var(--k));
 	font-weight: 800;
 	letter-spacing: -.02em;
 	line-height: 1.15;
-	font-variant-numeric: tabular-nums;
-}
-/* Avant : plus petit, en retrait / Before: smaller, recessed */
-.succes-solde-avant b { font-size: calc(22px * var(--k)); color: var(--text-dim); }
-/* Apres : le chiffre que le client demande / After: the figure the customer asks for */
-.succes-solde-apres { text-align: right; }
-.succes-solde-apres b { font-size: calc(30px * var(--k)); color: var(--text); }
-
-/* Le passage : montant paye au-dessus d'une fleche / The paid amount above an arrow */
-.succes-passage {
-	display: grid;
-	justify-items: center;
-	gap: calc(3px * var(--k));
-	padding-bottom: calc(6px * var(--k));
-	color: var(--text-faint);
-}
-.succes-passage b {
-	padding: calc(2px * var(--k)) calc(9px * var(--k));
-	border-radius: var(--r-pill);
-	background: var(--surface-2);
-	color: var(--text-dim);
-	font-size: max(var(--fs-min), calc(13px * var(--k)));
-	font-weight: 800;
+	color: var(--text);
 	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
 }
-.succes-fleche { width: calc(34px * var(--k)); height: calc(10px * var(--k)); fill: currentColor; }
+.succes-reseau-indisponible {
+	font-size: max(var(--fs-min), calc(12px * var(--k)));
+	color: var(--text-dim);
+	text-align: right;
+}
 
-/* Plusieurs monnaies (cascade, 2 cartes) : Monnaie | Avant | Paye | Apres
-   / Several currencies: Currency | Before | Paid | After */
+/* Tableau des monnaies de l'écran « vider carte »
+   / Currency table of the "empty card" screen */
 .succes-assets {
 	width: 100%;
 	border-collapse: collapse;
@@ -1745,8 +1740,7 @@ body:has(#confirm:not(.hide) .card-modal) #messages .card-modal {
    / V2s: figures one step smaller to fit 360px */
 @media only screen and (max-width: 599px) {
 	.succes-rendre-val { font-size: calc(36px * var(--k)); }
-	.succes-solde-apres b { font-size: calc(24px * var(--k)); }
-	.succes-solde-avant b { font-size: calc(18px * var(--k)); }
+	.succes-solde-total b { font-size: calc(28px * var(--k)); }
 }
 
 /* --- Message serveur (hx_messages.html) / Server message ---

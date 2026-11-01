@@ -2054,7 +2054,7 @@ def ancien_fedow_simule_par_carte(fed_par_carte, debit_par_carte):
             "wallet": {"uuid": str(uuid.uuid4()), "tokens": [jeton_fed]},
         }
 
-    def lire_la_fiche(tag_id):
+    def lire_la_fiche(tag_id, timeout=30):
         fiche_connue = fiche_par_tag.get(tag_id)
         if fiche_connue is None:
             raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {tag_id}")

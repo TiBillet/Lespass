@@ -126,7 +126,8 @@ def _post(fedow_config: FedowConfig = None,
 def _get(fedow_config: FedowConfig = None,
          user: TibilletUser = None,
          path: str = None,
-         apikey: str = None):
+         apikey: str = None,
+         timeout: int = 30):
     fedow_domain = fedow_config.fedow_domain()
     now = f"{datetime.now().isoformat()}"
 
@@ -166,7 +167,7 @@ def _get(fedow_config: FedowConfig = None,
         f"https://{fedow_domain}/{path}/",
         headers=headers,
         verify=bool(not settings.DEBUG),
-        timeout=30,
+        timeout=timeout,
     )
     session.close()
 
@@ -777,7 +778,7 @@ class NFCcardFedow():
             raise Exception(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
         return True
 
-    def retrieve(self, tag_id: str):
+    def retrieve(self, tag_id: str, timeout: int = 30):
         """
         Recupere une carte NFC cote Fedow par son tag_id. Appelle la route
         standard CardAPI.retrieve (vue DRF non decoree -> GET card/{tag_id}/,
@@ -794,11 +795,14 @@ class NFCcardFedow():
         enough on Fedow's side (HasKeyAndPlaceSignature).
 
         :param tag_id: identifiant hexadecimal 8 caracteres de la carte NFC.
+        :param timeout: delai de connexion, puis de reponse, en secondes.
         :return: donnees validees de la carte (dict), dont qrcode_uuid et number_printed.
         :raises CarteInconnueDeFedow: carte absente de Fedow (404).
         :raises Exception: erreur HTTP ou de validation.
         """
-        response_card = _get(self.fedow_config, path=f'card/{tag_id.upper()}')
+        response_card = _get(
+            self.fedow_config, path=f'card/{tag_id.upper()}', timeout=timeout
+        )
         if response_card.status_code == 404:
             # Seul le 404 de Fedow veut dire « carte inconnue ». Fedow le renvoie en
             # JSON. Un 404 en texte ou en HTML vient du reverse-proxy, quand Fedow est

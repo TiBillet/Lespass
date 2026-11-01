@@ -321,7 +321,7 @@ def ancien_fedow_simule(fiches=(), debit_par_la_carte=None):
     for fiche in fiches:
         fiche_par_tag[fiche["first_tag_id"]] = fiche
 
-    def lire_la_fiche(tag_id):
+    def lire_la_fiche(tag_id, timeout=30):
         fiche_connue = fiche_par_tag.get(tag_id)
         if fiche_connue is None:
             raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {tag_id}")

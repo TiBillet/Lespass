@@ -331,7 +331,7 @@ def ancien_fedow_simule(fiches=(), panne=None):
         fiche_par_tag[fiche["first_tag_id"]] = fiche
     tags_demandes = []
 
-    def faux_retrieve(self, tag_id):
+    def faux_retrieve(self, tag_id, timeout=30):
         tags_demandes.append(tag_id)
         if panne is not None:
             raise panne
@@ -1027,7 +1027,10 @@ def test_32_a_paiement_nfc_carte_seulement_chez_fedow_rapatriee_et_debitee(lieu)
     assert 'data-testid="paiement-succes"' in reponse.content.decode(), (
         message_de_la_caisse(reponse)
     )
-    assert fedow.tags_demandes == [carte_fedow.tag_id]
+    # Deux lectures : le rapatriement, puis le FED de la carte, lu à chaque vente pour
+    # le solde total de l'écran de succès.
+    # / Two reads: the fetch, then the card's FED, read at each sale for the total.
+    assert fedow.tags_demandes == [carte_fedow.tag_id, carte_fedow.tag_id]
     verifier_la_carte_rapatriee(lieu, carte_fedow)
     monnaie_locale = monnaie_locale_du_lieu(lieu)
     assert (
@@ -1267,10 +1270,11 @@ def test_36_a_seconde_carte_seulement_chez_fedow_rapatriee_et_paie_le_reste(lieu
     La carte 1 (locale) paie 5,00 € ; la seconde carte, connue seulement de l'ancien
     Fedow et chargée de 6,00 €, est rapatriée et paie le reste, 5,50 €. Une seule vente,
     réglée ; il reste 0,50 € sur la seconde carte.
-    L'ancien Fedow est interrogé deux fois : le rapatriement de la seconde carte, puis
-    la lecture du FED de la carte 1, qui ne couvre pas tout (inconnue là-bas : 0).
+    L'ancien Fedow est interrogé trois fois : le rapatriement de la seconde carte, le
+    FED de la carte 1 (inconnue là-bas : 0), puis le FED de la seconde carte, lu à
+    chaque vente pour le solde total de l'écran de succès.
     / Second card known only by the old Fedow: fetched, pays the 5.50 € left. The old
-    Fedow is asked twice: fetching card 2, then reading card 1's FED.
+    Fedow is asked three times: fetching card 2, then the FED of each card.
     """
     deux_cartes = preparer_un_paiement_a_deux_cartes(lieu)
     seconde_carte = carte_connue_seulement_de_fedow(
@@ -1284,7 +1288,11 @@ def test_36_a_seconde_carte_seulement_chez_fedow_rapatriee_et_paie_le_reste(lieu
     assert 'data-testid="paiement-succes"' in reponse.content.decode(), (
         message_de_la_caisse(reponse)
     )
-    assert fedow.tags_demandes == [seconde_carte.tag_id, deux_cartes.carte_1.tag_id]
+    assert fedow.tags_demandes == [
+        seconde_carte.tag_id,
+        deux_cartes.carte_1.tag_id,
+        seconde_carte.tag_id,
+    ]
     verifier_la_carte_rapatriee(lieu, seconde_carte)
     vente = retrouver_la_vente_de_la_cle(deux_cartes.cle_d_idempotence)
     assert vente.statut == Vente.Statut.REGLEE

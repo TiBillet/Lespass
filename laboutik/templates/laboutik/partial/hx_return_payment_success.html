@@ -14,7 +14,7 @@ ORDRE DE LECTURE, de haut en bas :
 1. Coche + « Paiement réussi » (petit, vert)
 2. Montant a rendre ou a rembourser, en tres gros — seulement s'il y en a un
 3. Total et moyen de paiement (lignes .card-confirm-row)
-4. Carte(s) cashless : avant / montant paye / apres, un cadre par carte
+4. Carte(s) cashless : montant paye par monnaie et solde total, un cadre par carte
    puis les adhesions actives du titulaire (si le reglage laboutik l'active)
 5. Alertes (stock negatif, carte non rattachee), teinte warn
 6. Imprimer (secondaire) + Nouvelle vente (principal)
@@ -25,10 +25,10 @@ FLUX :
 3. Le caissier touche « Nouvelle vente » (ou le fond) : #messages se vide
    et manageReset() (footer.js) remet le panier a zero.
 
-DONNEES CARTE : cartes_apres_paiement, une entree par carte debitee
-({"tag_id", "soldes"}). Les soldes viennent de views.py:_calculer_soldes_apres_paiement() :
-une entree par monnaie, montants en centimes (solde_avant_centimes, debite_centimes,
-solde_centimes). Rendu par _succes_carte.html.
+DONNEES CARTE : cartes_apres_paiement, une entree par carte debitee, preparee par
+views.py:_carte_pour_l_ecran_de_succes() : tag_id, soldes (une entree par monnaie debitee,
+FED compris, montants en centimes : solde_avant_centimes, debite_centimes, solde_centimes),
+solde_total_centimes et reseau_indisponible. Rendu par _succes_carte.html.
 
 L'id bt-retour-layer1 est garde sur « Nouvelle vente » : les tests E2E
 cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
@@ -104,10 +104,9 @@ cliquent '[data-testid="paiement-succes"] #bt-retour-layer1'.
 
           {% comment %}
           CARTES CASHLESS : un cadre par carte debitee (1 ou 2 cartes).
-          Chaque cadre montre avant → (montant paye) → apres, ou un tableau
-          Monnaie · Avant · Payé · Après si la carte a paye avec plusieurs monnaies.
+          Chaque cadre montre le montant paye par monnaie et le solde total de la carte.
           Le cadre est dans _succes_carte.html.
-          cartes_apres_paiement vient de la vue : [{"tag_id": ..., "soldes": [...]}].
+          cartes_apres_paiement vient de views.py:_carte_pour_l_ecran_de_succes().
           / Cashless cards: one frame per debited card, see _succes_carte.html.
           {% endcomment %}
           {% if cartes_apres_paiement %}
