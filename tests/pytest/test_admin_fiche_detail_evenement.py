@@ -151,7 +151,7 @@ def test_le_filtre_email_ne_garde_que_la_reservation_correspondante(
     email_cherche = reservations[0].user_commande.email
 
     reponse = afficher_la_fiche_detail(
-        admin_client, tenant, evenement, {"email": email_cherche[:20]}
+        admin_client, tenant, evenement, {"email": email_cherche[:27]}
     )
 
     contenu = reponse.content.decode()
