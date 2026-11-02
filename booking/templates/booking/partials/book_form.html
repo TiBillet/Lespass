@@ -453,10 +453,10 @@ DEPENDENCIES :
                 {# Deux blocs : un seul est visible, selon le tarif coché (JS plus haut). #}
                 {# / Two blocks: only one is shown, depending on the checked price. #}
                 <div class="js-boutons-reservation-directe">
-                    <button type="submit"
+                    <button id="resource-submit" type="submit"
                             class="btn btn-primary w-100 mb-2"
                             data-loading-disable
-                            data-testid="booking-submit">
+                            data-testid="resource-submit">
                         <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
                         {% translate "Payer maintenant" %}
                     </button>

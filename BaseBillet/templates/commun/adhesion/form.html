@@ -658,10 +658,10 @@
         subscribe + a real secondary button that opens login offcanvas.
         {% endcomment %}
         {% if user.is_authenticated %}
-            <button type="submit"
+            <button id="membership-submit" type="submit"
                     class="btn btn-primary w-100 mb-2"
                     data-loading-disable
-                    data-testid="booking-submit">
+                    data-testid="membership-submit">
                 <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
                 {% translate "Payer maintenant" %}
             </button>
@@ -682,10 +682,10 @@
                 {% endif %}            </button>
         {% else %}
             {# Anonyme : "Réserver" en primary (flow direct) #}
-            <button type="submit"
+            <button id="membership-submit" type="submit"
                     class="btn btn-primary w-100 mb-2"
                     data-loading-disable
-                    data-testid="booking-submit">
+                    data-testid="membership-submit">
                 <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
                 {% translate "Payer maintenant" %}
             </button>
