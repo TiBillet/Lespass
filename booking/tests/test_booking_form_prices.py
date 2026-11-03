@@ -121,6 +121,32 @@ def choix_du_tarif(bloc, tarif):
     return resultat.group(0)
 
 
+def client_en_francais(utilisateur):
+    """
+    Client connecté qui lit les pages en français : les nouveaux textes sont des textes
+    source en français, et le format des montants suit la langue (« 8,33 »).
+    / Logged-in client reading pages in French (French source texts, French number format).
+    """
+    client = client_connecte(utilisateur)
+    client.defaults["HTTP_ACCEPT_LANGUAGE"] = "fr"
+    return client
+
+
+def libelle_du_tarif(html, tarif):
+    """
+    Le texte du libellé (<label>) du choix d'un tarif, espaces regroupés.
+    / The text of a price choice's <label>, whitespace collapsed.
+    """
+    bloc = bloc_du_tarif(html, tarif)
+    resultat = re.search(
+        r'<label[^>]*for="price-' + str(tarif.uuid) + r'"[^>]*>(.*?)</label>',
+        bloc,
+        flags=re.S,
+    )
+    assert resultat is not None
+    return texte_sans_balises(resultat.group(1))
+
+
 def tarif_reserve_aux_adherents(location, nom="Tarif adhérent", prix="8.00"):
     """Ajoute à la ressource un tarif fixe réservé aux adhérents d'une adhésion.
     / Adds a fixed members-only price, tied to one membership, to the resource."""
@@ -169,31 +195,33 @@ def test_formulaire_de_reservation_visiteur_non_connecte_redirige(lieu):
 
 def test_tarifs_exemple(lieu):
     """
-    L'exemple de la spec : un tarif fixe, un tarif à prix libre, un tarif archivé.
-    / The spec example: a fixed price, a pay-what-you-want price, an archived price.
+    L'exemple de la spec : créneaux de 180 minutes, un tarif fixe, deux tarifs à prix
+    libre (avec et sans minimum), un tarif gratuit, un tarif archivé.
+    / The spec example: 180-minute slots, a fixed price, two pay-what-you-want prices
+    (with and without minimum), a free price, an archived price.
     """
-    location = creer_ressource_avec_tarif(prix="12.00")
+    location = creer_ressource_avec_tarif(prix="12.00", duree_du_creneau_en_minutes=180)
     plein_tarif = location.tarif
     plein_tarif.name = "Plein tarif"
     plein_tarif.save()
     soutien = ajouter_un_tarif(location.produit, prix="5.00", nom="Soutien", free_price=True)
+    solidaire = ajouter_un_tarif(
+        location.produit, prix="0.00", nom="Solidaire", free_price=True
+    )
+    benevoles = ajouter_un_tarif(location.produit, prix="0.00", nom="Bénévoles")
     ancien_tarif = ajouter_un_tarif(
         location.produit, prix="9.00", nom="Ancien tarif", archived=True
     )
 
-    client = client_connecte(creer_utilisateur())
-    html = formulaire_de_reservation(client, location)
+    html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
 
-    # « Tarifs » est un texte source en français : on le lit en français.
-    # / "Tarifs" is a French source text: read it in French.
-    client.defaults["HTTP_ACCEPT_LANGUAGE"] = "fr"
-    html_en_francais = formulaire_de_reservation(client, location)
-    assert "Tarifs :" in texte_sans_balises(html_en_francais)
-    assert texte_sans_balises(bloc_du_tarif(html, plein_tarif)).startswith(
-        "Plein tarif - 12.00€ /h"
-    )
-    assert texte_sans_balises(bloc_du_tarif(html, soutien)).startswith("Soutien")
-    assert "€ /h" not in texte_sans_balises(bloc_du_tarif(html, soutien))
+    assert "Tarifs :" in texte_sans_balises(html)
+    assert libelle_du_tarif(html, plein_tarif) == "Plein tarif - 36 € / créneau"
+    assert libelle_du_tarif(html, soutien) == "Soutien - prix libre dès 15 € / créneau"
+    assert libelle_du_tarif(html, solidaire) == "Solidaire - prix libre"
+    assert libelle_du_tarif(html, benevoles) == "Bénévoles - gratuit"
+    assert 'placeholder="Montant par créneau, 15 € minimum"' in bloc_du_tarif(html, soutien)
+    assert 'placeholder="Montant par créneau"' in bloc_du_tarif(html, solidaire)
     assert bloc_du_tarif(html, ancien_tarif) is None
 
 
@@ -233,39 +261,102 @@ def test_tarifs_chaque_tarif_en_vente_est_un_choix(lieu):
 
 def test_tarifs_libelle_du_tarif_fixe(lieu):
     """
-    Un tarif fixe se lit `<name> - <prix>€ /h`.
-    / A fixed price reads `<name> - <prix>€ /h`.
+    Un tarif fixe se lit `<name> - <montant> € / créneau`, le montant valant
+    `prix × durée du créneau / 60`.
+    / A fixed price reads `<name> - <amount> € / créneau`, amount = prix × duration / 60.
     """
-    location = creer_ressource_avec_tarif(prix="12.00")
+    location = creer_ressource_avec_tarif(prix="12.00", duree_du_creneau_en_minutes=90)
     location.tarif.name = "Location salle"
     location.tarif.save()
 
-    html = formulaire_de_reservation(client_connecte(creer_utilisateur()), location)
+    html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
 
-    assert texte_sans_balises(bloc_du_tarif(html, location.tarif)).startswith(
-        "Location salle - 12.00€ /h"
-    )
+    assert libelle_du_tarif(html, location.tarif) == "Location salle - 18 € / créneau"
+
+
+def test_tarifs_montant_arrondi_au_centime_sans_centimes_inutiles(lieu):
+    """
+    Le montant d'un créneau est arrondi au centime, et s'écrit selon la langue :
+    10 €/h pour 50 minutes donnent 8,333… €, affichés « 8,33 » en français.
+    / The slot amount is rounded to the cent and written in the active language.
+    """
+    location = creer_ressource_avec_tarif(prix="10.00", duree_du_creneau_en_minutes=50)
+    location.tarif.name = "Location salle"
+    location.tarif.save()
+
+    html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
+
+    assert libelle_du_tarif(html, location.tarif) == "Location salle - 8,33 € / créneau"
 
 
 def test_tarifs_libelle_et_champ_du_tarif_a_prix_libre(lieu):
     """
-    Un tarif à prix libre se lit `<name>` ; son champ de montant porte le minimum et l'aide
-    « par heure ».
-    / A pay-what-you-want price reads `<name>`; its amount field shows the minimum and the
-    "per hour" help.
+    Un tarif à prix libre se lit `<name> - prix libre dès <minimum> € / créneau`, et son
+    champ de montant dit « Montant par créneau, <minimum> € minimum ».
+    / A pay-what-you-want price shows its per-slot minimum, in the label and the field.
     """
-    location = creer_ressource_avec_tarif(prix="5.00", prix_libre=True)
-    location.tarif.name = "Prix libre"
+    location = creer_ressource_avec_tarif(
+        prix="6.00", prix_libre=True, duree_du_creneau_en_minutes=120
+    )
+    location.tarif.name = "Soutien"
     location.tarif.save()
 
-    html = formulaire_de_reservation(client_connecte(creer_utilisateur()), location)
+    html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
     bloc = bloc_du_tarif(html, location.tarif)
-    texte = texte_sans_balises(bloc)
 
-    assert texte.startswith("Prix libre")
-    assert "€ /h" not in texte
-    assert 'placeholder="Enter the amount (minimum 5.00€)"' in bloc
-    assert "Enter the desired amount per hour" in texte
+    assert libelle_du_tarif(html, location.tarif) == "Soutien - prix libre dès 12 € / créneau"
+    assert 'placeholder="Montant par créneau, 12 € minimum"' in bloc
+    assert "per hour" not in texte_sans_balises(bloc)
+
+
+def test_tarifs_prix_libre_sans_minimum(lieu):
+    """
+    Un tarif à prix libre dont `prix` vaut 0 se lit `<name> - prix libre`, et son champ
+    dit « Montant par créneau ».
+    / A pay-what-you-want price with a 0 minimum reads `<name> - prix libre`.
+    """
+    location = creer_ressource_avec_tarif(prix="0.00", prix_libre=True)
+    location.tarif.name = "Solidaire"
+    location.tarif.save()
+
+    html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
+
+    assert libelle_du_tarif(html, location.tarif) == "Solidaire - prix libre"
+    assert 'placeholder="Montant par créneau"' in bloc_du_tarif(html, location.tarif)
+
+
+def test_tarifs_tarif_gratuit(lieu):
+    """
+    Un tarif gratuit (fixe, `prix` à 0) se lit `<name> - gratuit`.
+    / A free price (fixed, `prix` 0) reads `<name> - gratuit`.
+    """
+    location = creer_ressource_avec_tarif(prix="0.00")
+    location.tarif.name = "Bénévoles"
+    location.tarif.save()
+
+    html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
+
+    assert libelle_du_tarif(html, location.tarif) == "Bénévoles - gratuit"
+
+
+def test_r2_minimum_affiche_arrondi_au_centime_superieur(lieu):
+    """
+    R2 : le minimum d'un prix libre est arrondi au centime supérieur. 10 €/h pour 50
+    minutes donnent 8,333… €, affichés « 8,34 ».
+    / R2: the open-price minimum is rounded UP to the cent: 8.333… shows as 8,34.
+    """
+    location = creer_ressource_avec_tarif(
+        prix="10.00", prix_libre=True, duree_du_creneau_en_minutes=50
+    )
+    location.tarif.name = "Soutien"
+    location.tarif.save()
+
+    html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
+
+    assert libelle_du_tarif(html, location.tarif) == "Soutien - prix libre dès 8,34 € / créneau"
+    assert 'placeholder="Montant par créneau, 8,34 € minimum"' in bloc_du_tarif(
+        html, location.tarif
+    )
 
 
 def test_tarifs_un_seul_tarif_en_vente_est_preselectionne(lieu):
@@ -314,7 +405,6 @@ def test_tarifs_reserve_aux_adherents_adhesion_valide_choix_normal(lieu):
     bloc = bloc_du_tarif(html, tarif)
 
     assert choix_du_tarif(bloc, tarif) is not None
-    assert texte_sans_balises(bloc).startswith("Tarif adhérent - 8.00€ /h")
 
 
 def test_tarifs_reserve_aux_adherents_adhesion_au_panier_choix_normal(lieu):
