@@ -4,8 +4,8 @@ Tests de l'affichage des tarifs dans le formulaire de réservation.
 
 LOCALISATION : booking/tests/test_booking_form_prices.py
 
-Spécification : booking/spec/main/booking-form.md, section « Prices ».
-/ Specification: booking/spec/main/booking-form.md, section "Prices".
+Spécification : booking/spec/main/booking-form.md, section « Tarifs ».
+/ Specification: booking/spec/main/booking-form.md, section "Tarifs".
 
 Chaque test fabrique sa ressource dans une transaction annulée à la fin
 (`django_db`) : rien ne reste en base de dev.
@@ -131,12 +131,12 @@ def tarif_reserve_aux_adherents(location, nom="Tarif adhérent", prix="8.00"):
 
 
 # --------------------------------------------------------------------------
-# Accès au formulaire
-# / Form access
+# Formulaire de réservation : l'accès
+# / Booking form: access
 # --------------------------------------------------------------------------
 
 
-def test_booking_form_visitor_not_logged_in_is_redirected(lieu):
+def test_formulaire_de_reservation_visiteur_non_connecte_redirige(lieu):
     """
     Un visiteur non connecté n'a pas le formulaire : il est renvoyé vers `/`, avec
     l'avertissement « Please login to access this page. ».
@@ -162,15 +162,15 @@ def test_booking_form_visitor_not_logged_in_is_redirected(lieu):
 
 
 # --------------------------------------------------------------------------
-# Prices : les tarifs listés
-# / Prices: the listed prices
+# Tarifs : les tarifs listés
+# / Tarifs: the listed prices
 # --------------------------------------------------------------------------
 
 
-def test_prices_example(lieu):
+def test_tarifs_exemple(lieu):
     """
-    L'exemple de la spec : un tarif fixe, un tarif ouvert, un tarif archivé.
-    / The spec example: a fixed price, an open price, an archived price.
+    L'exemple de la spec : un tarif fixe, un tarif à prix libre, un tarif archivé.
+    / The spec example: a fixed price, a pay-what-you-want price, an archived price.
     """
     location = creer_ressource_avec_tarif(prix="12.00")
     plein_tarif = location.tarif
@@ -197,7 +197,7 @@ def test_prices_example(lieu):
     assert bloc_du_tarif(html, ancien_tarif) is None
 
 
-def test_prices_a_price_not_on_sale_does_not_appear(lieu):
+def test_tarifs_un_tarif_pas_en_vente_n_apparait_pas(lieu):
     """
     Un tarif non publié, ou archivé, n'est pas listé.
     / An unpublished or archived price is not listed.
@@ -215,7 +215,7 @@ def test_prices_a_price_not_on_sale_does_not_appear(lieu):
     assert bloc_du_tarif(html, archive) is None
 
 
-def test_prices_each_price_on_sale_is_one_choice(lieu):
+def test_tarifs_chaque_tarif_en_vente_est_un_choix(lieu):
     """
     Chaque tarif en vente est un choix (bouton radio `price`).
     / Each price on sale is one choice (a `price` radio button).
@@ -231,7 +231,7 @@ def test_prices_each_price_on_sale_is_one_choice(lieu):
         assert 'type="radio"' in choix
 
 
-def test_prices_fixed_price_label(lieu):
+def test_tarifs_libelle_du_tarif_fixe(lieu):
     """
     Un tarif fixe se lit `<name> - <prix>€ /h`.
     / A fixed price reads `<name> - <prix>€ /h`.
@@ -247,28 +247,28 @@ def test_prices_fixed_price_label(lieu):
     )
 
 
-def test_prices_open_price_label_and_amount_field(lieu):
+def test_tarifs_libelle_et_champ_du_tarif_a_prix_libre(lieu):
     """
-    Un tarif ouvert se lit `<name>` ; son champ de montant porte le minimum et l'aide
+    Un tarif à prix libre se lit `<name>` ; son champ de montant porte le minimum et l'aide
     « par heure ».
-    / An open price reads `<name>`; its amount field shows the minimum and the
+    / A pay-what-you-want price reads `<name>`; its amount field shows the minimum and the
     "per hour" help.
     """
     location = creer_ressource_avec_tarif(prix="5.00", prix_libre=True)
-    location.tarif.name = "Prix ouvert"
+    location.tarif.name = "Prix libre"
     location.tarif.save()
 
     html = formulaire_de_reservation(client_connecte(creer_utilisateur()), location)
     bloc = bloc_du_tarif(html, location.tarif)
     texte = texte_sans_balises(bloc)
 
-    assert texte.startswith("Prix ouvert")
+    assert texte.startswith("Prix libre")
     assert "€ /h" not in texte
     assert 'placeholder="Enter the amount (minimum 5.00€)"' in bloc
     assert "Enter the desired amount per hour" in texte
 
 
-def test_prices_single_price_on_sale_is_pre_selected(lieu):
+def test_tarifs_un_seul_tarif_en_vente_est_preselectionne(lieu):
     """
     Un seul tarif en vente, qu'on peut choisir : il est présélectionné.
     / A single price on sale that can be chosen is pre-selected.
@@ -280,7 +280,7 @@ def test_prices_single_price_on_sale_is_pre_selected(lieu):
     assert "checked" in choix_du_tarif(bloc_du_tarif(html, location.tarif), location.tarif)
 
 
-def test_prices_several_prices_none_pre_selected(lieu):
+def test_tarifs_plusieurs_tarifs_aucun_preselectionne(lieu):
     """
     Plusieurs tarifs en vente : aucun n'est présélectionné.
     / Several prices on sale: none is pre-selected.
@@ -295,12 +295,12 @@ def test_prices_several_prices_none_pre_selected(lieu):
 
 
 # --------------------------------------------------------------------------
-# Prices : les tarifs réservés aux adhérents
-# / Prices: members-only prices
+# Tarifs : les tarifs réservés aux adhérents
+# / Tarifs: members-only prices
 # --------------------------------------------------------------------------
 
 
-def test_prices_members_only_with_valid_membership_is_a_normal_choice(lieu):
+def test_tarifs_reserve_aux_adherents_adhesion_valide_choix_normal(lieu):
     """
     Adhésion valide : le tarif est un choix normal.
     / Valid membership: the price is a normal choice.
@@ -317,7 +317,7 @@ def test_prices_members_only_with_valid_membership_is_a_normal_choice(lieu):
     assert texte_sans_balises(bloc).startswith("Tarif adhérent - 8.00€ /h")
 
 
-def test_prices_members_only_with_membership_in_cart_is_a_normal_choice(lieu):
+def test_tarifs_reserve_aux_adherents_adhesion_au_panier_choix_normal(lieu):
     """
     L'adhésion est dans le panier : le tarif est un choix normal.
     / The membership is in the cart: the price is a normal choice.
@@ -337,7 +337,7 @@ def test_prices_members_only_with_membership_in_cart_is_a_normal_choice(lieu):
     assert choix_du_tarif(bloc_du_tarif(html, tarif), tarif) is not None
 
 
-def test_prices_members_only_without_membership(lieu):
+def test_tarifs_reserve_aux_adherents_sans_adhesion(lieu):
     """
     Connecté sans adhésion : « You must have <A> or <B> to book this rate. », chaque
     adhésion en lien vers `/memberships/?open=<uuid>`, et pas de choix.
@@ -361,7 +361,7 @@ def test_prices_members_only_without_membership(lieu):
     assert choix_du_tarif(bloc, tarif) is None
 
 
-def test_prices_members_only_single_price_without_membership_is_not_pre_selected(lieu):
+def test_tarifs_reserve_aux_adherents_seul_tarif_sans_adhesion_pas_preselectionne(lieu):
     """
     Un seul tarif en vente, réservé aux adhérents, sans adhésion : il n'y a pas de
     choix, donc rien n'est présélectionné.
