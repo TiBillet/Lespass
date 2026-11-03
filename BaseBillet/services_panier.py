@@ -1065,16 +1065,14 @@ class PanierSession:
         if price.free_price:
             price_to_compute = custom_amount_dec
 
-        # Arrondi au centime, comme le prix vendu à la facturation (get_or_create_price_sold
-        # applique le même `dround`) : le panier annonce exactement ce qui sera facturé. Sans
-        # lui, une durée qui ne divise pas 60 (40 ou 50 minutes, autorisées par le modèle)
-        # donne un nombre à 28 décimales, affiché tel quel et tronqué dans le total.
-        # / Rounded to the cent like the sold price at checkout (same `dround`): the cart shows
-        # exactly what will be charged.
-        from fedow_connect.utils import dround
+        # Même calcul que le moteur (booking/montants.py) : N fois le montant d'un créneau
+        # arrondi au centime. Le panier annonce exactement ce qui sera facturé.
+        # / Same computation as the booking engine: N times the rounded amount of one slot.
+        # The cart shows exactly what will be charged.
+        from booking.montants import montant_de_la_reservation
 
-        total_estimation = dround(
-            Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
+        total_estimation = montant_de_la_reservation(
+            price_to_compute, slot_duration_minutes, slot_count
         )
 
 

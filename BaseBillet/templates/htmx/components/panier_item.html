@@ -74,8 +74,10 @@
                 {% trans "Resource" %} &middot; {{ detail.price.name }}
                 {# Même règle que pour un billet : un tarif horaire de 0 € s'affiche comme #}
                 {# les autres. / Same rule as for a ticket: a 0 € hourly price is displayed. #}
+                {# Le montant libre d'une ressource est rangé en heure, sans arrondi (6,666…) : #}
+                {# on l'affiche au centime. / Stored hourly without rounding: show it to the cent. #}
                 {% if detail.price.free_price %}
-                    &middot; {{ detail.custom_amount }}
+                    &middot; {{ detail.custom_amount|floatformat:"-2" }}
                     €/{% translate 'heure' %}
                 {% else %}
                     &middot; {{ detail.price.prix }}
@@ -86,7 +88,7 @@
                 {{ detail.slot_count }} slot de {{ detail.slot_duration_minutes }}min
                 &middot;
                 {% if detail.price.free_price %}
-                    {{ detail.hours|floatformat:"-2" }}h * {{ detail.custom_amount }}€/h = {{ detail.total_estimation }}€
+                    {{ detail.hours|floatformat:"-2" }}h * {{ detail.custom_amount|floatformat:"-2" }}€/h = {{ detail.total_estimation }}€
                 {% else %}
                     {{ detail.hours|floatformat:"-2" }}h * {{ detail.price.prix }}€/h = {{ detail.total_estimation }}€
                 {% endif %}
