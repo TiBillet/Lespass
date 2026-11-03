@@ -16,7 +16,8 @@ the Dev43 skills and take precedence over them where they differ.
   (`booking/spec/main/`, `booking/spec/changes/`,
   `booking/spec/BACKLOG.md`), including in the git commands they give,
   e.g. `git diff <base> -- booking/spec/` and
-  `git log -p -- booking/spec`.
+  `git log -p -- booking/spec`. Likewise, the project's `README.md`
+  means `booking/README.md`.
 - The software that `booking/spec/main/` describes is the `booking`
   module. Other apps (e.g. `BaseBillet`, `AuthBillet`) are its
   environment: specify only what `booking` uses of them, never their
