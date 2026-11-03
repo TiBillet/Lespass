@@ -1,39 +1,38 @@
-# Data model
+# Modèle de données
 
-Only the entities and fields that specified zones use.
+Seulement les entités et les champs qu'utilisent les zones spécifiées.
 
-## Resource
+## Ressource
 
-A bookable thing of a place: a room, a machine, a desk.
-
-- `name`
-- `product`: its resource product (required).
-
-## Resource product
-
-A `Product` of category `RESOURCE` (`BaseBillet`). Several resources
-may share one.
-
-- `prices`: its prices.
-
-## Price
-
-A price of a resource product (`BaseBillet.Price`).
+Une chose réservable d'un lieu : une salle, une machine, un bureau.
 
 - `name`
-- `prix`: an amount for one hour of booking.
-- `free_price`: true for an open price.
-- `publish`, `archived`: a price is on sale when it is published and
-  not archived.
-- `adhesions_obligatoires`: membership products, possibly none. When
-  there are some, the price is members-only: it needs a valid
-  membership to any one of them.
+- `product` : son produit de ressource (obligatoire).
 
-Kinds of price:
+## Produit de ressource
 
-- fixed price: `free_price` false, `prix` above 0. The booker pays
-  `prix` per hour.
-- open price: `free_price` true. The booker types an amount per hour,
-  at least `prix`.
-- free price: `free_price` false, `prix` 0. "Free" always means this
-  kind, never an open price.
+Un `Product` de catégorie `RESOURCE` (`BaseBillet`). Plusieurs
+ressources peuvent en partager un.
+
+- `prices` : ses tarifs.
+
+## Tarif
+
+Un tarif d'un produit de ressource (`BaseBillet.Price`).
+
+- `name`
+- `prix` : un montant pour une heure de réservation.
+- `free_price` : vrai pour un tarif à prix libre.
+- `publish`, `archived` : un tarif est en vente quand il est publié et
+  non archivé.
+- `adhesions_obligatoires` : des produits d'adhésion, éventuellement
+  aucun. S'il y en a, le tarif est réservé aux adhérents : il faut une
+  adhésion valide à l'un d'eux.
+
+Sortes de tarif :
+
+- tarif fixe : `free_price` faux, `prix` supérieur à 0. Le réservant
+  paie `prix` par heure.
+- tarif à prix libre : `free_price` vrai. Le réservant saisit un
+  montant par heure, au moins égal à `prix`.
+- tarif gratuit : `free_price` faux, `prix` à 0.
