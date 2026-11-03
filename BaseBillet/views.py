@@ -7907,6 +7907,15 @@ class PanierMVT(viewsets.ViewSet):
             custom_amount = request.POST.get(f'custom_amount_{price_uuid}')
         custom_amount = custom_amount or None
 
+        # Le formulaire de réservation envoie le montant d'un prix libre PAR CRÉNEAU :
+        # on le ramène à l'heure, comme le reste du calcul (booking/montants.py).
+        # / The booking form sends an open price's amount PER SLOT: convert it to hourly.
+        from booking.montants import prix_horaire_d_un_montant_par_creneau
+
+        custom_amount = prix_horaire_d_un_montant_par_creneau(
+            custom_amount, slot_duration_minutes
+        )
+
         # Code promo : lie a un Product specifique (FK). On ne passe que si
         # ce code existe pour le product de l'adhesion cible — sinon None.
         # Validation complete (actif, is_usable, match) dans add_membership.
