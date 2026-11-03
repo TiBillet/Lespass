@@ -1,11 +1,12 @@
 # booking
 
-Lespass app for places that share resources (rooms, equipment) and run
-on volunteers. Members book time slots on resource calendars; managers
-plan volunteer shifts and volunteers sign up for them.
+App Lespass pour les lieux qui partagent des ressources (salles,
+matériel) et fonctionnent avec des bénévoles. Les membres réservent des
+créneaux sur le calendrier des ressources ; les gestionnaires planifient
+les créneaux bénévoles, et les bénévoles s'y inscrivent.
 
-Specification: `spec/` (Dev43 process, see `DEV43.md`).
+Spécification : `spec/` (processus Dev43, voir `DEV43.md`).
 
-Run its tests (in the Docker container):
+Lancer ses tests (dans le conteneur Docker) :
 
     docker exec lespass_django poetry run pytest booking/tests/

@@ -1,9 +1,9 @@
 # Backlog
 
-- Docs: delete `booking/doc/` once its content is specified or dropped.
-- Docs: translate the documents of `booking/` (spec, README, `DEV43.md`) into French.
-- Booking form: show the three kinds of price distinctly: fixed (per hour), open with its minimum (per hour), and free (0 €).
-- Booking pages: check which image is shown, the resource's or its resource product's.
-- Booking form: remove the out-of-stock handling of prices, which resource prices never trigger.
-- Booking form: remove the 'Log in to access this rate.' branch, which never renders since the form requires login.
-- Booking form: remove the non-HTMX branch of `book` (missing `booking/views/book.html`) and its out-of-date fallback comment.
+- Docs : supprimer `booking/doc/` une fois son contenu spécifié ou abandonné.
+- Docs : traduire en français les documents de `booking/` (spec, README, `DEV43.md`).
+- Formulaire de réservation : afficher distinctement les trois sortes de tarif : fixe (par heure), à prix libre avec son minimum (par heure), et gratuit (0 €).
+- Pages de réservation : vérifier quelle image est affichée, celle de la ressource ou celle de son produit de ressource.
+- Formulaire de réservation : retirer la gestion du stock épuisé des tarifs, que les tarifs de ressource ne déclenchent jamais.
+- Formulaire de réservation : retirer la branche « Log in to access this rate. », qui ne s'affiche jamais puisque le formulaire exige d'être connecté.
+- Formulaire de réservation : retirer la branche non HTMX de `book` (`booking/views/book.html` manquant) et son commentaire de repli périmé.

@@ -1,47 +1,49 @@
-# Technical
+# Technique
 
-## Scope
+## Périmètre
 
-- The specified software is the `booking` Django app: the reservation
-  of shared resources, and the volunteer planning (`benevolat`).
-- It runs inside Lespass, a multi-tenant Django project
-  (`django-tenants`): each place is a tenant, and `booking` data lives
-  in the tenant's schema.
-- The rest of Lespass is the environment of `booking`. The
-  specification states only what `booking` uses of it, e.g. products,
-  prices and payment (`BaseBillet`, `PaiementStripe`), users
-  (`AuthBillet`).
-- Shared files that an increment may change:
-  - the admin of `booking`, in `Administration/` (e.g.
+- Le logiciel spécifié est l'app Django `booking` : la réservation de
+  ressources partagées, et le planning des bénévoles (`benevolat`).
+- Il tourne dans Lespass, un projet Django multi-lieux
+  (`django-tenants`) : chaque lieu est un tenant, et les données de
+  `booking` vivent dans le schéma du tenant.
+- Le reste de Lespass est l'environnement de `booking`. La
+  spécification ne décrit que ce que `booking` en utilise, par exemple
+  les produits, les tarifs et le paiement (`BaseBillet`,
+  `PaiementStripe`), les utilisateurs (`AuthBillet`).
+- Fichiers partagés qu'un incrément peut modifier :
+  - l'admin de `booking`, dans `Administration/` (par exemple
     `Administration/admin/resources.py`,
-    `Administration/admin/benevolat.py`);
-  - the URL mount point, `TiBillet/urls_tenants.py`;
-  - the code of other apps that calls `booking`, e.g. the cart and
-    orders in `BaseBillet/`.
+    `Administration/admin/benevolat.py`) ;
+  - le point de montage des URL, `TiBillet/urls_tenants.py` ;
+  - le code des autres apps qui appelle `booking`, par exemple le
+    panier et les commandes dans `BaseBillet/`.
 
-## Stack and conventions
+## Pile et conventions
 
-- The stack and conventions are those of Lespass, in `GUIDELINES.md`
-  at the repository root: Django, DRF `ViewSet` controllers,
-  `Serializer` validation, HTMX and Bootstrap, French source text for
-  translations.
+- La pile et les conventions sont celles de Lespass, dans
+  `GUIDELINES.md` à la racine du dépôt : Django, contrôleurs DRF
+  `ViewSet`, validation par `Serializer`, HTMX et Bootstrap, texte
+  source en français pour les traductions.
 
-## Test and quality policy
+## Politique de tests et de qualité
 
-- Tests of `booking` behavior go in `booking/tests/`, with its own
-  fixtures in `booking/tests/conftest.py`.
-- Behavior that only a browser can observe goes in `tests/e2e/`, under
-  an existing family marker of `pytest.ini` (e.g. `benevolat`,
-  `billetterie`).
-- Tests run in the Docker container:
-  - the check of a phase:
-    `docker exec lespass_django poetry run pytest booking/tests/`, and
-    the files of `tests/pytest/` and `tests/e2e/` that test the area
-    the increment changes (`make test` would need the live server);
-  - the full suite, `make test`, is run by the human, not by the agent.
+- Les tests du comportement de `booking` vont dans `booking/tests/`,
+  avec ses propres fixtures dans `booking/tests/conftest.py`.
+- Le comportement que seul un navigateur peut observer va dans
+  `tests/e2e/`, sous un marqueur de famille existant de `pytest.ini`
+  (par exemple `benevolat`, `billetterie`).
+- Les tests tournent dans le conteneur Docker :
+  - le contrôle d'une phase :
+    `docker exec lespass_django poetry run pytest booking/tests/`, et
+    les fichiers de `tests/pytest/` et `tests/e2e/` qui testent la zone
+    que l'incrément modifie (`make test` exigerait le serveur live) ;
+  - la suite complète, `make test`, est lancée par l'humain, pas par
+    l'agent.
 
 ## Documents
 
-- `booking/spec/` is the specification.
-- `booking/doc/` holds earlier notes, read as input when specifying an
-  area. It is deleted once its content is specified or dropped.
+- `booking/spec/` est la spécification.
+- `booking/doc/` contient des notes antérieures, lues comme matière
+  pour spécifier une zone. Il est supprimé une fois son contenu
+  spécifié ou abandonné.
