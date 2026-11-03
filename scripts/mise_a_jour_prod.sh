@@ -114,8 +114,21 @@ tous_les_services_tournent() {
 # un autre utilisateur (tibillet). Sous sudo ou at, l'umask peut l'empecher de le lire.
 # / Lock shared with cron/saveDb.sh: the backup waits for make update and vice versa.
 # umask 022: the backup reads the lock file as another user, inside the container.
+#
+# Le journal est ouvert AVANT le verrou : sous at, il n'y a pas de terminal et la sortie
+# du job est perdue (pas de serveur mail). Un arret sur le verrou doit donc etre ecrit
+# dans le journal pour etre lu le lendemain.
+# Extension .journal et non .log : le conteneur logrotate tourne chaque nuit tous les *.log
+# de logs/ (copie puis vidage sur place), le journal d'une mise a jour serait vide le
+# lendemain. Un fichier par passage, petit : pas besoin de rotation.
+# / The log opens BEFORE the lock: under at, the job output is lost (no mail server).
+# / .journal, not .log: logrotate would empty every *.log of logs/ each night.
 # ---------------------------------------------------------------------------------------
 umask 022
+FICHIER_JOURNAL="logs/mise_a_jour_$(date +%F_%Hh%M).journal"
+exec > >(tee -a "$FICHIER_JOURNAL") 2>&1
+echo "== make update — $(date '+%F %T') — journal : $FICHIER_JOURNAL"
+
 exec 9>logs/mise_a_jour.lock
 if ! flock -n 9; then
     echo "Verrou pris : sauvegarde (pg_dumpall) ou autre make update en cours. Attente, 30 min au plus..."
@@ -123,14 +136,6 @@ if ! flock -n 9; then
         arreter "verrou toujours pris apres 30 min (logs/mise_a_jour.lock). Rien n'a ete modifie."
     fi
 fi
-
-# Extension .journal et non .log : le conteneur logrotate tourne chaque nuit tous les *.log
-# de logs/ (copie puis vidage sur place), le journal d'une mise a jour serait vide le
-# lendemain. Un fichier par passage, petit : pas besoin de rotation.
-# / .journal, not .log: logrotate would empty every *.log of logs/ each night.
-FICHIER_JOURNAL="logs/mise_a_jour_$(date +%F_%Hh%M).journal"
-exec > >(tee -a "$FICHIER_JOURNAL") 2>&1
-echo "== make update — $(date '+%F %T') — journal : $FICHIER_JOURNAL"
 
 
 # ---------------------------------------------------------------------------------------
@@ -185,7 +190,12 @@ fi
 # / Fetch the code WITHOUT touching the served folder
 # ---------------------------------------------------------------------------------------
 echo "== git fetch"
-git fetch
+# Sous at, aucun agent SSH n'est joignable : un remote en git@github.com: echoue ici avec
+# « Permission denied (publickey) ». La prod lit GitHub en HTTPS (git remote set-url).
+# / Under at, no SSH agent is reachable: the fetch URL must be HTTPS.
+if ! git fetch; then
+    arreter "git fetch a echoue (acces au remote : git remote -v ; sous at, un remote SSH sans agent est refuse). Rien n'a ete modifie."
+fi
 if ! branche_suivie=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null); then
     arreter "la branche courante ne suit aucune branche distante (git branch -u)."
 fi
