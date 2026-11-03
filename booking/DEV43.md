@@ -21,14 +21,13 @@ the Dev43 skills and take precedence over them where they differ.
   module. Other apps (e.g. `BaseBillet`, `AuthBillet`) are its
   environment: specify only what `booking` uses of them, never their
   own behavior.
-- Work outside `booking/` is outside the process: Pause and the phases
-  constrain only `booking/`. An increment may need a change outside
-  `booking/` (e.g. settings, URLs, templates); name it in the plan and
-  tag it.
+- An increment on `booking` may change shared files outside
+  `booking/` (e.g. migrations, admin configuration, settings, URLs,
+  templates). They are part of the increment, and exit commits stage
+  them as usual (`git add -A`).
+- Work unrelated to `booking` is outside the process: Pause does not
+  constrain it.
 - Git: other developers commit to the same branch, so commits between
-  `<base>` and `HEAD` may not be yours. Limit every diff, log and tag
-  check of the process to `booking/`, e.g.
-  `git diff <base> -- booking/ | grep '^+.*@dev43:'` and
-  `git ls-files -o --exclude-standard -z booking/ | xargs -0 -r grep -Hn '@dev43:'`.
-- Exit commits stage only `booking/` (`git add -A booking/`, plus any
-  file outside it that the plan named), never `git add -A`.
+  `<base>` and `HEAD` may not be yours. When reading the history of an
+  increment, keep only its own commits, e.g.
+  `git log -p --reverse --grep='^Dev43-Next: ' <first>^..HEAD`.
