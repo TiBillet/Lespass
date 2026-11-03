@@ -33,10 +33,11 @@
 - Behavior that only a browser can observe goes in `tests/e2e/`, under
   an existing family marker of `pytest.ini` (e.g. `benevolat`,
   `billetterie`).
-- Tests run in the Docker container, through `make test`:
-  - the check of a phase: `make test ARGS="booking/tests/"`, and the
-    files of `tests/pytest/` and `tests/e2e/` that test the area the
-    increment changes;
+- Tests run in the Docker container:
+  - the check of a phase:
+    `docker exec lespass_django poetry run pytest booking/tests/`, and
+    the files of `tests/pytest/` and `tests/e2e/` that test the area
+    the increment changes (`make test` would need the live server);
   - the full suite, `make test`, is run by the human, not by the agent.
 
 ## Documents

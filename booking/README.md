@@ -8,4 +8,4 @@ Specification: `spec/` (Dev43 process, see `DEV43.md`).
 
 Run its tests (in the Docker container):
 
-    make test ARGS="booking/tests/"
+    docker exec lespass_django poetry run pytest booking/tests/
