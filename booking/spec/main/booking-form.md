@@ -4,6 +4,10 @@ The form where a booker books a slot of a resource, at
 `/booking/<resource>/book/`. Quoted texts are the source texts, before
 translation.
 
+A visitor who is not logged in does not get the form: they are
+redirected to `/`, with the warning "Please login to access this
+page.". The rest of this page is about logged-in bookers.
+
 ## Prices
 
 The form lists, under "Tarifs", the prices of the resource's product
@@ -30,8 +34,6 @@ A members-only price shows, depending on the booker:
 
 - the membership is valid, or one of its membership products is in the
   booker's cart: the price, as a normal choice;
-- otherwise, not logged in: "Log in to access this rate.", and no
-  choice;
 - otherwise: "You must have <membership> or <membership> to book this
   rate.", each membership linking to `/memberships/?open=<uuid>`, and
   no choice.
