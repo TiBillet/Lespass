@@ -178,7 +178,8 @@ def reserver_une_ressource(
     / Books a resource slot through the booking form.
 
     Le formulaire envoie des dates sans fuseau, lues dans le fuseau courant.
-    `montant_libre` : montant par heure saisi pour un tarif à prix libre ("12.00").
+    `montant_libre` : montant par créneau saisi pour un tarif à prix libre ("12.00") ;
+    les créneaux de `creer_ressource_avec_tarif` durent une heure par défaut.
     Sans panier : `POST /booking/<ressource>/book/`. Avec panier : ajout puis paiement.
     """
     if tarif is None:

@@ -26,10 +26,18 @@
   `ViewSet`, validation par `Serializer`, HTMX et Bootstrap, texte
   source en français pour les traductions.
 
+## Montant d'une réservation de ressource
+
+- Un seul calcul du montant d'une réservation de ressource, dans
+  `booking`, appelé par le moteur de réservation et par le panier.
+
 ## Politique de tests et de qualité
 
 - Les tests du comportement de `booking` vont dans `booking/tests/`,
   avec ses propres fixtures dans `booking/tests/conftest.py`.
+- Les tests qui passent par le paiement ou le panier vont dans
+  `tests/pytest/`, avec ses simulations (`mock_stripe`,
+  `fabriques_panier.py`).
 - Le comportement que seul un navigateur peut observer va dans
   `tests/e2e/`, sous un marqueur de famille existant de `pytest.ini`
   (par exemple `benevolat`, `billetterie`).
