@@ -1,7 +1,6 @@
 # Backlog
 
 - Docs : supprimer `booking/doc/` une fois son contenu spécifié ou abandonné.
-- Docs : traduire en français les documents de `booking/` (spec, README, `DEV43.md`).
 - Formulaire de réservation : afficher distinctement les trois sortes de tarif : fixe (par heure), à prix libre avec son minimum (par heure), et gratuit (0 €).
 - Pages de réservation : vérifier quelle image est affichée, celle de la ressource ou celle de son produit de ressource.
 - Formulaire de réservation : retirer la gestion du stock épuisé des tarifs, que les tarifs de ressource ne déclenchent jamais.
