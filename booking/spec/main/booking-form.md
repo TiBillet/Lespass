@@ -1,8 +1,8 @@
 # Formulaire de réservation
 
-Le formulaire où un réservant réserve un créneau d'une ressource, à
-`/booking/<resource>/book/`. Les textes cités sont les textes source,
-avant traduction.
+Le formulaire où un réservant réserve un ou plusieurs créneaux
+consécutifs d'une ressource, à `/booking/<resource>/book/`. Les textes
+cités sont les textes source, avant traduction.
 
 Un visiteur non connecté n'a pas le formulaire : il est redirigé vers
 `/`, avec l'avertissement « Please login to access this page. ». Le
@@ -14,21 +14,41 @@ Le formulaire liste, sous « Tarifs », les tarifs en vente du produit de
 la ressource, un choix chacun. Un tarif qui n'est pas en vente
 n'apparaît pas. L'ordre des tarifs n'est pas spécifié.
 
-Exemple : une ressource dont le produit a « Plein tarif » à 12.00
-(fixe), « Soutien » à 5.00 (prix libre) et « Ancien tarif » (archivé) :
+Les montants sont par créneau : le montant d'un créneau vaut
+`prix × durée du créneau / 60`, arrondi au centime.
+
+Exemple : des créneaux de 180 minutes, et un produit qui a « Plein
+tarif » à 12.00 (fixe), « Soutien » à 5.00 (prix libre), « Solidaire »
+à 0.00 (prix libre), « Bénévoles » à 0.00 (fixe, donc gratuit) et
+« Ancien tarif » (archivé) :
 
     Tarifs :
-      ( ) Plein tarif - 12.00€ /h
-      ( ) Soutien
+      ( ) Plein tarif - 36 € / créneau
+      ( ) Soutien - prix libre dès 15 € / créneau
+      ( ) Solidaire - prix libre
+      ( ) Bénévoles - gratuit
 
-- Un tarif fixe se lit `<name> - <prix>€ /h`.
-- Un tarif à prix libre se lit `<name>`. Une fois choisi, il montre un
-  champ de montant avec le texte indicatif « Enter the amount (minimum
-  <prix>€) » et l'aide « Enter the desired amount per hour ».
+Une fois « Soutien » choisi, il montre un champ de montant avec le
+texte indicatif « Montant par créneau, 15 € minimum ». Pour
+« Solidaire », le texte indicatif est « Montant par créneau ».
+
+- Un tarif fixe se lit `<name> - <montant> € / créneau`.
+- Un tarif à prix libre se lit `<name> - prix libre dès <minimum> € /
+  créneau`, ou `<name> - prix libre` quand `prix` vaut 0.
+- Un tarif gratuit se lit `<name> - gratuit`.
+- Un montant s'écrit sans centimes inutiles, selon la langue : « 36 »,
+  « 8,33 » en français.
+- R1: Pour un tarif fixe, le montant payé pour N créneaux vaut N fois le
+  montant affiché par créneau.
+- R2: Le minimum d'un prix libre est `prix × durée du créneau / 60`,
+  arrondi au centime supérieur. Un montant saisi égal à ce minimum est
+  accepté ; un montant inférieur est refusé.
+- R3: Le montant saisi pour un prix libre est un montant par créneau :
+  pour N créneaux, le montant payé vaut N fois le montant saisi, en
+  réservation directe comme en passant par le panier.
 - Quand la ressource n'a qu'un tarif en vente, et qu'on peut le
   choisir, il est présélectionné.
-- L'affichage d'un tarif gratuit, la monnaie et le format des montants
-  ne sont pas spécifiés.
+- La monnaie n'est pas spécifiée.
 
 Un tarif réservé aux adhérents montre, selon le réservant :
 

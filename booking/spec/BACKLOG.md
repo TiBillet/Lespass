@@ -6,3 +6,4 @@
 - Formulaire de réservation : retirer la gestion du stock épuisé des tarifs, que les tarifs de ressource ne déclenchent jamais.
 - Formulaire de réservation : retirer la branche « Log in to access this rate. », qui ne s'affiche jamais puisque le formulaire exige d'être connecté.
 - Formulaire de réservation : retirer la branche non HTMX de `book` (`booking/views/book.html` manquant) et son commentaire de repli périmé.
+- Panier : afficher la ligne d'une ressource par créneau, comme le formulaire de réservation.
