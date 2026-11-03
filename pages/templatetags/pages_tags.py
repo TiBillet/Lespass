@@ -1198,3 +1198,25 @@ def templates_bloc(context, bloc):
     candidats.append(f"pages/classic/partials/bloc_{type_bloc}.html")
 
     return candidats
+
+
+@register.simple_tag
+def donnees_explorer_carte_figee(bloc):
+    """
+    Donnees de l'outil de carte du reseau pour un bloc CARTE_FIGEE.
+    / Network map tool data for a CARTE_FIGEE block.
+
+    LOCALISATION : pages/templatetags/pages_tags.py
+
+    Utilisation dans pages/classic/partials/bloc_carte_figee.html :
+        {% donnees_explorer_carte_figee bloc as explorer_data %}
+    Le resultat a la forme {"points": [...], "tenants": [...]} lue par
+    seo/static/seo/explorer.js. La conversion est dans pages/carte_figee.py.
+    / Returns {"points", "tenants"} for explorer.js. Conversion lives in
+    pages/carte_figee.py.
+    """
+    # Import local : meme reflexe que les vues de pages (imports circulaires).
+    # / Local import, same habit as the pages views.
+    from pages.carte_figee import donnees_explorer_depuis_carte_figee
+
+    return donnees_explorer_depuis_carte_figee(bloc.donnees_carte_figee or [])

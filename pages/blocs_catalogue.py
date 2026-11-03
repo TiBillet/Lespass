@@ -10,10 +10,11 @@ Utilise par : `Bloc.clean()` (validation type x affichage), l'API v2 (validation
 block-types endpoint) and the admin (conditional_fields).
 
 LE CATALOGUE EST ORGANISE PAR INTENTION, PAS PAR RENDU.
-Sept types repondent chacun a une phrase que se dit la personne qui construit
+Huit types repondent chacun a une phrase que se dit la personne qui construit
 la page : « j'ecris du texte », « je mets quelque chose en avant », « je montre
 des images », « j'integre un truc externe », « je montre ou c'est », « je reponds
-a des questions », « je liste des choses automatiquement ».
+a des questions », « je liste des choses automatiquement », « je montre une carte
+de lieux et de leurs evenements ».
 
 La variation VISUELLE a l'interieur d'un type est portee par le champ
 `affichage` (cf. AFFICHAGES_PAR_TYPE). Regle non negociable : **jamais un
@@ -115,6 +116,19 @@ CHAMPS_PAR_TYPE = {
     # `page_source` is NOT listed here: it is a foreign key needing dedicated
     # API handling (see CHAMPS_RELATION).
     "LISTE": ["titre", "source", "nombre_max"],
+
+    # CARTE_FIGEE = « je montre une carte de lieux et de leurs evenements, a un
+    # moment donne ». C'est l'outil de carte de la page « Autour de nous »,
+    # nourri par un FICHIER JSON importe et non par la base (pages/carte_figee.py).
+    # Ce n'est pas un affichage du LIEU : le LIEU montre ou se trouve CE lieu,
+    # avec ses infos pratiques ; la carte figee montre un ensemble de lieux.
+    # `donnees_carte_figee` ne se saisit pas a la main : dans l'admin, il est
+    # remplace par le champ d'import `fichier_carte_figee` (pages/admin.py).
+    # / CARTE_FIGEE = "I show a map of venues and their events, at one point in
+    # time": the network map tool fed by an imported JSON file. Not a LIEU
+    # display: LIEU shows where THIS venue is. In the admin, the JSON field is
+    # replaced by the `fichier_carte_figee` upload field.
+    "CARTE_FIGEE": ["titre", "donnees_carte_figee"],
 }
 
 # Pour chaque type : les affichages autorises. Un type absent ou a tuple vide
@@ -156,6 +170,7 @@ AFFICHAGES_PAR_TYPE = {
     "LIEU": ("VERTICAL", "HORIZONTAL"),
     "FAQ": (),
     "LISTE": (),
+    "CARTE_FIGEE": (),
 }
 
 # Pour un couple (type, affichage) : les champs que son gabarit rend REELLEMENT.

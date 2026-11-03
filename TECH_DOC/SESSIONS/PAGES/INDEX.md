@@ -29,6 +29,7 @@ une séquence ordonnée de blocs typés.
 | 05 | API v2 pages : fabriquer un site via API (perm. clé + CRUD + catalogue) | Spec validée | 4 | [CHANTIER-05-api-v2-pages.md](./CHANTIER-05-api-v2-pages.md) |
 | 06 | Blocs `IFRAME` (intégration libre + whitelist ROOT) + `PARTENAIRES` (logos cliquables) | Spec validée (review fable) | 2 | [CHANTIER-06-blocs-iframe-partenaires.md](./CHANTIER-06-blocs-iframe-partenaires.md) |
 | 07 | Moteur documentaire : arbre à N niveaux, URLs hiérarchiques, sidebar, TOC | Spec validée (review fable) | 5 | [CHANTIER-07-moteur-documentaire.md](./CHANTIER-07-moteur-documentaire.md) |
+| 08 | Bloc `CARTE_FIGEE` : la carte du réseau nourrie par un fichier JSON importé (bilan de campagne) | Codé (non commité), review fable | — | [CHANTIER-08-carte-figee.md](./CHANTIER-08-carte-figee.md) |
 
 ## Décisions verrouillées (résumé — détail dans SPEC.md)
 

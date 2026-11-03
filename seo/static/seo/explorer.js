@@ -106,10 +106,37 @@
     // ============================================================
 
     function escapeHtml(text) {
+        // Echappe un texte pour le poser dans du HTML construit en chaine.
+        // Le navigateur echappe & < > en serialisant un noeud texte, mais PAS
+        // les guillemets. Or le resultat sert aussi DANS des attributs
+        // (href="...", src="...") : un " non echappe refermerait l'attribut et
+        // permettrait d'en ajouter un autre (onfocus=..., XSS). On echappe
+        // donc " et ' en plus.
+        // / Escapes text for string-built HTML, quotes included: the result is
+        // also used inside attributes, where a raw quote would allow XSS.
         if (!text) return '';
         const div = document.createElement('div');
         div.appendChild(document.createTextNode(text));
-        return div.innerHTML;
+        return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function lienDuLieu(url, domain) {
+        // Lien vers le lieu. Une `url` fournie par les donnees passe en premier :
+        // c'est le cas d'une carte figee (bloc de page CARTE_FIGEE), dont les lieux
+        // ne sont pas forcement sur TiBillet. Sinon, on construit le lien avec le
+        // domaine du tenant. Renvoie '' quand il n'y a aucun lien.
+        // L'url est deja verifiee cote serveur (http:// ou https:// seulement).
+        // / Venue link: a provided `url` first (frozen map), else the tenant domain.
+        if (url) return url;
+        return domain ? 'https://' + domain + '/' : '';
+    }
+
+    function lienDeLEvenement(url, domain, slug) {
+        // Lien vers un evenement. Meme regle que lienDuLieu : l'`url` fournie
+        // d'abord, sinon le domaine du tenant et le slug. '' quand aucun lien.
+        // / Event link: a provided `url` first, else domain + slug. '' if none.
+        if (url) return url;
+        return (domain && slug) ? 'https://' + domain + '/event/' + slug + '/' : '';
     }
 
     function pluralize(count, singular, plural) {
@@ -334,6 +361,7 @@
                     name: ev.name,
                     datetime_iso: ev.datetime_iso,
                     slug: ev.slug,
+                    url: ev.url || '',
                     tags: ev.tags || [],
                     image_url: ev.image_url || '',
                     pa_id: point.pa_id,
@@ -421,6 +449,7 @@
                 name: t.name,
                 domain: t.domain,
                 slug: t.slug || '',
+                url: t.url || '',
                 short_description: t.short_description,
                 locality: t.locality,
                 country: t.country,
@@ -751,7 +780,7 @@
     function buildLieuCard(lieu) {
         const tenantId = escapeHtml(lieu.tenant_id);
         const domain = lieu.domain || '';
-        const href = domain ? 'https://' + domain + '/' : '#';
+        const href = lienDuLieu(lieu.url, domain);
         const isCurrent = lieu.tenant_id === config.currentTenantUuid;
 
         // Logo en priorite, sinon image principale du lieu, sinon emoji.
@@ -793,6 +822,17 @@
             }
         }
 
+        // Bouton « Visiter le lieu » : seulement si le lieu a un lien. Un lieu
+        // d'une carte figee peut ne pas en avoir.
+        // / "Visit" button only when the venue has a link.
+        let footerHtml = '';
+        if (href) {
+            footerHtml = '<div class="explorer-card-footer">'
+                + '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener" class="explorer-card-link">'
+                + escapeHtml(config.i18n.visit) + ' →</a>'
+                + '</div>';
+        }
+
         return ''
             + '<div class="explorer-card explorer-card--lieu' + (isCurrent ? ' explorer-card--current' : '') + '"'
             + ' data-lieu-id="' + tenantId + '" data-type="lieu"'
@@ -811,10 +851,7 @@
                     + '</div>'
                 + '</div>'
                 + buildLieuAccordion(lieu, domain)
-                + '<div class="explorer-card-footer">'
-                    + '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener" class="explorer-card-link">'
-                    + escapeHtml(config.i18n.visit) + ' →</a>'
-                + '</div>'
+                + footerHtml
             + '</div>';
     }
 
@@ -828,17 +865,23 @@
         let items = '';
         for (let i = 0; i < events.length; i++) {
             const ev = events[i];
-            const evHref = domain && ev.slug ? 'https://' + domain + '/event/' + ev.slug + '/' : '#';
+            const evHref = lienDeLEvenement(ev.url, domain, ev.slug);
             const dateLabel = ev.datetime_iso ? formatShortDate(ev.datetime_iso) : '';
             const accIcon = ev.image_url
                 ? '<img src="' + escapeHtml(ev.image_url) + '" alt="" class="explorer-accordion-icon" style="width:28px;height:28px;border-radius:4px;object-fit:cover;">'
                 : '<span class="explorer-accordion-icon">\u{1F3B6}</span>';
-            items += ''
-                + '<a class="explorer-accordion-item" href="' + escapeHtml(evHref) + '" target="_blank" rel="noopener">'
-                    + accIcon
-                    + '<span class="explorer-accordion-name">' + escapeHtml(ev.name) + '</span>'
-                    + (dateLabel ? '<span class="explorer-accordion-date">' + escapeHtml(dateLabel) + '</span>' : '')
-                + '</a>';
+            const contenuDeLaLigne = accIcon
+                + '<span class="explorer-accordion-name">' + escapeHtml(ev.name) + '</span>'
+                + (dateLabel ? '<span class="explorer-accordion-date">' + escapeHtml(dateLabel) + '</span>' : '');
+            // Sans lien (evenement d'une carte figee sans url) : un <span>, pas
+            // un <a href="#" target="_blank"> qui rouvrirait la page.
+            // / No link: a <span>, not an href="#" reopening the page.
+            if (evHref) {
+                items += '<a class="explorer-accordion-item" href="' + escapeHtml(evHref) + '" target="_blank" rel="noopener">'
+                    + contenuDeLaLigne + '</a>';
+            } else {
+                items += '<span class="explorer-accordion-item">' + contenuDeLaLigne + '</span>';
+            }
         }
         return ''
             + '<div class="explorer-accordion">'
@@ -852,9 +895,11 @@
 
     function buildEventCard(event) {
         const tenantId = escapeHtml(event.tenant_id || '');
-        const evUrl = (event.tenant_domain && event.slug)
-            ? 'https://' + event.tenant_domain + '/event/' + event.slug + '/'
-            : '#';
+        const evUrl = lienDeLEvenement(event.url, event.tenant_domain, event.slug);
+        // Sans lien : le titre reste du texte. / No link: the title stays text.
+        const titreDeLEvenement = evUrl
+            ? '<a href="' + escapeHtml(evUrl) + '" target="_blank" rel="noopener">' + escapeHtml(event.name) + '</a>'
+            : escapeHtml(event.name);
         const datePart = event.datetime_iso
             ? '\u{1F4C5} ' + escapeHtml(formatShortDate(event.datetime_iso))
             : '';
@@ -895,9 +940,7 @@
                 + eventIcon
                 + '<div class="explorer-card-body">'
                     + '<div class="explorer-card-header">'
-                        + '<h3 class="explorer-card-title">'
-                            + '<a href="' + escapeHtml(evUrl) + '" target="_blank" rel="noopener">'
-                            + escapeHtml(event.name) + '</a></h3>'
+                        + '<h3 class="explorer-card-title">' + titreDeLEvenement + '</h3>'
                         + '<span class="explorer-badge event">' + escapeHtml(config.i18n.event) + '</span>'
                     + '</div>'
                     + '<div class="explorer-card-meta">' + metaText + '</div>'
@@ -1117,7 +1160,7 @@
     function buildPopupContent(point) {
         // Popup riche : nom PA + adresse + tenant + events futurs (top 5).
         // / Rich popup: PA name + address + tenant + future events (top 5).
-        const tenantHref = point.tenant_domain ? 'https://' + point.tenant_domain + '/' : '#';
+        const tenantHref = lienDuLieu(point.url, point.tenant_domain);
         let html = '<div class="explorer-popup">'
             + '<h4 class="explorer-popup-title">' + escapeHtml(point.pa_name) + '</h4>';
         if (point.address_display) {
@@ -1136,33 +1179,45 @@
                 + '<a href="' + escapeHtml(tenantHref) + '" target="_blank" rel="noopener">'
                 + escapeHtml(point.tenant_organisation || '') + ' ↗</a></p>';
         }
-        // Events futurs (top 5)
-        // / Future events (top 5)
+        // Evenements (5 au plus dans la popup). Le cache de la page reseau en
+        // donne deja 5 au plus ; une carte figee les donne TOUS (la liste doit
+        // tous les montrer), d'ou la coupe ici, et le « + N autre(s) ».
+        // / Events (5 max in the popup). A frozen map provides all of them,
+        // hence the cut here and the "+ N more".
+        const LIMITE_D_EVENEMENTS_DANS_LA_POPUP = 5;
         const events = point.events_futurs || [];
         const totalEvents = point.events_futurs_count_total || events.length;
-        if (events.length > 0) {
+        const eventsAffiches = events.slice(0, LIMITE_D_EVENEMENTS_DANS_LA_POPUP);
+        if (eventsAffiches.length > 0) {
             html += '<div class="explorer-popup-events"><strong>'
                 + escapeHtml(config.i18n.nextEvents) + ' (' + totalEvents + ')</strong>'
                 + '<ul class="explorer-popup-events-list">';
-            for (let i = 0; i < events.length; i++) {
-                const ev = events[i];
-                const evUrl = (point.tenant_domain && ev.slug)
-                    ? 'https://' + point.tenant_domain + '/event/' + ev.slug + '/'
-                    : tenantHref;
-                html += '<li><a href="' + escapeHtml(evUrl) + '" target="_blank" rel="noopener">'
-                    + escapeHtml(ev.name)
-                    + (ev.datetime_iso ? ' — ' + escapeHtml(formatShortDate(ev.datetime_iso)) : '')
-                    + '</a></li>';
+            for (let i = 0; i < eventsAffiches.length; i++) {
+                const ev = eventsAffiches[i];
+                const evUrl = lienDeLEvenement(ev.url, point.tenant_domain, ev.slug) || tenantHref;
+                const texteDeLaLigne = escapeHtml(ev.name)
+                    + (ev.datetime_iso ? ' — ' + escapeHtml(formatShortDate(ev.datetime_iso)) : '');
+                if (evUrl) {
+                    html += '<li><a href="' + escapeHtml(evUrl) + '" target="_blank" rel="noopener">'
+                        + texteDeLaLigne + '</a></li>';
+                } else {
+                    html += '<li>' + texteDeLaLigne + '</li>';
+                }
             }
             html += '</ul>';
-            if (totalEvents > events.length) {
+            if (totalEvents > eventsAffiches.length) {
                 html += '<span class="explorer-popup-events-more">+ '
-                    + (totalEvents - events.length) + ' ' + escapeHtml(config.i18n.more) + '</span>';
+                    + (totalEvents - eventsAffiches.length) + ' ' + escapeHtml(config.i18n.more) + '</span>';
             }
             html += '</div>';
         }
-        html += '<a class="explorer-popup-link" href="' + escapeHtml(tenantHref) + '" target="_blank" rel="noopener">'
-            + escapeHtml(config.i18n.visit) + ' →</a></div>';
+        // Lien « Visiter le lieu » : seulement si le lieu a un lien.
+        // / "Visit" link only when the venue has a link.
+        if (tenantHref) {
+            html += '<a class="explorer-popup-link" href="' + escapeHtml(tenantHref) + '" target="_blank" rel="noopener">'
+                + escapeHtml(config.i18n.visit) + ' →</a>';
+        }
+        html += '</div>';
         return html;
     }
 

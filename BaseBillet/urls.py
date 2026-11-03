@@ -86,6 +86,23 @@ urlpatterns = [
 
     path('ticket/<uuid:pk_uuid>/', base_view.Ticket_html_view.as_view()),
 
+    # Cartes NFC imprimees avec une adresse sans le prefixe /qr/ :
+    # https://lieu.tld/<uuid> au lieu de https://lieu.tld/qr/<uuid>/.
+    # On renvoie vers la vraie route de scan. C'est ScanQrCode qui verifie
+    # la carte aupres de Fedow et choisit le bon domaine du lieu.
+    # Le convertisseur <uuid:> n'accepte qu'un UUID complet, en minuscules :
+    # les autres chemins continuent vers l'attrape-tout de pages.
+    # Cette route doit rester AVANT pages.urls (cf. TiBillet/urls_tenants.py),
+    # sinon l'attrape-tout /<slug>/ la capture et renvoie un 404.
+    # Redirection 302 : un 301 resterait en cache dans les navigateurs.
+    # / NFC cards printed without the /qr/ prefix: redirect to the real scan
+    # route. Must stay BEFORE pages.urls, or the /<slug>/ catch-all wins.
+    path(
+        '<uuid:qrcode_uuid>/',
+        RedirectView.as_view(url='/qr/%(qrcode_uuid)s/', permanent=False),
+        name='qr_sans_prefixe',
+    ),
+
     # path('create_event/', base_view.create_event, name='create_event'),
     # path('wiz_event/date/', base_view.event_date, name='event_date'),
     # path('wiz_event/presentation/', base_view.event_presentation, name='event_presentation'),

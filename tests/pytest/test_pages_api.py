@@ -483,10 +483,11 @@ def test_http_block_types_catalogue(cle_pages):
     # / The catalogue exposes all model types (including the new CHANTIER-06 ones).
     from pages.models import Bloc
     assert types == {code for code, _ in Bloc.TYPE_BLOC_CHOICES}
-    # Les 7 types d'intention, et rien d'autre : le catalogue est ferme.
-    # / The 7 intent types and nothing else: the catalogue is closed.
+    # Les 8 types d'intention, et rien d'autre : le catalogue est ferme.
+    # / The 8 intent types and nothing else: the catalogue is closed.
     assert types == {
-        "TEXTE", "SECTION", "IMAGES", "INTEGRATION", "LIEU", "FAQ", "LISTE"}
+        "TEXTE", "SECTION", "IMAGES", "INTEGRATION", "LIEU", "FAQ", "LISTE",
+        "CARTE_FIGEE"}
     # INTEGRATION expose hauteur_px et l'affichage qui choisit son pipeline.
     # / INTEGRATION exposes hauteur_px and the affichage picking its pipeline.
     integration = next(
@@ -1223,3 +1224,130 @@ def test_http_patch_bloc_position_invalide_400(cle_pages, position_invalide):
 
     r3 = client.get(f"/api/v2/blocs/{bloc_uuid}/", **auth)
     assert r3.json()["position"] == 4
+
+
+# ---------------------------------------------------------------------------
+# Bloc CARTE_FIGEE via l'API : donnees_carte_figee arrive par additionalProperty,
+# sans passer par l'import de l'admin. Seul Bloc.clean() (appele par
+# _valider_le_bloc) le verifie : ces tests figent ce controle.
+# / CARTE_FIGEE via the API: the data arrives through additionalProperty; only
+# Bloc.clean() checks it.
+# ---------------------------------------------------------------------------
+def _lieu_de_carte_figee(**cles_a_changer):
+    """Un lieu valide pour une carte figee. / A valid frozen-map venue."""
+    lieu = {
+        "nom": "Lieu API",
+        "latitude": 45.75,
+        "longitude": 4.83,
+        "url": "https://lieu.example.org/",
+        "evenements": [{"nom": "Atelier API", "date": "2026-10-02"}],
+    }
+    lieu.update(cles_a_changer)
+    return lieu
+
+
+def _corps_page_avec_carte_figee(slug, lieux):
+    return {
+        "@type": "WebPage", "name": f"Carte API {slug}",
+        "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": slug}],
+        "hasPart": [{
+            "additionalType": "CARTE_FIGEE",
+            "headline": "Bilan",
+            "additionalProperty": [
+                {"@type": "PropertyValue", "name": "donnees_carte_figee", "value": lieux},
+            ],
+        }],
+    }
+
+
+@pytest.mark.django_db
+def test_http_carte_figee_avec_url_a_guillemet_est_refusee(cle_pages):
+    """Un guillemet dans l'URL refermerait l'attribut href : 400, rien n'est cree."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    lieux = [_lieu_de_carte_figee(url='https://x.org/" autofocus onfocus="alert(1)')]
+
+    r = client.post("/api/v2/pages/", _corps_page_avec_carte_figee("carte-api-xss", lieux),
+                    format="json", **auth)
+
+    assert r.status_code == 400, r.content
+
+
+@pytest.mark.django_db
+def test_http_carte_figee_valide_est_rangee_nettoyee(cle_pages):
+    """Nombres en texte convertis, cle inconnue retiree : la version propre est stockee."""
+    from rest_framework.test import APIClient
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Bloc
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    lieux = [_lieu_de_carte_figee(latitude="45.75", couleur="rouge")]
+
+    r = client.post("/api/v2/pages/", _corps_page_avec_carte_figee("carte-api-ok", lieux),
+                    format="json", **auth)
+
+    assert r.status_code == 201, r.content
+    bloc_uuid = r.json()["hasPart"][0]["identifier"]
+    with tenant_context(Client.objects.get(schema_name="lespass")):
+        bloc = Bloc.objects.get(pk=bloc_uuid)
+        assert bloc.donnees_carte_figee[0]["latitude"] == 45.75
+        assert "couleur" not in bloc.donnees_carte_figee[0]
+
+
+@pytest.mark.django_db
+def test_http_patch_carte_figee_avec_url_javascript_est_refuse(cle_pages):
+    from rest_framework.test import APIClient
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Bloc
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    r = client.post("/api/v2/pages/",
+                    _corps_page_avec_carte_figee("carte-api-patch", [_lieu_de_carte_figee()]),
+                    format="json", **auth)
+    assert r.status_code == 201, r.content
+    bloc_uuid = r.json()["hasPart"][0]["identifier"]
+
+    r2 = client.patch(f"/api/v2/blocs/{bloc_uuid}/", {
+        "additionalProperty": [{
+            "@type": "PropertyValue", "name": "donnees_carte_figee",
+            "value": [_lieu_de_carte_figee(url="javascript:alert(1)")],
+        }]}, format="json", **auth)
+
+    assert r2.status_code == 400, r2.content
+    with tenant_context(Client.objects.get(schema_name="lespass")):
+        bloc = Bloc.objects.get(pk=bloc_uuid)
+        assert bloc.donnees_carte_figee[0]["url"] == "https://lieu.example.org/"
+
+
+@pytest.mark.django_db
+def test_http_patch_d_un_bloc_texte_ne_garde_pas_de_donnees_de_carte(cle_pages):
+    """Hors CARTE_FIGEE, donnees_carte_figee est vide par Bloc.clean() : rien de non verifie ne reste."""
+    from rest_framework.test import APIClient
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client
+    from pages.models import Bloc
+    client = APIClient()
+    auth = {"HTTP_AUTHORIZATION": f"Api-Key {cle_pages}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+    body = {"@type": "WebPage", "name": "Texte API",
+            "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "texte-api-carte"}],
+            "hasPart": [{"additionalType": "TEXTE", "text": "Bonjour"}]}
+    r = client.post("/api/v2/pages/", body, format="json", **auth)
+    assert r.status_code == 201, r.content
+    bloc_uuid = r.json()["hasPart"][0]["identifier"]
+
+    r2 = client.patch(f"/api/v2/blocs/{bloc_uuid}/", {
+        "additionalProperty": [{
+            "@type": "PropertyValue", "name": "donnees_carte_figee",
+            "value": [_lieu_de_carte_figee(url="javascript:alert(1)")],
+        }]}, format="json", **auth)
+
+    assert r2.status_code == 200, r2.content
+    with tenant_context(Client.objects.get(schema_name="lespass")):
+        assert Bloc.objects.get(pk=bloc_uuid).donnees_carte_figee == []
