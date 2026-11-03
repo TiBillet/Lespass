@@ -33,6 +33,6 @@ Sortes de tarif :
 
 - tarif fixe : `free_price` faux, `prix` supérieur à 0. Le réservant
   paie `prix` par heure.
-- tarif à prix libre : `free_price` vrai. Le réservant saisit un
-  montant par heure, au moins égal à `prix`.
+- tarif à prix libre : `free_price` vrai. Le réservant choisit un
+  montant qui, ramené à l'heure, est au moins égal à `prix`.
 - tarif gratuit : `free_price` faux, `prix` à 0.
