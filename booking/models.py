@@ -498,8 +498,15 @@ class Booking(models.Model):
     no 'cancelled' status.
     """
 
-    WAITING_PAYMENT, ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID, USER_CANCELED = "WP", "CA", "VA", "WA", "PA", "AU", "UC"
-    FREERES, FREERES_USERACTIV = "FR", "FU"
+    WAITING_PAYMENT = "WP"
+    ADMIN_CANCELED = "CA"
+    ADMIN_VALID = "VA"
+    ADMIN_WAITING = "WA"
+    PAID_BY_USER = "PA"
+    NO_ADMIN_VALID = "AU"
+    USER_CANCELED = "UC"
+    FREERES = "FR"
+    FREERES_USERACTIV = "FU"
 
     STATUS_CHOICES = [
         (WAITING_PAYMENT, _("Waiting for payment")),

@@ -28,18 +28,20 @@ from django.utils.html import strip_tags
 from django.utils.text import Truncator
 from rest_framework import permissions, viewsets
 from django.contrib import messages
+from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 from rest_framework.decorators import action
 
 from BaseBillet.models import Configuration, Event, Paiement_stripe, Price, PaymentMethod, ProductFormField, Ticket
-from BaseBillet.services_libelle_prix import TYPE_RESSOURCE, libelle_prix
+from BaseBillet.services_libelle_prix import TYPE_RESSOURCE, formater_montant, libelle_prix
 from BaseBillet.views import get_context, reponses_du_formulaire_personnalise_pour_le_panier
 from booking.benevolat import lire_la_semaine_demandee, lundi_de_la_semaine, titre_de_la_semaine
 from booking.booking_engine import Interval, compute_slots, confirmer_booking_gratuit, get_checkout_stripe, validate_new_booking
 from booking.booking_engine import annotate_slots_for_display, get_existing_bookings_for_resource
 from booking.booking_engine import validate_resource_booking_form
 from booking.models import Booking, Resource
+from booking.montants import minimum_d_un_creneau, montant_d_un_creneau, prix_horaire_d_un_montant_par_creneau
 from booking.tasks import send_booking_cancellation_user
 from booking.tasks import send_booking_request_admin, send_booking_request_user
 from booking.tasks import send_booking_accepted_user, send_booking_refused_user
@@ -85,6 +87,53 @@ def texte_brut_d_un_texte_riche(texte_riche):
 # annotate_slots_for_display ont été déplacées dans booking/booking_engine.py
 # car elles sont partagées avec BaseBillet/views.py.
 # / Moved to booking/booking_engine.py because they are shared with BaseBillet/views.py.
+
+# ── Tarifs du formulaire / Booking form prices ─────────────────────────────
+
+
+def tarifs_du_formulaire(resource, slot_duration_minutes):
+    """
+    Les tarifs en vente de la ressource, prêts pour le formulaire de réservation :
+    chacun reçoit son libellé par créneau et le texte indicatif de son champ de montant.
+    / The resource's prices on sale, with their per-slot label and amount field text.
+
+    LOCALISATION : booking/views.py
+
+    Règles : booking/spec/main/booking-form.md, section « Tarifs ».
+    - tarif fixe : « <nom> - 36 € / créneau »
+    - tarif à prix libre : « <nom> - prix libre dès 15 € / créneau »,
+      ou « <nom> - prix libre » quand le minimum vaut 0
+    - tarif gratuit (fixe à 0 €) : « <nom> - gratuit »
+    Les montants sont écrits sans centimes inutiles, selon la langue (formater_montant).
+    / Amounts are written without useless cents, in the active language.
+    """
+    tarifs = []
+    for tarif in resource.published_prices():
+        if tarif.free_price:
+            minimum = minimum_d_un_creneau(tarif.prix, slot_duration_minutes)
+            tarif.minimum_par_creneau = minimum
+            if minimum > 0:
+                minimum_en_texte = formater_montant(minimum)
+                description = gettext("prix libre dès %(montant)s € / créneau") % {
+                    "montant": minimum_en_texte,
+                }
+                tarif.texte_indicatif_du_montant = gettext(
+                    "Montant par créneau, %(montant)s € minimum"
+                ) % {"montant": minimum_en_texte}
+            else:
+                description = gettext("prix libre")
+                tarif.texte_indicatif_du_montant = gettext("Montant par créneau")
+        elif tarif.prix == 0:
+            description = gettext("gratuit")
+        else:
+            montant = montant_d_un_creneau(tarif.prix, slot_duration_minutes)
+            description = gettext("%(montant)s € / créneau") % {
+                "montant": formater_montant(montant),
+            }
+        tarif.libelle_par_creneau = f"{tarif.name} - {description}"
+        tarifs.append(tarif)
+    return tarifs
+
 
 # ── ViewSet ──────────────────────────────────────────────────────────────────
 
@@ -891,6 +940,9 @@ class BookingViewSet(viewsets.ViewSet):
         context = get_context(request)
         context.update({
             'resource':              resource,
+            'tarifs_du_formulaire':  tarifs_du_formulaire(
+                resource, requested_slot.slot_duration_minutes
+            ),
             'slot':                  requested_slot,
             'consecutive_slots':     consecutive_slots,
             'max_slot_count':        max_slot_count,
@@ -937,10 +989,24 @@ class BookingViewSet(viewsets.ViewSet):
             )
             cancellation_possible = timezone.now() <= cancellation_deadline
 
+        # Durée qui sert aux montants par créneau. Sur certains refus, la vue n'a pas
+        # de durée (créneau introuvable) : on prend celle du créneau demandé, sinon une
+        # heure.
+        # / Duration for per-slot amounts; on some refusals there is none: use the
+        # requested slot's, else one hour.
+        duree_pour_les_tarifs = slot_duration_minutes
+        if not duree_pour_les_tarifs and requested_slot is not None:
+            duree_pour_les_tarifs = requested_slot.slot_duration_minutes
+        if not duree_pour_les_tarifs:
+            duree_pour_les_tarifs = 60
+
         context = get_context(request)
         context.update({
             'reponses_saisies': self._reponses_saisies_du_formulaire(request, resource),
             'resource': resource,
+            'tarifs_du_formulaire': tarifs_du_formulaire(
+                resource, duree_pour_les_tarifs
+            ),
             'slot': requested_slot,
             'consecutive_slots': consecutive_slots,
             'max_slot_count': max_slot_count,
@@ -1052,7 +1118,13 @@ class BookingViewSet(viewsets.ViewSet):
         firstname = request.POST.get("firstname", None)
         lastname = request.POST.get("lastname", None)
 
-        custom_amount = request.POST.get(f"custom_amount_{price_uuid}", None)
+        # Le formulaire envoie le montant d'un prix libre PAR CRÉNEAU : on le ramène à
+        # l'heure, comme le reste du calcul (booking/montants.py).
+        # / The form sends an open price's amount PER SLOT: convert it to hourly.
+        custom_amount = prix_horaire_d_un_montant_par_creneau(
+            request.POST.get(f"custom_amount_{price_uuid}", None),
+            slot_duration_minutes,
+        )
 
         # Réponses au formulaire dynamique du produit de la ressource.
         # Même fonction que le panier (PanierMVT.add_resource) : les réponses sont

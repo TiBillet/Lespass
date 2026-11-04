@@ -103,15 +103,23 @@ E2E_TEST_TOKEN='e2e-dev-only-pGk3xVqLz8R4nFw2'
 ##########################
 # TiBillet / LaBoutik V1 Legacy
 # Pour lancer des tests
+#
+# Commenté par défaut : ce bloc ne sert qu'à l'ancien LaBoutik V1
+# (docker-compose-laboutik-V1.yml). Décommenté, il écrase les DEMO_TAGID_*
+# du bloc principal (la dernière valeur gagne), et les tests E2E de ce dépôt
+# ne trouvent plus la carte primaire A49E8E2A.
+# / Commented out by default: this block is only for the old LaBoutik V1.
+# Uncommented, it overrides the DEMO_TAGID_* above (last value wins) and the
+# E2E tests of this repo no longer find the A49E8E2A primary card.
 ##########################
 
-FEDOW_URL='https://fedow.tibillet.localhost/' # ex : https://fedow.tibillet.localhost/
-LESPASS_TENANT_URL='https://lespass.tibillet.localhost/' # ex : https://lespass.tibillet.localhost/
-MAIN_ASSET_NAME="TestCoin"
-DEMO_TAGID_CM='EE144CE8'
-DEMO_TAGID_CLIENT1='41726643'
-DEMO_TAGID_CLIENT2='93BD3684'
-FEDOW_TEST_CARD_NUMBER='C3DB3821'
+# FEDOW_URL='https://fedow.tibillet.localhost/' # ex : https://fedow.tibillet.localhost/
+# LESPASS_TENANT_URL='https://lespass.tibillet.localhost/' # ex : https://lespass.tibillet.localhost/
+# MAIN_ASSET_NAME="TestCoin"
+# DEMO_TAGID_CM='EE144CE8'
+# DEMO_TAGID_CLIENT1='41726643'
+# DEMO_TAGID_CLIENT2='93BD3684'
+# FEDOW_TEST_CARD_NUMBER='C3DB3821'
 
 # SUNMI
 APP_ID=

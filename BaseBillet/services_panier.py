@@ -964,7 +964,9 @@ class PanierSession:
             # / A free price minimum can be 0 €: always compare, never test `price.prix` first.
             # Decimal("0") is falsy in Python, and skipping the comparison would accept a
             # negative amount.
-            if custom_amount_dec < price.prix:
+            from booking.montants import minimum_horaire_d_un_creneau
+
+            if custom_amount_dec < minimum_horaire_d_un_creneau(price.prix, slot_duration_minutes):
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
                 )
@@ -1061,21 +1063,20 @@ class PanierSession:
         clean_firstname = (firstname or '').strip()
         clean_lastname = (lastname or '').strip()
 
-        price_to_compute = price.prix
+        # Même calcul que le moteur (booking/montants.py) : N fois le montant d'un créneau.
+        # Le panier annonce exactement ce qui sera facturé.
+        # / Same computation as the booking engine: N times the amount of one slot.
+        # The cart shows exactly what will be charged.
+        from booking.montants import montant_de_la_reservation, montant_libre_de_la_reservation
+
         if price.free_price:
-            price_to_compute = custom_amount_dec
-
-        # Arrondi au centime, comme le prix vendu à la facturation (get_or_create_price_sold
-        # applique le même `dround`) : le panier annonce exactement ce qui sera facturé. Sans
-        # lui, une durée qui ne divise pas 60 (40 ou 50 minutes, autorisées par le modèle)
-        # donne un nombre à 28 décimales, affiché tel quel et tronqué dans le total.
-        # / Rounded to the cent like the sold price at checkout (same `dround`): the cart shows
-        # exactly what will be charged.
-        from fedow_connect.utils import dround
-
-        total_estimation = dround(
-            Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
-        )
+            total_estimation = montant_libre_de_la_reservation(
+                custom_amount_dec, slot_duration_minutes, slot_count
+            )
+        else:
+            total_estimation = montant_de_la_reservation(
+                price.prix, slot_duration_minutes, slot_count
+            )
 
 
         item = {
