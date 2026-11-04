@@ -30,8 +30,8 @@ skills Dev43 et l'emportent sur elles quand elles diffèrent.
   leur propre comportement.
 - Un incrément sur `booking` peut modifier des fichiers partagés hors
   de `booking/` (par exemple migrations, configuration de l'admin,
-  réglages, URL, gabarits). Ils font partie de l'incrément, et les
-  commits de sortie les indexent comme d'habitude (`git add -A`).
+  réglages, URL, gabarits). Ils font partie de l'incrément, et l'humain
+  les indexe avec le reste au commit de sortie (`git add -A`).
 - Le travail sans rapport avec `booking` est hors du processus : la
   Pause ne le contraint pas.
 - Git : d'autres développeurs committent sur la même branche, donc les
@@ -39,3 +39,11 @@ skills Dev43 et l'emportent sur elles quand elles diffèrent.
   Pour lire l'historique d'un incrément, ne garder que ses propres
   commits, par exemple
   `git log -p --reverse --grep='^Dev43-Next: ' <first>^..HEAD`.
+- Commits : conformément à `GUIDELINES.md`, l'agent ne lance aucune
+  opération git qui modifie le dépôt ; il garde les commandes de lecture
+  (`git log`, `git diff`, `git status`). Là où Dev43 prévoit un commit,
+  il écrit le message complet, trailers compris, dans `.git/SQUASH_MSG`,
+  s'arrête et attend que l'humain ait commité. Il relit ensuite l'état
+  avec `git log`, puis continue. Les autres commandes que Dev43 lui
+  demande, par exemple le `git revert` d'un abandon, il les donne à
+  l'humain.
