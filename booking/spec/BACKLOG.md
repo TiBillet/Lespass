@@ -5,7 +5,8 @@
 - Formulaire de réservation : retirer la gestion du stock épuisé des tarifs, que les tarifs de ressource ne déclenchent jamais.
 - Formulaire de réservation : retirer la branche « Log in to access this rate. », qui ne s'affiche jamais puisque le formulaire exige d'être connecté.
 - Formulaire de réservation : retirer la branche non HTMX de `book` (`booking/views/book.html` manquant) et son commentaire de repli périmé.
-- Panier : rendre la ligne d'une ressource moins verbeuse et par créneau, comme le formulaire de réservation (par exemple « Ressource · 3 créneaux de 1h · 5 € / créneau ») : aujourd'hui la durée apparaît trois fois, le calcul est écrit en entier (« 3h * 5,00€/h = 15.00€ »), les formats de montant diffèrent, et « slot » n'est ni traduit ni accordé.
+- Panier : rendre la ligne d'une ressource moins verbeuse et par créneau, comme le formulaire de réservation (par exemple « Ressource · 3 créneaux de 1h · 5 € / créneau ») : aujourd'hui la durée apparaît trois fois, le calcul est écrit en entier (« 3h * 5,00€/h = 15.00€ »), les formats de montant diffèrent, « slot » n'est ni traduit ni accordé, et le calcul ne tombe plus toujours juste à cause de l'arrondi par créneau (3 créneaux de 40 minutes à 10 €/h : « 2h * 10.00€/h = 20.10€ »).
+- Tarifs : un tarif fixe sous 0,05 € par créneau s'affiche « 0 € / créneau » et devient gratuit ; décider s'il faut le refuser ou le garder.
 - Liste des ressources : le prix de la carte d'une ressource (« 10 € », `libelle_prix` posé par `BookingViewSet.list`) est ambigu, sans unité (par heure, par créneau ?) ni sorte de tarif.
 - Formulaire de réservation : rendre plus visibles les contours gris trop pâles, surtout les boutons radio des tarifs, qu'on distingue à peine du fond.
 - Réservation : afficher la durée des créneaux de façon plus lisible (en heures et minutes), et pas seulement en minutes.

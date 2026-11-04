@@ -964,7 +964,9 @@ class PanierSession:
             # / A free price minimum can be 0 €: always compare, never test `price.prix` first.
             # Decimal("0") is falsy in Python, and skipping the comparison would accept a
             # negative amount.
-            if custom_amount_dec < price.prix:
+            from booking.montants import minimum_horaire_d_un_creneau
+
+            if custom_amount_dec < minimum_horaire_d_un_creneau(price.prix, slot_duration_minutes):
                 raise InvalidItemError(
                     _("The amount must be greater than or equal to the minimum.")
                 )
@@ -1061,19 +1063,20 @@ class PanierSession:
         clean_firstname = (firstname or '').strip()
         clean_lastname = (lastname or '').strip()
 
-        price_to_compute = price.prix
-        if price.free_price:
-            price_to_compute = custom_amount_dec
-
-        # Même calcul que le moteur (booking/montants.py) : N fois le montant d'un créneau
-        # arrondi au centime. Le panier annonce exactement ce qui sera facturé.
-        # / Same computation as the booking engine: N times the rounded amount of one slot.
+        # Même calcul que le moteur (booking/montants.py) : N fois le montant d'un créneau.
+        # Le panier annonce exactement ce qui sera facturé.
+        # / Same computation as the booking engine: N times the amount of one slot.
         # The cart shows exactly what will be charged.
-        from booking.montants import montant_de_la_reservation
+        from booking.montants import montant_de_la_reservation, montant_libre_de_la_reservation
 
-        total_estimation = montant_de_la_reservation(
-            price_to_compute, slot_duration_minutes, slot_count
-        )
+        if price.free_price:
+            total_estimation = montant_libre_de_la_reservation(
+                custom_amount_dec, slot_duration_minutes, slot_count
+            )
+        else:
+            total_estimation = montant_de_la_reservation(
+                price.prix, slot_duration_minutes, slot_count
+            )
 
 
         item = {

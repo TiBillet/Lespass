@@ -12,6 +12,11 @@ racine du dépôt : `ln -s booking/DEV43.md CLAUDE.md`.
   en français.
 - Les noms de fichiers restent en anglais, comme le code source.
 
+## Tableaux
+
+Par exception à la règle de Dev43 qui les interdit, la spécification
+peut contenir un tableau s'il est petit et contient surtout des chiffres.
+
 ## Périmètre : le module booking seul
 
 Dev43 ne régit que le module `booking/` de ce dépôt, partagé avec
