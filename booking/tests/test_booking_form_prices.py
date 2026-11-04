@@ -274,19 +274,37 @@ def test_tarifs_libelle_du_tarif_fixe(lieu):
     assert libelle_du_tarif(html, location.tarif) == "Location salle - 18 € / créneau"
 
 
-def test_tarifs_montant_arrondi_au_centime_sans_centimes_inutiles(lieu):
+@pytest.mark.parametrize(
+    "prix, duree_du_creneau_en_minutes, montant_affiche",
+    [
+        ("10.00", 40, "6,70"),
+        ("10.00", 50, "8,30"),
+        ("7.00", 45, "5,30"),
+        ("3.33", 180, "10"),
+    ],
+)
+def test_tarifs_montant_arrondi_aux_10_centimes_sans_centimes_inutiles(
+    lieu, prix, duree_du_creneau_en_minutes, montant_affiche
+):
     """
-    Le montant d'un créneau est arrondi au centime, et s'écrit selon la langue :
-    10 €/h pour 50 minutes donnent 8,333… €, affichés « 8,33 » en français.
-    / The slot amount is rounded to the cent and written in the active language.
+    Le tableau de la section « Tarifs » : le montant d'un créneau est arrondi aux 10
+    centimes les plus proches, à la dizaine supérieure à mi-chemin, et s'écrit selon la
+    langue.
+    / The table of the "Tarifs" section: the slot amount is rounded to the nearest 10
+    cents, up when halfway, and written in the active language.
     """
-    location = creer_ressource_avec_tarif(prix="10.00", duree_du_creneau_en_minutes=50)
+    location = creer_ressource_avec_tarif(
+        prix=prix, duree_du_creneau_en_minutes=duree_du_creneau_en_minutes
+    )
     location.tarif.name = "Location salle"
     location.tarif.save()
 
     html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
 
-    assert libelle_du_tarif(html, location.tarif) == "Location salle - 8,33 € / créneau"
+    assert (
+        libelle_du_tarif(html, location.tarif)
+        == f"Location salle - {montant_affiche} € / créneau"
+    )
 
 
 def test_tarifs_libelle_et_champ_du_tarif_a_prix_libre(lieu):
@@ -339,11 +357,11 @@ def test_tarifs_tarif_gratuit(lieu):
     assert libelle_du_tarif(html, location.tarif) == "Bénévoles - gratuit"
 
 
-def test_r2_minimum_affiche_arrondi_au_centime_superieur(lieu):
+def test_r2_minimum_affiche_arrondi_aux_10_centimes_superieurs(lieu):
     """
-    R2 : le minimum d'un prix libre est arrondi au centime supérieur. 10 €/h pour 50
-    minutes donnent 8,333… €, affichés « 8,34 ».
-    / R2: the open-price minimum is rounded UP to the cent: 8.333… shows as 8,34.
+    R2 : le minimum d'un prix libre est arrondi aux 10 centimes supérieurs. 10 €/h pour 50
+    minutes donnent 8,333… €, affichés « 8,40 ».
+    / R2: the open-price minimum is rounded UP to 10 cents: 8.333… shows as 8,40.
     """
     location = creer_ressource_avec_tarif(
         prix="10.00", prix_libre=True, duree_du_creneau_en_minutes=50
@@ -353,8 +371,8 @@ def test_r2_minimum_affiche_arrondi_au_centime_superieur(lieu):
 
     html = formulaire_de_reservation(client_en_francais(creer_utilisateur()), location)
 
-    assert libelle_du_tarif(html, location.tarif) == "Soutien - prix libre dès 8,34 € / créneau"
-    assert 'placeholder="Montant par créneau, 8,34 € minimum"' in bloc_du_tarif(
+    assert libelle_du_tarif(html, location.tarif) == "Soutien - prix libre dès 8,40 € / créneau"
+    assert 'placeholder="Montant par créneau, 8,40 € minimum"' in bloc_du_tarif(
         html, location.tarif
     )
 

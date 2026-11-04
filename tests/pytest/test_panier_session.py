@@ -843,13 +843,13 @@ def test_un_visiteur_anonyme_ne_recoit_pas_de_cookie_de_session(lieu):
     assert Session.objects.count() == sessions_avant
 
 
-def test_add_resource_arrondit_l_estimation_au_centime(lieu):
+def test_add_resource_arrondit_l_estimation_aux_10_centimes(lieu):
     """Créneaux de 40 minutes pris trois fois, à 10 €/h : un créneau vaut 6,666… €, arrondi
-    à 6,67 €, et trois créneaux valent 3 × 6,67 = 20,01 € (booking/spec/main/booking-form.md,
+    à 6,70 €, et trois créneaux valent 3 × 6,70 = 20,10 € (booking/spec/main/booking-form.md,
     R1). Sans arrondi, la division par 60 donne un nombre à 28 décimales, affiché tel quel
     dans le panier et tronqué dans le total.
-    / Three 40-minute slots at 10 €/h: one slot is 6.666… €, rounded to 6.67 €, so three
-    slots are 3 × 6.67 = 20.01 € (R1)."""
+    / Three 40-minute slots at 10 €/h: one slot is 6.666… €, rounded to 6.70 €, so three
+    slots are 3 × 6.70 = 20.10 € (R1)."""
     from decimal import Decimal
 
     from BaseBillet.services_panier import PanierSession
@@ -865,9 +865,9 @@ def test_add_resource_arrondit_l_estimation_au_centime(lieu):
         slot_count="3",
     )
 
-    assert Decimal(item["total_estimation"]) == Decimal("20.01")
-    assert item["total_estimation"] == "20.01"
-    assert panier.calcul_total_centimes() == 2001
+    assert Decimal(item["total_estimation"]) == Decimal("20.10")
+    assert item["total_estimation"] == "20.10"
+    assert panier.calcul_total_centimes() == 2010
 
 
 def test_add_membership_refuse_la_meme_adhesion_deux_fois(lieu):

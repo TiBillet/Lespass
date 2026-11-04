@@ -143,31 +143,60 @@ def test_r1_un_creneau_paye_le_montant_affiche(lieu, parcours):
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_r1_n_creneaux_payent_n_fois_le_montant_arrondi(lieu, parcours):
     """
-    R1 : 1,03 €/h pour des créneaux de 50 minutes : 0,858… € par créneau, affiché 0,86 €.
-    Pour 4 créneaux, on paie 4 × 0,86 = 3,44 €, et pas l'arrondi du total exact (3,43 €).
-    / R1: 0.858… per slot, shown 0.86; 4 slots pay 4 × 0.86 = 3.44, not the rounded
-    exact total (3.43).
+    R1 : 1,03 €/h pour des créneaux de 50 minutes : 0,858… € par créneau, affiché 0,90 €.
+    Pour 4 créneaux, on paie 4 × 0,90 = 3,60 €, et pas l'arrondi du total exact (3,40 €).
+    / R1: 0.858… per slot, shown 0.90; 4 slots pay 4 × 0.90 = 3.60, not the rounded
+    exact total (3.40).
     """
     acheteur = creer_utilisateur()
     location = creer_ressource_avec_tarif(prix="1.03", duree_du_creneau_en_minutes=50)
 
     reserver_des_creneaux(parcours, client_connecte(acheteur), location, 50, 4)
 
-    assert montant_paye_en_centimes(acheteur, location) == 344
+    assert montant_paye_en_centimes(acheteur, location) == 360
+
+
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+@pytest.mark.parametrize(
+    "prix, duree_du_creneau_en_minutes, montant_en_centimes",
+    [
+        ("10.00", 40, 2010),
+        ("10.00", 50, 2490),
+        ("7.00", 45, 1590),
+        ("3.33", 180, 3000),
+    ],
+)
+def test_r1_tableau_des_montants_pour_3_creneaux(
+    lieu, parcours, prix, duree_du_creneau_en_minutes, montant_en_centimes
+):
+    """
+    R1 : la colonne « 3 créneaux » du tableau de la section « Tarifs ».
+    / R1: the "3 créneaux" column of the table in the "Tarifs" section.
+    """
+    acheteur = creer_utilisateur()
+    location = creer_ressource_avec_tarif(
+        prix=prix, duree_du_creneau_en_minutes=duree_du_creneau_en_minutes
+    )
+
+    reserver_des_creneaux(
+        parcours, client_connecte(acheteur), location, duree_du_creneau_en_minutes, 3
+    )
+
+    assert montant_paye_en_centimes(acheteur, location) == montant_en_centimes
 
 
 # --------------------------------------------------------------------------
-# R2 : le minimum d'un prix libre, arrondi au centime supérieur
-# / R2: the open-price minimum, rounded up to the cent
+# R2 : le minimum d'un prix libre, arrondi aux 10 centimes supérieurs
+# / R2: the open-price minimum, rounded up to 10 cents
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_r2_un_montant_egal_au_minimum_affiche_est_accepte(lieu, parcours):
     """
-    R2 : 10 €/h minimum pour un créneau de 50 minutes : minimum affiché 8,34 €. Saisir
-    8,34 est accepté, et on paie 8,34 €.
-    / R2: minimum shown 8.34 for a 50-minute slot at 10 €/h: typing 8.34 is accepted.
+    R2 : 10 €/h minimum pour un créneau de 50 minutes : minimum affiché 8,40 €. Saisir
+    8,40 est accepté, et on paie 8,40 €.
+    / R2: minimum shown 8.40 for a 50-minute slot at 10 €/h: typing 8.40 is accepted.
     """
     acheteur = creer_utilisateur()
     location = creer_ressource_avec_tarif(
@@ -175,17 +204,18 @@ def test_r2_un_montant_egal_au_minimum_affiche_est_accepte(lieu, parcours):
     )
 
     reserver_des_creneaux(
-        parcours, client_connecte(acheteur), location, 50, 1, montant_libre="8.34"
+        parcours, client_connecte(acheteur), location, 50, 1, montant_libre="8.40"
     )
 
-    assert montant_paye_en_centimes(acheteur, location) == 834
+    assert montant_paye_en_centimes(acheteur, location) == 840
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
 def test_r2_un_montant_sous_le_minimum_affiche_est_refuse(lieu, parcours):
     """
-    R2 : même tarif, saisir 8,33 (sous le minimum affiché 8,34) est refusé : aucun booking.
-    / R2: same price, typing 8.33 (below the shown 8.34 minimum) is refused: no booking.
+    R2 : même tarif, saisir 8,39 est refusé, bien que ce montant, ramené à l'heure,
+    dépasse 10 € : aucun booking.
+    / R2: same price, typing 8.39 is refused although its hourly value exceeds 10 €.
     """
     acheteur = creer_utilisateur()
     location = creer_ressource_avec_tarif(
@@ -193,7 +223,7 @@ def test_r2_un_montant_sous_le_minimum_affiche_est_refuse(lieu, parcours):
     )
 
     reserver_des_creneaux(
-        parcours, client_connecte(acheteur), location, 50, 1, montant_libre="8.33"
+        parcours, client_connecte(acheteur), location, 50, 1, montant_libre="8.39"
     )
 
     assert booking_de(acheteur, location) is None
@@ -222,6 +252,40 @@ def test_r3_le_montant_saisi_est_par_creneau(lieu, parcours):
     )
 
     assert montant_paye_en_centimes(acheteur, location) == 1400
+
+
+@pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
+@pytest.mark.parametrize(
+    "montant_libre, duree_du_creneau_en_minutes, montant_en_centimes",
+    [
+        ("6.67", 40, 2001),
+        ("0.76", 45, 228),
+    ],
+)
+def test_r3_le_montant_saisi_n_est_pas_arrondi_aux_10_centimes(
+    lieu, parcours, montant_libre, duree_du_creneau_en_minutes, montant_en_centimes
+):
+    """
+    R3 : prix libre sans minimum, 3 créneaux : on paie 3 fois le montant saisi, au centime
+    près, sans l'arrondi des tarifs fixes.
+    / R3: open price, 3 slots: 3 times the typed amount, to the cent, without the rounding
+    of fixed prices.
+    """
+    acheteur = creer_utilisateur()
+    location = creer_ressource_avec_tarif(
+        prix="0.00", prix_libre=True, duree_du_creneau_en_minutes=duree_du_creneau_en_minutes
+    )
+
+    reserver_des_creneaux(
+        parcours,
+        client_connecte(acheteur),
+        location,
+        duree_du_creneau_en_minutes,
+        3,
+        montant_libre=montant_libre,
+    )
+
+    assert montant_paye_en_centimes(acheteur, location) == montant_en_centimes
 
 
 @pytest.mark.parametrize("parcours", LES_DEUX_PARCOURS)
