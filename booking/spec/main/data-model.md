@@ -32,7 +32,8 @@ Un tarif d'un produit de ressource (`BaseBillet.Price`).
 Sortes de tarif :
 
 - tarif fixe : `free_price` faux, `prix` supérieur à 0. Le réservant
-  paie `prix` par heure.
+  paie le montant par créneau que le formulaire en déduit.
 - tarif à prix libre : `free_price` vrai. Le réservant choisit un
-  montant qui, ramené à l'heure, est au moins égal à `prix`.
+  montant par créneau au moins égal au minimum que le formulaire déduit
+  de `prix`.
 - tarif gratuit : `free_price` faux, `prix` à 0.

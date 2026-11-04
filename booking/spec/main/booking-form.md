@@ -14,8 +14,16 @@ Le formulaire liste, sous « Tarifs », les tarifs en vente du produit de
 la ressource, un choix chacun. Un tarif qui n'est pas en vente
 n'apparaît pas. L'ordre des tarifs n'est pas spécifié.
 
-Les montants sont par créneau : le montant d'un créneau vaut
-`prix × durée du créneau / 60`, arrondi au centime.
+Les montants sont par créneau : pour un tarif fixe, le montant d'un
+créneau vaut `prix × durée du créneau / 60`, arrondi aux 10 centimes
+les plus proches, et à la dizaine supérieure à mi-chemin.
+
+| `prix` | Durée du créneau | Valeur exacte | 1 créneau | 3 créneaux |
+|--------|------------------|---------------|-----------|------------|
+| 10.00  | 40 minutes       | 6,666…        | 6,70      | 20,10      |
+| 10.00  | 50 minutes       | 8,333…        | 8,30      | 24,90      |
+| 7.00   | 45 minutes       | 5,25          | 5,30      | 15,90      |
+| 3.33   | 180 minutes      | 9,99          | 10        | 30         |
 
 Exemple : des créneaux de 180 minutes, et un produit qui a « Plein
 tarif » à 12.00 (fixe), « Soutien » à 5.00 (prix libre), « Solidaire »
@@ -37,11 +45,11 @@ texte indicatif « Montant par créneau, 15 € minimum ». Pour
   créneau`, ou `<name> - prix libre` quand `prix` vaut 0.
 - Un tarif gratuit se lit `<name> - gratuit`.
 - Un montant s'écrit sans centimes inutiles, selon la langue : « 36 »,
-  « 8,33 » en français.
+  « 8,30 » en français.
 - R1: Pour un tarif fixe, le montant payé pour N créneaux vaut N fois le
   montant affiché par créneau.
 - R2: Le minimum d'un prix libre est `prix × durée du créneau / 60`,
-  arrondi au centime supérieur. Un montant saisi égal à ce minimum est
+  arrondi aux 10 centimes supérieurs. Un montant saisi égal à ce minimum est
   accepté ; un montant inférieur est refusé.
 - R3: Le montant saisi pour un prix libre est un montant par créneau :
   pour N créneaux, le montant payé vaut N fois le montant saisi, en
