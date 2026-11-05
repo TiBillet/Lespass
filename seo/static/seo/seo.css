@@ -1267,3 +1267,14 @@ a.contributeur-item:hover .contributeur-logo-box {
         transform: none;
     }
 }
+
+/*
+ * Logo de la nav : le SVG est noir uni. En theme sombre, on l'inverse en blanc.
+ * On ne s'appuie pas sur prefers-color-scheme dans le SVG : le theme du site vient
+ * du localStorage (theme-switcher.mjs), pas du reglage du systeme.
+ * / Navbar logo: the SVG is plain black. In dark theme, invert it to white. The site
+ * theme comes from localStorage (theme-switcher.mjs), not from the system setting.
+ */
+[data-bs-theme="dark"] .navbar-brand-logo {
+    filter: invert(1);
+}
