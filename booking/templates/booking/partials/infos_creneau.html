@@ -37,7 +37,7 @@ Commentaire de gabarit (pas <!-- -->) : ce bloc est répété pour chaque créne
     </div>
 
     {% if slot.infos_creneau.evenements %}
-        <h4 class="h6 mt-3 mb-1">{% blocktrans count nombre=slot.infos_creneau.evenements|length %}Événement{% plural %}Événements{% endblocktrans %}</h4>
+        <h4 class="h6 mt-3 mb-1">{% blocktrans context "titre de la liste des événements d'un créneau" count nombre=slot.infos_creneau.evenements|length %}Événement{% plural %}Événements{% endblocktrans %}</h4>
         <ul class="list-unstyled mb-0">
             {% for evenement in slot.infos_creneau.evenements %}
                 <li class="mb-2" data-testid="booking-infos-creneau-evenement">

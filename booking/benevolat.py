@@ -1113,7 +1113,8 @@ def retirer_une_inscription(inscription, nom_pour_l_equipe):
       renfort de dernière minute, et ça empêche une boucle de mails.
     / The team is warned only after the deadline AND if the sign-up predates it.
 
-    :param nom_pour_l_equipe: « Prénom Nom » (ou l'email) de la personne
+    :param nom_pour_l_equipe: « Prénom Nom » (ou l'email) de la personne, pour l'équipe.
+        Les autres bénévoles ne reçoivent que son prénom public (prenom_public).
     :return: True si l'équipe est prévenue
     """
     # Import local : booking/tasks.py importe ce module dans ses fonctions.
@@ -1134,8 +1135,11 @@ def retirer_une_inscription(inscription, nom_pour_l_equipe):
 
     if prevenir_l_equipe:
         uuid_du_besoin = str(besoin.pk)
+        prenom_pour_les_benevoles = prenom_public(inscription.user)
         transaction.on_commit(
-            lambda: prevenir_l_equipe_d_un_desistement.delay(uuid_du_besoin, nom_pour_l_equipe)
+            lambda: prevenir_l_equipe_d_un_desistement.delay(
+                uuid_du_besoin, nom_pour_l_equipe, prenom_pour_les_benevoles,
+            )
         )
     return prevenir_l_equipe
 

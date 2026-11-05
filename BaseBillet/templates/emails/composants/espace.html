@@ -1,0 +1,7 @@
+{% comment %}
+ESPACE VERTICAL (une ligne de tableau) / Vertical spacer (one table row)
+LOCALISATION : BaseBillet/templates/emails/composants/espace.html
+Variable : hauteur (en pixels).
+&nbsp; + font-size et line-height égaux à la hauteur : une cellule vide prend environ 20 px dans Outlook.
+{% endcomment %}
+<tr><td height="{{ hauteur }}" style="font-size:{{ hauteur }}px; line-height:{{ hauteur }}px; mso-line-height-rule:exactly;">&nbsp;</td></tr>

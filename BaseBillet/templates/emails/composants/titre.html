@@ -1,0 +1,16 @@
+{% comment %}
+TITRE DU MAIL (une ligne de tableau) / Email title (one table row)
+LOCALISATION : BaseBillet/templates/emails/composants/titre.html
+Variables : texte (obligatoire), etiquette (facultatif : petit libellé au-dessus, ex. « Paiement »).
+Exemple : {% include "emails/composants/titre.html" with texte=title etiquette=sub_title %}
+{% endcomment %}
+{% if etiquette %}
+<tr>
+    <td style="padding:0 0 8px; font:700 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#584854; text-transform:uppercase; letter-spacing:0.04em;">{{ etiquette }}</td>
+</tr>
+{% endif %}
+<tr>
+    <td style="padding:0 0 16px;">
+        <h1 style="margin:0; font:700 24px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">{{ texte }}</h1>
+    </td>
+</tr>

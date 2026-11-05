@@ -1293,9 +1293,6 @@ def envoyer_le_recap(recap):
         titre_du_mail = f"[{configuration.organisation}] " + _(
             "Le récap du %(date)s"
         ) % {"date": date_de_la_veille}
-        image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-        if configuration.img:
-            image_url = f"https://{domaine}{configuration.img.med.url}"
         contexte = {
             "config": configuration,
             "date_de_la_veille": date_de_la_veille,
@@ -1304,9 +1301,6 @@ def envoyer_le_recap(recap):
             "lien_admin": f"https://{domaine}/admin/",
             "lien_des_reglages_des_envois": lien_des_reglages_des_envois(domaine),
             "title": titre_du_mail,
-            "objet": _("Le récap du matin"),
-            "now": timezone.now(),
-            "image_url": image_url,
         }
         mailer = CeleryMailerClass(
             email=destinataires,

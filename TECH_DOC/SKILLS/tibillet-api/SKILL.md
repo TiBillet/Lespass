@@ -175,7 +175,7 @@ depuis l'environnement (`os.environ["TIBILLET_API_KEY"]`).
   lieu (le cas le plus simple : `"2026-11-06T21:00:00"`). La fin doit tomber le jour même
   ou le lendemain (`21:00` → `00:00` le lendemain) ; plus de 24 h → 400. Une date seule =
   toute la journée, sans `endDate`.
-- **Inscrire un·e bénévole envoie un vrai mail** (« L'équipe t'a inscrit·e ») à la
+- **Inscrire un·e bénévole envoie un vrai mail** (« L'équipe vous a inscrit·e ») à la
   création : en dev, utilise des emails `@mock.test`.
 - **Tout n'est pas settable par l'API** : la **vidéo** d'un bloc, et l'**image de la page**
   (og:image) ne le sont pas. Si le besoin est là, c'est un manque à combler dans

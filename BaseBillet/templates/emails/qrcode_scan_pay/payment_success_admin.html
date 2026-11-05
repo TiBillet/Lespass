@@ -1,52 +1,44 @@
 {% extends 'emails/base.html' %}
-{% load humanize static i18n l10n tibitags %}
+{% load i18n tibitags %}
+{% comment %}
+MAIL : PAIEMENT PAR QR CODE VALIDÉ, pour l'équipe du lieu / QR code payment confirmed
+LOCALISATION : BaseBillet/templates/emails/qrcode_scan_pay/payment_success_admin.html
+Envoyé par : BaseBillet/tasks.py.
+Variables : amount (centimes, affiché avec |dround), payment_time, payment_time_iso, place, user_email, organisation.
+{% endcomment %}
 
-{% block content %}
-<tr>
-  <td class="pt-28 td_content" style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
-    <table align="center" cellpadding="0" cellspacing="0" class="w-100p" style="max-width:472px; margin:0 auto;" width="472">
-      <table>
-        <tr>
-          <td>
-            <table style="border-spacing: 0px;">
-              <tr>
-                <td valign="middle">
-                  <span style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{% trans "Payment received via QR code" %}</span>
-                  <span style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
-                </td>
-              </tr>
+{% block texte_d_apercu %}{% trans "A payment has just been validated." %}{% endblock %}
+
+{% block contenu %}
+    {% trans "Payment received via QR code" as etiquette %}
+    {% trans "A payment has just been validated." as titre %}
+    {% include "emails/composants/titre.html" with texte=titre etiquette=etiquette %}
+
+    <tr>
+        <td style="padding:0 0 16px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            {% trans "Hello" %},<br/><br/>
+            {% trans "A payment has been received via QR scan." %}
+        </td>
+    </tr>
+
+    <tr>
+        <td style="padding:0 0 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                {% with montant=amount|dround|stringformat:"s"|add:" €" %}
+                {% trans "Amount" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=montant %}
+                {% endwith %}
+                {% trans "Time" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=payment_time %}
+                {% trans "Place" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=place %}
+                {% trans "User" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=user_email %}
             </table>
-          </td>
-        </tr>
+        </td>
+    </tr>
 
-        <tr>
-          <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">{% trans "A payment has just been validated." %}</h1>
-          <td style="padding: 24px 0 24px 0; ">
-            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
-              {% trans "Hello" %},
-            </p>
-            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
-              {% trans "A payment has been received via QR scan." %}
-            </p>
-            <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
-              <li><b>{% trans "Amount" %}</b> : <data value="{{ amount|dround }}" data-currency="€">{{ amount|dround }} €</data></li>
-              <li><b>{% trans "Time" %}</b> : <time datetime="{{ payment_time_iso }}">{{ payment_time }}</time></li>
-              <li><b>{% trans "Place" %}</b> : {{ place }}</li>
-              <li><b>{% trans "User" %}</b> : <a href="mailto:{{ user_email }}">{{ user_email }}</a></li>
-            </ul>
-          </td>
-        </tr>
-
-        <tr>
-          <td>
-            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:16px;">
-              {% trans "Thank you" %},<br/>{{ organisation }}
-            </p>
-          </td>
-        </tr>
-
-      </table>
-    </table>
-  </td>
-</tr>
+    <tr>
+        <td style="padding:8px 0 0; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#584854;">
+            {% trans "Thank you" %},<br/>{{ organisation }}
+        </td>
+    </tr>
 {% endblock %}
+
+{% block raison_du_mail %}{% blocktranslate trimmed %}Vous recevez ce mail suite à un paiement auprès de {{ organisation }}.{% endblocktranslate %}{% endblock %}

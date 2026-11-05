@@ -18,6 +18,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 # from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
+from django.core.files.images import get_image_dimensions
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.signing import TimestampSigner
 from django.db import connection
@@ -55,6 +56,82 @@ def decode_uid(pk):
     return force_str(urlsafe_base64_decode(pk))
 
 
+def contexte_commun_des_mails(adresses_de_reponse):
+    """
+    Les variables dont la base des mails a besoin (emails/base.html).
+    / The variables the email base template needs.
+
+    LOCALISATION : BaseBillet/tasks.py
+
+    Appelée par CeleryMailerClass avant le rendu du gabarit. Le contexte de l'appelant
+    passe par-dessus : une tâche qui donne déjà « organisation » garde la sienne.
+    / Called by CeleryMailerClass before rendering. The caller's context wins.
+
+    - organisation : le nom du lieu. Dans le schéma public, c'est TiBillet qui parle.
+    - logo_du_lieu_url et largeur_du_logo : le LOGO du lieu (Configuration.logo, pas
+      Configuration.img qui est l'image de fond), affiché à 48 px de haut.
+      Outlook Windows a besoin de la largeur en pixels : sans elle, il affiche l'image
+      à sa taille réelle. Pas de logo : l'en-tête n'affiche que le nom.
+    - url_des_images_mail : le dossier des images du mail (fond, icônes).
+    - url_du_site : https://<domaine du lieu>, pour rendre absolus les liens relatifs.
+    - adresse_de_reponse : l'adresse du Reply-To. Vide : le pied de page ne propose pas
+      de répondre.
+
+    :param adresses_de_reponse: la liste renvoyée par CeleryMailerClass.adresse_de_reponse()
+    :return: un dictionnaire de contexte
+    """
+    # On relit le lieu en base : schema_context() pose un FakeTenant sans domaine.
+    # / Read the tenant from DB: schema_context() sets a FakeTenant without a domain.
+    lieu_courant = Client.objects.get(schema_name=connection.schema_name)
+    domaine = lieu_courant.get_primary_domain().domain
+    url_du_site = f"https://{domaine}"
+
+    if connection.schema_name == "public":
+        # Le logo TiBillet fait 218 x 96 : 48 px de haut donnent 109 px de large.
+        # / The TiBillet logo is 218 x 96: 48 px tall means 109 px wide.
+        return {
+            "organisation": "TiBillet",
+            "logo_du_lieu_url": f"{url_du_site}/static/assets/logo-couleur.png",
+            "largeur_du_logo": 109,
+            "url_des_images_mail": f"{url_du_site}/static/emails/",
+            "url_du_site": url_du_site,
+            "adresse_de_reponse": "",
+        }
+
+    config = Configuration.get_solo()
+
+    logo_du_lieu_url = ""
+    largeur_du_logo = 48
+    if config.logo:
+        # La vignette (300 x 120 au plus) suffit pour 48 px de haut, même sur un écran Retina.
+        # Un fichier de logo manquant ne doit pas empêcher l'envoi d'un billet : on affiche
+        # alors le nom seul, et on le note dans les logs.
+        # / The thumbnail is enough. A missing logo file must not block the email.
+        try:
+            largeur_de_la_vignette, hauteur_de_la_vignette = get_image_dimensions(config.logo.thumbnail)
+        except OSError:
+            logger.warning(f"Logo illisible pour les mails : {config.logo.name}")
+            largeur_de_la_vignette, hauteur_de_la_vignette = None, None
+        if largeur_de_la_vignette and hauteur_de_la_vignette:
+            logo_du_lieu_url = f"{url_du_site}{config.logo.thumbnail.url}"
+            # Un logo très large est limité à 160 px, pour laisser la place au nom.
+            # / A very wide logo is capped at 160 px, to leave room for the name.
+            largeur_du_logo = min(160, round(largeur_de_la_vignette * 48 / hauteur_de_la_vignette))
+
+    adresse_de_reponse = ""
+    if adresses_de_reponse:
+        adresse_de_reponse = adresses_de_reponse[0]
+
+    return {
+        "organisation": config.organisation,
+        "logo_du_lieu_url": logo_du_lieu_url,
+        "largeur_du_logo": largeur_du_logo,
+        "url_des_images_mail": f"{url_du_site}/static/emails/",
+        "url_du_site": url_du_site,
+        "adresse_de_reponse": adresse_de_reponse,
+    }
+
+
 class CeleryMailerClass():
 
     def __init__(self,
@@ -65,9 +142,14 @@ class CeleryMailerClass():
                  template=None,
                  context=None,
                  attached_files=None,
+                 reply_to=None,
                  ):
 
         self.title = title
+        # Adresse de réponse imposée par l'appelant (ex. : le visiteur du formulaire
+        # de contact). Vide : c'est l'adresse du lieu (voir adresse_de_reponse).
+        # / Reply-To forced by the caller; empty means the venue address.
+        self.reply_to = reply_to
         self.email = email
         self.text = text
         self.html = html
@@ -75,8 +157,18 @@ class CeleryMailerClass():
         self.attached_files = attached_files
         self.sended = None
         self.return_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ['EMAIL_HOST_USER'])
-        if template and context:
-            self.html = render_to_string(template, context=context)
+        if template:
+            # Un gabarit est toujours rendu, même sans contexte de l'appelant :
+            # la base des mails a son propre contexte commun.
+            # / A template is always rendered, even without a caller context.
+            # Le contexte commun (logo, nom du lieu, adresse de réponse) d'abord,
+            # puis celui de l'appelant, qui passe par-dessus.
+            # / Common context first, then the caller's, which wins.
+            contexte_complet = contexte_commun_des_mails(self.adresse_de_reponse())
+            contexte_complet["title"] = title
+            if context:
+                contexte_complet.update(context)
+            self.html = render_to_string(template, context=contexte_complet)
         else:
             self.html = self.text
 
@@ -101,6 +193,36 @@ class CeleryMailerClass():
         else:
             return False
 
+    def adresse_de_reponse(self):
+        """
+        L'adresse de l'en-tête Reply-To : celle donnée par l'appelant (reply_to),
+        sinon l'adresse du lieu (Configuration.email).
+        Quand la personne clique sur « Répondre », elle écrit au lieu,
+        et pas à l'adresse d'expédition (souvent noreply).
+        / The venue address (Configuration.email), for the Reply-To header.
+
+        LOCALISATION : BaseBillet/tasks.py
+
+        Le From ne change pas : c'est lui que SPF, DKIM et DMARC contrôlent.
+        Changer le From pour l'adresse du lieu ferait échouer DMARC.
+        / The From stays: SPF, DKIM and DMARC check it, not the Reply-To.
+
+        Dans le schéma public, la table Configuration n'existe pas : pas de Reply-To.
+        / No Reply-To in the public schema: the Configuration table does not exist there.
+
+        :return: une liste d'adresses, ou une liste vide
+        """
+        if self.reply_to:
+            return self.reply_to
+
+        if connection.schema_name == "public":
+            return []
+
+        adresse_du_lieu = Configuration.get_solo().email
+        if not adresse_du_lieu:
+            return []
+        return [adresse_du_lieu]
+
     def send(self):
         # logger.info("SELF.HTML : ",self.html)
         # import ipdb; ipdb.set_trace()
@@ -114,7 +236,11 @@ class CeleryMailerClass():
                 self.text,
                 self.return_email,
                 to,
-                headers={"List-Unsubscribe": f"<mailto: {self.return_email}?subject=unsubscribe>"},
+                reply_to=self.adresse_de_reponse(),
+                # Pas d'en-tête List-Unsubscribe : ces mails sont transactionnels (billets,
+                # achats, réservations, bénévolat, codes). On ne se désabonne pas d'un billet,
+                # et Gmail ou Yahoo afficheraient un lien « Se désabonner » trompeur.
+                # / No List-Unsubscribe: these emails are transactional.
             )
             mail.attach_alternative(self.html, "text/html")
 
@@ -330,9 +456,6 @@ def context_for_membership_email(membership: "Membership"):
     config = Configuration.get_solo()
     activate(config.language)
     domain = connection.tenant.get_primary_domain().domain
-    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    if hasattr(config.img, 'med'):
-        image_url = f"https://{domain}{config.img.med.url}"
 
     additionnal_text_3 = None
     if membership.price.fedow_reward_enabled:
@@ -358,10 +481,7 @@ def context_for_membership_email(membership: "Membership"):
 
     context = {
         'username': membership.member_name(),
-        'now': timezone.now(),
         'title': f"{config.organisation} : {membership.price.product.name}",
-        'image_url': image_url,
-        'objet': _("Confirmation email"),
         'sub_title': _("Welcome aboard !"),
         'main_text': _("Your payment for ") + f"{membership.price.product.name}" + _(" has been received."),
         'main_text_2': clean_html(config.additional_text_in_membership_mail) if config.additional_text_in_membership_mail else None,
@@ -371,7 +491,6 @@ def context_for_membership_email(membership: "Membership"):
             _('Product'): f'{membership.price.product.name} - {membership.price.name}',
             _('Contribution'): f'{membership.contribution_value} {config.currency_code}',
         },
-        'button_color': "#2d76a6",
         'button': {
             'text': _('REQUEST RECEIPT'),
             'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
@@ -466,20 +585,12 @@ def send_membership_pending_admin(membership_uuid: str):
     if not admin_emails and getattr(config, 'email', None):
         admin_emails = [config.email]
 
-    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    try:
-        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
-            image_url = f"https://{domain}{config.img.med.url}"
-    except Exception:
-        pass
 
     title = _(f"{config.organisation} : Nouvelle demande d'adhésion en attente")
 
     context = {
         'username': _("Administrateur"),
-        'now': timezone.now(),
         'title': title,
-        'image_url': image_url,
         'sub_title': _("Administration"),
         'main_text': _("Une nouvelle demande d'adhésion est en attente de validation manuelle."),
         'main_text_2': clean_html(f"{membership.member_name()} — {membership.price.product.name} — {membership.price.name}"),
@@ -490,7 +601,6 @@ def send_membership_pending_admin(membership_uuid: str):
             _('Email'): f"{membership.user.email if membership.user else ''}",
             _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
         },
-        'button_color': "#2d76a6",
         'button': {
             'text': _("Ouvrir l’administration"),
             'url': f'https://{domain}/admin/BaseBillet/membership/'
@@ -538,12 +648,6 @@ def send_membership_pending_user(membership_uuid: str):
         logger.warning("send_membership_pending_user: aucun destinataire")
         return False
 
-    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    try:
-        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
-            image_url = f"https://{domain}{config.img.med.url}"
-    except Exception:
-        pass
 
     title = _(f"{config.organisation} : Votre demande d'adhésion est en attente")
 
@@ -572,9 +676,7 @@ def send_membership_pending_user(membership_uuid: str):
 
     context = {
         'username': membership.member_name() or user.full_name() or user.email,
-        'now': timezone.now(),
         'title': title,
-        'image_url': image_url,
         'sub_title': _("Adhésion"),
         'main_text': main_text,
         'main_text_2': main_text_2,
@@ -584,7 +686,6 @@ def send_membership_pending_user(membership_uuid: str):
             _('Montant'): f"{dround(membership.contribution_value)} {config.currency_code}",
             _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
         },
-        'button_color': "#2d76a6",
         'button': button,
         'next_text_1': _("Si vous n'êtes pas à l'origine de cette demande, merci de contacter l'équipe TiBillet."),
         'end_text': _("À bientôt !"),
@@ -619,129 +720,6 @@ def send_membership_sepa_pending_user(membership_uuid: str):
     except Membership.DoesNotExist:
         logging.getLogger(__name__).warning(
             f"send_membership_sepa_pending_user: membership {membership_uuid} introuvable")
-        return False
-
-
-@app.task
-def send_payment_error_user(paiement_stripe_uuid: str, reason: str = None):
-    """
-    Envoie un email (FALC) à l'utilisateur pour l'informer que son paiement n'a pas abouti.
-
-    - Texte simple et clair.
-    - Utilise le template dédié: 'emails/payment_error.html'.
-
-    Paramètres:
-    - paiement_stripe_uuid: UUID de l'objet Paiement_stripe (en texte)
-    - reason: texte optionnel pour préciser la raison affichée (ex: erreur technique Stripe)
-    """
-    time.sleep(1)
-    try:
-        paiement: Paiement_stripe = Paiement_stripe.objects.get(uuid=UUID(paiement_stripe_uuid))
-    except Paiement_stripe.DoesNotExist:
-        logger.error(f"send_payment_error_user: paiement {paiement_stripe_uuid} introuvable")
-        return False
-
-    config = Configuration.get_solo()
-    activate(config.language)
-    tenant = connection.tenant
-    try:
-        domain = tenant.get_primary_domain().domain
-    except Exception:
-        domain = os.environ.get('DOMAIN', 'tibillet.coop')
-
-    # On essaye de récupérer l'utilisateur depuis le paiement, sinon depuis la première adhésion liée
-    user = paiement.user
-    membership = None
-    if not user:
-        try:
-            membership = paiement.lignearticles.filter(membership__isnull=False).first()
-            if membership:
-                membership = membership.membership
-                user = membership.user
-        except Exception:
-            membership = None
-
-    if not user or not getattr(user, 'email', None):
-        logger.warning("send_payment_error_user: aucun destinataire")
-        return False
-
-    # Logo: celui du lieu si disponible, sinon logo TiBillet
-    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    try:
-        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
-            image_url = f"https://{domain}{config.img.med.url}"
-    except Exception:
-        pass
-
-    # Textes FALC
-    title = _(f"{config.organisation} : Paiement non abouti")
-    main_text = _("Votre paiement n'a pas abouti.")
-    # Messages complémentaires
-    main_text_2 = _("Vous pouvez réessayer plus tard.")
-    if reason:
-        main_text_2 = f"{main_text_2} " + _(f"Raison: {reason}")
-    main_text_3 = _("Vérifiez vos informations bancaires si besoin.")
-
-    # Bouton simple: Ouvrir mon espace
-    try:
-        button = {
-            'text': _("Ouvrir mon espace"),
-            'url': forge_connexion_url(user, f"https://{domain}")
-        }
-    except Exception:
-        button = None
-
-    # Informations utiles
-    # Produit/adhésion si présent
-    produit_label = None
-    if membership and getattr(membership, 'price', None):
-        try:
-            produit_label = f"{membership.price.product.name} - {membership.price.name}"
-        except Exception:
-            produit_label = _("Adhésion")
-    else:
-        try:
-            # Fallback: liste des articles
-            produit_label = paiement.articles()
-        except Exception:
-            produit_label = _("Commande")
-
-    table_info = {
-        _('Produit'): produit_label,
-        _('Montant'): f"{dround(paiement.total())} {config.currency_code}",
-        _('Date'): date_format(paiement.order_date, format='DATETIME_FORMAT', use_l10n=True),
-        _('Référence'): paiement.uuid_8(),
-    }
-
-    context = {
-        'username': (membership.member_name() if membership else None) or getattr(user, 'full_name', lambda: None)() or user.email,
-        'now': timezone.now(),
-        'title': title,
-        'image_url': image_url,
-        'sub_title': _("Paiement"),
-        'main_text': main_text,
-        'main_text_2': main_text_2,
-        'main_text_3': main_text_3,
-        'table_info': table_info,
-        'button_color': "#cc4b37",
-        'button': button,
-        'next_text_1': _("Besoin d'aide ? Répondez à cet email."),
-        'end_text': _("Merci"),
-        'signature': _("Marvin, le robot TiBillet"),
-    }
-
-    try:
-        mail = CeleryMailerClass(
-            email=f"{user.email}",
-            title=f"{context.get('title')}",
-            template='emails/payment_error.html',
-            context=context,
-        )
-        mail.send()
-        logger.info("send_payment_error_user: mail envoyé")
-        return True
-    except Exception as e:
-        logger.error(f"send_payment_error_user: erreur d'envoi {e}")
         return False
 
 
@@ -788,12 +766,6 @@ def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
         logger.warning("send_payment_refused_user: aucun destinataire")
         return False
 
-    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    try:
-        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
-            image_url = f"https://{domain}{config.img.med.url}"
-    except Exception:
-        pass
 
     title = _(f"{config.organisation} : Paiement refusé par la banque")
     main_text = _("La banque a refusé le paiement.")
@@ -831,15 +803,12 @@ def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
 
     context = {
         'username': (membership.member_name() if membership else None) or getattr(user, 'full_name', lambda: None)() or user.email,
-        'now': timezone.now(),
         'title': title,
-        'image_url': image_url,
         'sub_title': _("Paiement"),
         'main_text': main_text,
         'main_text_2': main_text_2,
         'main_text_3': main_text_3,
         'table_info': table_info,
-        'button_color': "#cc4b37",
         'button': button,
         'next_text_1': _("Besoin d'aide ? Répondez à cet email."),
         'end_text': _("Merci"),
@@ -871,13 +840,6 @@ def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
             "send_membership_sepa_pending_user: aucun destinataire (user/email manquant)")
         return False
 
-    # Logo: celui du lieu si disponible, sinon logo TiBillet
-    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    try:
-        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
-            image_url = f"https://{domain}{config.img.med.url}"
-    except Exception:
-        pass
 
     # Contenus FALC
     title = _(f"{config.organisation} : Votre demande est prise en compte (SEPA)")
@@ -903,15 +865,12 @@ def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
 
     context = {
         'username': membership.member_name() or user.full_name() or user.email,
-        'now': timezone.now(),
         'title': title,
-        'image_url': image_url,
         'sub_title': _("Adhésion"),
         'main_text': main_text,
         'main_text_2': main_text_2,
         'main_text_3': main_text_3,
         'table_info': table_info,
-        'button_color': "#2d76a6",
         'button': button,
         'next_text_1': _("Vous n’avez rien à faire. Nous vous écrirons quand ce sera validé."),
         'end_text': _("Merci et à bientôt !"),
@@ -958,7 +917,6 @@ def send_membership_payment_link_user(membership_uuid: str):
     title = _(f"{config.organisation} : Paiement de votre adhésion")
     context = {
         'username': membership.member_name() or user.full_name() or user.email,
-        'now': timezone.now(),
         'title': title,
         'sub_title': _("Adhésion"),
         'main_text': _("Votre demande a été acceptée. Vous pouvez régler votre adhésion en cliquant sur le bouton ci-dessous."),
@@ -966,7 +924,6 @@ def send_membership_payment_link_user(membership_uuid: str):
             _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
             _('Montant'): f"{amount} {config.currency_code}",
         },
-        'button_color': "#2d76a6",
         'button': {
             'text': _("Payer maintenant"),
             'url': f"https://{tenant_url}/memberships/{membership.uuid}/get_checkout_for_membership",
@@ -1513,6 +1470,9 @@ def contact_mailer(sender, subject, message):
         email=[sender, configuration.email],
         title=subject,
         text=message,
+        # Le lieu répond au visiteur, pas à sa propre adresse.
+        # / The venue replies to the visitor, not to its own address.
+        reply_to=[sender],
         template='emails/contact_email.html',
         context={
             "organisation": configuration.organisation,
@@ -1571,9 +1531,6 @@ def connexion_celery_mailer(self, user_email,
     if not organisation:
         organisation = "TiBillet"
 
-    image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    if hasattr(config.img, 'med'):
-        image_url = f"{base_url}{config.img.med.url}"
 
     logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
     logger.info(f'    {organisation}')
@@ -1595,7 +1552,6 @@ def connexion_celery_mailer(self, user_email,
             template=template,
             context={
                 'organisation': organisation,
-                'image_url': image_url,
                 'connexion_url': connexion_url,
                 'base_url': base_url,
             },
@@ -1625,49 +1581,6 @@ def connexion_celery_mailer(self, user_email,
 # / Removed: legacy tenant-creation mail tasks. Replaced by `onboard/`.
 
 
-"""
-#TODO : A degager, pas utilisé ?
-def report_to_pdf(report):
-    template_name = 'report/ticketz.html'
-    font_config = FontConfiguration()
-    template = get_template(template_name)
-    html = template.render(report)
-    pdf_binary = HTML(string=html).write_pdf(
-        font_config=font_config,
-    )
-    logger.info(f"  WORKER CELERY : report_to_pdf - {report.get('organisation')} {report.get('date')} bytes")
-    return pdf_binary
-
-@app.task
-def report_celery_mailer(data_report_list: list):
-    configuration = Configuration.get_solo()
-    if configuration.server_cashless and configuration.key_cashless:
-        attached_files = {}
-        for report in data_report_list:
-            print(f"report : {report.get('structure')}")
-            try:
-                pdf_binary = report_to_pdf(report)
-                attached_files[f"{report.get('structure')}-{report.get('date')}.pdf"] = pdf_binary
-
-            except Exception as e:
-                logger.info(f"ZReportPDF erreur {e}")
-                raise e
-
-        try:
-            mail = CeleryMailerClass(
-                configuration.email,
-                _(f"TiBillet sales report - {configuration.organisation}"),
-                template='mails/mail_rapport.html',
-                context={'organisation': f'{configuration.organisation}'},
-                attached_files=attached_files,
-            )
-            mail.send()
-            logger.info(f"mail.sended : {mail.sended}")
-
-        except smtplib.SMTPRecipientsRefused as e:
-            logger.error(
-                f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
-"""
 
 
 @app.task
@@ -1706,13 +1619,12 @@ def ticket_celery_mailer(reservation_uuid: str):
             sleep(1)
 
     domain = connection.tenant.get_primary_domain().domain
-    image_url_place = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    image_url_event = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    if hasattr(config.img, 'med'):
-        image_url_place = f"https://{domain}{config.img.med.url}"
-    if reservation.event:
-        if reservation.event.img:
-            image_url_event = f"https://{domain}{reservation.event.img.med.url}"
+    # L'image de l'événement s'affiche dans le mail. Pas d'image : pas de bloc image.
+    # Le logo du lieu vient du contexte commun des mails (contexte_commun_des_mails).
+    # / The event image is shown; the venue logo comes from the common email context.
+    image_url_event = ""
+    if reservation.event and reservation.event.img:
+        image_url_event = f"https://{domain}{reservation.event.img.med.url}"
 
     if not reservation.to_mail:
         reservation.status = Reservation.PAID_NOMAIL
@@ -1730,11 +1642,16 @@ def ticket_celery_mailer(reservation_uuid: str):
                 f"Votre reservation pour {config.organisation}",
                 template='emails/buy_confirmation.html',
                 context={
-                    'config': config,
                     'custom_confirmation_message': clean_html(reservation.event.custom_confirmation_message) if reservation.event.custom_confirmation_message else None,
                     'reservation': reservation,
-                    'image_url_place': image_url_place,
+                    'event': reservation.event,
+                    # L'heure de l'événement dans le fuseau du lieu, pas en UTC.
+                    # / The event time in the venue's timezone, not UTC.
+                    'date_de_l_evenement': timezone.localtime(reservation.event.datetime, config.get_tzinfo()),
+                    'nombre_de_billets_joints': len(attached_files),
                     'image_url_event': image_url_event,
+                    'url_de_mon_espace': f"https://{domain}/my_account/",
+                    'url_de_l_evenement': f"https://{domain}/event/{reservation.event.slug}/",
                 },
                 attached_files=attached_files,
             )
@@ -2064,9 +1981,6 @@ def membership_renewal_reminder():
                         context = {
                             'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
                             'membership': membership,
-                            'now': timezone.now(),
-                            'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
-                            'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
                             'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
                         }
 
@@ -2327,8 +2241,6 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
         'place': place,
         'user_email': user_email,
         'organisation': config.organisation,
-        'now': timezone.now(),
-        'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
         'currency_symbol': currency_symbol,
     }
     mail = CeleryMailerClass(
@@ -2365,8 +2277,6 @@ def send_payment_success_user(user_email: str, amount: int, payment_time_str: st
         'payment_time_iso': payment_time_iso,
         'place': place,
         'organisation': config.organisation,
-        'now': timezone.now(),
-        'image_url': "https://tibillet.coop/static/assets/logo-couleur.svg",
         'currency_symbol': currency_symbol,
     }
     mail = CeleryMailerClass(
@@ -2403,14 +2313,6 @@ def send_reservation_cancellation_user(reservation_uuid: str):
 
     title = f"{config.organisation.capitalize()} - " + _("Your reservation has been cancelled.")
 
-    # Image/logo du lieu
-    image_url_place = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    try:
-        domain = connection.tenant.get_primary_domain().domain
-        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
-            image_url_place = f"https://{domain}{config.img.med.url}"
-    except Exception:
-        pass
 
     # Montant potentiel associé à ce ticket (indicatif)
     refund_amount = 0
@@ -2429,8 +2331,6 @@ def send_reservation_cancellation_user(reservation_uuid: str):
         'cancel_text': reservation.cancel_text(),
         'refund_amount': refund_amount,
         'currency_symbol': currency_symbol,
-        'now': timezone.now(),
-        'image_url_place': image_url_place,
     }
 
     mail = CeleryMailerClass(
@@ -2462,14 +2362,6 @@ def send_ticket_cancellation_user(ticket_uuid: str):
 
     title = f"{config.organisation.capitalize()} - " + _("Your ticket has been cancelled.")
 
-    # Image/logo du lieu
-    image_url_place = "https://tibillet.coop/static/assets/logo-couleur.svg"
-    try:
-        domain = connection.tenant.get_primary_domain().domain
-        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
-            image_url_place = f"https://{domain}{config.img.med.url}"
-    except Exception:
-        pass
 
     # Texte d'annulation (remboursement ou pas) réutilise la logique de réservation
     cancel_text = reservation.cancel_text()
@@ -2486,15 +2378,12 @@ def send_ticket_cancellation_user(ticket_uuid: str):
     context = {
         'title': title,
         'organisation': config.organisation,
-        'reservation': reservation,
         'ticket': ticket,
         'event': reservation.event,
         'event_datetime': reservation.event.datetime if reservation.event else None,
         'cancel_text': cancel_text,
         'refund_amount': refund_amount,
         'currency_symbol': currency_symbol,
-        'now': timezone.now(),
-        'image_url_place': image_url_place,
     }
 
     mail = CeleryMailerClass(

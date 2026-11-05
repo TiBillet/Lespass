@@ -1,0 +1,13 @@
+{% comment %}
+LIGNE DE RÉCAPITULATIF : libellé à gauche, valeur en gras à droite.
+/ Summary row: label left, bold value right.
+LOCALISATION : BaseBillet/templates/emails/composants/ligne.html
+À placer dans un tableau récapitulatif :
+<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    {% include "emails/composants/ligne.html" with libelle=... valeur=... %}
+</table></td></tr>
+{% endcomment %}
+<tr>
+    <td width="38%" valign="top" style="padding:12px 8px 12px 0; border-top:1px solid #e3dccf; font:400 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#584854;">{{ libelle }}</td>
+    <td valign="top" style="padding:12px 0; border-top:1px solid #e3dccf; font:700 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">{{ valeur }}</td>
+</tr>

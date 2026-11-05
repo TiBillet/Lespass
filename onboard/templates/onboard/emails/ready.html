@@ -1,151 +1,69 @@
 {% extends 'emails/base.html' %}
-{% load humanize static i18n %}
-
-{#
-Mail "Votre espace est pret" envoye par onboard.tasks.onboard_ready_mailer.
-/ "Your space is ready" email sent by onboard.tasks.onboard_ready_mailer.
-
+{% load i18n %}
+{% comment %}
+MAIL : « VOTRE ESPACE EST PRÊT » / "Your space is ready" email
 LOCALISATION : onboard/templates/onboard/emails/ready.html
-
-Reprise du wording riche du welcome_email.html legacy (flow /tenant/new/
-supprime 2026-05-16), adapte au contexte wizard onboard ou le tenant est
-deja cree avant l'envoi du mail. Differences cles :
-  - Plus de "Confirmation de votre demande" : le tenant existe deja.
-  - Bouton principal "Acceder a mon espace" (magic-link admin), pas
-    "Confirmer ma demande".
+Envoyé par : onboard/tasks.py (onboard_ready_mailer), après la création du lieu.
 
 Variables :
-  - organisation : nom du lieu (wc.organisation)
-  - admin_url    : magic-link vers l'admin du nouveau tenant
-  - instance_url : URL publique du tenant (https://<primary_domain>/)
-#}
+- nom_du_nouveau_lieu : le nom du lieu créé (wc.organisation).
+  Pas « organisation » : ce nom est celui de l'en-tête, et c'est TiBillet qui parle ici.
+- admin_url : lien magique vers l'admin du nouveau lieu ;
+- instance_url : l'adresse publique du lieu (https://<domaine principal>/).
+/ The created venue is nom_du_nouveau_lieu; the header shows TiBillet.
+{% endcomment %}
 
-{% block content %}
+{% block texte_d_apercu %}{% blocktrans with name=nom_du_nouveau_lieu %}Votre espace TiBillet {{ name }} est prêt !{% endblocktrans %}{% endblock %}
+
+{% block contenu %}
+    {% trans "Bienvenue dans la communauté TiBillet" as etiquette %}
+    {% blocktrans asvar titre with name=nom_du_nouveau_lieu %}Votre espace TiBillet {{ name }} est prêt !{% endblocktrans %}
+    {% include "emails/composants/titre.html" with texte=titre etiquette=etiquette %}
+
     <tr>
-        <td class="pt-28 td_content"
-            style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
-            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
-                   style="max-width:472px; margin:0 auto;" width="472">
-                <table style="">
-                    <tr>
-                        <td>
-                            <table style="border-spacing: 0px;">
-                                <tr>
-                                    <td valign="middle"><span
-                                            style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{% trans "Bienvenue dans la communauté TiBillet" %}</span><span
-                                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
+        <td style="padding:0 0 16px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            {% trans "Nous sommes vraiment super mega trop ravis de vous accueillir dans l'écosystème TiBillet ! Vous venez de rejoindre une communauté engagée dans les communs numériques et la coopération." %}<br/><br/>
+            {% trans "Votre espace est prêt à l'emploi. Pour y accéder et finaliser votre configuration, cliquez sur le bouton suivant :" %}
+        </td>
+    </tr>
 
-                    <tr>
-                        <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
-                            {% blocktrans with name=organisation %}Votre espace TiBillet {{ name }} est prêt !{% endblocktrans %}</h1><span
-                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
-                        <td style="padding: 24px 0 24px 0; ">
-                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
-                                {% trans "Nous sommes vraiment super mega trop ravis de vous accueillir dans l'écosystème TiBillet ! Vous venez de rejoindre une communauté engagée dans les communs numériques et la coopération." %}
-                            </p>
-                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
-                                {% trans "Votre espace est prêt à l'emploi. Pour y accéder et finaliser votre configuration, cliquez sur le bouton suivant :" %}
-                            </p>
-                            <table style="width:100%;border-spacing: 0px;padding: 0px;">
-                                <tr>
-                                    <td class="active-t btn" align="center"
-                                        style="background:#2d76a6;font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
-                                        <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
-                                           target="_blank"
-                                           href="{{ admin_url }}">{% trans "ACCÉDER À MON ESPACE" %}</a>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 0 0 24px 0;">
-                            <h2 style="font-weight:600;color:#2d76a6;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
-                                {% trans "Informations importantes" %}
-                            </h2>
-                            <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
-                                <li style="margin-bottom: 8px;">
-                                    {% trans "L'adresse publique de votre instance : " %}<a href="{{ instance_url }}" target="_blank">{{ instance_url }}</a>
-                                </li>
-                                <li style="margin-bottom: 8px;">
-                                    {% trans "Si vous souhaitez récolter de l'argent, il vous faudra créer un compte Stripe depuis la page d'administration de votre instance." %}
-                                </li>
-                                <li style="margin-bottom: 8px;">
-                                    {% trans "Pour toute demande d'aide, n'hésitez pas à venir rencontrer la communauté autour des outils TiBillet :" %}
-                                    <div style="margin-top: 8px;">
-                                        <a href="mailto:contact@tibillet.re"
-                                           style="color:#2d76a6;text-decoration:underline;">{% trans "Email de support" %}</a><br/>
-                                        <a href="https://discord.gg/7FJvtYx"
-                                           style="color:#2d76a6;text-decoration:underline;">Discord</a><br/>
-                                        <a href="https://matrix.to/#/#tibillet:tiers-lieux.org"
-                                           style="color:#2d76a6;text-decoration:underline;">Matrix</a><br/>
-                                        <a href="https://pouet.chapril.org/@tibillet"
-                                           style="color:#2d76a6;text-decoration:underline;">Mastodon</a>
-                                    </div>
-                                </li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 0 0 24px 0;">
-                            <h2 style="font-weight:600;color:#2d76a6;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
-                                {% trans "Voici ce que vous pouvez faire avec TiBillet :" %}
-                            </h2>
-                            <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
-                                <li style="margin-bottom: 8px;">
-                                    <b>{% trans "Billetterie" %}</b>
-                                    - {% trans "Créez et gérez des événements, vendez des billets en ligne, et suivez vos ventes en temps réel." %}
-                                </li>
-                                <li style="margin-bottom: 8px;">
-                                    <b>{% trans "Adhésions et abonnements" %}</b>
-                                    - {% trans "Gérez les adhésions à votre structure, proposez différentes formules d'abonnement, et suivez les renouvellements." %}
-                                </li>
-                                <li style="margin-bottom: 8px;">
-                                    <b>{% trans "Caisse enregistreuse & Cartes cashless" %}</b>
-                                    - {% trans "Utilisez une caisse enregistreuse (bientôt) certifiée et proposez un système de paiement sans espèces pour vos événements, avec des cartes d'adhésions rechargeables en monnaie temps pour valoriser l'engagement bénévole." %}
-                                </li>
-                                <li style="margin-bottom: 8px;">
-                                    <b>{% trans "Fédération d'agendas" %}</b>
-                                    - {% trans "Partagez vos événements et créez un réseau fédéré d'agendas, augmentant ainsi leur visibilité auprès d'un public plus large." %}
-                                </li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 0 0 24px 0;">
-                            <table style="width:100%;border-spacing: 0px;padding: 0px;">
-                                <tr>
-                                    <td class="active-t btn" align="center"
-                                        style="background:#2d76a6;font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
-                                        <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
-                                           target="_blank"
-                                           href="https://tibillet.github.io/documentation_v3/">{% trans "DÉCOUVRIR LA DOCUMENTATION" %}</a>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;">
-                                {% trans "Si vous avez des questions ou besoin d'aide pour démarrer, n'hésitez pas à nous contacter. Nous sommes là pour vous accompagner dans votre utilisation de TiBillet." %}
-                            </p>
-                        </td>
-                    </tr>
+    {% trans "Accéder à mon espace" as texte_du_bouton %}
+    {% include "emails/composants/bouton.html" with url=admin_url texte=texte_du_bouton %}
 
-                    <tr>
-                        <td>
-                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:32px;">
-                                {% trans "À bientôt sur TiBillet" %},<br/>{% trans "L'équipe de la Coopérative Code Commun : Axel, Adrienne, Nicolas, Kaya, Mike et Jonas." %}
-                            </p></td>
-                    </tr>
-                </table>
-            </table>
+    <!-- INFORMATIONS IMPORTANTES / Important information -->
+    <tr>
+        <td style="padding:8px 0 24px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            <h2 style="margin:0 0 8px; font:700 18px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">{% trans "Informations importantes" %}</h2>
+            {% trans "L'adresse publique de votre instance : " %}<a href="{{ instance_url }}" target="_blank" style="color:#1f5172;">{{ instance_url }}</a><br/><br/>
+            {% trans "Si vous souhaitez récolter de l'argent, il vous faudra créer un compte Stripe depuis la page d'administration de votre instance." %}<br/><br/>
+            {% trans "Pour toute demande d'aide, n'hésitez pas à venir rencontrer la communauté autour des outils TiBillet :" %}<br/>
+            <a href="mailto:contact@tibillet.re" style="color:#1f5172;">{% trans "Email de support" %}</a> ·
+            <a href="https://discord.gg/7FJvtYx" style="color:#1f5172;">Discord</a> ·
+            <a href="https://matrix.to/#/#tibillet:tiers-lieux.org" style="color:#1f5172;">Matrix</a> ·
+            <a href="https://pouet.chapril.org/@tibillet" style="color:#1f5172;">Mastodon</a>
+        </td>
+    </tr>
+
+    <!-- CE QUE PERMET TIBILLET / What TiBillet does -->
+    <tr>
+        <td style="padding:0 0 24px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            <h2 style="margin:0 0 8px; font:700 18px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">{% trans "Voici ce que vous pouvez faire avec TiBillet :" %}</h2>
+            <strong>{% trans "Billetterie" %}</strong> – {% trans "Créez et gérez des événements, vendez des billets en ligne, et suivez vos ventes en temps réel." %}<br/><br/>
+            <strong>{% trans "Adhésions et abonnements" %}</strong> – {% trans "Gérez les adhésions à votre structure, proposez différentes formules d'abonnement, et suivez les renouvellements." %}<br/><br/>
+            <strong>{% trans "Caisse enregistreuse & Cartes cashless" %}</strong> – {% trans "Utilisez une caisse enregistreuse (bientôt) certifiée et proposez un système de paiement sans espèces pour vos événements, avec des cartes d'adhésions rechargeables en monnaie temps pour valoriser l'engagement bénévole." %}<br/><br/>
+            <strong>{% trans "Fédération d'agendas" %}</strong> – {% trans "Partagez vos événements et créez un réseau fédéré d'agendas, augmentant ainsi leur visibilité auprès d'un public plus large." %}
+        </td>
+    </tr>
+
+    {% trans "Découvrir la documentation" as texte_du_bouton %}
+    {% include "emails/composants/bouton.html" with url="https://tibillet.github.io/documentation_v3/" texte=texte_du_bouton %}
+
+    <tr>
+        <td style="padding:8px 0 0; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#584854;">
+            {% trans "Si vous avez des questions ou besoin d'aide pour démarrer, n'hésitez pas à nous contacter. Nous sommes là pour vous accompagner dans votre utilisation de TiBillet." %}<br/><br/>
+            {% trans "À bientôt sur TiBillet" %},<br/>{% trans "L'équipe de la Coopérative Code Commun." %}
         </td>
     </tr>
 {% endblock %}
+
+{% block raison_du_mail %}{% translate "Vous recevez ce mail car vous venez de créer un espace TiBillet." %}{% endblock %}

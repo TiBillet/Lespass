@@ -104,7 +104,10 @@ def onboard_otp_mailer(wc_uuid, otp_clair):
             title=subject,
             text=text_body,
             template="onboard/emails/otp_code.html",
-            context={"otp": otp_clair, "organisation": organisation},
+            # Pas de clé « organisation » : c'est le nom de l'en-tête du mail, et ici
+            # c'est TiBillet qui parle, pas le lieu en cours de création.
+            # / No "organisation" key: it is the email header name, TiBillet speaks here.
+            context={"otp": otp_clair, "nom_du_nouveau_lieu": organisation},
         )
         mail.send()
 
@@ -229,7 +232,14 @@ def onboard_ready_mailer(wc_uuid):
             title=subject,
             text=text_body,
             template="onboard/emails/ready.html",
-            context=context,
+            # Pas de clé « organisation » : c'est le nom de l'en-tête du mail, et ici
+            # c'est TiBillet qui parle, pas le lieu qui vient d'être créé.
+            # / No "organisation" key: it is the email header name, TiBillet speaks here.
+            context={
+                "nom_du_nouveau_lieu": organisation,
+                "admin_url": admin_url,
+                "instance_url": instance_url,
+            },
         )
         mail.send()
 

@@ -477,7 +477,9 @@ def test_se_retirer_apres_le_delai_retire_et_previent_l_equipe(lieu, django_capt
         arguments for nom, arguments in lieu.taches_demandees
         if nom == "prevenir_l_equipe_d_un_desistement"
     ]
-    assert taches_de_desistement == [(str(lieu.besoin.pk), "Camille Martin")]
+    # Le nom complet pour l'équipe, le prénom seul pour les autres bénévoles.
+    # / Full name for the team, first name only for the other volunteers.
+    assert taches_de_desistement == [(str(lieu.besoin.pk), "Camille Martin", "Camille")]
 
 
 def test_on_ne_se_retire_pas_d_un_besoin_passe(lieu):
@@ -531,7 +533,7 @@ def test_les_mails_se_rendent_sans_erreur(lieu):
     desistement = render_to_string(
         "booking/benevolat/emails/desistement_equipe.html",
         {**contexte_commun, "nom_de_la_personne": "Camille Martin", "nombre_inscrits": 0,
-         "url_de_l_admin": "https://x/"},
+         "url_du_planning": "https://x/"},
     )
 
     assert lieu.tache.name in confirmation

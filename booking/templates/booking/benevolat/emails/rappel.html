@@ -1,58 +1,31 @@
-<!DOCTYPE html>
+{% extends 'emails/base.html' %}
 {% load i18n %}
 {% comment %}
-MAIL DE RAPPEL LA VEILLE D'UN CRÉNEAU BÉNÉVOLE (§5.9)
+MAIL DE RAPPEL LA VEILLE DES CRÉNEAUX BÉNÉVOLES (§5.9)
 / Day-before volunteer reminder email
 
 LOCALISATION : booking/templates/booking/benevolat/emails/rappel.html
 Envoyé par booking/tasks.py, rappeler_les_benevoles_du_lendemain_du_lieu.
-Le lien « Je ne peux plus venir » est signé : il marche sans être connecté·e, même après
-le délai de retrait. Il mène à une page de confirmation, jamais à une suppression directe.
-/ The signed link works without login and leads to a confirmation page.
+UN mail par personne : il liste tous ses créneaux de demain, dans l'ordre des heures.
+Chaque créneau a son propre lien « Je ne peux plus venir ». Ce lien est signé : il marche
+sans être connecté·e, même après le délai de retrait. Il mène à une page de confirmation,
+jamais à une suppression directe.
+
+Variables : title, creneaux (liste de { besoin, plage, url_de_desistement }), url_de_mes_creneaux.
+/ One email per person listing all tomorrow's slots, each with its own signed withdrawal link.
 {% endcomment %}
-{% get_current_language as LANGUAGE_CODE %}
-<html lang="{{ LANGUAGE_CODE }}">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ title }}</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111; }
-        .container { max-width: 640px; margin: 0 auto; padding: 24px; }
-        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-        .header img { height: 42px; }
-        .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; }
-        .muted { color: #6b7280; font-size: 14px; }
-        .title { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
-        .btn { display: inline-block; background: #111827; color: #fff; padding: 10px 16px; border-radius: 8px; text-decoration: none; }
-        .divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <div class="header">
-        {% if image_url_place %}<img src="{{ image_url_place }}" alt="{{ organisation }}" />{% endif %}
-        <div class="title">{{ organisation }}</div>
-    </div>
 
-    <div class="card">
-        <h1 class="title">{{ title }}</h1>
-        <p>
-            {{ besoin.planning.name }} · {{ besoin.date|date:"l j F" }} · <strong>{{ besoin.tache.name }}</strong> · {{ plage }}
-        </p>
+{% block texte_d_apercu %}{% for creneau in creneaux %}{{ creneau.besoin.tache.name }} · {{ creneau.plage }}{% if not forloop.last %} — {% endif %}{% endfor %}{% endblock %}
 
-        {% if besoin.tache.description %}
-            <div class="divider"></div>
-            <p><strong>{% translate "Consignes" %}</strong></p>
-            <p>{{ besoin.tache.description|linebreaksbr }}</p>
-        {% endif %}
+{% block contenu %}
+    {% include "emails/composants/titre.html" with texte=title %}
 
-        <div class="divider"></div>
-        <p>
-            <a class="btn" href="{{ url_de_desistement }}">{% translate "Je ne peux plus venir" %}</a>
-            &nbsp;<a href="{{ url_de_mes_creneaux }}">{% translate "Mes créneaux" %}</a>
-        </p>
-    </div>
-</div>
-</body>
-</html>
+    {% for creneau in creneaux %}
+        {% include "booking/benevolat/emails/_creneau.html" with besoin=creneau.besoin plage=creneau.plage url_de_desistement=creneau.url_de_desistement avec_consignes=True %}
+    {% endfor %}
+
+    {% translate "Mes créneaux" as texte_du_bouton %}
+    {% include "emails/composants/bouton.html" with url=url_de_mes_creneaux texte=texte_du_bouton %}
+{% endblock %}
+
+{% block raison_du_mail %}{% blocktranslate trimmed %}Vous recevez ce mail car vous êtes inscrit·e comme bénévole auprès de {{ organisation }}.{% endblocktranslate %}{% endblock %}

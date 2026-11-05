@@ -2199,7 +2199,7 @@ paths:
         sont écrits que s'ils sont vides. S'ils manquent dans le compte ET dans la requête : 400,
         rien n'est créé. Planning publié et besoin pas passé, sinon 400. Pas de contrôle
         d'adhésion. 201 si créée, 200 si la personne était déjà inscrite (rejouer est sans
-        danger). À la création, la personne reçoit « L'équipe t'a inscrit·e » avec le lien
+        danger). À la création, la personne reçoit « L'équipe vous a inscrit·e » avec le lien
         « Je ne peux plus venir ». `inscritPar` = le compte de la clé.
         EN: 201 when created, 200 when already signed up.
       tags: [Volunteering]

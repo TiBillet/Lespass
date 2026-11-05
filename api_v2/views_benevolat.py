@@ -294,7 +294,7 @@ class VolunteerSignupViewSet(viewsets.ViewSet):
            ET dans la requête : 400, et rien n'est créé (transaction annulée).
         3. get_or_create avec inscrit_par = le compte de la clé (vide si la clé n'en a pas) :
            201 si créée, 200 avec l'inscription existante si rejouée (sans danger).
-        4. Mail « L'équipe t'a inscrit·e » (avec le lien « Je ne peux plus venir »),
+        4. Mail « L'équipe vous a inscrit·e » (avec le lien « Je ne peux plus venir »),
            seulement à la création, après le commit.
         """
         entree = InscriptionEntreeSerializer(data=request.data)

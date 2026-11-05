@@ -1,9 +1,35 @@
-<div>Bonjour. Un nouveau message a été envoyé depuis le formulaire de contact de l'espace TiBillet : {{ organisation }}.</div>
-<br>
-<div>De : {{ sender }}</div>
-<div>Sujet : {{ subject }}</div>
-<div>Message :</div>
-<br>
-<div>{{ message | linebreaks }}</div>
+{% extends 'emails/base.html' %}
+{% load i18n %}
+{% comment %}
+MAIL : MESSAGE DU FORMULAIRE DE CONTACT / Contact form message
+LOCALISATION : BaseBillet/templates/emails/contact_email.html
+Envoyé par : BaseBillet/tasks.py (contact_mailer), au lieu ET à la personne qui écrit (copie).
+Le Reply-To est l'adresse du visiteur : quand le lieu clique « Répondre », il lui écrit.
 
+Variables : organisation, sender, subject, message.
+/ Sent to the venue and a copy to the sender. Reply-To is the visitor.
+{% endcomment %}
 
+{% block texte_d_apercu %}{{ subject }}{% endblock %}
+
+{% block contenu %}
+    {% translate "Nouveau message depuis le formulaire de contact" as titre %}
+    {% include "emails/composants/titre.html" with texte=titre %}
+
+    <tr>
+        <td style="padding:0 0 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                {% translate "De" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=sender %}
+                {% translate "Sujet" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=subject %}
+            </table>
+        </td>
+    </tr>
+
+    <tr>
+        <td style="font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            {{ message|linebreaksbr }}
+        </td>
+    </tr>
+{% endblock %}
+
+{% block raison_du_mail %}{% blocktranslate trimmed %}Message envoyé depuis le formulaire de contact du site de {{ organisation }}.{% endblocktranslate %}{% endblock %}
