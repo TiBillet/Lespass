@@ -938,8 +938,9 @@ class Bloc(models.Model):
     # jamais de HTML — le HTML et les classes vivent dans le gabarit) :
     #   - LIEU : les infos pratiques posees a cote de la carte ;
     #   - SECTION en affichage MEDIA_ET_CARTES : les sous-cartes de la section.
-    #   - SECTION en affichage EQUIPE / FRISE / RESSOURCES : les personnes, les
-    #     étapes ou les ressources ({"titre", "texte", "badge", "url"}).
+    #   - SECTION en affichage FRISE : les étapes ({"titre", "texte"}).
+    #     Les affichages EQUIPE et RESSOURCES, eux, lisent leurs éléments dans
+    #     ImageGalerie (une image facultative par élément).
     # Types d'item : "badge" (texte), "para" (texte), "horaire" (texte),
     # "adresse" (texte multi-lignes), "accessibilite" (texte),
     # "transport" (titre + lignes[]). / Structured content for the left column of the
@@ -1239,11 +1240,15 @@ class ImageGalerie(models.Model):
     Une image rattachee a un bloc. Relation plusieurs-images-vers-un-bloc :
     c'est le seul cas du moteur ou un bloc porte plusieurs fichiers (les autres
     blocs ont un champ image plat). Editee en inline (TabularInline) dans
-    l'admin du Bloc. Sert aux blocs IMAGES en galerie ou en bande de logos, et
-    aux images referencees depuis un bloc TEXTE (![legende](galerie:N)).
+    l'admin du Bloc. Sert aux blocs IMAGES en galerie ou en bande de logos,
+    aux images referencees depuis un bloc TEXTE (![legende](galerie:N)), et
+    aux personnes d'une SECTION en affichage EQUIPE et aux ressources d'une
+    SECTION en affichage RESSOURCES (une image = un element, image facultative).
     / An image attached to a block. Many-images-to-one-block relation: the only
     case in the engine where a block carries several files. Used by IMAGES
-    blocks (grid or logo strip) and by images referenced from a TEXTE block.
+    blocks (grid or logo strip), by images referenced from a TEXTE block, and
+    by the items of a SECTION in EQUIPE or RESSOURCES display (one image = one
+    item, image optional).
 
     LOCALISATION : pages/models.py
     """
@@ -1276,7 +1281,7 @@ class ImageGalerie(models.Model):
     # Légende optionnelle (texte d'alternative + sous-titre affiché).
     # / Optional caption (alt text + displayed subtitle).
     legende = models.CharField(
-        max_length=200,
+        max_length=500,
         blank=True,
         verbose_name=_("Légende"),
         help_text=_("Texte alternatif et légende de l'image (optionnel)."),
@@ -1298,6 +1303,20 @@ class ImageGalerie(models.Model):
         help_text=_("Lien optionnel : rend l'image cliquable (nouvel onglet). Ex. site d'un partenaire."),
     )
 
+    # Tags de l'image, separes par des virgules. Seuls les affichages EQUIPE
+    # et RESSOURCES d'une SECTION les rendent : une image = un element, la
+    # legende = son nom ou son titre, et chaque tag devient un badge dessous.
+    # Texte libre et non une relation : ces tags ne servent pas a filtrer.
+    # / The image's comma-separated tags. Only a SECTION's EQUIPE and
+    # RESSOURCES displays render them: one image = one item, caption = name or
+    # title, each tag a badge. Free text, not a relation: no filtering.
+    tags = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Tags"),
+        help_text=_("Blocs Équipe et Ressources : badges affichés sous le nom, séparés par des virgules. Ex. : Coordination, Salariée."),
+    )
+
     # Ordre de l'image dans la galerie (croissant).
     # / Image order in the gallery (ascending).
     position = models.PositiveIntegerField(
@@ -1313,3 +1332,20 @@ class ImageGalerie(models.Model):
 
     def __str__(self):
         return self.legende or f"Image #{self.position}"
+
+    def liste_des_tags(self):
+        """
+        Decoupe le champ `tags` en liste, sans espaces autour ni tag vide.
+        « Coordination, , Salariée » donne ["Coordination", "Salariée"].
+        / Splits `tags` into a list, stripped, without empty tags.
+
+        LOCALISATION : pages/models.py
+        Lu par les gabarits bloc_section_equipe.html et
+        bloc_section_ressources.html (skins classic et V2).
+        """
+        tags_propres = []
+        for morceau in self.tags.split(","):
+            tag = morceau.strip()
+            if tag:
+                tags_propres.append(tag)
+        return tags_propres

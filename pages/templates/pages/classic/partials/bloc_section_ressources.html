@@ -9,31 +9,48 @@ Version socle, OBLIGATOIRE (repli classic de templates_bloc, voir
 bloc_section_equipe.html). Le skin V2 a sa version.
 Styles : section « Nouveaux affichages SECTION » de tb-blocs.css.
 
-`bloc.contenu` = [{"titre", "texte", "badge", "url" (optionnelle)}, …]
+Les ressources viennent de `bloc.images_galerie` (ImageGalerie) : une image =
+une ressource. `legende` = le titre, `tags` = les badges (séparés par des
+virgules, lus par ImageGalerie.liste_des_tags), `lien_url` = le lien du titre
+(facultatif), `image` = la vignette (facultative, recadrée en carré par le
+CSS). `alt` vide : le titre est écrit juste à côté.
 SÉCURITÉ : lien posé seulement si l'URL commence par « http » ou « / ».
-/ Base version, REQUIRED as the classic fallback. Link only for http(s) or /.
+/ Base version, REQUIRED as the classic fallback. Resources come from the
+block's ImageGalerie: caption = title, tags = badges, optional link and
+thumbnail. Link only for http(s) or /.
 {% endcomment %}
 <section class="tb-bloc tb-bloc--ressources" data-testid="bloc-section-ressources">
     <div class="tb-bloc__contenu">
         {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
         {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
 
-        {% if bloc.contenu %}
-            <ul class="tb-sous-cartes tb-ressources" role="list">
-                {% for ressource in bloc.contenu %}
-                    <li class="tb-sous-carte">
-                        <p class="tb-sous-carte__titre">
-                            {% if ressource.url|slice:":4" == "http" or ressource.url|slice:":1" == "/" %}
-                                <a href="{{ ressource.url }}" target="_blank" rel="noopener">{{ ressource.titre }} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
-                            {% else %}
-                                {{ ressource.titre }}
+        {% with ressources=bloc.images_galerie.all %}
+            {% if ressources %}
+                <ul class="tb-sous-cartes tb-ressources" role="list">
+                    {% for ressource in ressources %}
+                        <li class="tb-sous-carte" data-testid="ressource-element">
+                            {% if ressource.image %}
+                                <img class="tb-ressources__vignette" src="{{ ressource.image.med.url }}"
+                                     alt="" width="64" height="64" loading="lazy" data-testid="ressource-element-vignette">
                             {% endif %}
-                            {% if ressource.badge %}<span class="tb-bloc__carte-badge">{{ ressource.badge }}</span>{% endif %}
-                        </p>
-                        {% if ressource.texte %}<div class="tb-sous-carte__texte">{{ ressource.texte|linebreaksbr }}</div>{% endif %}
-                    </li>
-                {% endfor %}
-            </ul>
-        {% endif %}
+                            <p class="tb-sous-carte__titre">
+                                {% if ressource.lien_url|slice:":4" == "http" or ressource.lien_url|slice:":1" == "/" %}
+                                    <a href="{{ ressource.lien_url }}" target="_blank" rel="noopener">{{ ressource.legende }} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
+                                {% else %}
+                                    {{ ressource.legende }}
+                                {% endif %}
+                            </p>
+                            {% with tags=ressource.liste_des_tags %}
+                                {% if tags %}
+                                    <span class="tb-ressources__tags">
+                                        {% for tag in tags %}<span class="tb-bloc__carte-badge">{{ tag }}</span>{% endfor %}
+                                    </span>
+                                {% endif %}
+                            {% endwith %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
     </div>
 </section>

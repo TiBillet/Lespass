@@ -4,42 +4,61 @@ BLOC SECTION / affichage RESSOURCES — skin V2 (DA v1)
 / SECTION block / RESSOURCES display — V2 skin (DA v1)
 
 LOCALISATION : pages/templates/pages/V2/partials/bloc_section_ressources.html
-Maquette : TEMP-tibillet-lespass-main/qui-sommes-nous.html, section « Ressources »
 
-Les ressources viennent de `bloc.contenu`, une liste d'items TEXTE :
-    [{"titre": "Statuts de l'association", "texte": "PDF, 4 pages",
-      "badge": "PDF", "url": "https://…"}, …]
-`url` est optionnelle. SÉCURITÉ : le lien n'est posé que si l'adresse commence
-par « http » ou « / » (jamais « javascript: » ni autre schéma dangereux,
-`contenu` étant saisi librement dans l'admin ou par l'API).
-/ `url` is optional and only rendered when it starts with "http" or "/".
+Les ressources viennent de `bloc.images_galerie` (modèle ImageGalerie,
+l'encart « Images » de la fiche du bloc). Une image = une ressource :
+- `legende` = le titre ;
+- `tags` = les badges, séparés par des virgules
+  (lus par ImageGalerie.liste_des_tags) ;
+- `lien_url` = le lien du titre, FACULTATIF ;
+- `image` = la vignette, FACULTATIVE. Avec image : la variation `med` est
+  recadrée en carré par le CSS (.resource-card__vignette, object-fit: cover).
+  Sans image : l'icône document.
+La vignette a un `alt` vide : le titre est écrit juste à côté.
+SÉCURITÉ : le lien n'est posé que si l'adresse commence par « http » ou « / ».
+Le modèle valide déjà `lien_url`, mais ce test reste : il ne coûte rien.
+/ Resources come from the block's ImageGalerie: caption = title, tags =
+badges, optional link, optional thumbnail cropped square (document icon as
+fallback). Link only for http(s) or /.
 {% endcomment %}
 <section class="tb-bloc tb-bloc--ressources" data-testid="bloc-section-ressources">
     <div class="tb-bloc__contenu">
         {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
         {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
 
-        {% if bloc.contenu %}
-            <ul class="ressources-grille" role="list">
-                {% for ressource in bloc.contenu %}
-                    <li class="card resource-card">
-                        <span class="resource-card__icon" aria-hidden="true">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
-                        </span>
-                        <div>
-                            <div class="resource-card__title">
-                                {% if ressource.url|slice:":4" == "http" or ressource.url|slice:":1" == "/" %}
-                                    <a class="link ressources-grille__lien" href="{{ ressource.url }}" target="_blank" rel="noopener">{{ ressource.titre }} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
-                                {% else %}
-                                    {{ ressource.titre }}
-                                {% endif %}
+        {% with ressources=bloc.images_galerie.all %}
+            {% if ressources %}
+                <ul class="ressources-grille" role="list">
+                    {% for ressource in ressources %}
+                        <li class="card resource-card" data-testid="ressource-element">
+                            {% if ressource.image %}
+                                <img class="resource-card__vignette" src="{{ ressource.image.med.url }}"
+                                     alt="" width="64" height="64" loading="lazy" data-testid="ressource-element-vignette">
+                            {% else %}
+                                <span class="resource-card__icon" aria-hidden="true" data-testid="ressource-element-icone">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+                                </span>
+                            {% endif %}
+                            <div>
+                                <div class="resource-card__title">
+                                    {% if ressource.lien_url|slice:":4" == "http" or ressource.lien_url|slice:":1" == "/" %}
+                                        <a class="link ressources-grille__lien" href="{{ ressource.lien_url }}" target="_blank" rel="noopener">{{ ressource.legende }} <span aria-hidden="true">↗</span><span class="visually-hidden">{% translate '(nouvel onglet)' %}</span></a>
+                                    {% else %}
+                                        {{ ressource.legende }}
+                                    {% endif %}
+                                </div>
+                                {% with tags=ressource.liste_des_tags %}
+                                    {% if tags %}
+                                        <span class="ressources-grille__tags">
+                                            {% for tag in tags %}<span class="badge badge--neutral">{{ tag }}</span>{% endfor %}
+                                        </span>
+                                    {% endif %}
+                                {% endwith %}
                             </div>
-                            {% if ressource.texte %}<div class="resource-card__desc">{{ ressource.texte|linebreaksbr }}</div>{% endif %}
-                            {% if ressource.badge %}<span class="badge badge--neutral equipe-grille__badge">{{ ressource.badge }}</span>{% endif %}
-                        </div>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
     </div>
 </section>

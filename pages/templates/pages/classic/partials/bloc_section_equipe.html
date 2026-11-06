@@ -11,24 +11,43 @@ ferait planter les skins reunion et faire_festival. Le skin V2 a sa version
 (pages/V2/partials/bloc_section_equipe.html).
 Styles : section « Nouveaux affichages SECTION » de pages/static/pages/css/tb-blocs.css.
 
-`bloc.contenu` = [{"titre": nom, "texte": rôle, "badge": …}, …]
-/ Base version, REQUIRED as the classic fallback of templates_bloc.
+Les personnes viennent de `bloc.images_galerie` (ImageGalerie) : une image =
+une personne. `legende` = le nom, `tags` = les badges (séparés par des
+virgules, lus par ImageGalerie.liste_des_tags), `image` = la photo,
+facultative. Photo recadrée en rond par le CSS ; sans photo, l'initiale.
+`alt` vide : le nom est écrit juste à côté.
+/ Base version, REQUIRED as the classic fallback of templates_bloc. People
+come from the block's ImageGalerie: caption = name, tags = badges, optional
+photo cropped round, initial as fallback.
 {% endcomment %}
 <section class="tb-bloc tb-bloc--equipe" data-testid="bloc-section-equipe">
     <div class="tb-bloc__contenu">
         {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
         {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
 
-        {% if bloc.contenu %}
-            <ul class="tb-equipe" role="list">
-                {% for membre in bloc.contenu %}
-                    <li class="tb-equipe__membre">
-                        <span class="tb-equipe__nom">{{ membre.titre }}</span>
-                        {% if membre.texte %}<span class="tb-equipe__role">{{ membre.texte }}</span>{% endif %}
-                        {% if membre.badge %}<span class="tb-bloc__carte-badge">{{ membre.badge }}</span>{% endif %}
-                    </li>
-                {% endfor %}
-            </ul>
-        {% endif %}
+        {% with membres=bloc.images_galerie.all %}
+            {% if membres %}
+                <ul class="tb-equipe" role="list">
+                    {% for membre in membres %}
+                        <li class="tb-equipe__membre" data-testid="equipe-membre">
+                            {% if membre.image %}
+                                <img class="tb-equipe__avatar" src="{{ membre.image.med.url }}"
+                                     alt="" width="64" height="64" loading="lazy" data-testid="equipe-membre-photo">
+                            {% else %}
+                                <span class="tb-equipe__avatar tb-equipe__avatar--initiale" aria-hidden="true" data-testid="equipe-membre-initiale">{{ membre.legende|slice:":1"|upper }}</span>
+                            {% endif %}
+                            <span class="tb-equipe__nom">{{ membre.legende }}</span>
+                            {% with tags=membre.liste_des_tags %}
+                                {% if tags %}
+                                    <span class="tb-equipe__tags">
+                                        {% for tag in tags %}<span class="tb-bloc__carte-badge">{{ tag }}</span>{% endfor %}
+                                    </span>
+                                {% endif %}
+                            {% endwith %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
     </div>
 </section>

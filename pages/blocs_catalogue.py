@@ -55,12 +55,14 @@ CHAMPS_PAR_TYPE = {
         "bouton_label", "bouton_url", "bouton2_label", "bouton2_url",
         "auteur_nom", "auteur_role", "auteur_photo",
         # `contenu` porte les elements de la section, en DONNEES TEXTE : les
-        # sous-cartes, les personnes, les dates, les ressources, ou les boutons
-        # d'un appel a l'action. Un element n'est pas un bloc : il vit a
+        # sous-cartes, les dates, ou les boutons d'un appel a l'action. Les
+        # personnes d'une EQUIPE et les ressources n'y sont pas : elles vivent
+        # dans ImageGalerie. Un element n'est pas un bloc : il vit a
         # l'interieur de sa section, la ou une liste de blocs ne saurait le
         # placer. Les cles de chaque affichage : CLES_ELEMENT_PAR_AFFICHAGE.
         # / `contenu` carries the section's items as TEXT DATA (sub-cards,
-        # people, dates, resources, call-to-action buttons). Keys per display:
+        # dates, call-to-action buttons; EQUIPE people and RESSOURCES live in
+        # ImageGalerie). Keys per display:
         # CLES_ELEMENT_PAR_AFFICHAGE.
         "contenu",
     ],
@@ -216,15 +218,20 @@ CHAMPS_PAR_AFFICHAGE = {
             "contenu",
         ],
         "CITATION": ["texte", "auteur_nom", "auteur_role", "auteur_photo"],
-        # contenu = [{"titre": nom, "texte": rôle, "badge": …}, …]
-        # / contenu = [{"titre": name, "texte": role, "badge": …}, …]
-        "EQUIPE": ["titre", "texte", "contenu"],
+        # Les personnes ne sont PAS dans `contenu` : ce sont les ImageGalerie
+        # du bloc (photo facultative, legende = nom, tags = badges).
+        # / People are NOT in `contenu`: they are the block's ImageGalerie
+        # (optional photo, caption = name, tags = badges).
+        "EQUIPE": ["titre", "texte"],
         # contenu = [{"titre": année, "texte": récit}, …]
         # / contenu = [{"titre": year, "texte": story}, …]
         "FRISE": ["titre", "texte", "contenu"],
-        # contenu = [{"titre": …, "texte": …, "badge": …, "url": lien optionnel}, …]
-        # / contenu = [{"titre", "texte", "badge", "url" (optional link)}, …]
-        "RESSOURCES": ["titre", "texte", "contenu"],
+        # Les ressources ne sont PAS dans `contenu` : ce sont les ImageGalerie
+        # du bloc (vignette facultative, legende = titre, tags = badges,
+        # lien_url = lien).
+        # / Resources are NOT in `contenu`: they are the block's ImageGalerie
+        # (optional thumbnail, caption = title, tags = badges, link).
+        "RESSOURCES": ["titre", "texte"],
     },
     "IMAGES": {
         # Une seule image : le champ `image` du bloc.
@@ -246,16 +253,14 @@ CHAMPS_PAR_AFFICHAGE = {
 # Pour les affichages qui lisent `contenu` en liste d'elements : les cles
 # qu'un element peut porter ET que le gabarit rend reellement. Meme logique que
 # CHAMPS_PAR_AFFICHAGE, un cran plus bas : l'editeur de lignes de l'admin ne
-# montre que ces cles (une frise n'affiche pas de badge, seules les ressources
-# ont un lien).
+# montre que ces cles (une frise n'affiche pas de badge, seul l'appel a
+# l'action a un lien).
 # / For affichages reading `contenu` as a list of items: the keys an item may
 # carry AND that the template actually renders. The admin line editor only
 # shows these keys.
 CLES_ELEMENT_PAR_AFFICHAGE = {
     "MEDIA_ET_CARTES": ("titre", "texte", "badge"),
-    "EQUIPE": ("titre", "texte", "badge"),
     "FRISE": ("titre", "texte"),
-    "RESSOURCES": ("titre", "texte", "badge", "url"),
     # Un élément = un bouton de plus : son libellé et son lien.
     # / One item = one more button: its label and its link.
     "APPEL_ACTION": ("titre", "url"),
@@ -276,7 +281,16 @@ SKINS_PAR_CHAMP_DU_TYPE = {
 # Sert a n'afficher cet inline que la ou il sera lu.
 # / (type, affichage) pairs whose images live in the ImageGalerie inline. Used
 # to show that inline only where it will be read.
-AFFICHAGES_AVEC_GALERIE = frozenset({("IMAGES", "GRILLE"), ("IMAGES", "BANDE_LOGOS")})
+AFFICHAGES_AVEC_GALERIE = frozenset({
+    ("IMAGES", "GRILLE"),
+    ("IMAGES", "BANDE_LOGOS"),
+    # Une image = une personne de l'equipe (photo facultative).
+    # / One image = one team member (optional photo).
+    ("SECTION", "EQUIPE"),
+    # Une image = une ressource (vignette facultative, lien facultatif).
+    # / One image = one resource (optional thumbnail and link).
+    ("SECTION", "RESSOURCES"),
+})
 
 # Affichage pose d'office quand la personne n'en choisit pas. Un bloc sans
 # affichage explicite doit quand meme s'afficher : on prend le plus neutre.
@@ -290,6 +304,17 @@ AFFICHAGE_PAR_DEFAUT = {
     # without an explicit choice keeps the look it always had.
     "LIEU": "VERTICAL",
 }
+
+# Affichages de SECTION dont les ELEMENTS sont des ImageGalerie (une image
+# facultative par element). Deduit de AFFICHAGES_AVEC_GALERIE. Lu par l'API
+# (api_v2/serializers.py) pour accepter et exposer la liste `image`.
+# / SECTION affichages whose ITEMS are ImageGalerie rows (optional image per
+# item). Derived from AFFICHAGES_AVEC_GALERIE. Read by the API.
+AFFICHAGES_SECTION_EN_GALERIE = frozenset(
+    affichage
+    for type_bloc, affichage in AFFICHAGES_AVEC_GALERIE
+    if type_bloc == "SECTION"
+)
 
 # Types dont les images sont portees par ImageGalerie (relation multi-images).
 # / Types whose images are carried by ImageGalerie (multi-image relation).

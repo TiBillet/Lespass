@@ -1,14 +1,14 @@
 {% load i18n %}
 {% comment %}
-UNE SOUS-CARTE D'UNE SECTION (equipe, frise, ressources, media et cartes)
-/ One sub-card of a SECTION
+UN ELEMENT D'UNE SECTION (media et cartes, frise, appel a l'action)
+/ One item of a SECTION
 
 LOCALISATION : pages/templates/admin/pages/widgets/ligne_cartes.html
 
 Les 4 champs sont toujours presents (alignement des valeurs postees). Chacun
 n'est MONTRE que pour les affichages dont le gabarit le rend : `expressions_cles`
 vient de CLES_ELEMENT_PAR_AFFICHAGE (pages/blocs_catalogue.py). Une frise n'a
-donc pas de badge, et seules les ressources ont un lien.
+donc pas de badge, et seul l'appel a l'action a un lien.
 / The 4 inputs are always present. Each is SHOWN only for the affichages whose
 template renders it (catalogue table CLES_ELEMENT_PAR_AFFICHAGE).
 
@@ -27,7 +27,7 @@ A L'ENVOI DU FORMULAIRE :
 Les champs s'appellent `<nom>__<cle>` et se repetent d'une ligne a l'autre.
 pages/editeur_items.py:lire_lignes_depuis_post les reassemble dans l'ordre du
 DOM, puis nettoyer_contenu_cartes les nettoie. BlocAdmin.save_model recopie le resultat
-dans Bloc.contenu (SECTION Equipe, Frise, Ressources, Media + sous-cartes) (via admin_apercu.py:appliquer_editeurs_de_lignes).
+dans Bloc.contenu (SECTION Media + sous-cartes, Frise, Appel a l'action) (via admin_apercu.py:appliquer_editeurs_de_lignes).
 L'apercu en direct lit les memes champs (admin_apercu.py:vue_apercu_bloc_en_direct).
 
 CONTEXTE RECU : nom, ligne, classes_champ, classes_select, expressions_cles

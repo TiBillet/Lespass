@@ -82,6 +82,29 @@ curl -sk -X POST "https://$H/api/v2/pages/<PAGE_UUID>/blocs/" -H "Authorization:
 ```
 Images par **upload** : `multipart/form-data` sur le même endpoint (champ `image`, etc.).
 
+### 4 bis. Section Équipe (une `ImageObject` par personne)
+`SECTION` en affichage `EQUIPE` : `image` = liste d'`ImageObject`, une par personne.
+`caption` = le nom, `keywords` = les badges (texte « a, b » ou liste), `contentUrl`
+= la photo, **facultative** (sans photo, le site affiche l'initiale du nom).
+```bash
+curl -sk -X POST "https://$H/api/v2/pages/<PAGE_UUID>/blocs/" -H "Authorization: $K" \
+  -H "Content-Type: application/json" -d '{
+    "additionalType":"SECTION",
+    "additionalProperty":[{"name":"affichage","value":"EQUIPE"}],
+    "image":[
+      {"@type":"ImageObject","contentUrl":"https://exemple.fr/awa.jpg","caption":"Awa Diallo","keywords":"Coordination, Salariée"},
+      {"@type":"ImageObject","caption":"Théo Marchand","keywords":["Vie associative","Bénévole"]}
+    ]
+  }'
+```
+
+### 4 ter. Section Ressources (une `ImageObject` par ressource)
+Même forme que l'Équipe, avec `affichage` = `RESSOURCES`. `caption` = le titre,
+`keywords` = les badges, `url` = le lien du titre (facultatif, `http…` ou `/…`),
+`contentUrl` = la vignette, **facultative** (sans vignette, le site affiche une
+icône document). Exemple d'élément :
+`{"@type":"ImageObject","caption":"Le journal du lieu","keywords":"Page","url":"/journal/"}`
+
 ### 5. Éditer / supprimer un bloc
 ```bash
 curl -sk -X PATCH  "https://$H/api/v2/blocs/<BLOC_UUID>/" -H "Authorization: $K" \

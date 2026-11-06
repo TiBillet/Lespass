@@ -967,10 +967,15 @@ h2.tb-bloc__titre::before {
     margin-top: 1.75rem;
 }
 .tb-galerie__item { margin: 0; }
+/* L'image garde son propre format : jamais de cadre impose ni d'object-fit
+   cover. Une grille sert aussi a des logos et des illustrations carres :
+   un cadre 4:3 les rognerait. Les attributs width/height du gabarit
+   reservent la place avant le chargement.
+   / The image keeps its own ratio: no forced frame, no object-fit cover
+   (it would crop square logos and illustrations). */
 .tb-galerie__image {
     width: 100%;
-    aspect-ratio: 4 / 3;
-    object-fit: cover;
+    height: auto;
     border-radius: var(--tb-rayon-sm);
     box-shadow: var(--tb-ombre);
     display: block;
@@ -1803,6 +1808,34 @@ h2.tb-bloc__titre::before {
 }
 .tb-equipe__nom { font-weight: 700; }
 .tb-equipe__role { color: var(--tb-texte-doux); }
+/* Photo ronde d'une personne, ou son initiale si pas de photo. object-fit
+   recadre la photo au centre pour remplir le rond. aspect-ratio est
+   INDISPENSABLE : `.tb-bloc img { height: auto }` (plus haut) est plus
+   specifique et ecrase la hauteur d'une photo.
+   / Round photo of a person, or their initial without one. aspect-ratio is
+   REQUIRED: `.tb-bloc img { height: auto }` overrides a photo's height. */
+.tb-equipe__avatar {
+    width: 4rem;
+    height: 4rem;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.tb-equipe__avatar--initiale {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: var(--tb-bordure);
+    color: var(--tb-texte-doux);
+}
+.tb-equipe__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+}
 
 .tb-frise {
     list-style: none;
@@ -1818,3 +1851,17 @@ h2.tb-bloc__titre::before {
 .tb-frise__texte { color: var(--tb-texte-doux); }
 
 .tb-ressources { list-style: none; padding: 0; }
+/* Vignette carree d'une ressource, recadree au centre. aspect-ratio est
+   INDISPENSABLE : `.tb-bloc img { height: auto }` ecrase la hauteur.
+   / Square resource thumbnail; aspect-ratio is REQUIRED (see above). */
+.tb-ressources__vignette {
+    width: 4rem;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: var(--tb-rayon);
+}
+.tb-ressources__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+}

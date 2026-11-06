@@ -65,7 +65,7 @@ Pour les **blocs** de page (`WebPageElement`), le mapping est :
 | `headline` | `titre` | |
 | `alternativeHeadline` | `sous_titre` | |
 | `text` | `texte` | HTML nettoyé par nh3 côté serveur |
-| `image` | `image` | URL (string) **ou** `ImageObject[]` pour GALERIE / PARTENAIRES |
+| `image` | `image` | URL (string) **ou** `ImageObject[]` pour GALERIE / PARTENAIRES, et pour une SECTION `EQUIPE` ou `RESSOURCES` (un élément par objet : `caption` = nom ou titre, `keywords` = badges, `url` = lien (RESSOURCES), `contentUrl` facultative) |
 | `position` | `position` | ordre dans la page |
 | `additionalProperty` | *tout le reste* | `PropertyValue[]` (voir ci-dessous) |
 

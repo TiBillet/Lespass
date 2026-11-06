@@ -702,11 +702,12 @@ def test_cles_des_sous_cartes_couvrent_les_affichages_qui_lisent_contenu():
 
 def test_la_frise_ne_propose_pas_de_badge():
     """L'expression du badge n'inclut pas FRISE ; celle du lien seulement
-    RESSOURCES et APPEL_ACTION (les boutons en plus d'un appel a l'action)."""
+    APPEL_ACTION (les boutons en plus d'un appel a l'action). Les ressources
+    ont leur lien dans ImageGalerie, pas dans `contenu`."""
     from pages.admin_widgets import EXPRESSIONS_DES_CLES_DE_CARTES
 
     assert "FRISE" not in EXPRESSIONS_DES_CLES_DE_CARTES["badge"]
-    assert "['RESSOURCES','APPEL_ACTION']" in EXPRESSIONS_DES_CLES_DE_CARTES["url"]
+    assert "['APPEL_ACTION']" in EXPRESSIONS_DES_CLES_DE_CARTES["url"]
 
 
 # ---------------------------------------------------------------------------
@@ -854,6 +855,48 @@ def test_galerie_montre_les_nouvelles_lignes_de_l_encart(tenant, admin_client, n
     assert contenu.count("image_a_venir.svg") >= 2
     with tenant_context(tenant):
         assert bloc.images_galerie.count() == 0  # rien n'est enregistre
+
+
+def test_apercu_equipe_garde_la_photo_enregistree_et_la_personne_sans_photo(
+    tenant, admin_client, nettoyer_pages_apercu
+):
+    """
+    Apercu d'une EQUIPE : une personne deja enregistree garde sa photo (la
+    ligne est retrouvee par `images_galerie-N-uuid`, le nom de la cle
+    primaire), et une ligne neuve sans fichier mais avec un nom devient une
+    personne sans photo, rendue par son initiale.
+    / EQUIPE preview: a saved person keeps their photo (row found through
+    `-uuid`, the pk name); a new row with a name but no file becomes a person
+    without a photo, shown by their initial.
+    """
+    from pages.models import Bloc, ImageGalerie
+
+    page = _creer_page(tenant, "equipe")
+    with tenant_context(tenant):
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.SECTION, affichage=Bloc.EQUIPE)
+        personne_enregistree = ImageGalerie.objects.create(
+            bloc=bloc, legende="Awa", image="images/pages/galerie/awa-apercu.jpg", position=1,
+        )
+
+    donnees = QueryDict(mutable=True)
+    donnees.update({
+        "modele": "SECTION:EQUIPE", "bloc_uuid": str(bloc.pk),
+        "images_galerie-TOTAL_FORMS": "2", "images_galerie-INITIAL_FORMS": "1",
+        "images_galerie-0-uuid": str(personne_enregistree.pk),
+        "images_galerie-0-legende": "Awa", "images_galerie-0-tags": "Coordination",
+        "images_galerie-1-uuid": "",
+        "images_galerie-1-legende": "Zoé", "images_galerie-1-tags": "Bénévole",
+        "fichiers_choisis": "",
+    })
+
+    reponse = admin_client.post(reverse("staff_admin:pages_bloc_apercu"), donnees.urlencode(),
+                                content_type="application/x-www-form-urlencoded")
+
+    contenu = reponse.content.decode()
+    assert "awa-apercu.med.jpg" in contenu
+    assert "Zoé" in contenu
+    assert "equipe-membre-initiale" in contenu
+    assert "Bénévole" in contenu
 
 
 def test_galerie_markdown_resout_une_image_choisie(tenant, admin_client, nettoyer_pages_apercu):

@@ -5,8 +5,8 @@ Editeurs de lignes des blocs : remplacent la saisie de JSON brut dans l'admin.
 LOCALISATION : pages/editeur_items.py
 
 Deux champs du modele Bloc sont des listes (JSONField) :
-- `contenu` : les infos pratiques d'un LIEU, ou les sous-cartes d'une SECTION
-  (MEDIA_ET_CARTES, EQUIPE, FRISE, RESSOURCES) ;
+- `contenu` : les infos pratiques d'un LIEU, ou les elements d'une SECTION
+  (MEDIA_ET_CARTES, FRISE, APPEL_ACTION) ;
 - `points_gps` : les marqueurs de la carte d'un LIEU.
 
 Avant, la personne tapait ces listes en JSON. Maintenant, l'admin affiche une
@@ -48,7 +48,7 @@ SEPARATEUR = "__"
 # / LIEU practical info. `titre` and `lignes` only serve the "transport" type.
 CLES_CONTENU_LIEU = ("type", "texte", "titre", "lignes")
 
-# Sous-cartes d'une SECTION (MEDIA_ET_CARTES, EQUIPE, FRISE, RESSOURCES).
+# Elements d'une SECTION (MEDIA_ET_CARTES, FRISE, APPEL_ACTION).
 # / A SECTION's sub-cards.
 CLES_CONTENU_CARTES = ("titre", "texte", "badge", "url")
 
@@ -199,7 +199,7 @@ def nettoyer_contenu_lieu(lignes):
 
 def nettoyer_contenu_cartes(lignes):
     """
-    Nettoie les sous-cartes d'une SECTION (equipe, frise, ressources...).
+    Nettoie les elements d'une SECTION (sous-cartes, frise, boutons...).
     / Cleans a SECTION's sub-cards.
 
     - une ligne sans titre, sans texte et sans badge est ignoree ;

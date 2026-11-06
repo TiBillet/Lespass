@@ -61,7 +61,7 @@ def _expressions_des_cles_de_cartes():
     Pour chaque cle d'une sous-carte (titre, texte, badge, url) : l'expression
     Alpine qui ne la montre que pour les affichages dont le gabarit la rend.
     Lu dans CLES_ELEMENT_PAR_AFFICHAGE (pages/blocs_catalogue.py).
-    Ex. : badge -> "['MEDIA_ET_CARTES','EQUIPE','RESSOURCES'].includes(affichage)".
+    Ex. : badge -> "['MEDIA_ET_CARTES'].includes(affichage)".
     / For each sub-card key: the Alpine expression showing it only for the
     affichages whose template renders it.
     """

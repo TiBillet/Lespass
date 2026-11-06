@@ -782,7 +782,6 @@ class ImageGalerieInline(TabularInline):
 
     model = ImageGalerie
     extra = 1
-    fields = ("image", "legende", "lien_url", "position")
     ordering = ("position",)
     # Tri par glisser-déposer (sortable Unfold) : la poignée remplace la
     # saisie manuelle du nombre, le champ position est masqué.
@@ -790,6 +789,34 @@ class ImageGalerieInline(TabularInline):
     # number input, the position field is hidden.
     ordering_field = "position"
     hide_ordering_field = True
+
+    def get_fields(self, request, obj=None):
+        """
+        Les colonnes de l'encart, selon le bloc qui le porte.
+        / The inline's columns, depending on the block holding it.
+
+        LOCALISATION : pages/admin.py — ImageGalerieInline.get_fields
+
+        Dans un inline, `obj` est le BLOC parent, pas l'image.
+        - SECTION en EQUIPE : une ligne = une personne. La legende est son nom,
+          les tags deviennent des badges. Le lien n'est pas rendu par le
+          gabarit de l'equipe : on ne le propose pas.
+        - SECTION en RESSOURCES : une ligne = une ressource. La legende est son
+          titre, les tags des badges, le lien rend le titre cliquable.
+        - Partout ailleurs : les tags ne sont rendus par aucun gabarit, on ne
+          les propose pas.
+        / In an inline, `obj` is the parent BLOCK. EQUIPE: tags, no link.
+        RESSOURCES: tags and link. Everywhere else: link, no tags.
+        """
+        affichage_du_bloc = ""
+        if obj is not None and obj.type_bloc == Bloc.SECTION:
+            affichage_du_bloc = obj.affichage
+
+        if affichage_du_bloc == Bloc.EQUIPE:
+            return ("image", "legende", "tags", "position")
+        if affichage_du_bloc == Bloc.RESSOURCES:
+            return ("image", "legende", "tags", "lien_url", "position")
+        return ("image", "legende", "lien_url", "position")
 
     # Les 4 permissions sont OBLIGATOIRES. Sans elles, Django retombe sur les
     # permissions modele (`user.has_perm`), qu'un administrateur de tenant n'a
@@ -1239,14 +1266,18 @@ class BlocAdmin(ModelAdmin):
         Deux cas seulement :
         - TEXTE : les images illustrent l'article et se referencent dans la
           source Markdown via ![legende](galerie:N) (N = position dans l'inline) ;
-        - IMAGES en GRILLE ou BANDE_LOGOS : les images SONT le contenu du bloc.
+        - les couples de AFFICHAGES_AVEC_GALERIE (IMAGES en GRILLE ou
+          BANDE_LOGOS, SECTION en EQUIPE ou RESSOURCES) : les images SONT le
+          contenu du bloc. Pour une EQUIPE ou des RESSOURCES, une image = un
+          element (personne ou ressource), et le fichier est facultatif.
         Les affichages PLEINE_LARGEUR et VIGNETTE_TITRE, eux, lisent le champ
         `image` du bloc : leur proposer l'inline ferait saisir des images que le
         gabarit ne regarde jamais.
         A la CREATION (obj=None), le type n'est pas encore connu cote serveur :
         l'inline apparait apres le premier enregistrement (flux Django standard).
         / Only two cases: TEXTE (images referenced from the Markdown source) and
-        IMAGES in GRILLE or BANDE_LOGOS (the images ARE the content).
+        the AFFICHAGES_AVEC_GALERIE pairs (the images ARE the content; for
+        EQUIPE / RESSOURCES, one image = one item, file optional).
         PLEINE_LARGEUR and VIGNETTE_TITRE read the block's `image` field instead:
         offering them the inline would collect images the template never reads.
         On CREATION (obj=None) the type is unknown server-side, so the inline

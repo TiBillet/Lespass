@@ -3127,8 +3127,27 @@ details.module + details.module { margin-top: var(--space-4); }
 }
 .team-card__name, .team-card__role { display: block; }
 .equipe-grille__badge { margin-top: var(--space-2); }
+/* Photo d'une personne : la variation garde ses proportions, object-fit la
+   recadre au centre pour remplir le rond de .avatar.
+   aspect-ratio est INDISPENSABLE : `.tb-bloc img { height: auto }`
+   (tb-blocs.css) est plus specifique que .avatar--md et ecrase sa hauteur.
+   Avec un ratio carre, height: auto redonne la meme hauteur que la largeur.
+   / A person's photo, cropped to fill the .avatar circle. aspect-ratio is
+   REQUIRED: `.tb-bloc img { height: auto }` overrides the avatar height. */
+.avatar__photo { object-fit: cover; aspect-ratio: 1 / 1; padding: 0; }
+.equipe-grille__tags { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-2); }
 .tb-bloc--frise .timeline { list-style: none; margin: var(--space-5) 0 0; }
 .ressources-grille__lien { font-size: inherit; }
+/* Vignette d'une ressource, a la place de l'icone document. Carree et
+   recadree au centre. aspect-ratio est INDISPENSABLE : `.tb-bloc img
+   { height: auto }` (tb-blocs.css) ecrase la hauteur.
+   / A resource thumbnail, replacing the document icon. Square, centre-cropped.
+   aspect-ratio is REQUIRED: `.tb-bloc img { height: auto }` overrides height. */
+.resource-card__vignette {
+  width: 64px; aspect-ratio: 1 / 1; flex-shrink: 0;
+  object-fit: cover; border-radius: var(--radius-s);
+}
+.ressources-grille__tags { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-2); }
 
 /* =================================================================
    PAGE CMS : SOMMAIRE À GAUCHE, SECTIONS NUMÉROTÉES

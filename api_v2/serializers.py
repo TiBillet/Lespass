@@ -2127,6 +2127,7 @@ from pages.blocs_catalogue import (
     CHAMPS_FICHIER,
     CHAMPS_IMAGE_URL,
     TYPES_AVEC_GALERIE,
+    AFFICHAGES_SECTION_EN_GALERIE,
 )
 
 # Champs « standard » schema.org mappes a un champ modele (les autres passent
@@ -2162,15 +2163,29 @@ class BlocSchemaSerializer(serializers.Serializer):
         # `url` = lien cible du logo (PARTENAIRES), absent si vide.
         # / GALLERY / PARTNERS: expose the image list as ImageObject[]. `url` = the
         # logo's target link (PARTNERS), omitted when empty.
-        if instance.type_bloc in TYPES_AVEC_GALERIE:
+        # EQUIPE / RESSOURCES : une ImageGalerie = un element (personne ou
+        # ressource). `caption` = le nom ou le titre, `keywords` = les tags
+        # (separes par des virgules), `url` = le lien. L'image est
+        # facultative : un element sans image sort sans `contentUrl`.
+        # / EQUIPE / RESSOURCES: one ImageGalerie = one item. caption = name
+        # or title, keywords = comma-separated tags, url = link. Optional
+        # image: no image, no contentUrl.
+        section_a_elements_en_galerie = (
+            instance.type_bloc == "SECTION"
+            and instance.affichage in AFFICHAGES_SECTION_EN_GALERIE
+        )
+        if instance.type_bloc in TYPES_AVEC_GALERIE or section_a_elements_en_galerie:
             image_sortie = []
             for ig in instance.images_galerie.all().order_by("position"):
-                if not ig.image:
+                if not ig.image and not section_a_elements_en_galerie:
                     continue
-                image_object = {"@type": "ImageObject", "contentUrl": ig.image.url,
-                                "caption": ig.legende or None}
+                image_object = {"@type": "ImageObject", "caption": ig.legende or None}
+                if ig.image:
+                    image_object["contentUrl"] = ig.image.url
                 if ig.lien_url:
                     image_object["url"] = ig.lien_url
+                if ig.tags:
+                    image_object["keywords"] = ig.tags
                 image_sortie.append(image_object)
         else:
             image_sortie = image_url
@@ -2278,8 +2293,23 @@ class BlocCreateSerializer(serializers.Serializer):
         """
         type_bloc = validated_data["additionalType"]
         fichier_image = None
-        fichiers_galerie = []          # liste de (ContentFile, legende, position)
+        # liste de (ContentFile ou None, legende, position, lien, tags)
+        # / list of (ContentFile or None, caption, position, link, tags)
+        fichiers_galerie = []
         fichiers_additional = {}       # nom_champ -> ContentFile
+
+        # L'affichage arrive dans additionalProperty. Une SECTION en EQUIPE ou
+        # en RESSOURCES recoit ses elements dans la liste `image` (une
+        # ImageObject par personne ou par ressource, image facultative).
+        # / The affichage comes in additionalProperty. A SECTION in EQUIPE or
+        # RESSOURCES gets its items in the `image` list (one ImageObject each).
+        affichage_demande = ""
+        for prop in (validated_data.get("additionalProperty") or []):
+            if prop.get("name") == "affichage":
+                affichage_demande = prop.get("value") or ""
+        section_a_elements_en_galerie = (
+            type_bloc == "SECTION" and affichage_demande in AFFICHAGES_SECTION_EN_GALERIE
+        )
 
         # Champs image passes en additionalProperty (image_secondaire, auteur_photo).
         # / Image fields passed via additionalProperty.
@@ -2310,12 +2340,39 @@ class BlocCreateSerializer(serializers.Serializer):
                     lien = (img.get("url") if isinstance(img, dict) else "") or ""
                     if url_a_schema_dangereux(lien):
                         lien = ""
-                    fichiers_galerie.append((fichier, legende, index, lien))
+                    fichiers_galerie.append((fichier, legende, index, lien, ""))
+        elif isinstance(valeur_image, list) and section_a_elements_en_galerie:
+            for index, element in enumerate(valeur_image):
+                if not isinstance(element, dict):
+                    raise serializers.ValidationError(
+                        {"image": _("Équipe et Ressources : chaque élément doit être un objet ImageObject.")})
+                # Image facultative : sans contentUrl, le gabarit affiche
+                # l'initiale (EQUIPE) ou l'icone document (RESSOURCES).
+                # / Optional image: without contentUrl, the template shows the
+                # initial (EQUIPE) or the document icon (RESSOURCES).
+                url_de_l_image = element.get("contentUrl") or ""
+                fichier = None
+                if url_de_l_image:
+                    fichier = telecharger_et_valider_image(url_de_l_image)
+                nom_ou_titre = element.get("caption") or ""
+                # keywords : texte « a, b » ou liste ["a", "b"] (schema.org).
+                # / keywords: "a, b" text or ["a", "b"] list (schema.org).
+                tags = element.get("keywords") or ""
+                if isinstance(tags, list):
+                    tags = ", ".join(str(tag) for tag in tags)
+                # Le lien n'est rendu que par RESSOURCES. Schema dangereux
+                # neutralise : l'ImageGalerie ne passe pas par full_clean ici.
+                # / The link is only rendered by RESSOURCES. Dangerous scheme
+                # neutralized: ImageGalerie skips full_clean here.
+                lien = element.get("url") or ""
+                if url_a_schema_dangereux(lien):
+                    lien = ""
+                fichiers_galerie.append((fichier, nom_ou_titre, index, str(lien), str(tags)))
         elif isinstance(valeur_image, list):
             # Une liste d'images n'est acceptee que pour GALERIE et PARTENAIRES.
             # / A list of images is only accepted for the IMAGES type.
             raise serializers.ValidationError(
-                {"image": _("Une liste d'images n'est acceptee que pour les blocs IMAGES.")})
+                {"image": _("Une liste d'images n'est acceptee que pour les blocs IMAGES et les sections Équipe ou Ressources.")})
 
         # Bloc TEXTE : on importe les images referencees dans le markdown
         # (![alt](http...)) et on reecrit le texte en ![alt](galerie:N), le mecanisme
@@ -2346,7 +2403,7 @@ class BlocCreateSerializer(serializers.Serializer):
                 if not fichier:
                     return correspondance.group(0)
                 compteur["n"] += 1
-                fichiers_galerie.append((fichier, alt, compteur["n"], ""))
+                fichiers_galerie.append((fichier, alt, compteur["n"], "", ""))
                 return f"![{alt}](galerie:{compteur['n']})"
 
             texte_markdown_reecrit = _re_md.sub(
@@ -2436,10 +2493,14 @@ class BlocCreateSerializer(serializers.Serializer):
         # Galerie pre-telechargee (FK : bloc deja persiste). / Pre-downloaded gallery.
         if fichiers["galerie"]:
             from pages.models import ImageGalerie
-            for fichier, legende, position, lien in fichiers["galerie"]:
+            for fichier, legende, position, lien, tags in fichiers["galerie"]:
+                # Un element d'EQUIPE ou de RESSOURCES peut ne pas avoir
+                # d'image : un champ fichier vide s'ecrit "" (la colonne refuse
+                # NULL). / An EQUIPE or RESSOURCES item may have no image: an
+                # empty file field is written as "" (the column refuses NULL).
                 ImageGalerie.objects.create(
-                    bloc=bloc, image=fichier, legende=legende, position=position,
-                    lien_url=lien)
+                    bloc=bloc, image=fichier or "", legende=legende,
+                    position=position, lien_url=lien, tags=tags)
         return bloc
 
     def create(self, validated_data: Dict[str, Any]) -> "Bloc":
