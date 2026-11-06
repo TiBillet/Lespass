@@ -1,8 +1,9 @@
 # Blocs Équipe et Ressources : une image par élément / Team and Resources blocks: one image per item
 
 **Date :** 2026-11-06
-**Migration :** Oui — `pages/migrations/0006_imagegalerie_tags.py` (ajout du champ `ImageGalerie.tags`).
-Dépend de `0005_imagegalerie_legende_500` (autre chantier du même jour).
+**Migration :** Oui — `pages/migrations/0005_imagegalerie_legende_tags.py`. Elle regroupe
+l'ajout du champ `ImageGalerie.tags` (ce chantier) et `legende` passée à 500 caractères
+(chantier « galerie sans recadrage » du même jour).
 Pas de migration de données : aucun bloc Équipe ni Ressources n'existe en base.
 `docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas pages`
 
@@ -42,7 +43,7 @@ retrouvées dans l'aperçu.
 | Fichier / File | Changement / Change |
 |---|---|
 | `pages/models.py` | `ImageGalerie.tags` + méthode `liste_des_tags()` |
-| `pages/migrations/0006_imagegalerie_tags.py` | Ajout de la colonne `tags` |
+| `pages/migrations/0005_imagegalerie_legende_tags.py` | Ajout de la colonne `tags` (+ `legende` à 500) |
 | `pages/blocs_catalogue.py` | EQUIPE et RESSOURCES dans `AFFICHAGES_AVEC_GALERIE`, retirés des tables de `contenu` ; nouvelle constante `AFFICHAGES_SECTION_EN_GALERIE` |
 | `pages/admin.py` | Encart Images : colonnes selon le bloc (EQUIPE : tags sans lien ; RESSOURCES : tags et lien ; ailleurs : lien sans tags) |
 | `pages/admin_apercu.py` | Aperçu : clé `-uuid`, tags lus, personne sans photo gardée |
