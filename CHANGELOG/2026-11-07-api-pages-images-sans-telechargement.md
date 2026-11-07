@@ -14,6 +14,7 @@
 - Ajout d'un bloc en multipart : un fichier refusé ne laisse plus de bloc orphelin (transaction).
 - Bloc TEXTE : les images externes du markdown ne sont plus importées, le texte est gardé tel quel.
 - Doc remise à jour sur le catalogue réel des blocs (skill `tibillet-api`, OpenAPI, `api_v2/GUIDELINES.md`) : elle citait encore les 19 anciens types (HERO, PARAGRAPHE, GALERIE, IFRAME…), refusés par l'API depuis juillet 2026, des champs disparus (`surtitre`, `image_position`, `repliable`) et le mode blog (`est_blog`), retiré. La table des 8 types et de leurs affichages est ajoutée. Chaque exemple JSON de la doc a été créé pour de vrai, dans une transaction annulée.
+- Admin des clés API : l'encart « Besoin d'aide ? » (liste et formulaire) explique l'usage d'une clé et donne les liens du contrat OpenAPI (`.yaml` brut, à donner à un agent) et du skill `tibillet-api`.
 
 / The server no longer downloads images from URLs; any non-file image is a 400. New multipart endpoint to add one image to a block's gallery. Stricter image validation (real format, 50 Mpx, decompression bomb → 400) for the whole API v2. Server-chosen file names. No orphan block on a refused multipart file.
 
@@ -33,6 +34,8 @@
 | `TECH_DOC/SKILLS/tibillet-api/` | `SKILL.md` et `references/recettes.md` : recettes en deux temps |
 | `tests/pytest/test_pages_api.py`, `test_pages_equipe.py` | Tests du téléchargement retirés ; tests du nouveau comportement |
 | `TECH_DOC/SESSIONS/PAGES/` | `CHANTIER-09-…md`, `INDEX.md` |
+| `Administration/admin_tenant.py`, `Administration/admin/help_messages_dictionnary.py` | `ExternalApiKeyAdmin` + `HelpDisplayMixin`, entrée d'aide `CLE_API` (liens .yaml et skill) |
+| `tests/pytest/test_admin_cle_api_aide.py` | Les deux liens sont sur la liste et sur le formulaire de création |
 
 ---
 
@@ -62,6 +65,11 @@ Prérequis : une clé API avec le droit `page` (`K="Api-Key <cle>"`), `H=lespass
 ### Test 5 — events : effet de la validation durcie
 1. Créer un event avec une image JPEG classique (`img`) : 201, comme avant.
 2. Avec un TIFF : 400.
+
+### Test 6 — aide de l'admin des clés API
+1. Admin → Clés API : cliquer sur « Besoin d'aide ? Cliquer ici ! ».
+2. Attendu : le texte d'usage et deux liens (contrat .yaml brut, skill tibillet-api) ; ils ouvrent les fichiers sur GitHub.
+3. Même encart sur « Ajouter une clé ».
 
 ### Tests automatiques
 `docker exec lespass_django poetry run pytest tests/pytest/test_pages_api.py tests/pytest/test_pages_equipe.py tests/pytest/test_pages_ressources.py tests/pytest/test_event_images.py tests/pytest/test_postal_address_images.py -q`

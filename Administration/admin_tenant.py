@@ -208,9 +208,22 @@ logger = logging.getLogger(__name__)
 
 
 @admin.register(ExternalApiKey, site=staff_admin_site)
-class ExternalApiKeyAdmin(ModelAdmin):
+class ExternalApiKeyAdmin(HelpDisplayMixin, ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
+
+    # Encart d'aide « Besoin d'aide ? » sur la liste et sur le formulaire : il
+    # donne les liens du contrat de l'API (.yaml) et du skill tibillet-api, a
+    # confier a un agent avec la cle. Textes et liens :
+    # Administration/admin/help_messages_dictionnary.py (cle "CLE_API").
+    # La liste a besoin de list_before_template ; le formulaire passe par le
+    # change_form_template pose par HelpDisplayMixin.
+    # / Help box on list and form: links to the API contract and the agent guide.
+    list_before_template = "admin/help/help_display_before_template.html"
+    list_help_text = HELP_MESSAGES_DICT["CLE_API"]["list_help_text"]
+    list_help_url = HELP_MESSAGES_DICT["CLE_API"]["list_help_url"]
+    changeform_help_text = HELP_MESSAGES_DICT["CLE_API"]["changeform_help_text"]
+    changeform_help_url = HELP_MESSAGES_DICT["CLE_API"]["changeform_help_url"]
 
     list_display = [
         'name',
