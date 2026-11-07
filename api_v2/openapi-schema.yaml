@@ -1477,11 +1477,15 @@ paths:
       summary: Create a Page with nested blocs (schema.org/WebPage, atomic)
       description: |
         FR: Crée une page et ses blocs en une seule requête atomique. Si la création
-        d'un bloc échoue (URL image invalide, slug réservé, etc.), l'ensemble est
-        annulé. Requiert une clé API avec permission `page`.
+        d'un bloc échoue (image envoyée autrement qu'en fichier, slug réservé, etc.),
+        rien n'est créé. Le JSON ne porte aucune image : le serveur ne télécharge
+        aucune URL. Les images s'envoient ensuite, en fichier, sur chaque bloc
+        (PATCH multipart, ou POST /api/v2/blocs/{uuid}/images/ pour une galerie).
+        Requiert une clé API avec permission `page`.
 
-        EN: Atomically creates a page and its blocs. Any bloc error (invalid image
-        URL, reserved slug, etc.) rolls back the entire creation.
+        EN: Atomically creates a page and its blocs. Any bloc error (image not sent
+        as a file, reserved slug, etc.) creates nothing. The JSON carries no image:
+        images are uploaded afterwards on each bloc.
         Requires an API key with `page` permission.
       tags: [Page]
       security:
@@ -1494,7 +1498,7 @@ paths:
               $ref: '#/components/schemas/WebPageCreate'
             examples:
               pageWithBlocs:
-                summary: "Page d'accueil : HERO (identité) + PARAGRAPHE + CTA"
+                summary: "Page d'accueil : bannière + texte + appel à l'action"
                 value:
                   "@context": "https://schema.org"
                   "@type": "WebPage"
@@ -1507,13 +1511,20 @@ paths:
                       name: "publie"
                       value: true
                   hasPart:
-                    - additionalType: "HERO"
+                    - additionalType: "SECTION"
                       headline: "Bienvenue"
-                    - additionalType: "PARAGRAPHE"
-                      headline: "À propos"
-                      text: "<p>Un lieu culturel <strong>coopératif</strong>.</p>"
-                    - additionalType: "CTA"
                       additionalProperty:
+                        - "@type": "PropertyValue"
+                          name: "affichage"
+                          value: "BANNIERE"
+                    - additionalType: "TEXTE"
+                      headline: "À propos"
+                      text: "Un lieu culturel **coopératif**."
+                    - additionalType: "SECTION"
+                      additionalProperty:
+                        - "@type": "PropertyValue"
+                          name: "affichage"
+                          value: "APPEL_ACTION"
                         - "@type": "PropertyValue"
                           name: "bouton_label"
                           value: "Voir l'agenda"
@@ -1528,7 +1539,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WebPage'
         '400':
-          description: "Bad Request — slug réservé, URL image invalide, champ requis manquant"
+          description: "Bad Request — slug réservé, image envoyée autrement qu'en fichier, champ requis manquant"
           content:
             application/json:
               schema:
@@ -1545,14 +1556,17 @@ paths:
       summary: "Catalogue des types de blocs et leurs champs autorisés"
       description: |
         FR: Catalogue de référence des types de blocs disponibles et de leurs
-        champs autorisés (dont IFRAME, PARTENAIRES, NEWSLETTER). Source unique :
+        champs autorisés (SECTION, TEXTE, IMAGES, INTEGRATION, LIEU, FAQ, LISTE, CARTE_FIGEE). Source unique :
         `pages/blocs_catalogue.py`. Toujours interroger cet endpoint pour connaître
-        les types et champs à jour plutôt que de les coder en dur.
+        les types et champs à jour plutôt que de les coder en dur. Les valeurs de
+        `affichage` (variation visuelle d'un type) ne sont PAS dans cette réponse :
+        elles sont listées dans `api_v2/GUIDELINES.md` (AFFICHAGES_PAR_TYPE).
 
         EN: Reference catalogue of the available bloc types and their allowed
-        fields (including IFRAME, PARTENAIRES, NEWSLETTER). Single source of truth:
+        fields (SECTION, TEXTE, IMAGES, INTEGRATION, LIEU, FAQ, LISTE, CARTE_FIGEE). Single source of truth:
         `pages/blocs_catalogue.py`. Always query this endpoint for the up-to-date
-        types and fields instead of hardcoding them.
+        types and fields instead of hardcoding them. The `affichage` values are NOT
+        in this response: see `api_v2/GUIDELINES.md`.
       tags: [Page]
       security:
         - ApiKeyAuth: []
@@ -1573,16 +1587,17 @@ paths:
                   summary: "Extrait du catalogue (2 premiers types)"
                   value:
                     blockTypes:
-                      - type: "HERO"
-                        label: "Héro"
-                        fields:
-                          - "titre"
-                          - "sous_titre"
-                      - type: "PARAGRAPHE"
-                        label: "Paragraphe"
+                      - type: "TEXTE"
+                        label: "Texte (article, paragraphe — écrit en Markdown)"
                         fields:
                           - "titre"
                           - "texte"
+                      - type: "IMAGES"
+                        label: "Images (une photo, une galerie, une bande de logos)"
+                        fields:
+                          - "affichage"
+                          - "titre"
+                          - "image"
   /api/v2/pages/{uuid}/:
     get:
       operationId: retrievePage
@@ -1677,18 +1692,28 @@ paths:
       operationId: createBloc
       summary: "Ajoute un bloc à une Page (JSON ou multipart)"
       description: |
-        FR: Ajoute un bloc à la page identifiée par uuid. Accepte du JSON (image par
-        URL, téléchargée par le serveur, ≤ 10 Mo) ou du multipart/form-data (upload
-        de fichier image). Protection anti-SSRF : les URL vers des hôtes internes/privés/
-        loopback sont rejetées (400). Les schémas non http/https sont refusés.
-        Pour une vidéo, utiliser le bloc EMBED (embed_url = YouTube/Vimeo/PeerTube).
-        L'upload de fichier vidéo n'est pas exposé par l'API.
+        FR: Ajoute un bloc à la page identifiée par uuid, en JSON ou en multipart.
+        Le serveur ne télécharge AUCUNE URL : une image s'envoie en fichier.
+        - Image simple (`image`, `image_secondaire`, `auteur_photo`) : en multipart
+          sur cet endpoint, ou ensuite par PATCH multipart du bloc.
+        - Galerie (IMAGES en GRILLE ou BANDE_LOGOS), photos d'une Équipe, vignettes
+          de Ressources, images d'un bloc TEXTE : créer le bloc, puis envoyer chaque
+          image par `POST /api/v2/blocs/{uuid}/images/`.
+        Une image envoyée autrement (URL, liste d'ImageObject avec `contentUrl`,
+        dict, texte à la place du fichier…) renvoie un 400. Seule exception : une
+        SECTION Équipe ou Ressources reçoit ses éléments dans `image`, SANS
+        `contentUrl` (nom, badges, lien). Fichier accepté : JPEG, PNG, GIF ou WebP,
+        ≤ 10 Mo, ≤ 50 mégapixels, renommé par le serveur. Le markdown d'un bloc
+        TEXTE est gardé tel quel : ses images externes ne sont pas importées.
+        Pour une vidéo, utiliser le bloc INTEGRATION (embed_url = YouTube/Vimeo/PeerTube).
 
-        EN: Adds a bloc to the page. Accepts JSON (image by URL, server-downloaded,
-        ≤ 10 MB) or multipart/form-data (image file upload).
-        Anti-SSRF: URLs pointing to internal/private/loopback hosts are rejected (400).
-        For video, use the EMBED block (embed_url = YouTube/Vimeo/PeerTube).
-        Video file upload is not exposed by the API.
+        EN: Adds a bloc to the page, as JSON or multipart. The server downloads NO
+        URL: images are sent as files (multipart here, or
+        `POST /api/v2/blocs/{uuid}/images/` for galleries, team photos, resource
+        thumbnails and TEXTE images). Any other image form returns 400. An EQUIPE or
+        RESSOURCES SECTION gets its items in `image`, WITHOUT `contentUrl`.
+        Accepted files: JPEG, PNG, GIF or WebP, ≤ 10 MB, ≤ 50 megapixels, renamed
+        by the server.
       tags: [Page]
       security:
         - ApiKeyAuth: []
@@ -1707,13 +1732,15 @@ paths:
               $ref: '#/components/schemas/WebPageElementCreate'
             examples:
               imageTexteBloc:
-                summary: "Bloc IMAGE_TEXTE avec image par URL et bouton"
+                summary: "Section texte + image avec bouton (l'image s'envoie ensuite en multipart)"
                 value:
-                  additionalType: "IMAGE_TEXTE"
+                  additionalType: "SECTION"
                   headline: "Nos ateliers"
                   text: "<p>Découvrez nos ateliers hebdomadaires.</p>"
-                  image: "https://exemple.fr/atelier.jpg"
                   additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "affichage"
+                      value: "TEXTE_IMAGE_GAUCHE"
                     - "@type": "PropertyValue"
                       name: "bouton_label"
                       value: "Réserver"
@@ -1721,26 +1748,26 @@ paths:
                       name: "bouton_url"
                       value: "/event/"
               galerieBloc:
-                summary: "Bloc GALERIE avec liste ImageObject[]"
+                summary: "Galerie en grille (les images s'envoient ensuite par /blocs/{uuid}/images/)"
                 value:
-                  additionalType: "GALERIE"
+                  additionalType: "IMAGES"
                   headline: "Notre galerie"
-                  image:
-                    - "@type": "ImageObject"
-                      contentUrl: "https://exemple.fr/img1.jpg"
-                      caption: "Salle principale"
-                    - "@type": "ImageObject"
-                      contentUrl: "https://exemple.fr/img2.jpg"
-                      caption: "Terrasse"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "affichage"
+                      value: "GRILLE"
               iframeBloc:
-                summary: "Bloc IFRAME (contenu intégré libre, hauteur fixe)"
+                summary: "Intégration en WIDGET (contenu intégré libre, hauteur fixe)"
                 description: >-
                   L'iframe n'est rendu que si l'hôte de embed_url est autorisé par le
                   superadmin ROOT (whitelist globale). hauteur_px : hauteur du cadre.
                 value:
-                  additionalType: "IFRAME"
+                  additionalType: "INTEGRATION"
                   headline: "Le plan d'accès"
                   additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "affichage"
+                      value: "WIDGET"
                     - "@type": "PropertyValue"
                       name: "embed_url"
                       value: "https://www.openstreetmap.org/export/embed.html?bbox=..."
@@ -1748,42 +1775,57 @@ paths:
                       name: "hauteur_px"
                       value: 420
               newsletterBloc:
-                summary: "Bloc NEWSLETTER (formulaire d'inscription Ghost)"
+                summary: "Intégration en NEWSLETTER (formulaire d'inscription Ghost)"
                 description: >-
                   embed_url = l'instance Ghost (data-site). headline/alternativeHeadline
                   = titre/description du formulaire. Le script Ghost est servi en local.
                 value:
-                  additionalType: "NEWSLETTER"
+                  additionalType: "INTEGRATION"
                   headline: "Les news de TiBillet"
                   alternativeHeadline: "La boîte à outils d'organisation collective"
                   additionalProperty:
                     - "@type": "PropertyValue"
+                      name: "affichage"
+                      value: "NEWSLETTER"
+                    - "@type": "PropertyValue"
                       name: "embed_url"
                       value: "https://ghost.exemple.coop/"
               partenairesBloc:
-                summary: "Bloc PARTENAIRES (bande de logos cliquables)"
+                summary: "Bande de logos (les logos s'envoient ensuite par /blocs/{uuid}/images/)"
                 description: >-
-                  Comme GALERIE, image = liste d'ImageObject. La clé `url` (optionnelle)
-                  rend le logo cliquable (nouvel onglet) ; les schémas dangereux sont
-                  neutralisés côté serveur.
+                  Chaque logo s'ajoute par POST /api/v2/blocs/{uuid}/images/ (fichier
+                  + caption + url). La clé `url` rend le logo cliquable (nouvel
+                  onglet) ; un schéma dangereux est vidé côté serveur.
                 value:
-                  additionalType: "PARTENAIRES"
+                  additionalType: "IMAGES"
                   headline: "Ils nous soutiennent"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "affichage"
+                      value: "BANDE_LOGOS"
+              equipeBloc:
+                summary: "Section Équipe : les personnes, sans photo"
+                description: >-
+                  Les personnes arrivent dans `image`, SANS contentUrl. Chaque photo
+                  s'ajoute ensuite par POST /api/v2/blocs/{uuid}/images/.
+                value:
+                  additionalType: "SECTION"
+                  headline: "L'équipe"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "affichage"
+                      value: "EQUIPE"
                   image:
                     - "@type": "ImageObject"
-                      contentUrl: "https://exemple.fr/logo-alpha.png"
-                      caption: "Coop Alpha"
-                      url: "https://alpha.exemple/"
-                    - "@type": "ImageObject"
-                      contentUrl: "https://exemple.fr/logo-beta.png"
-                      caption: "Asso Beta"
+                      caption: "Awa Diallo"
+                      keywords: "Coordination, Salariée"
           multipart/form-data:
             schema:
               type: object
               properties:
                 additionalType:
                   type: string
-                  example: IMAGE_TEXTE
+                  example: IMAGES
                 headline:
                   type: string
                 alternativeHeadline:
@@ -1794,7 +1836,7 @@ paths:
                 image:
                   type: string
                   format: binary
-                  description: "Fichier image (JPEG/PNG/WebP, ≤ 10 Mo)"
+                  description: "Fichier image (JPEG, PNG, GIF ou WebP, ≤ 10 Mo, ≤ 50 mégapixels). Un texte à la place du fichier renvoie un 400."
                 image_secondaire:
                   type: string
                   format: binary
@@ -1811,18 +1853,100 @@ paths:
               schema:
                 $ref: '#/components/schemas/WebPageElement'
         '400':
-          description: "Bad Request — tentative SSRF, image invalide, type de bloc inconnu"
+          description: "Bad Request — image envoyée autrement qu'en fichier, fichier refusé (format, taille, pixels), type de bloc inconnu"
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v2/blocs/{uuid}/images/:
+    post:
+      operationId: addBlocImage
+      summary: "Ajoute une image à la galerie d'un bloc (multipart)"
+      description: |
+        FR: Ajoute UNE image à la fin de la galerie d'un bloc. C'est le seul moyen,
+        par l'API, de remplir une galerie, les photos d'une Équipe, les vignettes de
+        Ressources et les images d'un bloc TEXTE. Le serveur ne télécharge aucune URL.
+        Blocs acceptés : IMAGES en affichage GRILLE ou BANDE_LOGOS, SECTION en
+        EQUIPE ou RESSOURCES, et TEXTE. Autre bloc : 400.
+        Le fichier est obligatoire, sauf pour Équipe et Ressources (photo facultative).
+        Fichier accepté : JPEG, PNG, GIF ou WebP, ≤ 10 Mo, ≤ 50 mégapixels, renommé
+        par le serveur. Un `url` à schéma dangereux est vidé.
+        Réponse : l'ImageObject créé. `galerieReference` (`galerie:N`) est la
+        référence à écrire dans le markdown d'un bloc TEXTE : `![légende](galerie:N)`.
+        Exemple : `curl -X POST .../api/v2/blocs/<uuid>/images/ -F image=@logo.png
+        -F caption="Coop Alpha" -F url=https://alpha.exemple/`
+
+        EN: Adds ONE image at the end of a block's gallery (multipart). Accepted
+        blocks: IMAGES in GRILLE or BANDE_LOGOS, SECTION in EQUIPE or RESSOURCES,
+        TEXTE. File required except for EQUIPE/RESSOURCES. `galerieReference` is the
+        `galerie:N` reference to use in a TEXTE block's markdown.
+      tags: [Page]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: "Fichier image (JPEG, PNG, GIF ou WebP, ≤ 10 Mo, ≤ 50 mégapixels)"
+                caption:
+                  type: string
+                  description: "Légende ; nom de la personne (Équipe) ; titre de la ressource (Ressources). ≤ 500 caractères"
+                url:
+                  type: string
+                  description: "Lien de l'image (logo cliquable, lien d'une ressource). Schéma dangereux vidé"
+                keywords:
+                  type: string
+                  description: "Badges, séparés par des virgules (Équipe, Ressources). ≤ 200 caractères"
+      responses:
+        '201':
+          description: Created — l'image ajoutée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageObject'
+              examples:
+                logo:
+                  value:
+                    "@type": "ImageObject"
+                    identifier: "3f1c2b9e-0d4a-4e8b-9a51-6c2f8e7d1a03"
+                    contentUrl: "/media/images/pages/galerie/4b9f0c1e2d3a4f5e8a7b6c5d4e3f2a1b.png"
+                    caption: "Coop Alpha"
+                    url: "https://alpha.exemple/"
+                    position: 0
+                    galerieReference: "galerie:1"
+        '400':
+          description: "Bad Request — bloc sans galerie, fichier absent ou refusé, texte à la place du fichier"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Bloc introuvable
   /api/v2/blocs/{uuid}/:
     patch:
       operationId: patchBloc
       summary: "Modifie un bloc (JSON ou multipart)"
       description: |
-        FR: Édite un bloc par son uuid. Mêmes formats que POST (JSON ou multipart).
-        Protection anti-SSRF identique. Les schémas dangereux dans les champs lien
+        FR: Édite un bloc par son uuid, en JSON ou en multipart.
+        Images : multipart UNIQUEMENT (fichier joint dans `image`, `image_secondaire`
+        ou `auteur_photo`). Le serveur ne télécharge aucune URL : une image envoyée
+        autrement (URL, liste d'ImageObject, null…), que ce soit dans
+        `image` ou dans `additionalProperty`, renvoie un 400. La galerie d'un bloc
+        ne se modifie pas par PATCH : une image s'y ajoute par
+        POST /api/v2/blocs/{uuid}/images/. Les schémas dangereux dans les champs lien
         (bouton_url, bouton2_url, embed_url) sont neutralisés automatiquement
         (champ vidé, pas d'erreur retournée).
         `position` (clé de premier niveau, entier ≥ 0) déplace le bloc dans sa page ;
@@ -1831,8 +1955,12 @@ paths:
         `contenu` = [{"titre": libellé, "url": lien}, …] ajoute des boutons. Un
         bouton n'est affiché que si son lien commence par « http » ou « / ».
 
-        EN: Updates a bloc by its uuid. Same formats as POST (JSON or multipart).
-        Same anti-SSRF protection. Dangerous URL schemes in link fields
+        EN: Updates a bloc by its uuid, as JSON or multipart.
+        Images: multipart ONLY (file attached in `image`, `image_secondaire` or
+        `auteur_photo`). The server downloads no URL: an image sent any other
+        way (URL, ImageObject list, null…), in `image` or in `additionalProperty`,
+        returns 400. A block's gallery is not changed by PATCH: add images with
+        POST /api/v2/blocs/{uuid}/images/. Dangerous URL schemes in link fields
         (bouton_url, bouton2_url, embed_url) are silently neutralized (field cleared).
         Top-level `position` (integer ≥ 0) moves the block in its page; invalid -> 400.
         APPEL_ACTION: `contenu` = [{"titre", "url"}, …] adds buttons beyond the
@@ -1852,10 +1980,39 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/WebPageElementCreate'
+              type: object
+              description: >
+                Champs modifiables en JSON. Pas de `image` : au PATCH, les images
+                s'envoient en multipart (400 sinon). `additionalProperty` ne peut
+                pas non plus porter `image_secondaire` ni `auteur_photo`.
+              properties:
+                headline:
+                  type: string
+                alternativeHeadline:
+                  type: string
+                text:
+                  type: string
+                  description: "HTML nettoyé par nh3 (markdown brut pour un bloc TEXTE)"
+                position:
+                  type: integer
+                  minimum: 0
+                additionalProperty:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PropertyValue'
+            examples:
+              titre_et_bouton:
+                summary: "Change le titre et le lien du bouton"
+                value:
+                  headline: "Titre corrigé"
+                  additionalProperty:
+                    - {"@type": "PropertyValue", "name": "bouton_url", "value": "https://exemple.org/billetterie/"}
           multipart/form-data:
             schema:
               type: object
+              description: >
+                Seul moyen de changer une image au PATCH :
+                curl -X PATCH .../api/v2/blocs/<uuid>/ -F image=@photo.png
               properties:
                 headline:
                   type: string
@@ -1881,11 +2038,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/WebPageElement'
         '400':
-          description: Bad Request
+          description: "Bad Request — image envoyée en JSON (multipart uniquement), position invalide, affichage étranger au type"
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              examples:
+                image_en_json:
+                  summary: "Image envoyée par URL au PATCH"
+                  value:
+                    image: ["Les images s'envoient en fichier : en multipart sur le bloc, ou par POST /api/v2/blocs/{uuid}/images/ pour une galerie, une équipe ou des ressources. Le serveur ne télécharge aucune URL."]
     delete:
       operationId: deleteBloc
       summary: Supprime un bloc
@@ -3226,11 +3388,10 @@ components:
           type: string
           description: >
             Type de bloc (champ pivot du mapping). Valeurs possibles :
-            HERO, PARAGRAPHE, IMAGE_TEXTE, CTA, TEMOIGNAGE, VIDEO_TEXTE,
-            CARTE, IMAGE, CARTE_LEAFLET, INFOS, FAQ, EVENEMENTS, GALERIE, EMBED,
-            MARKDOWN, LISTE_SOUS_PAGES, IFRAME, PARTENAIRES, NEWSLETTER.
+            SECTION, TEXTE, IMAGES, INTEGRATION, LIEU, FAQ, LISTE, CARTE_FIGEE. La variation visuelle est portée par
+            `affichage` (dans additionalProperty).
             Liste à jour : GET /api/v2/pages/block-types/.
-          example: HERO
+          example: SECTION
         headline:
           type: string
           description: Titre du bloc
@@ -3242,8 +3403,9 @@ components:
           description: "Contenu HTML nettoyé par nh3 (whitelist de balises autorisées)"
         image:
           description: >
-            URL de l'image principale (string), ou liste ImageObject[]
-            pour les blocs GALERIE et PARTENAIRES.
+            En lecture : URL de l'image principale (string), ou liste
+            ImageObject[] pour une galerie (IMAGES en GRILLE ou BANDE_LOGOS) et
+            pour une SECTION Équipe ou Ressources.
           oneOf:
             - type: string
               format: uri
@@ -3257,14 +3419,14 @@ components:
           type: array
           description: >
             Tous les champs supplémentaires du bloc sous forme PropertyValue[].
-            Clés possibles : surtitre, badge, image_secondaire (URL),
-            image_position, affichage_image (PLEINE_LARGEUR|VIGNETTE_TITRE),
-            bouton_label, bouton_url,
-            bouton2_label, bouton2_url, auteur_nom, auteur_role,
-            auteur_photo (URL), points_gps (JSON), contenu (JSON),
-            nombre_max (int), repliable (bool), embed_url, hauteur_px (int).
+            Clés possibles : affichage, source, badge, bouton_label, bouton_url,
+            bouton2_label, bouton2_url, auteur_nom, auteur_role, points_gps (JSON),
+            donnees_carte_figee (JSON), contenu (JSON), nombre_max (int),
+            embed_url, hauteur_px (int). image_secondaire et auteur_photo sont
+            exposés en lecture (URL) ; en écriture, ce sont des fichiers
+            (multipart seulement).
             Le champ video n'est pas settable via l'API (admin uniquement) ;
-            pour une vidéo, utiliser le bloc EMBED (embed_url).
+            pour une vidéo, utiliser le bloc INTEGRATION en VIDEO (embed_url).
             Format value : string | nombre | booléen | liste | objet JSON.
           items:
             $ref: '#/components/schemas/PropertyValue'
@@ -3275,7 +3437,7 @@ components:
         additionalType:
           type: string
           description: "Type de bloc (requis à la création)"
-          example: HERO
+          example: SECTION
         headline:
           type: string
         alternativeHeadline:
@@ -3285,16 +3447,14 @@ components:
           description: "HTML (sera nettoyé par nh3 côté serveur)"
         image:
           description: >
-            URL http/https (téléchargée par le serveur, ≤ 10 Mo) ou liste
-            ImageObject[] pour GALERIE et PARTENAIRES (avec clé `url` optionnelle
-            = lien cliquable du logo). URLs internes/privées/loopback refusées
-            (protection SSRF). Vidéos : multipart uniquement, pas par URL.
-          oneOf:
-            - type: string
-              format: uri
-            - type: array
-              items:
-                $ref: '#/components/schemas/ImageObject'
+            Seulement pour une SECTION en affichage EQUIPE ou RESSOURCES : la liste
+            des éléments (caption = nom ou titre, keywords = badges, url = lien),
+            SANS contentUrl. Toute autre valeur non vide renvoie un 400 : le serveur
+            ne télécharge aucune URL. Les images s'envoient en fichier (multipart sur
+            le bloc, ou POST /api/v2/blocs/{uuid}/images/ pour une galerie).
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageObject'
         position:
           type: integer
         additionalProperty:
@@ -3313,11 +3473,11 @@ components:
         type:
           type: string
           description: Code du type de bloc
-          example: HERO
+          example: SECTION
         label:
           type: string
           description: Libellé lisible
-          example: "Héro"
+          example: "Section mise en avant (bannière, texte + média, carte, appel à l'action, citation)"
         fields:
           type: array
           description: Noms des champs autorisés pour ce type
@@ -3325,7 +3485,7 @@ components:
             type: string
     ImageObject:
       type: object
-      description: "schema.org/ImageObject — image d'un bloc GALERIE ou PARTENAIRES"
+      description: "schema.org/ImageObject — image de la galerie d'un bloc (IMAGES, SECTION Équipe/Ressources, TEXTE)"
       properties:
         '@type':
           type: string
@@ -3333,7 +3493,7 @@ components:
         contentUrl:
           type: string
           format: uri
-          description: "URL publique de l'image (téléchargée par le serveur)"
+          description: "URL publique de l'image, en lecture seulement (jamais acceptée en écriture : le serveur ne télécharge aucune URL)"
         caption:
           type: string
           description: "Légende de l'image"
@@ -3341,8 +3501,8 @@ components:
           type: string
           format: uri
           description: >
-            Lien cible du logo (bloc PARTENAIRES uniquement, optionnel) : rend le
-            logo cliquable dans un nouvel onglet. Les schémas dangereux
+            Lien de l'image (optionnel) : rend un logo d'une bande de logos
+            cliquable (nouvel onglet), ou sert de lien à une ressource. Les schémas dangereux
             (javascript:, data:, vbscript:) sont neutralisés côté serveur.
     # --- Bénévolat / Volunteering ---
     VolunteerTask:

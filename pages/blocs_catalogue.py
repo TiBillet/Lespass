@@ -332,13 +332,18 @@ CHAMPS_BLOC_AUTORISES = frozenset(
 )
 
 # Champs FICHIER : ne se settent JAMAIS via additionalProperty (string arbitraire =
-# corruption). Ils passent par URL (telechargement) ou upload multipart.
-# / FILE fields: never set via additionalProperty. They go through URL download or
-# multipart upload.
+# corruption). Ils arrivent uniquement en fichier (multipart). L'API ne telecharge
+# aucune URL.
+# / FILE fields: never set via additionalProperty. They only arrive as uploaded
+# files (multipart). The API downloads no URL.
 CHAMPS_FICHIER = frozenset({"image", "image_secondaire", "video", "auteur_photo"})
 
-# Champs IMAGE telechargeables par URL distante (pas la video : multipart only).
-# / IMAGE fields downloadable from a remote URL (not video: multipart only).
+# Champs IMAGE d'un bloc, envoyes en fichier par l'API (pas la video : l'API
+# n'accepte aucune video). Une valeur non vide envoyee autrement (URL, texte)
+# est refusee par un 400 (api_v2/serializers.py:BlocCreateSerializer.validate,
+# api_v2/views.py:_refuser_les_images_envoyees_sans_fichier).
+# / A block's IMAGE fields, sent as files to the API (no video). Anything else
+# non-empty is refused with a 400.
 CHAMPS_IMAGE_URL = frozenset({"image", "image_secondaire", "auteur_photo"})
 
 # Champs RELATION (cles etrangeres) : hors de CHAMPS_PAR_TYPE, donc hors de

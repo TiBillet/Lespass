@@ -34,7 +34,8 @@ K='Api-Key xxxx.yyyy'; H='lespass.tibillet.localhost'
 ### 1. Catalogue des types de blocs (À FAIRE EN PREMIER)
 ```bash
 curl -sk -H "Authorization: $K" "https://$H/api/v2/pages/block-types/"
-# -> {"blockTypes":[{"type":"HERO","label":"...","fields":["titre","sous_titre"]}, ...]}
+# -> {"blockTypes":[{"type":"SECTION","label":"...","fields":["affichage","titre",...]}, ...]}
+# Les AFFICHAGES de chaque type ne sont pas dans cette réponse : voir SKILL.md (table des types).
 ```
 
 ### 2. Créer une page ENTIÈRE avec ses blocs (POST imbriqué `hasPart`)
@@ -48,10 +49,12 @@ curl -sk -X POST "https://$H/api/v2/pages/" -H "Authorization: $K" \
       {"@type":"PropertyValue","name":"publie","value":true}
     ],
     "hasPart":[
-      {"additionalType":"HERO","headline":"Bienvenue","alternativeHeadline":"Un lieu coopératif"},
-      {"additionalType":"PARAGRAPHE","headline":"À propos","text":"<p>Bonjour <strong>ici</strong>.</p>"},
-      {"additionalType":"NEWSLETTER","headline":"Nos news",
-       "additionalProperty":[{"name":"embed_url","value":"https://ghost.exemple.coop/"}]}
+      {"additionalType":"SECTION","headline":"Bienvenue","alternativeHeadline":"Un lieu coopératif",
+       "additionalProperty":[{"name":"affichage","value":"BANNIERE"}]},
+      {"additionalType":"TEXTE","headline":"À propos","text":"Bonjour **ici**."},
+      {"additionalType":"INTEGRATION","headline":"Nos news",
+       "additionalProperty":[{"name":"affichage","value":"NEWSLETTER"},
+                             {"name":"embed_url","value":"https://ghost.exemple.coop/"}]}
     ]
   }'
 ```
@@ -60,55 +63,66 @@ curl -sk -X POST "https://$H/api/v2/pages/" -H "Authorization: $K" \
 ```bash
 curl -sk -X POST "https://$H/api/v2/pages/<PAGE_UUID>/blocs/" -H "Authorization: $K" \
   -H "Content-Type: application/json" -d '{
-    "additionalType":"IFRAME","headline":"Le plan",
+    "additionalType":"INTEGRATION","headline":"Le plan",
     "additionalProperty":[
+      {"name":"affichage","value":"WIDGET"},
       {"name":"embed_url","value":"https://www.openstreetmap.org/export/embed.html?bbox=..."},
       {"name":"hauteur_px","value":420}
     ]
   }'
 ```
 
-### 4. Bloc avec images (GALERIE / PARTENAIRES)
-`image` = liste d'`ImageObject`. Pour PARTENAIRES, la clé `url` rend le logo cliquable.
+### 4. Bloc avec images (galerie, bande de logos) — en deux temps
+Le serveur ne télécharge **aucune URL** : une image s'envoie en fichier. On crée le
+bloc en JSON, puis on envoie **chaque image** par `POST /api/v2/blocs/{uuid}/images/`.
 ```bash
-curl -sk -X POST "https://$H/api/v2/pages/<PAGE_UUID>/blocs/" -H "Authorization: $K" \
+# 1. Le bloc (bande de logos ; GRILLE pour une galerie photo)
+BLOC=$(curl -sk -X POST "https://$H/api/v2/pages/<PAGE_UUID>/blocs/" -H "Authorization: $K" \
   -H "Content-Type: application/json" -d '{
-    "additionalType":"PARTENAIRES","headline":"Ils nous soutiennent",
-    "image":[
-      {"@type":"ImageObject","contentUrl":"https://exemple.fr/logo-a.png","caption":"Coop A","url":"https://a.exemple/"},
-      {"@type":"ImageObject","contentUrl":"https://exemple.fr/logo-b.png","caption":"Asso B"}
-    ]
-  }'
+    "additionalType":"IMAGES","headline":"Ils nous soutiennent",
+    "additionalProperty":[{"name":"affichage","value":"BANDE_LOGOS"}]
+  }' | jq -r .identifier)
+# 2. Un appel par logo. `url` rend le logo cliquable (schéma dangereux vidé).
+curl -sk -X POST "https://$H/api/v2/blocs/$BLOC/images/" -H "Authorization: $K" \
+  -F image=@logo-a.png -F caption="Coop A" -F url=https://a.exemple/
 ```
-Images par **upload** : `multipart/form-data` sur le même endpoint (champ `image`, etc.).
+La réponse est l'`ImageObject` créé ; `galerieReference` (`galerie:N`) sert à appeler
+l'image dans le markdown d'un bloc TEXTE : `![légende](galerie:N)`.
+Image trouvée sur le web : la télécharger soi-même (`curl -o`), puis l'envoyer.
+Fichier accepté : JPEG, PNG, GIF ou WebP, ≤ 10 Mo, ≤ 50 mégapixels.
 
 ### 4 bis. Section Équipe (une `ImageObject` par personne)
-`SECTION` en affichage `EQUIPE` : `image` = liste d'`ImageObject`, une par personne.
-`caption` = le nom, `keywords` = les badges (texte « a, b » ou liste), `contentUrl`
-= la photo, **facultative** (sans photo, le site affiche l'initiale du nom).
+`SECTION` en affichage `EQUIPE` : `image` = liste d'`ImageObject`, une par personne,
+**sans `contentUrl`** (une URL renvoie un 400). `caption` = le nom, `keywords` = les
+badges (texte « a, b » ou liste). Sans photo, le site affiche l'initiale du nom.
 ```bash
 curl -sk -X POST "https://$H/api/v2/pages/<PAGE_UUID>/blocs/" -H "Authorization: $K" \
   -H "Content-Type: application/json" -d '{
     "additionalType":"SECTION",
     "additionalProperty":[{"name":"affichage","value":"EQUIPE"}],
     "image":[
-      {"@type":"ImageObject","contentUrl":"https://exemple.fr/awa.jpg","caption":"Awa Diallo","keywords":"Coordination, Salariée"},
+      {"@type":"ImageObject","caption":"Awa Diallo","keywords":"Coordination, Salariée"},
       {"@type":"ImageObject","caption":"Théo Marchand","keywords":["Vie associative","Bénévole"]}
     ]
   }'
 ```
+Pour ajouter une personne **avec sa photo** au bloc existant :
+`curl -sk -X POST "https://$H/api/v2/blocs/<BLOC_UUID>/images/" -H "Authorization: $K" -F image=@awa.jpg -F caption="Awa Diallo" -F keywords="Coordination"`.
 
 ### 4 ter. Section Ressources (une `ImageObject` par ressource)
 Même forme que l'Équipe, avec `affichage` = `RESSOURCES`. `caption` = le titre,
-`keywords` = les badges, `url` = le lien du titre (facultatif, `http…` ou `/…`),
-`contentUrl` = la vignette, **facultative** (sans vignette, le site affiche une
-icône document). Exemple d'élément :
-`{"@type":"ImageObject","caption":"Le journal du lieu","keywords":"Page","url":"/journal/"}`
+`keywords` = les badges, `url` = le lien du titre (facultatif, `http…` ou `/…`). La
+vignette est **facultative** (sans vignette, le site affiche une icône document) et
+s'envoie, comme une photo d'Équipe, par `POST /api/v2/blocs/{uuid}/images/`.
+Exemple d'élément : `{"@type":"ImageObject","caption":"Le journal du lieu","keywords":"Page","url":"/journal/"}`
 
 ### 5. Éditer / supprimer un bloc
 ```bash
 curl -sk -X PATCH  "https://$H/api/v2/blocs/<BLOC_UUID>/" -H "Authorization: $K" \
   -H "Content-Type: application/json" -d '{"headline":"Titre corrigé"}'
+# Changer l'image : en fichier, multipart (une URL renvoie un 400).
+curl -sk -X PATCH  "https://$H/api/v2/blocs/<BLOC_UUID>/" -H "Authorization: $K" \
+  -F image=@photo.png
 curl -sk -X DELETE "https://$H/api/v2/blocs/<BLOC_UUID>/" -H "Authorization: $K"
 ```
 

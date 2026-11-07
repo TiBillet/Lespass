@@ -61,13 +61,36 @@ Pour les **blocs** de page (`WebPageElement`), le mapping est :
 
 | Clé JSON (entrée/sortie) | Champ modèle | Note |
 |---|---|---|
-| `additionalType` | `type_bloc` | **pivot** : HERO, PARAGRAPHE, IFRAME, PARTENAIRES, NEWSLETTER… |
+| `additionalType` | `type_bloc` | **pivot** : `SECTION`, `TEXTE`, `IMAGES`, `INTEGRATION`, `LIEU`, `FAQ`, `LISTE`, `CARTE_FIGEE` (voir la table ci-dessous) |
 | `headline` | `titre` | |
 | `alternativeHeadline` | `sous_titre` | |
-| `text` | `texte` | HTML nettoyé par nh3 côté serveur |
-| `image` | `image` | URL (string) **ou** `ImageObject[]` pour GALERIE / PARTENAIRES, et pour une SECTION `EQUIPE` ou `RESSOURCES` (un élément par objet : `caption` = nom ou titre, `keywords` = badges, `url` = lien (RESSOURCES), `contentUrl` facultative) |
+| `text` | `texte` | bloc `TEXTE` : **markdown**, gardé tel quel ; autres blocs : HTML nettoyé par nh3 |
+| `image` | `image` | **Jamais une URL** (400). En JSON, seulement pour une SECTION `EQUIPE` ou `RESSOURCES` : `ImageObject[]` **sans `contentUrl`** (`caption` = nom ou titre, `keywords` = badges, `url` = lien). Les fichiers : multipart, ou `POST /api/v2/blocs/{uuid}/images/` |
 | `position` | `position` | ordre dans la page |
-| `additionalProperty` | *tout le reste* | `PropertyValue[]` (voir ci-dessous) |
+| `additionalProperty` | *tout le reste* | `PropertyValue[]` (voir ci-dessous), dont **`affichage`** |
+
+**Les 8 types de blocs** (`additionalType`) et leurs **affichages** (`affichage`, dans
+`additionalProperty`). Le catalogue live (`GET block-types/`) donne les champs de chaque
+type, mais **pas** la liste des affichages : la voici (source :
+`pages/blocs_catalogue.py:AFFICHAGES_PAR_TYPE`). Un affichage étranger au type → 400.
+Sans affichage, le serveur pose celui par défaut (SECTION → `BANNIERE`, IMAGES →
+`PLEINE_LARGEUR`).
+
+| Type | Affichages | Pour |
+|---|---|---|
+| `SECTION` | `BANNIERE`, `TEXTE_IMAGE_GAUCHE`, `TEXTE_IMAGE_DROITE`, `TEXTE_VIDEO`, `MEDIA_ET_CARTES`, `CARTE`, `APPEL_ACTION`, `CITATION`, `EQUIPE`, `FRISE`, `RESSOURCES` | mettre quelque chose en avant |
+| `TEXTE` | — | du texte en **markdown** |
+| `IMAGES` | `PLEINE_LARGEUR`, `VIGNETTE_TITRE`, `GRILLE`, `BANDE_LOGOS` | une ou plusieurs images |
+| `INTEGRATION` | `VIDEO`, `WIDGET`, `NEWSLETTER` | intégrer un contenu externe (`embed_url`) |
+| `LIEU` | `VERTICAL`, `HORIZONTAL` | une carte et des infos pratiques |
+| `FAQ` | — | questions / réponses |
+| `LISTE` | — (`source` = `SOUS_PAGES` ou `EVENEMENTS`) | une liste automatique |
+| `CARTE_FIGEE` | — | une carte nourrie par un fichier JSON |
+
+Anciens noms (avant juillet 2026), refusés par l'API : HERO, CTA, IMAGE_TEXTE, CARTE,
+TEMOIGNAGE → `SECTION` ; PARAGRAPHE, MARKDOWN → `TEXTE` ; IMAGE, GALERIE, PARTENAIRES →
+`IMAGES` ; EMBED, IFRAME, NEWSLETTER → `INTEGRATION` ; CARTE_LEAFLET, INFOS → `LIEU` ;
+EVENEMENTS, LISTE_SOUS_PAGES → `LISTE`.
 
 **`additionalProperty`** transporte tous les autres champs, au format
 `{"@type":"PropertyValue","name":"<champ>","value":<valeur>}`. Exemples de `name` :
@@ -84,25 +107,32 @@ Deux points qui évitent de deviner :
 
 Les **pages** (`WebPage`) suivent la même logique : `name` = titre, `hasPart` = la liste
 ordonnée de blocs (création imbriquée en un seul POST), `additionalProperty` pour
-`slug`, `publie`, `est_accueil`, `est_blog`, `noindex`, `meta_title`, `meta_description`.
+`slug`, `position`, `publie`, `est_accueil`, `noindex`, `meta_title`, `meta_description`.
 
 **Hiérarchie & navbar** : pour ranger une page **sous une page parente** (menu déroulant),
 utilise le champ **`isPartOf`** (au niveau haut du corps, PAS dans additionalProperty) =
 l'uuid **ou** le slug de la parente. Une page **d'accueil** (`est_accueil`) ne peut pas
-être parente. Une page **blog** (`est_blog=true`) type ses sous-pages en **articles** (JSON-LD Article +
-signature date, et elles sortent du menu déroulant). Pour lister les articles en cartes,
-ajoute un bloc `LISTE_SOUS_PAGES` à la page blog (c'est lui qui rend les cartes ; `est_blog`
-ne les crée pas). Le corps d'un article : un bloc `MARKDOWN` (les images `![](url)` du
-markdown sont **importées** et servies depuis le tenant, via `galerie:N`).
+être parente. Il n'y a **plus de mode blog** (`est_blog` a été retiré du moteur en
+juillet 2026). Pour lister les sous-pages d'une page en cartes : un bloc `LISTE` avec
+`source` = `SOUS_PAGES` (et `nombre_max`). Le corps d'un article : un bloc `TEXTE`
+(markdown). Les images
+`![](https://…)` du markdown **ne sont pas importées** (servies par le site d'origine).
+Pour les héberger sur le lieu : envoyer chaque image par `POST /api/v2/blocs/{uuid}/images/`,
+puis écrire `![légende](galerie:N)` (N = `galerieReference` de la réponse).
 
 ## 3. Réflexes par domaine
 
 - **Pages/blocs** : (1) `GET block-types/` pour connaître types + champs à jour ;
   (2) `POST /api/v2/pages/` avec `hasPart` pour créer la page **et** ses blocs d'un
   coup, OU `POST /api/v2/pages/{uuid}/blocs/` pour ajouter un bloc à une page existante.
-- **Images** : par **URL** (le serveur télécharge, valide Pillow, ≤ 10 Mo, refuse le
-  SSRF interne/loopback) — pratique pour scripter. Ou par **upload multipart** sur les
-  endpoints `blocs`. La **vidéo** n'est pas settable par l'API (utiliser un bloc EMBED).
+- **Images : toujours en fichier, jamais par URL** (le serveur ne télécharge rien ;
+  une URL renvoie un 400). Image simple : multipart sur `POST .../blocs/` ou
+  `PATCH /api/v2/blocs/{uuid}/`. Galerie (IMAGES en `GRILLE`/`BANDE_LOGOS`), photos
+  d'Équipe, vignettes de Ressources, images d'un article : créer le bloc en JSON, puis
+  **un `POST /api/v2/blocs/{uuid}/images/` par image** (multipart : `image`, `caption`,
+  `url`, `keywords`). Fichier : JPEG, PNG, GIF ou WebP, ≤ 10 Mo, ≤ 50 mégapixels.
+  Pour une image trouvée sur le web : la télécharger soi-même, puis l'envoyer.
+  La **vidéo** n'est pas settable par l'API (utiliser un bloc INTEGRATION).
 - **Bénévolat** : (1) `POST /api/v2/volunteer-tasks/` (la tâche) ; (2) `POST
   /api/v2/volunteer-plannings/` (slug dans `additionalProperty`) ; (3) un `POST
   /api/v2/volunteer-needs/` par case (`superEvent` = planning, `about` = tâche) ;
@@ -118,17 +148,19 @@ markdown sont **importées** et servies depuis le tenant, via `galerie:N`).
 Un `201` prouve que le bloc existe, **pas** que la page est belle. Deux règles issues
 de vraies corrections en review :
 
-- **Quinconce (`IMAGE_TEXTE`) : le texte ne doit pas être plus haut que l'image.**
+- **Quinconce (`SECTION` en `TEXTE_IMAGE_GAUCHE` / `TEXTE_IMAGE_DROITE`) : le texte ne
+  doit pas être plus haut que l'image.**
   Le template pose le texte *à côté* de l'image, et l'image **garde son ratio** (pas de
   crop : ce sont souvent des illustrations). Si tu colles 6 paragraphes à côté d'une
   illustration, le texte déborde sous elle et le bloc devient bancal.
   → Garde **~400 caractères max** à côté de l'image (un chapô), et renvoie **le reste
-  dans un bloc `PARAGRAPHE` pleine largeur** juste après. Alterne
-  `image_position` GAUCHE/DROITE d'un `IMAGE_TEXTE` au suivant pour l'effet quinconce.
+  dans un bloc `TEXTE` pleine largeur** juste après. Alterne l'affichage
+  `TEXTE_IMAGE_GAUCHE` / `TEXTE_IMAGE_DROITE` d'une section à la suivante pour l'effet
+  quinconce.
   Ne « corrige » pas ça en CSS avec un `object-fit: cover` : ça croperait les
   illustrations de tous les tenants (la skin `classic` est partagée).
-- **Un bloc = une idée.** Une section longue = `IMAGE_TEXTE` (image + chapô) puis
-  `PARAGRAPHE`(s). Pas un bloc géant par section.
+- **Un bloc = une idée.** Une section longue = une `SECTION` texte + image (image +
+  chapô) puis un ou plusieurs `TEXTE`. Pas un bloc géant par section.
 
 ## 5. Peupler un site entier : figer la source, scripter, vérifier
 
@@ -159,12 +191,12 @@ depuis l'environnement (`os.environ["TIBILLET_API_KEY"]`).
   autre slug. (Référence exhaustive : `pages/models.py:SLUGS_RESERVES`.)
 - **La réponse expose les défauts de TOUS les champs** : à la relecture (`GET`), chaque
   bloc renvoie `additionalProperty` avec les valeurs par défaut de tous les champs du
-  modèle (`image_position`, `nombre_max`, `hauteur_px`…), pas seulement ceux de son type.
+  modèle (`nombre_max`, `hauteur_px`…), pas seulement ceux de son type.
   C'est normal — ne cherche que les champs que tu as posés, ignore les autres.
 - **URLs dangereuses neutralisées** : les champs lien (`bouton_url`, `embed_url`, et la
-  clé `url` d'un logo PARTENAIRES) à schéma `javascript:`/`data:`/`vbscript:` sont
+  clé `url` d'un logo d'une bande de logos) à schéma `javascript:`/`data:`/`vbscript:` sont
   **vidés** côté serveur, pas rejetés. Ne compte pas dessus pour valider — envoie du https.
-- **`embed_url` d'un IFRAME** n'est **rendu** que si son hôte est autorisé par le
+- **`embed_url` d'une `INTEGRATION` en `WIDGET`** n'est **rendu** que si son hôte est autorisé par le
   superadmin ROOT (whitelist globale). L'API accepte la création ; le rendu, lui, dépend
   de la whitelist.
 - **403 ≠ 404** : un 403 signale une clé sans la bonne permission, pas une ressource

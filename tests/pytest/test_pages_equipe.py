@@ -160,46 +160,16 @@ def test_admin_equipe_affiche_l_encart_images():
 
     assert admin.get_inlines(request=None, obj=bloc_equipe) == [ImageGalerieInline]
 
-
-def test_api_equipe_cree_les_personnes_avec_et_sans_photo_et_les_expose(
-    tenant, monkeypatch
-):
+def test_api_equipe_cree_les_personnes_sans_photo_et_les_expose(tenant):
     """
-    API : une SECTION EQUIPE recoit ses personnes dans `image`. Sans
-    contentUrl, la personne est creee sans photo. `keywords` (texte ou liste)
-    devient `tags`, et ressort tel quel en lecture.
-    / API: EQUIPE people come in `image`; no contentUrl = no photo; keywords
-    (text or list) becomes tags and is exposed on read.
+    API : une SECTION EQUIPE recoit ses personnes dans `image`, sans photo
+    (la photo s'envoie ensuite par POST /api/v2/blocs/{uuid}/images/).
+    `keywords` (texte ou liste) devient `tags`, et ressort tel quel en lecture.
+    / API: EQUIPE people come in `image`, without photo; keywords (text or
+    list) becomes tags and is exposed on read.
     """
-    import io
-
-    from PIL import Image as PILImage
-
     from api_v2.serializers import BlocCreateSerializer, BlocSchemaSerializer
     from pages.models import Page
-
-    tampon = io.BytesIO()
-    PILImage.new("RGB", (8, 8), "green").save(tampon, format="PNG")
-    contenu_png = tampon.getvalue()
-
-    class FausseReponse:
-        status_code = 200
-        headers = {"Content-Type": "image/png"}
-        content = contenu_png
-
-        def raise_for_status(self):
-            pass
-
-        def iter_content(self, chunk_size=65536):
-            yield self.content
-
-        def close(self):
-            pass
-
-    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda hote: False)
-    monkeypatch.setattr(
-        "api_v2.serializers.requests.get", lambda *args, **kwargs: FausseReponse()
-    )
 
     with tenant_context(tenant):
         page = Page.objects.create(titre="Equipe API", slug="pytest-equipe-api")
@@ -211,7 +181,6 @@ def test_api_equipe_cree_les_personnes_avec_et_sans_photo_et_les_expose(
                     "image": [
                         {
                             "@type": "ImageObject",
-                            "contentUrl": "https://exemple.fr/awa.png",
                             "caption": "Awa Diallo",
                             "keywords": "Coordination, Salariée",
                         },
@@ -232,13 +201,11 @@ def test_api_equipe_cree_les_personnes_avec_et_sans_photo_et_les_expose(
                 "Awa Diallo",
                 "Théo Marchand",
             ]
-            assert bool(personnes[0].image) is True
-            assert bool(personnes[1].image) is False
+            assert bool(personnes[0].image) is False
             assert personnes[1].tags == "Vie associative, Bénévole"
 
             sortie = BlocSchemaSerializer(bloc).data
             assert sortie["image"][0]["keywords"] == "Coordination, Salariée"
-            assert "contentUrl" in sortie["image"][0]
-            assert "contentUrl" not in sortie["image"][1]
+            assert "contentUrl" not in sortie["image"][0]
         finally:
             page.delete()

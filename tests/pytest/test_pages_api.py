@@ -288,33 +288,6 @@ def test_bloc_create_ignore_champ_video_en_additional_property():
         assert not bloc.video  # vide, pas de corruption
 
 
-@pytest.mark.django_db
-def test_bloc_create_image_secondaire_url_dangereuse_leve_400():
-    """Une URL d'image dangereuse/interne via additionalProperty leve ValidationError
-    (coherence avec le champ standard image, pas d'echec silencieux).
-    / A dangerous/internal image URL via additionalProperty raises ValidationError
-    (consistent with the standard image field, no silent failure)."""
-    from django_tenants.utils import tenant_context
-    from Customers.models import Client
-    from pages.models import Page
-    from api_v2.serializers import BlocCreateSerializer
-    from rest_framework import serializers as drf_serializers
-    import pytest as _pytest
-
-    tenant = Client.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
-        page = Page.objects.create(titre="x", slug="img-sec-danger")
-        ser = BlocCreateSerializer(data={
-            "additionalType": "LIEU",
-            "additionalProperty": [
-                {"@type": "PropertyValue", "name": "image_secondaire", "value": "javascript:alert(1)"},
-            ],
-        }, context={"page": page})
-        assert ser.is_valid(), ser.errors
-        with _pytest.raises(drf_serializers.ValidationError):
-            ser.save()
-
-
 def test_url_a_schema_dangereux_promu_dans_utils():
     """La fonction de neutralisation est disponible dans Administration.utils.
     / The neutralization function is available in Administration.utils."""
@@ -324,61 +297,6 @@ def test_url_a_schema_dangereux_promu_dans_utils():
     assert url_a_schema_dangereux("https://exemple.fr") is False
     assert url_a_schema_dangereux("/event/") is False
     assert url_a_schema_dangereux("") is False
-
-
-@pytest.mark.django_db
-def test_bloc_image_par_url_ok(monkeypatch):
-    import io
-    from PIL import Image as PILImage
-    from django_tenants.utils import tenant_context
-    from Customers.models import Client
-    from pages.models import Page
-    from api_v2.serializers import BlocCreateSerializer
-
-    buf = io.BytesIO()
-    PILImage.new("RGB", (10, 10), "blue").save(buf, format="PNG")
-    contenu_png = buf.getvalue()
-
-    class FakeResp:
-        status_code = 200
-        headers = {"Content-Type": "image/png"}
-        content = contenu_png
-        def raise_for_status(self): pass
-        def iter_content(self, chunk_size=65536):
-            # Renvoie le contenu en un seul bloc (suffit pour le test).
-            yield self.content
-        def close(self): pass
-
-    # On neutralise le check SSRF (hote public simule) + la requete reseau.
-    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
-    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
-
-    tenant = Client.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
-        page = Page.objects.create(titre="img", slug="img-url-ok")
-        ser = BlocCreateSerializer(data={
-            "additionalType": "IMAGES",
-            "image": "https://exemple.fr/photo.png",
-        }, context={"page": page})
-        assert ser.is_valid(), ser.errors
-        bloc = ser.save()
-        assert bloc.image  # fichier enregistre
-
-
-@pytest.mark.django_db
-def test_telecharger_image_bloque_ssrf_loopback():
-    """Une URL pointant vers une IP loopback/interne est refusee (anti-SSRF).
-    / A URL pointing to a loopback/internal IP is refused (anti-SSRF)."""
-    from rest_framework import serializers as drf_serializers
-    from api_v2.serializers import telecharger_et_valider_image
-    import pytest as _pytest
-    for url in ("http://127.0.0.1/x.png",
-                "http://169.254.169.254/latest/meta-data/",
-                "http://localhost/x.png",
-                "file:///etc/passwd",
-                "ftp://exemple.fr/x.png"):
-        with _pytest.raises(drf_serializers.ValidationError):
-            telecharger_et_valider_image(url)
 
 
 @pytest.mark.django_db
@@ -553,78 +471,6 @@ def test_bloc_points_gps_doit_etre_une_liste():
 
 
 @pytest.mark.django_db
-def test_bloc_galerie_cree_et_expose_imageobjects(monkeypatch):
-    """GALERIE : liste d'ImageObject (URL) -> ImageGalerie ; sortie = ImageObject[].
-    / GALLERY: list of ImageObject (URL) -> ImageGalerie; output = ImageObject[]."""
-    import io
-    from PIL import Image as PILImage
-    from django_tenants.utils import tenant_context
-    from Customers.models import Client
-    from pages.models import Page
-    from api_v2.serializers import BlocCreateSerializer, BlocSchemaSerializer
-
-    buf = io.BytesIO()
-    PILImage.new("RGB", (8, 8), "green").save(buf, format="PNG")
-    png = buf.getvalue()
-
-    class FakeResp:
-        status_code = 200
-        headers = {"Content-Type": "image/png"}
-        content = png
-        def raise_for_status(self): pass
-        def iter_content(self, chunk_size=65536):
-            # Renvoie le contenu en un seul bloc (suffit pour le test).
-            yield self.content
-        def close(self): pass
-
-    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
-    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
-
-    tenant = Client.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
-        page = Page.objects.create(titre="g", slug="galerie-rt")
-        ser = BlocCreateSerializer(data={
-            "additionalType": "IMAGES",
-            "image": [
-                {"@type": "ImageObject", "contentUrl": "https://ex.fr/a.png", "caption": "A"},
-                {"@type": "ImageObject", "contentUrl": "https://ex.fr/b.png", "caption": "B"},
-            ],
-        }, context={"page": page})
-        assert ser.is_valid(), ser.errors
-        bloc = ser.save()
-        assert bloc.images_galerie.count() == 2
-        out = BlocSchemaSerializer(bloc).data
-        # En sortie, image = liste d'ImageObject.
-        assert isinstance(out["image"], list)
-        assert out["image"][0]["@type"] == "ImageObject"
-        assert [img["caption"] for img in out["image"]] == ["A", "B"]
-
-
-@pytest.mark.django_db
-def test_telecharger_image_refuse_corps_trop_gros(monkeypatch):
-    """Un corps distant > 10 Mo est refuse SANS tout charger en memoire (cap borne).
-    / A remote body > 10 MB is refused without loading it all in memory (bounded cap)."""
-    from rest_framework import serializers as drf
-    from api_v2.serializers import telecharger_et_valider_image
-    import pytest as _pytest
-
-    class GrosResp:
-        status_code = 200
-        headers = {"Content-Type": "image/png"}  # pas de Content-Length -> lecture bornee
-        def raise_for_status(self): pass
-        def iter_content(self, chunk_size=65536):
-            # 3 blocs de 5 Mo = 15 Mo > 10 Mo : doit stopper avant la fin.
-            for _ in range(3):
-                yield b"x" * (5 * 1024 * 1024)
-        def close(self): pass
-
-    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
-    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: GrosResp())
-    with _pytest.raises(drf.ValidationError):
-        telecharger_et_valider_image("https://exemple.fr/gros.png")
-
-
-@pytest.mark.django_db
 def test_http_patch_bloc_points_gps_doit_etre_liste(cle_pages):
     """PATCH d'un bloc avec points_gps non-liste -> 400 (coherence avec CREATE).
     / PATCH a block with a non-list points_gps -> 400 (consistency with CREATE)."""
@@ -786,38 +632,6 @@ def test_page_patch_retire_le_parent(cle_pages):
         assert Page.objects.get(uuid=enfant_uuid).parent is None
 
 
-@pytest.mark.django_db
-def test_page_nested_galerie_url_dangereuse_ne_cree_rien(monkeypatch):
-    """Si une URL de galerie est dangereuse, la creation ECHOUE en 400 et NE laisse
-    NI page NI bloc NI image (atomicite preservee malgre le pre-telechargement).
-    / If a gallery URL is dangerous, creation fails 400 and leaves NO page/block/image."""
-    from django_tenants.utils import tenant_context
-    from Customers.models import Client
-    from pages.models import Page
-    from api_v2.serializers import PageCreateSerializer
-    from rest_framework import serializers as drf
-    import pytest as _pytest
-
-    tenant = Client.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
-        nb_pages_avant = Page.objects.count()
-        payload = {
-            "name": "Galerie KO",
-            "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "galerie-ko"}],
-            "hasPart": [{
-                "additionalType": "IMAGES",
-                "image": [{"@type": "ImageObject", "contentUrl": "javascript:alert(1)"}],
-            }],
-        }
-        ser = PageCreateSerializer(data=payload, context={"request": None})
-        assert ser.is_valid(), ser.errors
-        with _pytest.raises(drf.ValidationError):
-            ser.save()
-        # Rien n'a ete cree (ni la page au slug galerie-ko).
-        assert Page.objects.count() == nb_pages_avant
-        assert not Page.objects.filter(slug="galerie-ko").exists()
-
-
 # ---------------------------------------------------------------------------
 # CHANTIER 06 — Création via API v2 des blocs IFRAME / NEWSLETTER / PARTENAIRES
 # ---------------------------------------------------------------------------
@@ -883,143 +697,9 @@ def test_bloc_integration_newsletter_cree_avec_embed_url():
         assert bloc.embed_url == "https://ghost.tibillet.coop/"
 
 
-@pytest.mark.django_db
-def test_bloc_images_bande_logos_cree_logos_cliquables(monkeypatch):
-    """PARTENAIRES : liste d'ImageObject (contentUrl + caption + url) -> logos avec lien_url ;
-    url dangereuse neutralisee ; sortie expose `url` seulement si lien present."""
-    import io
-    from PIL import Image as PILImage
-    from pages.models import Page
-    from api_v2.serializers import BlocCreateSerializer, BlocSchemaSerializer
-
-    buf = io.BytesIO()
-    PILImage.new("RGB", (8, 8), "blue").save(buf, format="PNG")
-    png = buf.getvalue()
-
-    class FakeResp:
-        status_code = 200
-        headers = {"Content-Type": "image/png"}
-        content = png
-        def raise_for_status(self): pass
-        def iter_content(self, chunk_size=65536): yield self.content
-        def close(self): pass
-
-    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
-    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
-
-    tenant = Client.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
-        page = Page.objects.create(titre="p", slug="partenaires-api")
-        ser = BlocCreateSerializer(data={
-            "additionalType": "IMAGES",
-            "headline": "Ils nous soutiennent",
-            # Une bande de logos : plusieurs images, donc la relation
-            # ImageGalerie. / A logo strip: several images, hence ImageGalerie.
-            "additionalProperty": [
-                {"@type": "PropertyValue", "name": "affichage", "value": "BANDE_LOGOS"},
-            ],
-            "image": [
-                {"@type": "ImageObject", "contentUrl": "https://ex.fr/a.png",
-                 "caption": "Alpha", "url": "https://alpha.example/"},
-                {"@type": "ImageObject", "contentUrl": "https://ex.fr/b.png",
-                 "caption": "Beta"},
-                {"@type": "ImageObject", "contentUrl": "https://ex.fr/c.png",
-                 "caption": "Mechant", "url": "javascript:alert(1)"},
-            ],
-        }, context={"page": page})
-        assert ser.is_valid(), ser.errors
-        bloc = ser.save()
-        assert bloc.type_bloc == "IMAGES"
-        assert bloc.affichage == "BANDE_LOGOS"
-        assert bloc.images_galerie.count() == 3
-        logos = list(bloc.images_galerie.order_by("position"))
-        assert logos[0].lien_url == "https://alpha.example/"
-        assert logos[1].lien_url == ""              # pas de lien fourni
-        assert logos[2].lien_url == ""              # javascript: neutralise
-        out = BlocSchemaSerializer(bloc).data
-        assert out["image"][0]["url"] == "https://alpha.example/"
-        assert "url" not in out["image"][1]
-
-
 # ---------------------------------------------------------------------------
-# Bloc TEXTE : source Markdown preservee, images referencees importees
+# Bloc TEXTE : source Markdown preservee
 # ---------------------------------------------------------------------------
-def _monkey_download_ok(monkeypatch):
-    """
-    Fait reussir le telechargement d'une image distante, sans reseau.
-
-    Neutralise le garde SSRF (qui refuserait un hote interne) et remplace la
-    requete HTTP par une reponse portant un PNG minimal.
-    / Makes a remote image download succeed without network access: disables
-    the SSRF guard and replaces the HTTP request with a tiny PNG response.
-    """
-    contenu_png = _png_bytes()
-
-    class FakeResp:
-        status_code = 200
-        headers = {"Content-Type": "image/png", "Content-Length": str(len(contenu_png))}
-        content = contenu_png
-
-        def raise_for_status(self):
-            pass
-
-        def iter_content(self, chunk_size=65536):
-            yield self.content
-
-        def close(self):
-            pass
-
-    monkeypatch.setattr("api_v2.serializers._hote_est_interne", lambda h: False)
-    monkeypatch.setattr("api_v2.serializers.requests.get", lambda *a, **k: FakeResp())
-
-
-
-@pytest.mark.django_db
-def test_bloc_texte_importe_images_et_preserve_source(monkeypatch):
-    """MARKDOWN : ![](http-url) -> importee en galerie:N (ImageGalerie) ; la source
-    markdown n'est PAS mutilee par clean_html (les autoliens/gras restent)."""
-    from pages.models import Page
-    from api_v2.serializers import BlocCreateSerializer
-
-    _monkey_download_ok(monkeypatch)
-    tenant = Client.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
-        page = Page.objects.create(titre="md", slug="pytest-md-img")
-        md = ("## Titre\n\nDu **gras** et un autolien <https://exemple.fr>.\n\n"
-              "![une image](https://ex.fr/a.png)\n\nFin.")
-        ser = BlocCreateSerializer(data={"additionalType": "TEXTE", "text": md},
-                                   context={"page": page})
-        assert ser.is_valid(), ser.errors
-        bloc = ser.save()
-        # Image importee et texte reecrit.
-        assert bloc.images_galerie.count() == 1
-        assert "![une image](galerie:1)" in bloc.texte
-        # Source markdown preservee (clean_html l'aurait mutilee).
-        assert "**gras**" in bloc.texte
-        assert "<https://exemple.fr>" in bloc.texte
-
-
-@pytest.mark.django_db
-def test_bloc_texte_image_morte_garde_url(monkeypatch):
-    """Une image markdown inaccessible ne casse PAS le POST : on garde l'URL externe."""
-    from rest_framework import serializers as drf
-    from pages.models import Page
-    from api_v2.serializers import BlocCreateSerializer
-
-    def _leve(*a, **k):
-        raise drf.ValidationError("image morte")
-    monkeypatch.setattr("api_v2.serializers.telecharger_et_valider_image", _leve)
-
-    tenant = Client.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
-        page = Page.objects.create(titre="md2", slug="pytest-md-dead")
-        md = "Texte.\n\n![morte](https://ex.fr/introuvable.png)\n\nFin."
-        ser = BlocCreateSerializer(data={"additionalType": "TEXTE", "text": md},
-                                   context={"page": page})
-        assert ser.is_valid(), ser.errors
-        bloc = ser.save()  # ne leve pas
-        assert bloc.images_galerie.count() == 0
-        assert "https://ex.fr/introuvable.png" in bloc.texte  # URL gardee
 
 
 @pytest.mark.django_db
@@ -1351,3 +1031,519 @@ def test_http_patch_d_un_bloc_texte_ne_garde_pas_de_donnees_de_carte(cle_pages):
     assert r2.status_code == 200, r2.content
     with tenant_context(Client.objects.get(schema_name="lespass")):
         assert Bloc.objects.get(pk=bloc_uuid).donnees_carte_figee == []
+
+
+# --------------------------------------------------------------------------- #
+#  PATCH d'un bloc : les images s'envoient en multipart, jamais par URL       #
+#  / Block PATCH: images are sent as multipart, never by URL                  #
+# --------------------------------------------------------------------------- #
+
+
+def _creer_un_bloc_pour_le_patch(slug_de_la_page, type_bloc, affichage):
+    """Cree une page et un bloc sans image dans le tenant lespass. Renvoie l'uuid du bloc.
+    / Creates a page and an image-less block in the lespass tenant. Returns the block uuid."""
+    from pages.models import Page, Bloc
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Patch image", slug=slug_de_la_page)
+        bloc = Bloc.objects.create(page=page, type_bloc=type_bloc, affichage=affichage)
+        return str(bloc.uuid)
+
+
+def _lire_le_bloc(bloc_uuid):
+    """Relit le bloc depuis la base du tenant lespass. / Reloads the block from the DB."""
+    from pages.models import Bloc
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        return Bloc.objects.get(uuid=bloc_uuid)
+
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_json_image_par_url_refusee_400(cle_pages):
+    """PATCH JSON avec `image` = URL : 400 explicite, rien n'est enregistre.
+    / JSON PATCH with an image URL: explicit 400, nothing saved."""
+    from rest_framework.test import APIClient
+    bloc_uuid = _creer_un_bloc_pour_le_patch("patch-json-image", "IMAGES", "PLEINE_LARGEUR")
+
+    client = APIClient()
+    reponse = client.patch(f"/api/v2/blocs/{bloc_uuid}/", {
+        "headline": "Ne doit pas etre enregistre",
+        "image": "https://exemple.org/photo.png",
+    }, format="json", **_entetes_api(cle_pages))
+
+    assert reponse.status_code == 400, reponse.content
+    assert "image" in reponse.json()
+    bloc = _lire_le_bloc(bloc_uuid)
+    assert not bloc.image
+    assert bloc.titre != "Ne doit pas etre enregistre"
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_json_liste_d_images_refusee_400(cle_pages):
+    """PATCH JSON avec une liste dans `image` (galerie) : 400 explicite.
+    / JSON PATCH with a list in `image` (gallery): explicit 400."""
+    from rest_framework.test import APIClient
+    bloc_uuid = _creer_un_bloc_pour_le_patch("patch-json-liste-images", "IMAGES", "GRILLE")
+
+    client = APIClient()
+    reponse = client.patch(f"/api/v2/blocs/{bloc_uuid}/", {
+        "image": [{"contentUrl": "https://exemple.org/a.png"}],
+    }, format="json", **_entetes_api(cle_pages))
+
+    assert reponse.status_code == 400, reponse.content
+    assert "image" in reponse.json()
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_json_auteur_photo_en_additional_property_refusee_400(cle_pages):
+    """PATCH JSON avec `auteur_photo` dans additionalProperty : 400 explicite.
+    / JSON PATCH with `auteur_photo` in additionalProperty: explicit 400."""
+    from rest_framework.test import APIClient
+    bloc_uuid = _creer_un_bloc_pour_le_patch("patch-json-auteur-photo", "SECTION", "CITATION")
+
+    client = APIClient()
+    reponse = client.patch(f"/api/v2/blocs/{bloc_uuid}/", {
+        "additionalProperty": [
+            {"@type": "PropertyValue", "name": "auteur_photo",
+             "value": "https://exemple.org/portrait.png"},
+        ]}, format="json", **_entetes_api(cle_pages))
+
+    assert reponse.status_code == 400, reponse.content
+    assert "auteur_photo" in reponse.json()
+    assert not _lire_le_bloc(bloc_uuid).auteur_photo
+
+
+# --------------------------------------------------------------------------- #
+#  CHANTIER 09 — Les images s'envoient en fichier, le serveur ne telecharge   #
+#  plus rien (TECH_DOC/SESSIONS/PAGES/CHANTIER-09-images-sans-telechargement) #
+#  / Images are sent as files, the server downloads nothing                   #
+# --------------------------------------------------------------------------- #
+
+def _entetes_api(cle_brute):
+    """Entetes HTTP d'un appel a l'API v2 sur le tenant lespass.
+    / HTTP headers of an API v2 call on the lespass tenant."""
+    return {"HTTP_AUTHORIZATION": f"Api-Key {cle_brute}",
+            "HTTP_HOST": "lespass.tibillet.localhost"}
+
+
+def _png_dont_l_en_tete_annonce(largeur, hauteur):
+    """Fabrique un petit PNG (69 octets) dont l'en-tete annonce largeur x hauteur.
+    Pillow lit les dimensions dans l'en-tete sans rien decoder : on teste ainsi la
+    limite en pixels sans allouer la memoire d'une image geante.
+    / Builds a tiny PNG whose header claims width x height, so the pixel limit can
+    be tested without allocating a huge image."""
+    import io
+    import struct
+    import zlib
+    from PIL import Image as PILImage
+
+    tampon = io.BytesIO()
+    PILImage.new("RGB", (1, 1)).save(tampon, "PNG")
+    octets = bytearray(tampon.getvalue())
+    assert octets[12:16] == b"IHDR"
+    donnees_ihdr = bytearray(octets[16:29])
+    donnees_ihdr[0:4] = struct.pack(">I", largeur)
+    donnees_ihdr[4:8] = struct.pack(">I", hauteur)
+    octets[16:29] = donnees_ihdr
+    octets[29:33] = struct.pack(">I", zlib.crc32(b"IHDR" + bytes(donnees_ihdr)) & 0xFFFFFFFF)
+    return bytes(octets)
+
+
+def _image_en_octets(format_pillow, **options_d_enregistrement):
+    """Une petite image 4x4 enregistree dans le format demande (TIFF, MPO...).
+    / A tiny 4x4 image saved in the requested format."""
+    import io
+    from PIL import Image as PILImage
+    tampon = io.BytesIO()
+    PILImage.new("RGB", (4, 4), "orange").save(tampon, format_pillow, **options_d_enregistrement)
+    return tampon.getvalue()
+
+
+def _fichier_envoye(nom, contenu, type_declare="image/png"):
+    """Un fichier tel que Django le recoit d'un formulaire multipart.
+    / A file as Django receives it from a multipart form."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    return SimpleUploadedFile(nom, contenu, content_type=type_declare)
+
+
+@pytest.fixture
+def connexions_sortantes_tentees(monkeypatch):
+    """Espion sur la resolution DNS : prouve qu'aucune connexion sortante n'est
+    tentee. Renvoie la liste des hotes demandes (elle doit rester vide).
+    / Spy on DNS resolution: proves no outgoing connection is attempted."""
+    import socket
+    hotes_demandes = []
+
+    def fausse_resolution(hote, *args, **kwargs):
+        hotes_demandes.append(hote)
+        raise AssertionError(f"Connexion sortante interdite : {hote}")
+
+    monkeypatch.setattr(socket, "getaddrinfo", fausse_resolution)
+    return hotes_demandes
+
+
+# --- Lot A : validation d'un fichier image ------------------------------------
+
+def test_valider_image_png_renvoie_l_extension_png():
+    """Un vrai PNG passe, et la fonction renvoie l'extension de son format reel.
+    / A real PNG passes and the function returns its real format's extension."""
+    from api_v2.serializers import _validate_uploaded_image
+    fichier = _fichier_envoye("nimporte-quoi.php", _png_bytes())
+    assert _validate_uploaded_image(fichier) == ".png"
+
+
+def test_valider_image_accepte_un_mpo_et_l_enregistre_en_jpg():
+    """Pillow lit certaines photos d'appareil comme MPO (JPEG multi-image) : acceptees, en .jpg.
+    / Some camera photos are read as MPO (multi-picture JPEG): accepted, stored as .jpg."""
+    from PIL import Image as PILImage
+    from api_v2.serializers import _validate_uploaded_image
+    contenu_mpo = _image_en_octets("MPO", append_images=[PILImage.new("RGB", (4, 4))])
+    fichier = _fichier_envoye("photo.jpg", contenu_mpo, "image/jpeg")
+    assert _validate_uploaded_image(fichier) == ".jpg"
+
+
+def test_valider_image_refuse_un_tiff():
+    """Un TIFF valide est refuse : seuls JPEG, PNG, GIF et WebP sont acceptes.
+    / A valid TIFF is refused: only JPEG, PNG, GIF and WebP are accepted."""
+    from api_v2.serializers import _validate_uploaded_image
+    fichier = _fichier_envoye("scan.tiff", _image_en_octets("TIFF"), "image/tiff")
+    with pytest.raises(serializers.ValidationError):
+        _validate_uploaded_image(fichier)
+
+
+def test_valider_image_refuse_plus_de_50_megapixels():
+    """Un PNG de 8000 x 8000 (64 Mpx) est refuse, sans erreur 500.
+    / An 8000 x 8000 PNG (64 Mpx) is refused, without a 500."""
+    from api_v2.serializers import _validate_uploaded_image
+    fichier = _fichier_envoye("geant.png", _png_dont_l_en_tete_annonce(8000, 8000))
+    with pytest.raises(serializers.ValidationError):
+        _validate_uploaded_image(fichier)
+
+
+def test_valider_image_refuse_une_bombe_de_decompression():
+    """Au-dela de 178 Mpx, Pillow leve DecompressionBombError (qui n'est pas une
+    OSError) : elle doit devenir une erreur de validation, pas un 500.
+    / Above 178 Mpx Pillow raises DecompressionBombError: it must become a 400."""
+    from api_v2.serializers import _validate_uploaded_image
+    fichier = _fichier_envoye("bombe.png", _png_dont_l_en_tete_annonce(20000, 20000))
+    with pytest.raises(serializers.ValidationError):
+        _validate_uploaded_image(fichier)
+
+
+@pytest.mark.django_db
+def test_http_patch_bloc_multipart_nomme_le_fichier_cote_serveur(cle_pages):
+    """Le nom du fichier enregistre est choisi par le serveur : le nom et
+    l'extension envoyes par le client ne sont pas gardes.
+    / The stored file name is chosen by the server, never the client's."""
+    from rest_framework.test import APIClient
+    bloc_uuid = _creer_un_bloc_pour_le_patch("patch-nom-serveur", "IMAGES", "PLEINE_LARGEUR")
+
+    client = APIClient()
+    reponse = client.patch(f"/api/v2/blocs/{bloc_uuid}/",
+                           {"image": _fichier_envoye("photo.php", _png_bytes())},
+                           format="multipart", **_entetes_api(cle_pages))
+
+    assert reponse.status_code == 200, reponse.content
+    nom_enregistre = _lire_le_bloc(bloc_uuid).image.name
+    assert nom_enregistre.endswith(".png")
+    assert "photo" not in nom_enregistre
+
+
+# --- Lot B : POST /api/v2/blocs/{uuid}/images/ -------------------------------
+
+def _ajouter_une_image(cle_pages, bloc_uuid, donnees):
+    """Appelle l'endpoint d'ajout d'image en multipart. / Calls the add-image endpoint."""
+    from rest_framework.test import APIClient
+    return APIClient().post(f"/api/v2/blocs/{bloc_uuid}/images/", donnees,
+                            format="multipart", **_entetes_api(cle_pages))
+
+
+@pytest.mark.django_db
+def test_http_ajouter_des_images_a_une_grille_donne_des_rangs_successifs(cle_pages):
+    """Deux images ajoutees a une GRILLE : 201, rangs galerie:1 puis galerie:2,
+    nom de fichier choisi par le serveur, et le bloc expose ses ImageObject.
+    / Two images added to a grid: 201, ranks 1 then 2, server-side file name."""
+    from rest_framework.test import APIClient
+    bloc_uuid = _creer_un_bloc_pour_le_patch("galerie-endpoint", "IMAGES", "GRILLE")
+
+    premiere = _ajouter_une_image(cle_pages, bloc_uuid, {
+        "image": _fichier_envoye("a.png", _png_bytes()), "caption": "A"})
+    seconde = _ajouter_une_image(cle_pages, bloc_uuid, {
+        "image": _fichier_envoye("b.png", _png_bytes()), "caption": "B"})
+
+    assert premiere.status_code == 201, premiere.content
+    assert seconde.status_code == 201, seconde.content
+    assert premiere.json()["@type"] == "ImageObject"
+    assert premiere.json()["galerieReference"] == "galerie:1"
+    assert seconde.json()["galerieReference"] == "galerie:2"
+    assert seconde.json()["contentUrl"].endswith(".png")
+    assert "/b.png" not in seconde.json()["contentUrl"]
+
+    lecture_du_bloc = APIClient().get(f"/api/v2/blocs/{bloc_uuid}/", **_entetes_api(cle_pages))
+    legendes = [image["caption"] for image in lecture_du_bloc.json()["image"]]
+    assert legendes == ["A", "B"]
+
+
+@pytest.mark.django_db
+def test_http_ajouter_un_logo_avec_lien_et_lien_dangereux_vide(cle_pages):
+    """Bande de logos : `url` devient le lien du logo ; un lien javascript: est vide,
+    comme partout dans l'API. / Logo strip: `url` is the logo link; a dangerous one is emptied."""
+    bloc_uuid = _creer_un_bloc_pour_le_patch("logos-endpoint", "IMAGES", "BANDE_LOGOS")
+
+    logo_avec_lien = _ajouter_une_image(cle_pages, bloc_uuid, {
+        "image": _fichier_envoye("alpha.png", _png_bytes()),
+        "caption": "Alpha", "url": "https://alpha.example/"})
+    logo_mechant = _ajouter_une_image(cle_pages, bloc_uuid, {
+        "image": _fichier_envoye("c.png", _png_bytes()),
+        "caption": "Mechant", "url": "javascript:alert(1)"})
+
+    assert logo_avec_lien.status_code == 201, logo_avec_lien.content
+    assert logo_avec_lien.json()["url"] == "https://alpha.example/"
+    assert logo_mechant.status_code == 201, logo_mechant.content
+    assert "url" not in logo_mechant.json()
+
+
+@pytest.mark.django_db
+def test_http_ajouter_une_image_a_un_bloc_sans_galerie_refuse_400(cle_pages):
+    """Un bloc qui n'affiche pas de galerie (FAQ) refuse l'ajout d'image.
+    / A block that shows no gallery (FAQ) refuses the image."""
+    from pages.models import ImageGalerie
+    bloc_uuid = _creer_un_bloc_pour_le_patch("faq-sans-galerie", "FAQ", "")
+
+    reponse = _ajouter_une_image(cle_pages, bloc_uuid, {
+        "image": _fichier_envoye("a.png", _png_bytes())})
+
+    assert reponse.status_code == 400, reponse.content
+    with tenant_context(Client.objects.get(schema_name="lespass")):
+        assert not ImageGalerie.objects.filter(bloc__uuid=bloc_uuid).exists()
+
+
+@pytest.mark.django_db
+def test_http_ajouter_une_image_sans_fichier_a_une_grille_refuse_400(cle_pages):
+    """Une grille d'images exige un fichier. / An image grid requires a file."""
+    bloc_uuid = _creer_un_bloc_pour_le_patch("grille-sans-fichier", "IMAGES", "GRILLE")
+    reponse = _ajouter_une_image(cle_pages, bloc_uuid, {"caption": "Sans fichier"})
+    assert reponse.status_code == 400, reponse.content
+
+
+@pytest.mark.django_db
+def test_http_ajouter_une_image_envoyee_en_texte_refuse_400(cle_pages):
+    """Une URL envoyee a la place du fichier est refusee (le serveur ne telecharge rien).
+    / A URL sent instead of a file is refused (the server downloads nothing)."""
+    bloc_uuid = _creer_un_bloc_pour_le_patch("grille-image-texte", "IMAGES", "GRILLE")
+    reponse = _ajouter_une_image(cle_pages, bloc_uuid, {"image": "https://exemple.org/a.png"})
+    assert reponse.status_code == 400, reponse.content
+    assert "image" in reponse.json()
+
+
+@pytest.mark.django_db
+def test_http_ajouter_une_personne_sans_photo_a_une_equipe(cle_pages):
+    """SECTION Equipe : la photo est facultative, nom et badges suffisent.
+    / EQUIPE section: the photo is optional, name and badges are enough."""
+    bloc_uuid = _creer_un_bloc_pour_le_patch("equipe-sans-photo", "SECTION", "EQUIPE")
+
+    reponse = _ajouter_une_image(cle_pages, bloc_uuid, {
+        "caption": "Theo Marchand", "keywords": "Vie associative, Benevole"})
+
+    assert reponse.status_code == 201, reponse.content
+    assert reponse.json()["caption"] == "Theo Marchand"
+    assert reponse.json()["keywords"] == "Vie associative, Benevole"
+    assert "contentUrl" not in reponse.json()
+
+
+@pytest.mark.django_db
+def test_http_image_ajoutee_a_un_bloc_texte_est_resolue_par_galerie_1(cle_pages):
+    """Bloc TEXTE : l'image envoyee est resolue au rendu par ![...](galerie:1).
+    / TEXTE block: the uploaded image is resolved by ![...](galerie:1)."""
+    from pages.models import Bloc, Page
+    from pages.templatetags.pages_tags import rendre_bloc_markdown
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Article", slug="article-galerie-1")
+        bloc = Bloc.objects.create(page=page, type_bloc=Bloc.TEXTE,
+                                   texte="Intro\n\n![une photo](galerie:1)")
+        bloc_uuid = str(bloc.uuid)
+
+    reponse = _ajouter_une_image(cle_pages, bloc_uuid, {
+        "image": _fichier_envoye("photo.png", _png_bytes())})
+
+    assert reponse.status_code == 201, reponse.content
+    assert reponse.json()["galerieReference"] == "galerie:1"
+    with tenant_context(tenant):
+        html_rendu = str(rendre_bloc_markdown(Bloc.objects.get(uuid=bloc_uuid)))
+        assert "introuvable" not in html_rendu
+        assert "<img" in html_rendu
+
+
+# --- Lot C : plus aucun telechargement a la creation -------------------------
+
+@pytest.mark.django_db
+def test_http_creer_un_bloc_json_avec_une_url_d_image_refuse_400(cle_pages, connexions_sortantes_tentees):
+    """POST /pages/{uuid}/blocs/ en JSON avec `image` = URL : 400, aucun bloc cree,
+    aucune connexion sortante. / JSON create with an image URL: 400, nothing created."""
+    from rest_framework.test import APIClient
+    from pages.models import Page
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Page", slug="creation-url-refusee")
+        page_uuid = str(page.uuid)
+
+    reponse = APIClient().post(f"/api/v2/pages/{page_uuid}/blocs/", {
+        "additionalType": "IMAGES", "image": "https://exemple.org/photo.png",
+    }, format="json", **_entetes_api(cle_pages))
+
+    assert reponse.status_code == 400, reponse.content
+    assert "image" in reponse.json()
+    assert connexions_sortantes_tentees == []
+    with tenant_context(tenant):
+        assert Page.objects.get(uuid=page_uuid).blocs.count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("valeur_image", [
+    {"@type": "ImageObject", "contentUrl": "https://exemple.org/a.png"},
+    [{"@type": "ImageObject", "contentUrl": "https://exemple.org/a.png"}],
+    42,
+])
+def test_creer_un_bloc_images_avec_une_image_en_json_refuse(valeur_image):
+    """Liste blanche : un dict, une liste ou toute autre valeur dans `image` d'un
+    bloc IMAGES est refuse par is_valid(). / Whitelist: any non-empty image value is refused."""
+    from api_v2.serializers import BlocCreateSerializer
+    serializer_du_bloc = BlocCreateSerializer(
+        data={"additionalType": "IMAGES", "image": valeur_image}, context={"page": None})
+    assert not serializer_du_bloc.is_valid()
+    assert "image" in serializer_du_bloc.errors
+
+
+@pytest.mark.parametrize("valeur_vide", [None, "", []])
+def test_creer_un_bloc_avec_une_image_vide_reste_accepte(valeur_vide):
+    """`image` vide (None, "", []) est ignore : compatibilite avec les clients actuels.
+    / An empty `image` is ignored, for compatibility."""
+    from api_v2.serializers import BlocCreateSerializer
+    serializer_du_bloc = BlocCreateSerializer(
+        data={"additionalType": "FAQ", "headline": "Q ?", "image": valeur_vide},
+        context={"page": None})
+    assert serializer_du_bloc.is_valid(), serializer_du_bloc.errors
+
+
+@pytest.mark.parametrize("valeur_photo", [
+    "https://exemple.org/portrait.png",
+    {"contentUrl": "https://exemple.org/portrait.png"},
+    ["https://exemple.org/portrait.png"],
+])
+def test_creer_un_bloc_avec_une_photo_d_auteur_en_json_refuse(valeur_photo):
+    """`auteur_photo` dans additionalProperty, quel que soit son type : refuse.
+    / `auteur_photo` in additionalProperty, whatever its type: refused."""
+    from api_v2.serializers import BlocCreateSerializer
+    serializer_du_bloc = BlocCreateSerializer(data={
+        "additionalType": "SECTION",
+        "additionalProperty": [
+            {"name": "affichage", "value": "CITATION"},
+            {"name": "auteur_photo", "value": valeur_photo},
+        ],
+    }, context={"page": None})
+    assert not serializer_du_bloc.is_valid()
+    assert "auteur_photo" in serializer_du_bloc.errors
+
+
+def test_creer_une_equipe_dont_une_personne_porte_une_photo_par_url_refuse():
+    """SECTION Equipe : une personne avec `contentUrl` est refusee (la photo
+    s'envoie par l'endpoint images). / A person with contentUrl is refused."""
+    from api_v2.serializers import BlocCreateSerializer
+    serializer_du_bloc = BlocCreateSerializer(data={
+        "additionalType": "SECTION",
+        "additionalProperty": [{"name": "affichage", "value": "EQUIPE"}],
+        "image": [{"@type": "ImageObject", "caption": "Awa",
+                   "contentUrl": "https://exemple.org/awa.png"}],
+    }, context={"page": None})
+    assert not serializer_du_bloc.is_valid()
+    assert "image" in serializer_du_bloc.errors
+
+
+@pytest.mark.django_db
+def test_creer_une_page_dont_un_bloc_porte_une_galerie_par_url_ne_cree_rien(connexions_sortantes_tentees):
+    """Page avec hasPart : un bloc IMAGES avec une liste d'URL fait echouer toute
+    la creation, sans page ni bloc. / A hasPart IMAGES list fails the whole creation."""
+    from pages.models import Page
+    from api_v2.serializers import PageCreateSerializer
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        nombre_de_pages_avant = Page.objects.count()
+        serializer_de_la_page = PageCreateSerializer(data={
+            "name": "Galerie par URL",
+            "additionalProperty": [{"@type": "PropertyValue", "name": "slug", "value": "galerie-par-url"}],
+            "hasPart": [
+                {"additionalType": "FAQ", "headline": "Valide"},
+                {"additionalType": "IMAGES",
+                 "image": [{"@type": "ImageObject", "contentUrl": "https://exemple.org/a.png"}]},
+            ],
+        }, context={"request": None})
+        assert serializer_de_la_page.is_valid(), serializer_de_la_page.errors
+        with pytest.raises(serializers.ValidationError):
+            serializer_de_la_page.save()
+        assert Page.objects.count() == nombre_de_pages_avant
+        assert not Page.objects.filter(slug="galerie-par-url").exists()
+    assert connexions_sortantes_tentees == []
+
+
+@pytest.mark.django_db
+def test_creer_un_bloc_texte_garde_ses_images_markdown_externes(connexions_sortantes_tentees):
+    """Bloc TEXTE : une image markdown externe n'est plus importee. Le texte est
+    garde tel quel, sans clean_html. / External markdown images are kept as-is."""
+    from pages.models import Page
+    from api_v2.serializers import BlocCreateSerializer
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="md", slug="pytest-md-externe")
+        texte_markdown = ("## Titre\n\nDu **gras** et un autolien <https://exemple.fr>.\n\n"
+                          "![une image](https://exemple.org/a.png)\n\nFin.")
+        serializer_du_bloc = BlocCreateSerializer(
+            data={"additionalType": "TEXTE", "text": texte_markdown}, context={"page": page})
+        assert serializer_du_bloc.is_valid(), serializer_du_bloc.errors
+        bloc = serializer_du_bloc.save()
+        assert bloc.texte == texte_markdown
+        assert bloc.images_galerie.count() == 0
+    assert connexions_sortantes_tentees == []
+
+
+@pytest.mark.django_db
+def test_http_ajouter_un_bloc_multipart_avec_une_image_en_texte_refuse_400(cle_pages):
+    """POST multipart avec `image` en texte (une URL) : 400 au lieu d'un retrait
+    silencieux. / Multipart POST with `image` as text: 400, not silently dropped."""
+    from rest_framework.test import APIClient
+    from pages.models import Page
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Page", slug="multipart-image-texte")
+        page_uuid = str(page.uuid)
+
+    reponse = APIClient().post(f"/api/v2/pages/{page_uuid}/blocs/", {
+        "additionalType": "IMAGES", "image": "https://exemple.org/a.png",
+    }, format="multipart", **_entetes_api(cle_pages))
+
+    assert reponse.status_code == 400, reponse.content
+    assert "image" in reponse.json()
+    with tenant_context(tenant):
+        assert Page.objects.get(uuid=page_uuid).blocs.count() == 0
+
+
+@pytest.mark.django_db
+def test_http_ajouter_un_bloc_multipart_avec_un_tiff_ne_cree_aucun_bloc(cle_pages):
+    """POST multipart avec un fichier refuse (TIFF) : 400 et aucun bloc orphelin.
+    / Multipart POST with a refused file (TIFF): 400 and no orphan block."""
+    from rest_framework.test import APIClient
+    from pages.models import Page
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Page", slug="multipart-tiff")
+        page_uuid = str(page.uuid)
+
+    reponse = APIClient().post(f"/api/v2/pages/{page_uuid}/blocs/", {
+        "additionalType": "IMAGES",
+        "image": _fichier_envoye("scan.tiff", _image_en_octets("TIFF"), "image/tiff"),
+    }, format="multipart", **_entetes_api(cle_pages))
+
+    assert reponse.status_code == 400, reponse.content
+    with tenant_context(tenant):
+        assert Page.objects.get(uuid=page_uuid).blocs.count() == 0

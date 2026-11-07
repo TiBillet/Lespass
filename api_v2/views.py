@@ -56,10 +56,13 @@ from .serializers import (
     PageCreateSerializer,
     BlocSchemaSerializer,
     BlocCreateSerializer,
+    ImageDeGalerieCreateSerializer,
+    MESSAGE_IMAGES_EN_FICHIER,
     CHAMPS_PAGE_AUTORISES,
     CHAMPS_BLOC_AUTORISES,
     CHAMPS_TEXTE_RICHE,
     CHAMPS_FICHIER,
+    CHAMPS_IMAGE_URL,
     CHAMPS_URL_A_NEUTRALISER,
 )
 from pages.models import Page, Bloc, valider_slug_non_reserve
@@ -169,7 +172,7 @@ def _appliquer_fichiers_multipart(request, bloc):
     """
     if not hasattr(request, "FILES"):
         return
-    from api_v2.serializers import _validate_uploaded_image
+    from api_v2.serializers import nommer_le_fichier_image_cote_serveur
     # Upload de fichiers IMAGE uniquement (image principale, secondaire, photo d'auteur).
     # L'upload de fichiers VIDEO est volontairement retire : pour une video, utiliser le
     # bloc EMBED (embed_url YouTube/Vimeo/PeerTube, rendu en iframe). Cela evite d'heberger
@@ -178,8 +181,32 @@ def _appliquer_fichiers_multipart(request, bloc):
     for nom_fichier in ("image", "image_secondaire", "auteur_photo"):
         fichier = request.FILES.get(nom_fichier)
         if fichier:
-            _validate_uploaded_image(fichier)
+            # Valide l'image et la renomme : le nom envoye par le client n'est
+            # jamais garde. / Validates and renames: the client's name is never kept.
+            nommer_le_fichier_image_cote_serveur(fichier)
             setattr(bloc, nom_fichier, fichier)
+
+
+def _refuser_les_images_envoyees_sans_fichier(request):
+    """Refuse (400) un champ image present dans la requete sans fichier joint.
+    / Refuses (400) an image field present in the request without an attached file.
+
+    LOCALISATION : api_v2/views.py
+
+    Une image s'envoie en fichier (multipart). Une URL, une liste, null ou un
+    texte a la place du fichier est refuse : sinon la valeur serait ignoree et
+    la reponse ferait croire que l'image a change. Le serveur ne telecharge
+    aucune URL.
+    Appelants : BlocViewSet.partial_update (JSON ou multipart) et
+    PageViewSet.ajouter_bloc (multipart seulement : en JSON, c'est
+    BlocCreateSerializer.validate qui decide).
+    """
+    for nom_du_champ_image in CHAMPS_IMAGE_URL:
+        champ_present = nom_du_champ_image in request.data
+        fichier_joint = nom_du_champ_image in request.FILES
+        if champ_present and not fichier_joint:
+            raise serializers.ValidationError(
+                {nom_du_champ_image: [MESSAGE_IMAGES_EN_FICHIER]})
 
 
 class CrowdInitiativeViewSet(viewsets.ViewSet):
@@ -1435,6 +1462,7 @@ class PageViewSet(viewsets.ViewSet):
         # We use .dict() to flatten scalars, then remove file fields (File objects, not strings).
         # These files are applied after the serializer save via _appliquer_fichiers_multipart.
         if hasattr(request.data, "dict"):
+            _refuser_les_images_envoyees_sans_fichier(request)
             donnees = request.data.dict()
             # Retire les champs fichier : ce sont des objets File, pas des scalaires.
             # / Remove file fields: they are File objects, not scalars.
@@ -1445,9 +1473,14 @@ class PageViewSet(viewsets.ViewSet):
         donnees.setdefault("position", page.blocs.count())
         ser = BlocCreateSerializer(data=donnees, context={"page": page})
         ser.is_valid(raise_exception=True)
-        bloc = ser.save()
-        _appliquer_fichiers_multipart(request, bloc)
-        bloc.save()
+        # Tout ou rien : si le fichier est refuse (format, pixels), le bloc deja
+        # cree par ser.save() est annule. Sans cette transaction, un 400 laisserait
+        # un bloc orphelin en base (ATOMIC_REQUESTS n'est pas active).
+        # / All or nothing: a refused file rolls back the block created by save().
+        with transaction.atomic():
+            bloc = ser.save()
+            _appliquer_fichiers_multipart(request, bloc)
+            bloc.save()
         return Response(BlocSchemaSerializer(bloc).data, status=status.HTTP_201_CREATED)
 
 
@@ -1463,6 +1496,13 @@ class BlocViewSet(viewsets.ViewSet):
 
     def partial_update(self, request, uuid=None):
         bloc = get_object_or_404(Bloc, uuid=uuid)
+
+        # Une image s'envoie en fichier (multipart) : une URL, une liste ou
+        # toute autre valeur est refusee par un 400, jamais ignoree.
+        # La galerie d'un bloc ne se modifie pas ici : voir ajouter_image.
+        # / An image is sent as a file: anything else is a 400, never ignored.
+        _refuser_les_images_envoyees_sans_fichier(request)
+
         if "headline" in request.data:
             bloc.titre = request.data["headline"] or ""
         if "alternativeHeadline" in request.data:
@@ -1501,6 +1541,11 @@ class BlocViewSet(viewsets.ViewSet):
                 nom = prop.get("name")
                 if nom not in CHAMPS_BLOC_AUTORISES:
                     continue  # securite : jamais setattr hors whitelist
+                # Image secondaire ou photo d'auteur en JSON : refus explicite,
+                # pour la meme raison que `image` plus haut (multipart uniquement).
+                # / Secondary image or author photo in JSON: explicit refusal.
+                if nom in CHAMPS_IMAGE_URL:
+                    raise serializers.ValidationError({nom: [MESSAGE_IMAGES_EN_FICHIER]})
                 if nom in CHAMPS_FICHIER:
                     continue  # securite : les fichiers ne se settent jamais via string
                 valeur = prop.get("value")
@@ -1537,6 +1582,28 @@ class BlocViewSet(viewsets.ViewSet):
         bloc = get_object_or_404(Bloc, uuid=uuid)
         bloc.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="images")
+    def ajouter_image(self, request, uuid=None):
+        """
+        Ajoute UNE image a la fin de la galerie d'un bloc (multipart).
+        / Adds ONE image at the end of a block's gallery (multipart).
+
+        LOCALISATION : api_v2/views.py
+        Route : POST /api/v2/blocs/{uuid}/images/ (droit de cle `page`,
+        basename `bloc`, comme le reste de ce viewset).
+
+        C'est le seul moyen de remplir par l'API une galerie (IMAGES en grille
+        ou en bande de logos), les photos d'une Equipe, les vignettes de
+        Ressources, et les images d'un bloc TEXTE (![legende](galerie:N)).
+        Regles et reponse : api_v2/serializers.py:ImageDeGalerieCreateSerializer.
+        """
+        bloc = get_object_or_404(Bloc, uuid=uuid)
+        serializer_de_l_image = ImageDeGalerieCreateSerializer(
+            data=request.data, context={"bloc": bloc})
+        serializer_de_l_image.is_valid(raise_exception=True)
+        serializer_de_l_image.save()
+        return Response(serializer_de_l_image.data, status=status.HTTP_201_CREATED)
 
 
 # --------------------------------------------------------------------------- #
