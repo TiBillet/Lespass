@@ -206,9 +206,9 @@ This single permission covers both `/api/v2/pages/` and `/api/v2/blocs/` routes.
 | POST | `/api/v2/pages/` | Crée une page + ses blocs (nested `hasPart`), **atomique** | 201 WebPage |
 | GET | `/api/v2/pages/block-types/` | **Catalogue** des types de blocs et champs autorisés | 200 `{"blockTypes":[...]}` |
 | GET | `/api/v2/pages/{uuid}/` | Détail (lookup par **uuid OU slug**) | 200 WebPage / 404 |
-| PATCH | `/api/v2/pages/{uuid}/` | Édite les **méta** de la page (titre, slug, publie, SEO…) | 200 WebPage |
-| DELETE | `/api/v2/pages/{uuid}/` | Supprime la page (cascade blocs) | 204 |
-| POST | `/api/v2/pages/{uuid}/blocs/` | Ajoute **un** bloc (JSON ou multipart) | 201 WebPageElement |
+| PATCH | `/api/v2/pages/{uuid}/` | Édite les **méta** de la page (titre, slug, publie, SEO…) ; **uuid OU slug** | 200 WebPage / 404 |
+| DELETE | `/api/v2/pages/{uuid}/` | Supprime la page (cascade blocs) ; **uuid OU slug** | 204 / 404 |
+| POST | `/api/v2/pages/{uuid}/blocs/` | Ajoute **un** bloc (JSON ou multipart) ; **uuid OU slug** | 201 WebPageElement / 404 |
 | PATCH | `/api/v2/blocs/{uuid}/` | Édite un bloc (JSON ou multipart ; images en multipart uniquement) | 200 WebPageElement |
 | DELETE | `/api/v2/blocs/{uuid}/` | Supprime un bloc | 204 |
 

@@ -23,7 +23,7 @@ K='Api-Key xxxx.yyyy'; H='lespass.tibillet.localhost'
 | Sales | `GET /api/v2/sales/` | `sale` |
 | Crowds | `GET/POST /api/v2/initiatives/`, `.../budget-items/`, `.../votes/`, `.../participations/` | `crowd` |
 | Wallet | `POST /api/v2/wallet-refills/` | `walletrefill` (gift_asset) |
-| **Pages** | `GET/POST /api/v2/pages/`, `GET .../{uuid}/`, `POST .../{uuid}/blocs/`, `PATCH/DELETE /api/v2/blocs/{uuid}/` | `page` |
+| **Pages** | `GET/POST /api/v2/pages/`, `GET/PATCH/DELETE .../{uuid ou slug}/`, `POST .../{uuid ou slug}/blocs/`, `PATCH/DELETE /api/v2/blocs/{uuid}/`, `POST /api/v2/blocs/{uuid}/images/` | `page` |
 | **Catalogue blocs** | `GET /api/v2/pages/block-types/` | `page` |
 | Bénévolat | `GET/POST /api/v2/volunteer-tasks/`, `…/volunteer-plannings/` (uuid ou slug), `…/volunteer-needs/`, `…/volunteer-signups/` ; `GET/PATCH/DELETE …/{uuid}/` (pas de PATCH d'inscription) | `volunteering` |
 

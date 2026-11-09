@@ -1638,8 +1638,9 @@ paths:
         FR: Édite uniquement les méta de la page (titre, slug, description, noindex,
         meta_title, publie, est_accueil, position). Les blocs sont gérés par les
         routes /api/v2/pages/{uuid}/blocs/ et /api/v2/blocs/{uuid}/.
+        La page se désigne par son uuid ou son slug, comme au GET.
 
-        EN: Updates page metadata only (title, slug, description, noindex,
+        EN: Page addressed by uuid or slug, like GET. Updates page metadata only (title, slug, description, noindex,
         meta_title, publie, est_accueil, position). Blocs are managed via their
         own routes.
       tags: [Page]
@@ -1649,9 +1650,9 @@ paths:
         - in: path
           name: uuid
           required: true
+          description: "UUID ou slug de la page / Page UUID or slug."
           schema:
             type: string
-            format: uuid
       requestBody:
         required: true
         content:
@@ -1681,9 +1682,9 @@ paths:
         - in: path
           name: uuid
           required: true
+          description: "UUID ou slug de la page / Page UUID or slug."
           schema:
             type: string
-            format: uuid
       responses:
         '204':
           description: Deleted
@@ -1692,7 +1693,7 @@ paths:
       operationId: createBloc
       summary: "Ajoute un bloc à une Page (JSON ou multipart)"
       description: |
-        FR: Ajoute un bloc à la page identifiée par uuid, en JSON ou en multipart.
+        FR: Ajoute un bloc à la page identifiée par uuid ou slug, en JSON ou en multipart.
         Le serveur ne télécharge AUCUNE URL : une image s'envoie en fichier.
         - Image simple (`image`, `image_secondaire`, `auteur_photo`) : en multipart
           sur cet endpoint, ou ensuite par PATCH multipart du bloc.
@@ -1721,9 +1722,9 @@ paths:
         - in: path
           name: uuid
           required: true
+          description: "UUID ou slug de la page / Page UUID or slug."
           schema:
             type: string
-            format: uuid
       requestBody:
         required: true
         content:

@@ -1547,3 +1547,68 @@ def test_http_ajouter_un_bloc_multipart_avec_un_tiff_ne_cree_aucun_bloc(cle_page
     assert reponse.status_code == 400, reponse.content
     with tenant_context(tenant):
         assert Page.objects.get(uuid=page_uuid).blocs.count() == 0
+
+
+# Toutes les routes /pages/ et /blocs/ qui lisent un uuid dans l'URL.
+# Le routeur DRF accepte n'importe quel texte a cet endroit.
+# / Every /pages/ and /blocs/ route that reads a uuid from the URL.
+ROUTES_PAGES_ET_BLOCS_AVEC_UUID_DANS_L_URL = [
+    ("get", "/api/v2/blocs/{identifiant}/"),
+    ("patch", "/api/v2/blocs/{identifiant}/"),
+    ("delete", "/api/v2/blocs/{identifiant}/"),
+    ("post", "/api/v2/blocs/{identifiant}/images/"),
+    ("patch", "/api/v2/pages/{identifiant}/"),
+    ("delete", "/api/v2/pages/{identifiant}/"),
+    ("post", "/api/v2/pages/{identifiant}/blocs/"),
+]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("methode, gabarit_de_route", ROUTES_PAGES_ET_BLOCS_AVEC_UUID_DANS_L_URL)
+def test_http_identifiant_qui_n_est_pas_un_uuid_renvoie_404(cle_pages, methode, gabarit_de_route):
+    """Un identifiant mal forme (uuid tronque, faute de frappe) donne un 404 :
+    la ressource ne peut pas exister. Jamais un 500.
+    / A malformed identifier gives a 404, never a 500."""
+    from rest_framework.test import APIClient
+    client = APIClient()
+    client.raise_request_exception = False
+    route = gabarit_de_route.format(identifiant="8d22a6b4-x")
+
+    appel_http = getattr(client, methode)
+    reponse = appel_http(route, {}, format="json", **_entetes_api(cle_pages))
+
+    assert reponse.status_code == 404, reponse.content
+
+
+@pytest.mark.django_db
+def test_http_page_modifiee_enrichie_puis_supprimee_par_son_slug(cle_pages):
+    """PATCH, ajout d'un bloc et DELETE acceptent le slug de la page, comme le GET.
+    / PATCH, block creation and DELETE accept the page slug, like GET."""
+    from rest_framework.test import APIClient
+    from pages.models import Page
+    tenant = Client.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        page = Page.objects.create(titre="Mentions", slug="mentions-par-slug")
+        page_uuid = page.uuid
+    client = APIClient()
+
+    reponse_patch = client.patch("/api/v2/pages/mentions-par-slug/",
+                                 {"name": "Mentions légales"}, format="json",
+                                 **_entetes_api(cle_pages))
+    assert reponse_patch.status_code == 200, reponse_patch.content
+    assert reponse_patch.json()["identifier"] == str(page_uuid)
+
+    reponse_bloc = client.post("/api/v2/pages/mentions-par-slug/blocs/",
+                               {"additionalType": "TEXTE", "text": "Bonjour"},
+                               format="json", **_entetes_api(cle_pages))
+    assert reponse_bloc.status_code == 201, reponse_bloc.content
+
+    with tenant_context(tenant):
+        page.refresh_from_db()
+        assert page.titre == "Mentions légales"
+        assert page.blocs.count() == 1
+
+    reponse_delete = client.delete("/api/v2/pages/mentions-par-slug/", **_entetes_api(cle_pages))
+    assert reponse_delete.status_code == 204
+    with tenant_context(tenant):
+        assert not Page.objects.filter(uuid=page_uuid).exists()

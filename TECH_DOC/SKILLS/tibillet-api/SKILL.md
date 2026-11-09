@@ -108,6 +108,8 @@ Deux points qui évitent de deviner :
 Les **pages** (`WebPage`) suivent la même logique : `name` = titre, `hasPart` = la liste
 ordonnée de blocs (création imbriquée en un seul POST), `additionalProperty` pour
 `slug`, `position`, `publie`, `est_accueil`, `noindex`, `meta_title`, `meta_description`.
+Toutes les routes `/api/v2/pages/{x}/` (GET, PATCH, DELETE, `…/blocs/`) acceptent
+l'**uuid ou le slug** de la page. Un bloc, lui, se désigne toujours par son uuid.
 
 **Hiérarchie & navbar** : pour ranger une page **sous une page parente** (menu déroulant),
 utilise le champ **`isPartOf`** (au niveau haut du corps, PAS dans additionalProperty) =

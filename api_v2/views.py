@@ -152,6 +152,27 @@ def get_event_par_identifiant_ou_404(identifiant):
     return event
 
 
+def get_page_par_uuid_ou_slug_ou_404(identifiant):
+    """
+    Trouve une Page par son uuid OU son slug, ou leve Http404.
+    / Find a Page by its uuid OR its slug, or raise Http404.
+
+    LOCALISATION : api_v2/views.py
+
+    Toutes les routes /api/v2/pages/{x}/ acceptent les deux formes, comme le GET.
+    Un texte qui n'est pas un uuid est cherche comme slug : jamais de 500.
+    La recherche elle-meme est dans api_v2/serializers.py:_resoudre_page,
+    deja utilisee pour la page parente (isPartOf).
+    / Every /api/v2/pages/{x}/ route accepts both forms. Lookup is done by
+    _resoudre_page, also used for the parent page (isPartOf).
+    """
+    from api_v2.serializers import _resoudre_page
+    page = _resoudre_page(identifiant)
+    if page is None:
+        raise Http404("Page not found")
+    return page
+
+
 def _ressemble_uuid(valeur) -> bool:
     """True si la chaine est un UUID valide. / True if the string is a valid UUID."""
     try:
@@ -227,7 +248,7 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
         return Response({"results": serializer.data})
 
     def retrieve(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid, archived=False)
         serializer = InitiativeSchemaSerializer(initiative)
         return Response(serializer.data)
 
@@ -239,13 +260,13 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid)
         initiative.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["get", "post"], url_path="budget-items")
     def budget_items(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid)
         if request.method.lower() == "get":
             items = initiative.budget_items.all().order_by("-created_at")
             serializer = BudgetItemSchemaSerializer(items, many=True)
@@ -270,7 +291,7 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["get", "post"], url_path="votes")
     def votes(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid, archived=False)
         if request.method.lower() == "post":
             obj, created = Vote.objects.get_or_create(initiative=initiative, user=request.user)
             count = Vote.objects.filter(initiative=initiative).count()
@@ -280,7 +301,7 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["get", "post"], url_path="participations")
     def participations(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid, archived=False)
         if request.method.lower() == "post":
             input_serializer = ParticipationCreateSerializer(data=request.data, context={"request": request})
             input_serializer.is_valid(raise_exception=True)
@@ -704,7 +725,7 @@ class ProductViewSet(viewsets.ViewSet):
         return reponse
 
     def retrieve(self, request, uuid=None):
-        product = get_object_or_404(Product, uuid=uuid, archive=False)
+        product = get_objet_par_uuid_ou_404(Product, uuid, archive=False)
         serializer = ProductSchemaSerializer(product)
         return Response(serializer.data)
 
@@ -787,7 +808,7 @@ class ReservationViewSet(viewsets.ViewSet):
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, uuid=None):
-        reservation = get_object_or_404(Reservation, uuid=uuid)
+        reservation = get_objet_par_uuid_ou_404(Reservation, uuid)
         serializer = ReservationSchemaSerializer(reservation)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -810,7 +831,7 @@ class MembershipViewSet(viewsets.ViewSet):
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, uuid=None):
-        membership = get_object_or_404(Membership, uuid=uuid)
+        membership = get_objet_par_uuid_ou_404(Membership, uuid)
         serializer = MembershipSchemaSerializer(membership)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1396,7 +1417,7 @@ class PageViewSet(viewsets.ViewSet):
         return Response(PageSchemaSerializer(page).data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, uuid=None):
-        page = get_object_or_404(Page, uuid=uuid)
+        page = get_page_par_uuid_ou_slug_ou_404(uuid)
         # PATCH meta seulement. / PATCH meta only.
         meta = {}
         for prop in (request.data.get("additionalProperty") or []):
@@ -1433,7 +1454,7 @@ class PageViewSet(viewsets.ViewSet):
         return Response(PageSchemaSerializer(page).data)
 
     def destroy(self, request, uuid=None):
-        page = get_object_or_404(Page, uuid=uuid)
+        page = get_page_par_uuid_ou_slug_ou_404(uuid)
         page.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1451,7 +1472,7 @@ class PageViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["post"], url_path="blocs")
     def ajouter_bloc(self, request, uuid=None):
-        page = get_object_or_404(Page, uuid=uuid)
+        page = get_page_par_uuid_ou_slug_ou_404(uuid)
         # JSON -> dict normal ; multipart -> QueryDict (on aplatit en scalaires).
         # / JSON -> plain dict; multipart -> QueryDict (flatten to scalars).
         # Note : en DRF, request.data = _full_data qui inclut les fichiers uploadés.
@@ -1491,11 +1512,11 @@ class BlocViewSet(viewsets.ViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def retrieve(self, request, uuid=None):
-        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc = get_objet_par_uuid_ou_404(Bloc, uuid)
         return Response(BlocSchemaSerializer(bloc).data)
 
     def partial_update(self, request, uuid=None):
-        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc = get_objet_par_uuid_ou_404(Bloc, uuid)
 
         # Une image s'envoie en fichier (multipart) : une URL, une liste ou
         # toute autre valeur est refusee par un 400, jamais ignoree.
@@ -1579,7 +1600,7 @@ class BlocViewSet(viewsets.ViewSet):
         return Response(BlocSchemaSerializer(bloc).data)
 
     def destroy(self, request, uuid=None):
-        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc = get_objet_par_uuid_ou_404(Bloc, uuid)
         bloc.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1598,7 +1619,7 @@ class BlocViewSet(viewsets.ViewSet):
         Ressources, et les images d'un bloc TEXTE (![legende](galerie:N)).
         Regles et reponse : api_v2/serializers.py:ImageDeGalerieCreateSerializer.
         """
-        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc = get_objet_par_uuid_ou_404(Bloc, uuid)
         serializer_de_l_image = ImageDeGalerieCreateSerializer(
             data=request.data, context={"bloc": bloc})
         serializer_de_l_image.is_valid(raise_exception=True)
