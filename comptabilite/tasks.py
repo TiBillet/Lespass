@@ -5,17 +5,18 @@ semaine, mois et année, et l'email de clôture.
 and year closures, and the closure email.
 
 LES EMAILS DE CLÔTURE
+Les réglages des envois sont dans `ConfigurationDesRapports` (comptabilite/models.py) :
+un booléen par envoi, une seule liste de destinataires.
 - J : aucun email séparé. Le ticket Z de chaque J part en pièce jointe du récap du
-  matin des admins (`Administration/recap_quotidien.py`), appelé à la fin de la
-  sous-tâche horaire du lieu, après le filet. En périodicité journalière, les adresses
-  de `rapport_emails` reçoivent aussi ce récap.
-- H, M, A : un email par clôture aux adresses de `rapport_emails`, si la périodicité
-  du rapport est le niveau de la clôture (`envoyer_email_cloture`).
-- Bouton « Envoyer par e-mail » de la caisse : l'email d'une clôture, tout de suite,
-  quelle que soit la périodicité (`envoyer_email_cloture_demande`).
-/ Closure e-mails: no separate e-mail for a J (its Z goes in the admins' morning
-recap); one e-mail per H, M, A matching the periodicity; the register button sends
-any closure at once.
+  matin (`Administration/recap_quotidien.py`), appelé à la fin de la sous-tâche
+  horaire du lieu, après le filet, s'il est coché.
+- H, M, A : un email par clôture aux destinataires, si le rapport de ce niveau est
+  coché (`envoyer_email_cloture`).
+- Envoi demandé : l'email d'une clôture, tout de suite, coché ou non
+  (`envoyer_email_cloture_demande`).
+/ Closure e-mails: settings in ConfigurationDesRapports. No separate e-mail for a J
+(its Z goes in the morning recap); one e-mail per ticked H, M, A; the requested
+sending ignores the ticks.
 
 LOCALISATION : comptabilite/tasks.py
 
@@ -84,7 +85,7 @@ from zoneinfo import ZoneInfo
 from celery import shared_task
 from django.db import connection, transaction
 from django.db.models import Min
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.utils.translation import gettext
 from django_tenants.utils import tenant_context
 
@@ -96,7 +97,7 @@ from BaseBillet.models_vente import Vente
 # / Module-level import so tests can mock via patch("comptabilite.tasks.CeleryMailerClass").
 from BaseBillet.tasks import CeleryMailerClass
 from comptabilite.integrite import calculer_hmac_cloture
-from comptabilite.models import ClotureCaisse
+from comptabilite.models import ClotureCaisse, ConfigurationDesRapports
 from comptabilite.presentation import euros_a_la_francaise
 from comptabilite.rapport import RapportDesVentes
 from Customers.models import Client
@@ -802,13 +803,14 @@ def journees_a_importer(apres_le_numero=None):
 
 def demander_l_email_automatique_si_configure(schema_name, cloture):
     """
-    Demande l'email d'une clôture H, M ou A si le lieu a des destinataires et que la
-    périodicité du rapport est le niveau de cette clôture.
-    / Requests the email of an H, M or A closure when configured for this level.
+    Demande l'email d'une clôture H, M ou A si le rapport de ce niveau est coché dans
+    les réglages des envois (`ConfigurationDesRapports`) et que la liste des
+    destinataires n'est pas vide.
+    / Requests the email of an H, M or A closure when its level is ticked and the
+    recipient list is not empty.
 
     Une J ne demande jamais d'email séparé : son ticket Z part en pièce jointe du récap
-    du matin des admins (`Administration/recap_quotidien.py`), envoyé aussi aux
-    adresses de `rapport_emails` en périodicité journalière.
+    du matin (`Administration/recap_quotidien.py`).
     / A J never requests its own email: its Z goes in the admins' morning recap.
 
     Aucun mail pour une H, M ou A dont la fin est avant OU ÉGALE à la mise en
@@ -833,8 +835,11 @@ def demander_l_email_automatique_si_configure(schema_name, cloture):
         if cloture_finie_avant_la_mise_en_service:
             return
 
-    configuration = Configuration.get_solo()
-    if configuration.rapport_periodicite == cloture.niveau and configuration.rapport_emails:
+    reglages_des_envois = ConfigurationDesRapports.get_solo()
+    rapport_du_niveau_coche = reglages_des_envois.envoie_le_rapport_du_niveau(
+        cloture.niveau
+    )
+    if rapport_du_niveau_coche and reglages_des_envois.adresses_des_destinataires():
         envoyer_email_cloture.delay(schema_name, str(cloture.uuid))
 
 
@@ -1145,16 +1150,16 @@ def generer_les_clotures_automatiques():
 def envoyer_email_cloture(schema_name, cloture_uuid):
     """
     L'envoi AUTOMATIQUE de l'email d'une clôture H, M ou A (demandé à sa création par
-    `demander_l_email_automatique_si_configure`) : seulement si la périodicité du
-    rapport du lieu est le niveau de la clôture. Une J n'a pas d'email séparé : son
-    ticket Z part dans le récap du matin (`Administration/recap_quotidien.py`).
-    / AUTOMATIC e-mail of an H, M or A closure: only when the report periodicity is
-    the closure level. A J has no separate e-mail: its Z goes in the morning recap.
+    `demander_l_email_automatique_si_configure`) : seulement si le rapport de ce niveau
+    est coché dans les réglages des envois. Une J n'a pas d'email séparé : son ticket Z
+    part dans le récap du matin (`Administration/recap_quotidien.py`).
+    / AUTOMATIC e-mail of an H, M or A closure: only when its level is ticked. A J has
+    no separate e-mail: its Z goes in the morning recap.
 
     :return: True si l'email est envoyé, False sinon
     """
     return _envoyer_l_email_de_la_cloture(
-        schema_name, cloture_uuid, respecter_la_periodicite=True
+        schema_name, cloture_uuid, respecter_les_reglages=True
     )
 
 
@@ -1162,30 +1167,30 @@ def envoyer_email_cloture(schema_name, cloture_uuid):
 def envoyer_email_cloture_demande(schema_name, cloture_uuid):
     """
     L'envoi DEMANDÉ de l'email d'une clôture (bouton « Envoyer par e-mail » de la
-    caisse) : c'est un clic explicite, la périodicité du rapport ne compte pas. Les
-    destinataires sont toujours ceux du lieu.
-    / REQUESTED closure e-mail (register button): the periodicity does not apply.
+    caisse) : c'est un clic explicite, les cases cochées ne comptent pas. Les
+    destinataires sont toujours ceux de la liste des réglages des envois.
+    / REQUESTED closure e-mail: the ticks do not apply, the recipients do.
 
     APPELÉE PAR : `laboutik/views.py`, `CaisseViewSet.envoyer_rapport`.
 
     :return: True si l'email est envoyé, False sinon
     """
     return _envoyer_l_email_de_la_cloture(
-        schema_name, cloture_uuid, respecter_la_periodicite=False
+        schema_name, cloture_uuid, respecter_les_reglages=False
     )
 
 
-def _envoyer_l_email_de_la_cloture(schema_name, cloture_uuid, respecter_la_periodicite):
+def _envoyer_l_email_de_la_cloture(schema_name, cloture_uuid, respecter_les_reglages):
     """
-    Envoie l'email d'une clôture aux destinataires de `Configuration.rapport_emails`,
-    avec le PDF de la clôture en pièce jointe. Rien n'est envoyé si la liste des
-    destinataires est vide ; ni, quand `respecter_la_periodicite` est vrai, si la
-    périodicité du rapport n'est pas le niveau de la clôture.
-    / Sends a closure email with its PDF to the venue's recipients. Nothing without
-    recipients; nor, for the automatic sending, for another level than the periodicity.
+    Envoie l'email d'une clôture aux destinataires des réglages des envois
+    (`ConfigurationDesRapports`), avec le PDF de la clôture en pièce jointe. Rien n'est
+    envoyé si la liste des destinataires est vide ; ni, quand `respecter_les_reglages`
+    est vrai, si le rapport de ce niveau n'est pas coché.
+    / Sends a closure email with its PDF to the settings' recipients. Nothing without
+    recipients; nor, for the automatic sending, when the level is not ticked.
 
-    :param respecter_la_periodicite: True pour l'envoi automatique, False pour l'envoi
-        demandé à la caisse
+    :param respecter_les_reglages: True pour l'envoi automatique, False pour l'envoi
+        demandé
     :return: True si l'email est envoyé, False sinon
     """
     tenant = Client.objects.get(schema_name=schema_name)
@@ -1202,67 +1207,89 @@ def _envoyer_l_email_de_la_cloture(schema_name, cloture_uuid, respecter_la_perio
             return False
 
         config = Configuration.get_solo()
+        reglages_des_envois = ConfigurationDesRapports.get_solo()
 
-        # Rien à envoyer sans destinataire, ou pour un autre niveau que la périodicité.
-        # / Nothing to send without recipients, or for another level.
-        if not config.rapport_emails or not config.rapport_emails.strip():
-            return False
-        niveau_hors_periodicite = config.rapport_periodicite != cloture.niveau
-        if respecter_la_periodicite and niveau_hors_periodicite:
-            return False
-
-        # Les destinataires : séparés par des virgules, sans les espaces autour.
-        # / Recipients: comma-separated, trimmed.
-        emails = []
-        for adresse_saisie in config.rapport_emails.split(","):
-            adresse_sans_espaces = adresse_saisie.strip()
-            if adresse_sans_espaces:
-                emails.append(adresse_sans_espaces)
+        # Rien à envoyer sans destinataire, ou pour un niveau décoché.
+        # / Nothing to send without recipients, or for an unticked level.
+        emails = reglages_des_envois.adresses_des_destinataires()
         if not emails:
+            return False
+        niveau_coche = reglages_des_envois.envoie_le_rapport_du_niveau(cloture.niveau)
+        if respecter_les_reglages and not niveau_coche:
             return False
 
         # Le PDF de la clôture, en pièce jointe.
         # / The closure PDF, attached.
         pdf_bytes, pdf_filename, _type_du_pdf = generer_pdf_cloture(cloture)
 
-        # Le sujet : le lieu, le niveau et le numéro de la clôture.
-        # / The subject: venue, level and closure number.
-        subject = (
-            f"[{config.organisation}] "
-            f"Clôture {cloture.get_niveau_display()} "
-            f"n° {cloture.numero_sequentiel}"
-        )
+        # Tout le mail est rendu dans la langue du lieu : sujet, gabarit, compteurs.
+        # Sans `override`, il partirait dans la langue laissée par la tâche Celery
+        # précédente du worker.
+        # / The whole mail is rendered in the venue's language.
+        with translation.override(config.language):
+            # Le sujet : le lieu, le niveau et le numéro de la clôture.
+            # / The subject: venue, level and closure number.
+            subject = (
+                f"[{config.organisation}] "
+                f"Clôture {cloture.get_niveau_display()} "
+                f"n° {cloture.numero_sequentiel}"
+            )
 
-        # Le total montré est le chiffre d'affaires TTC (`total_general`), écrit à la
-        # française par la même fonction que tous les lecteurs du rapport.
-        # / The total shown is the revenue incl. tax, written by the shared formatter.
-        chiffre_affaires_ttc_en_euros = euros_a_la_francaise(cloture.total_general)
+            # Les compteurs de l'activité, sans détail : seulement pour une H ou une M
+            # (le Z J part dans le récap du matin, l'A n'en porte pas). La période est
+            # celle de la clôture, [datetime_debut, datetime_fin[. Import local, comme
+            # l'import du récap dans `generer_les_clotures_automatiques_du_lieu`.
+            # / Activity counters: H and M only, over the closure's own period.
+            compteurs_de_l_activite = []
+            niveaux_avec_compteurs = [
+                ClotureCaisse.NIVEAU_HEBDOMADAIRE,
+                ClotureCaisse.NIVEAU_MENSUEL,
+            ]
+            if cloture.niveau in niveaux_avec_compteurs:
+                from Administration.recap_quotidien import compteurs_de_la_periode
 
-        # La période en heure du lieu, jamais celle du serveur (un lieu en Martinique
-        # lit ses heures à lui).
-        # / The period in the venue's time zone, never the server's.
-        fuseau_du_lieu = config.get_tzinfo()
-        debut_en_heure_du_lieu = timezone.localtime(
-            cloture.datetime_debut, fuseau_du_lieu
-        ).strftime("%d/%m/%Y %H:%M")
-        fin_en_heure_du_lieu = timezone.localtime(
-            cloture.datetime_fin, fuseau_du_lieu
-        ).strftime("%d/%m/%Y %H:%M")
+                compteurs_de_l_activite = compteurs_de_la_periode(
+                    cloture.datetime_debut, cloture.datetime_fin
+                )
 
-        mailer = CeleryMailerClass(
-            email=emails,
-            title=subject,
-            template="comptabilite/email/cloture_rapport_email.html",
-            context={
-                "config": config,
-                "cloture": cloture,
-                "chiffre_affaires_ttc_en_euros": chiffre_affaires_ttc_en_euros,
-                "debut_en_heure_du_lieu": debut_en_heure_du_lieu,
-                "fin_en_heure_du_lieu": fin_en_heure_du_lieu,
-            },
-            attached_files={pdf_filename: pdf_bytes},
-        )
-        result = mailer.send()
+            # Import local, même raison que ci-dessus.
+            # / Local import, same reason as above.
+            from Administration.recap_quotidien import lien_des_reglages_des_envois
+
+            # Le total montré est le chiffre d'affaires TTC (`total_general`), écrit à
+            # la française par la même fonction que tous les lecteurs du rapport.
+            # / The total shown is the revenue incl. tax, written by the shared formatter.
+            chiffre_affaires_ttc_en_euros = euros_a_la_francaise(cloture.total_general)
+
+            # La période en heure du lieu, jamais celle du serveur (un lieu en
+            # Martinique lit ses heures à lui).
+            # / The period in the venue's time zone, never the server's.
+            fuseau_du_lieu = config.get_tzinfo()
+            debut_en_heure_du_lieu = timezone.localtime(
+                cloture.datetime_debut, fuseau_du_lieu
+            ).strftime("%d/%m/%Y %H:%M")
+            fin_en_heure_du_lieu = timezone.localtime(
+                cloture.datetime_fin, fuseau_du_lieu
+            ).strftime("%d/%m/%Y %H:%M")
+
+            mailer = CeleryMailerClass(
+                email=emails,
+                title=subject,
+                template="comptabilite/email/cloture_rapport_email.html",
+                context={
+                    "config": config,
+                    "cloture": cloture,
+                    "chiffre_affaires_ttc_en_euros": chiffre_affaires_ttc_en_euros,
+                    "debut_en_heure_du_lieu": debut_en_heure_du_lieu,
+                    "fin_en_heure_du_lieu": fin_en_heure_du_lieu,
+                    "compteurs_de_l_activite": compteurs_de_l_activite,
+                    "lien_des_reglages_des_envois": lien_des_reglages_des_envois(
+                        tenant.get_primary_domain().domain
+                    ),
+                },
+                attached_files={pdf_filename: pdf_bytes},
+            )
+            result = mailer.send()
         logger.info(
             f"[{schema_name}] Email de la clôture n° {cloture.numero_sequentiel} "
             f"envoyé à {len(emails)} destinataire(s) : result={result}"

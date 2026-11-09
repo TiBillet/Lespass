@@ -104,6 +104,8 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
     {% endcomment %}
     {% jsonld_event event %}
 
+    {# TODO : plus aucun bouton n'appelle download_ics(). Le bouton « ajouter à mon agenda » est à reposer ailleurs. #}
+    {# / No button calls download_ics() any more. The "add to my calendar" button is to be placed elsewhere. #}
     <script>
     const ICS_FILE_LINES = [
         "BEGIN:VCALENDAR",

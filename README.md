@@ -103,37 +103,50 @@ Quelques exemples de ce que TiBillet rend possible aujourd'hui :
 
 ## Démarrage rapide
 
-TiBillet tourne dans Docker. Une seule commande pour lancer l'environnement de développement :
+TiBillet tourne dans Docker. Pour lancer l'environnement de développement :
 
 ```bash
 git clone https://github.com/TiBillet/Lespass.git
 cd Lespass
 cp env_example .env        # Configurer les variables d'environnement
+                           # (les valeurs par défaut conviennent pour le dev)
 
-# Créer le network
+# Certificat HTTPS de dev (mkcert) — cf. TLS_CERT_NAME dans le .env.
+# Une seule fois par machine : installer mkcert, puis sa CA locale
+sudo apt install libnss3-tools mkcert    # Fedora : sudo dnf install nss-tools mkcert
+mkcert -install
+# Dans le dépôt (guillemets simples OBLIGATOIRES autour du wildcard) :
+mkdir -p certs
+mkcert -cert-file certs/dev.pem -key-file certs/dev-key.pem 'tibillet.localhost' '*.tibillet.localhost'
+# Vérifier : la sortie doit contenir DNS:tibillet.localhost, DNS:*.tibillet.localhost
+openssl x509 -in certs/dev.pem -noout -ext subjectAltName
+
+# Créer le network (une seule fois par machine)
 docker network create frontend
 
-# Lespass uniquement :
+# Lancer la stack (le premier lancement build l'image : compter ~15 min) :
 docker compose up -d
-# Lespass + Laboutik
-docker compose -f docker-compose-laboutik-V1.yml up -d
 
-# pour les donnée de démo / dev
-docker exec -ti lespass_django bash
-./flush.sh # la première fois, ça installe toute les fixtures et lance le serveur
-rsp # Si l'installation a déja été réalisé, lance le serveur de dev'
+# Données de démo / dev (base remise à zéro, fixtures installées).
+# Arrêter Celery pendant le flush : sinon il crée la Configuration du lieu en même
+# temps que `install` -> IntegrityError "BaseBillet_configuration_pkey".
+docker compose stop lespass_celery
+docker exec lespass_django ./flush.sh --no-runserver
+docker compose start lespass_celery
 
-#idem pour Laboutik :
-docker exec -ti laboutik_django bash
-./flush.sh # la première fois, ça installe toute les fixtures et lance le serveur
-rsp # Si l'installation a déja été réalisé, lance le serveur de dev'
+# Lancer le serveur de dev (aussi pour les fois suivantes, sans refaire le flush)
+docker exec -ti lespass_django bash -ic rsp
+# Les e-mails (confirmation de compte, etc.) arrivent dans Mailpit :
+# https://mailpit.tibillet.localhost
 ```
 
 L'application est accessible sur 
 - `https://lespass.tibillet.localhost`
-- `https://laboutik.tibillet.localhost`
+- `https://lespass.tibillet.localhost/laboutik/caisse/` (caisse LaBoutik, intégrée à Lespass)
 
 > **Prérequis :** Docker, Docker Compose, et un reverse proxy Traefik (inclus dans le compose).
+
+> **Refaire un flush :** Fedow a sa propre base (volume `fedow_database`), que `flush.sh` ne vide pas. Un second flush échoue alors avec `Public pem not match`. Repartir de volumes vides, puis rejouer la séquence de flush : `docker compose down -v && docker compose up -d`.
 
 Pour les détails d'installation, de configuration et de déploiement en production : [→ Documentation complète](https://tibillet.coop)
 

@@ -272,7 +272,7 @@ def ancien_fedow_simule(est_primaire=True, erreur=None, carte_emise_par_le_lieu=
     if carte_emise_par_le_lieu:
         uuid_de_la_place = FedowConfig.get_solo().fedow_place_uuid
 
-    def faux_retrieve(self, tag_id):
+    def faux_retrieve(self, tag_id, timeout=30):
         tags_demandes.append(tag_id)
         if erreur is not None:
             raise erreur
@@ -617,7 +617,7 @@ def test_ouverture_lieu_non_relie_a_l_ancien_fedow_refuse_sans_rien_supprimer(
     construction_de_fedow_api = MagicMock(return_value=None)
     tags_demandes = []
 
-    def faux_retrieve(self, tag_id):
+    def faux_retrieve(self, tag_id, timeout=30):
         tags_demandes.append(tag_id)
         return fiche_de_carte_de_l_ancien_fedow(tag_id, est_primaire=True)
 

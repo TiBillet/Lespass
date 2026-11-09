@@ -57,10 +57,7 @@ Les compteurs « x résultats » doivent être les mêmes qu'avant le refactor.
 2. Attendu : le filtre propose uniquement les produits adhésion non archivés.
 
 ### Test 5 : API v1 `here`
-```bash
-curl -s -H "Authorization: Api-Key <clé>" https://lespass.tibillet.localhost/api/here/ | python -m json.tool
-```
-Attendu : la clé des adhésions ne contient que des produits adhésion publiés, avec tarif.
+Sans objet : la route `/api/here/` a été fermée (`CHANGELOG/2026-10-28-fermeture-api-v1-here.md`).
 
 ### Test 6 : tests automatiques
 ```bash

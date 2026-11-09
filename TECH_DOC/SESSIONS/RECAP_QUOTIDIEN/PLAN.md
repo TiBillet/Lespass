@@ -1,5 +1,7 @@
 # Récap quotidien des admins — Plan d'implémentation
 
+> **Archive du chantier 01, périmée par le chantier 02** ([CHANTIER-02-recap-allege.md](CHANTIER-02-recap-allege.md)) : les clés de rubriques citées ici ont changé.
+
 > **Pour les agents :** SOUS-SKILL REQUIS — `superpowers:subagent-driven-development` (recommandé)
 > ou `superpowers:executing-plans`. Les étapes sont en cases à cocher (`- [ ]`).
 >

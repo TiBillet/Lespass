@@ -29,7 +29,6 @@
 	color: var(--text);
 	background-color: var(--surface);
 	border-left: 1px solid var(--line-soft);
-	z-index: 2;
 }
 
 /* En-tete du ticket — `.tk-head` : titre efface, pastille de comptage

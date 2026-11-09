@@ -155,7 +155,9 @@ def test_carte_liee_fedow_ok_lit_le_fed_frais(carte_liee):
     assert solde["fed_disponible"] is True
     assert solde["fed_centimes"] == 500
     # Lecture fraîche, par la carte. / Fresh read, through the card.
-    lecture_de_la_carte.assert_called_once_with(carte_liee["carte"].tag_id)
+    lecture_de_la_carte.assert_called_once_with(
+        carte_liee["carte"].tag_id, timeout=10
+    )
     MockAPI.return_value.wallet.get_total_fiducial_and_all_federated_token.assert_not_called()
 
 
@@ -245,7 +247,7 @@ def test_carte_anonyme_lit_le_fed_de_sa_carte_sur_l_ancien_fedow(carte_anonyme):
     assert solde["fed_centimes"] == 900
     lecture_fed_par_signature.assert_not_called()
     MockAPI.return_value.NFCcard.retrieve.assert_called_with(
-        carte_anonyme["carte"].tag_id
+        carte_anonyme["carte"].tag_id, timeout=10
     )
 
     # Nettoyage du wallet éphémère miroir créé par la résolution Fedow.

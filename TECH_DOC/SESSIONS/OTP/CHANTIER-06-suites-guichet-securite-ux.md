@@ -21,6 +21,7 @@ Les numéros de ligne datent du 2026-10-20. Ils bougent : se fier d'abord au nom
 | D-UX | « Se connecter » (navbar, footer) mène **directement** au guichet, sans passer par le panneau `#loginPanel`. Le panneau ne sert plus que lorsqu'une **action** demande d'être connecté (réserver, adhérer, panier, bénévolat). Il dit : « Pour vérifier que vous êtes un humain, connectez-vous pour réserver », puis un bouton mène au guichet | À faire, voir §4 |
 | D-SIMPLE | **Pas de formulaire email sur le lieu.** L'email et le code restent sur le guichet. On veut une UX plus agréable, pas plus de code ni de surface d'attaque | Tranché. L'idée du modal email sur le lieu (« D17 ») est abandonnée |
 | E1 | `on_commit` dans `reservation_paid` | **En attente**, voir §3.4 |
+| D-TEXTE (2026-11-09) | Réservation et adhésion anonymes : **toujours retirées**. Le bouton garde le mot de l'action (« Réserver », « Adhérer ») et ouvre `#loginPanel`. Le panneau dit « Pour continuer, nous avons besoin de vérifier que vous êtes un vrai humain. », bouton « Continuer », titre « Vérification ». Le formulaire déjà rempli n'est pas conservé pendant la connexion (choix assumé : moins de code) | **Fait**, voir `CHANGELOG/2026-11-09-otp-merge-main-boutons-reserver.md`. Le §4 point 2 (texte du panneau) est tranché : un texte unique |
 
 ---
 

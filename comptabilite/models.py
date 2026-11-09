@@ -26,6 +26,7 @@ import uuid as uuid_lib
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from solo.models import SingletonModel
 
 
 class ClotureCaisse(models.Model):
@@ -207,3 +208,102 @@ class ClotureCaisse(models.Model):
             .order_by("-numero_sequentiel")
             .first()
         )
+
+
+class ConfigurationDesRapports(SingletonModel):
+    """
+    Les réglages des envois automatiques du lieu : le récap du matin et les rapports
+    de clôture hebdomadaire, mensuelle et annuelle. Un booléen par envoi, une seule
+    liste de destinataires pour tous.
+    / The venue's automatic mail settings: one boolean per mail, one recipient list.
+
+    LOCALISATION : comptabilite/models.py
+
+    LUE PAR :
+    - Administration/recap_quotidien.py (`destinataires_du_recap`,
+      `envoyer_le_recap_du_lieu_si_c_est_l_heure`) : le booléen J et la liste ;
+    - comptabilite/tasks.py (`demander_l_email_automatique_si_configure`,
+      `_envoyer_l_email_de_la_cloture`) : les booléens H, M, A et la liste.
+    Seule la liste reçoit les mails : aucun admin n'est destinataire d'office.
+    / Only the list receives the mails: no admin is a recipient by default.
+
+    Spécification : TECH_DOC/SESSIONS/RECAP_QUOTIDIEN/CHANTIER-02-recap-allege.md §5.
+    """
+
+    envoyer_le_recap_quotidien = models.BooleanField(
+        default=True,
+        verbose_name=_("Récap du matin"),
+        help_text=_(
+            "Chaque matin, ce qui s'est passé la veille, avec le ticket Z de la journée "
+            "en pièce jointe."
+        ),
+    )
+    envoyer_le_rapport_hebdomadaire = models.BooleanField(
+        default=True,
+        verbose_name=_("Rapport hebdomadaire"),
+        help_text=_(
+            "Le ticket Z de la semaine, avec les chiffres de l'activité de la semaine."
+        ),
+    )
+    envoyer_le_rapport_mensuel = models.BooleanField(
+        default=True,
+        verbose_name=_("Rapport mensuel"),
+        help_text=_("Le ticket Z du mois, avec les chiffres de l'activité du mois."),
+    )
+    envoyer_le_rapport_annuel = models.BooleanField(
+        default=True,
+        verbose_name=_("Rapport annuel"),
+        help_text=_("Le ticket Z de l'année."),
+    )
+
+    # Le M2M vise le proxy HumanUser, pas TibilletUser : son manager ne rend que les
+    # users du lieu courant (`client_achat`). C'est ce queryset qui VALIDE les pk
+    # postés par le formulaire de l'admin : un pk forcé vers un user d'un autre lieu
+    # est refusé. Piège : `.add()` exige une instance HumanUser ; avec un TibilletUser
+    # (ce que rend `get_or_create_user`), écrire `.add(user.pk)`.
+    # / The M2M targets the HumanUser proxy: its manager only holds this venue's users
+    # and validates the posted pks. `.add()` needs a HumanUser: use `.add(user.pk)`.
+    destinataires = models.ManyToManyField(
+        "AuthBillet.HumanUser",
+        blank=True,
+        related_name="rapports_recus",
+        verbose_name=_("Destinataires"),
+        help_text=_(
+            "Les personnes qui reçoivent ces mails. Recherche parmi les personnes du "
+            "lieu. Liste vide : aucun mail."
+        ),
+    )
+
+    class Meta:
+        verbose_name = _("Envoi des rapports")
+        verbose_name_plural = _("Envoi des rapports")
+
+    def __str__(self):
+        return str(_("Envoi des rapports"))
+
+    def envoie_le_rapport_du_niveau(self, niveau):
+        """
+        Vrai si le rapport de clôture de ce niveau (H, M ou A) est coché. Une J n'a pas
+        de rapport à elle : son Z part dans le récap du matin (`envoyer_le_recap_quotidien`).
+        / True if the closure report of this level (H, M or A) is ticked.
+        """
+        if niveau == ClotureCaisse.NIVEAU_HEBDOMADAIRE:
+            return self.envoyer_le_rapport_hebdomadaire
+        if niveau == ClotureCaisse.NIVEAU_MENSUEL:
+            return self.envoyer_le_rapport_mensuel
+        if niveau == ClotureCaisse.NIVEAU_ANNUEL:
+            return self.envoyer_le_rapport_annuel
+        return False
+
+    def adresses_des_destinataires(self):
+        """
+        Les e-mails des destinataires : minuscules, sans espaces, sans doublon, sans
+        vide, triés par e-mail.
+        / The recipients' e-mails: lowercase, trimmed, no duplicates, no blanks.
+        """
+        adresses = []
+        for destinataire in self.destinataires.order_by("email"):
+            adresse = (destinataire.email or "").strip().lower()
+            if adresse and adresse not in adresses:
+                adresses.append(adresse)
+        return adresses

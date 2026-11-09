@@ -87,8 +87,11 @@
     <!-- ================================================================
          STYLES CSS : Feuilles de style pour l'apparence du site
          ================================================================ -->
-    <!-- Favicon : petite icône affichée dans l'onglet du navigateur -->
-    <link rel="icon" type="image/png" href="{% static 'commun/img/favicon.png' %}">
+    {# Favicons : ile en degrade « Soleil » (SVG) (navigateurs modernes) + PNG 192 (Safari, Android) + apple-touch-icon (iOS). #}
+    {# / Favicons: island in the "Soleil" gradient (SVG) (modern browsers) + PNG 192 (Safari, Android) + apple-touch-icon (iOS). #}
+    <link rel="icon" type="image/svg+xml" href="{% static 'commun/img/favicon.svg' %}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'commun/img/favicon.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'commun/img/apple-touch-icon.png' %}">
 
     <!-- Bootstrap CSS : servi en local (version 5.3.3) -->
     <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
@@ -117,6 +120,14 @@
     {# BEFORE faire_festival.css, which overrides it. IT MUST STAY IN THIS #}
     {# <head>: a <link> in the body is removed from the DOM on every HTMX swap. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+    {# CSS du bénévolat (classes « bv- ») : planning, cartes « Coups de main », #}
+    {# « Mes créneaux ». Dans ce <head> pour la même raison que tb-blocs.css : #}
+    {# une page de planning arrivée par htmx est rendue avec headless.html, qui #}
+    {# n'a pas de bloc extra_meta. Un <link> posé par la page serait perdu. #}
+    {# Chargé AVANT faire_festival.css, qui peut le surcharger. #}
+    {# / Volunteering CSS. In this <head> like tb-blocs.css: an htmx-loaded page #}
+    {# is rendered with headless.html, which has no extra_meta block. #}
+    <link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
     <link rel="stylesheet" href="{% static 'faire_festival/css/faire_festival.css' %}">
 
     <!-- CSS pour les alertes SweetAlert2 -->

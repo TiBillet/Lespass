@@ -99,6 +99,11 @@ from pages.blocs_catalogue import (
     CHAMPS_PAR_TYPE,
     SKINS_PAR_CHAMP_DU_TYPE,
 )
+from pages.carte_figee import (
+    aide_du_champ_fichier,
+    lire_fichier_carte_figee,
+    resume_de_la_carte,
+)
 from pages.services import inserer_bloc_apres
 
 logger = logging.getLogger(__name__)
@@ -115,6 +120,12 @@ _CHAMP_MARKDOWN = "texte_markdown"
 # / HIDDEN form field carrying the site skin. Never saved: only used by the
 # display conditions.
 _CHAMP_SKIN = "skin_du_site"
+
+# Champ de formulaire d'IMPORT du bloc CARTE_FIGEE. Il remplace, a la meme
+# place, le champ JSON `donnees_carte_figee`, qui ne se saisit pas a la main.
+# / UPLOAD form field of the CARTE_FIGEE block. It replaces, in place, the
+# `donnees_carte_figee` JSON field, never typed by hand.
+_CHAMP_FICHIER_CARTE_FIGEE = "fichier_carte_figee"
 
 
 def _champs_du_catalogue():
@@ -152,6 +163,8 @@ def _champs_du_catalogue():
             champs_avec_editeurs.append(CHAMP_CONTENU_LIEU)
         elif champ == "points_gps":
             champs_avec_editeurs.append(CHAMP_POINTS_GPS)
+        elif champ == "donnees_carte_figee":
+            champs_avec_editeurs.append(_CHAMP_FICHIER_CARTE_FIGEE)
         else:
             champs_avec_editeurs.append(champ)
     return tuple(champs_avec_editeurs)
@@ -301,6 +314,7 @@ def _visibilite_des_champs():
     visibilite[CHAMP_CONTENU_LIEU] = _test_du_type("LIEU")
     visibilite[CHAMP_CONTENU_CARTES] = _ou_logique(fragments_cartes)
     visibilite[CHAMP_POINTS_GPS] = visibilite.pop("points_gps")
+    visibilite[_CHAMP_FICHIER_CARTE_FIGEE] = visibilite.pop("donnees_carte_figee")
 
     return visibilite
 
@@ -768,7 +782,6 @@ class ImageGalerieInline(TabularInline):
 
     model = ImageGalerie
     extra = 1
-    fields = ("image", "legende", "lien_url", "position")
     ordering = ("position",)
     # Tri par glisser-déposer (sortable Unfold) : la poignée remplace la
     # saisie manuelle du nombre, le champ position est masqué.
@@ -776,6 +789,34 @@ class ImageGalerieInline(TabularInline):
     # number input, the position field is hidden.
     ordering_field = "position"
     hide_ordering_field = True
+
+    def get_fields(self, request, obj=None):
+        """
+        Les colonnes de l'encart, selon le bloc qui le porte.
+        / The inline's columns, depending on the block holding it.
+
+        LOCALISATION : pages/admin.py — ImageGalerieInline.get_fields
+
+        Dans un inline, `obj` est le BLOC parent, pas l'image.
+        - SECTION en EQUIPE : une ligne = une personne. La legende est son nom,
+          les tags deviennent des badges. Le lien n'est pas rendu par le
+          gabarit de l'equipe : on ne le propose pas.
+        - SECTION en RESSOURCES : une ligne = une ressource. La legende est son
+          titre, les tags des badges, le lien rend le titre cliquable.
+        - Partout ailleurs : les tags ne sont rendus par aucun gabarit, on ne
+          les propose pas.
+        / In an inline, `obj` is the parent BLOCK. EQUIPE: tags, no link.
+        RESSOURCES: tags and link. Everywhere else: link, no tags.
+        """
+        affichage_du_bloc = ""
+        if obj is not None and obj.type_bloc == Bloc.SECTION:
+            affichage_du_bloc = obj.affichage
+
+        if affichage_du_bloc == Bloc.EQUIPE:
+            return ("image", "legende", "tags", "position")
+        if affichage_du_bloc == Bloc.RESSOURCES:
+            return ("image", "legende", "tags", "lien_url", "position")
+        return ("image", "legende", "lien_url", "position")
 
     # Les 4 permissions sont OBLIGATOIRES. Sans elles, Django retombe sur les
     # permissions modele (`user.has_perm`), qu'un administrateur de tenant n'a
@@ -903,6 +944,18 @@ class BlocAdminForm(forms.ModelForm):
         label=_("Points sur la carte"),
     )
 
+    # Import du fichier JSON d'une carte figee. Champ de FORMULAIRE : le
+    # contenu verifie va dans Bloc.donnees_carte_figee (cf. clean()). Le
+    # fichier lui-meme n'est pas garde. L'aide (avec l'exemple en accordeon)
+    # est posee dans __init__, pour suivre la langue de la requete.
+    # / JSON upload of a frozen map. FORM field: the checked content goes into
+    # Bloc.donnees_carte_figee. The file itself is not kept. Help set in
+    # __init__ to follow the request language.
+    fichier_carte_figee = forms.FileField(
+        required=False,
+        label=_("Fichier de la carte (JSON)"),
+    )
+
     # « Modele de bloc » : UN select pour le type ET l'affichage, groupe par
     # type (ex. « Section mise en avant › Carte »). Valeur "SECTION:CARTE",
     # redecoupee dans clean(). Les choix sont une FONCTION : Django la rappelle
@@ -963,7 +1016,42 @@ class BlocAdminForm(forms.ModelForm):
             type_bloc, affichage = decouper_modele(modele)
             donnees["type_bloc"] = type_bloc
             donnees["affichage"] = affichage
+
+        # Carte figee : la liste lue dans le fichier (clean_fichier_carte_figee)
+        # est posee sur l'instance ICI, avant la validation du modele
+        # (Bloc.clean, lancee ensuite par Django). Sans fichier, l'instance
+        # garde ses donnees : on peut changer le titre sans reimporter.
+        # / Frozen map: the list read from the file is set on the instance HERE,
+        # before model validation. Without a file, existing data is kept.
+        lieux_importes = donnees.get(_CHAMP_FICHIER_CARTE_FIGEE)
+        if donnees.get("type_bloc") == Bloc.CARTE_FIGEE and lieux_importes:
+            self.instance.donnees_carte_figee = lieux_importes
         return donnees
+
+    def clean_fichier_carte_figee(self):
+        """
+        Lit et verifie le fichier JSON importe pour une carte figee.
+        / Reads and checks the JSON file uploaded for a frozen map.
+
+        Toutes les erreurs du fichier sont rendues d'un coup, sous le champ.
+        Si le fichier a une erreur, rien n'est enregistre : le bloc garde ses
+        donnees precedentes.
+        / Every file error is shown at once under the field. On error, nothing
+        is saved and the block keeps its previous data.
+
+        :return: la liste des lieux propres, ou None si aucun fichier n'est envoye.
+        """
+        fichier_envoye = self.cleaned_data.get(_CHAMP_FICHIER_CARTE_FIGEE)
+        if not fichier_envoye:
+            return None
+        lieux_propres, erreurs = lire_fichier_carte_figee(fichier_envoye)
+        if erreurs:
+            # Drapeau lu par Bloc._verifier_la_carte_figee : il evite d'ajouter
+            # « Importez un fichier JSON » alors qu'un fichier a ete envoye.
+            # / Flag read by the model check: avoids a wrong extra message.
+            self.instance._fichier_importe_refuse = True
+            raise forms.ValidationError(erreurs)
+        return lieux_propres
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -972,6 +1060,19 @@ class BlocAdminForm(forms.ModelForm):
         from BaseBillet.views import get_skin_courant
 
         self.fields["skin_du_site"].initial = get_skin_courant()
+
+        # Aide du champ d'import : l'exemple de fichier, replie dans un
+        # accordeon. Si une carte est deja chargee, une ligne de resume passe
+        # devant : le champ fichier est toujours vide a l'ouverture, et l'admin
+        # ne saurait pas, sinon, qu'une carte existe deja.
+        # / Upload help with the folded example. If a map is already loaded, a
+        # summary line comes first: the file input is always empty on open.
+        if _CHAMP_FICHIER_CARTE_FIGEE in self.fields:
+            aide = aide_du_champ_fichier()
+            if self.instance.donnees_carte_figee:
+                resume = resume_de_la_carte(self.instance.donnees_carte_figee)
+                aide = format_html("<strong>{}</strong><br>{}", resume, aide)
+            self.fields[_CHAMP_FICHIER_CARTE_FIGEE].help_text = aide
 
         # La page d'un bloc ne se choisit pas dans sa fiche : un bloc s'ajoute
         # depuis la fiche de SA page (menus « + » de la section « Contenu de la
@@ -1165,14 +1266,18 @@ class BlocAdmin(ModelAdmin):
         Deux cas seulement :
         - TEXTE : les images illustrent l'article et se referencent dans la
           source Markdown via ![legende](galerie:N) (N = position dans l'inline) ;
-        - IMAGES en GRILLE ou BANDE_LOGOS : les images SONT le contenu du bloc.
+        - les couples de AFFICHAGES_AVEC_GALERIE (IMAGES en GRILLE ou
+          BANDE_LOGOS, SECTION en EQUIPE ou RESSOURCES) : les images SONT le
+          contenu du bloc. Pour une EQUIPE ou des RESSOURCES, une image = un
+          element (personne ou ressource), et le fichier est facultatif.
         Les affichages PLEINE_LARGEUR et VIGNETTE_TITRE, eux, lisent le champ
         `image` du bloc : leur proposer l'inline ferait saisir des images que le
         gabarit ne regarde jamais.
         A la CREATION (obj=None), le type n'est pas encore connu cote serveur :
         l'inline apparait apres le premier enregistrement (flux Django standard).
         / Only two cases: TEXTE (images referenced from the Markdown source) and
-        IMAGES in GRILLE or BANDE_LOGOS (the images ARE the content).
+        the AFFICHAGES_AVEC_GALERIE pairs (the images ARE the content; for
+        EQUIPE / RESSOURCES, one image = one item, file optional).
         PLEINE_LARGEUR and VIGNETTE_TITRE read the block's `image` field instead:
         offering them the inline would collect images the template never reads.
         On CREATION (obj=None) the type is unknown server-side, so the inline

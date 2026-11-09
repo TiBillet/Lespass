@@ -50,7 +50,6 @@ def email_participation_requested_admin(schema_name: str, initiative_uuid: str, 
             context = {
                 "title": subject,
                 "organisation": config.organisation,
-                "now": timezone.now(),
                 "initiative": init,
                 "participation": part,
                 "participant_email": getattr(part.participant, "email", ""),
@@ -116,14 +115,6 @@ def email_contribution_paid_user(schema_name: str, contribution_uuid: str) -> bo
                 logger.warning("crowds.email_contribution_paid_user: pas de destinataire")
                 return False
 
-            # FR: Logo du lieu (header de l'email)
-            # EN: Place logo (email header)
-            image_url = "https://tibillet.coop/static/assets/logo-couleur.svg"
-            try:
-                if hasattr(config, "img") and hasattr(config.img, "med") and config.img.med:
-                    image_url = f"https://{domain}{config.img.med.url}"
-            except Exception:
-                pass
 
             # FR: Image de l'initiative (affichée dans le corps de l'email)
             #     On utilise crop_hdr (960x540) pour un bon rendu email.
@@ -175,10 +166,7 @@ def email_contribution_paid_user(schema_name: str, contribution_uuid: str) -> bo
 
             context = {
                 "username": nom_utilisateur,
-                "now": timezone.now(),
                 "title": subject,
-                "image_url": image_url,
-                "objet": str(_("Confirmation de paiement")),
                 "sub_title": str(_("Contribution")),
                 "main_text": main_text,
                 "main_text_2": main_text_2,
@@ -193,7 +181,6 @@ def email_contribution_paid_user(schema_name: str, contribution_uuid: str) -> bo
                     "url": initiative_url,
                     "text": str(_("Voir le projet")),
                 },
-                "button_color": "#2d76a6",
                 "end_text": str(_("Merci pour votre contribution")),
                 "signature": config.organisation,
             }
@@ -236,9 +223,7 @@ def email_contribution_paid_admin(schema_name: str, initiative_uuid: str, contri
             context = {
                 "title": subject,
                 "organisation": config.organisation,
-                "now": timezone.now(),
                 "initiative": init,
-                "contribution": contrib,
                 "contributor_name": contrib.contributor_name or getattr(contrib.contributor, "email", ""),
                 "contributor_email": getattr(contrib.contributor, "email", ""),
                 "amount_eur": (contrib.amount or 0) / 100,

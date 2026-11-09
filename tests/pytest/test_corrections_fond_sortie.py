@@ -86,7 +86,6 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         config = Configuration.get_solo()
         config.module_monnaie_locale = True
         config.module_caisse = True
-        config.rapport_emails = ''
         config.save()
 
         # Le singleton de la caisse doit exister en base (tests/PIEGES.md 9.86) : il

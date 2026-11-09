@@ -9,7 +9,7 @@ Parcours testés (TECH_DOC/SESSIONS/OTP/CHANTIER-02-connexion-par-code-guichet.m
    code, on revient sur le lieu, connecté ;
 2. SSO : connecté sur `lespass`, on se connecte sur `festival` d'un clic, sans code ;
    puis « Me déconnecter » sur `festival` déconnecte aussi de `lespass` ;
-3. « Se connecter pour réserver » : après la connexion, la page de l'événement revient
+3. « Réserver » (anonyme) : après la connexion, la page de l'événement revient
    avec le panneau de réservation ouvert.
 / Tested journeys: code login, SSO between venues, logout everywhere, booking reopen.
 
@@ -215,8 +215,8 @@ def test_connecte_sur_lespass_on_entre_sur_festival_sans_code_puis_on_sort_de_pa
 
 
 # --------------------------------------------------------------------------
-# 3. « Se connecter pour réserver » rouvre le panneau de réservation
-# / 3. "Log in to book" reopens the booking panel
+# 3. « Réserver » (anonyme) rouvre le panneau de réservation
+# / 3. "Book" (anonymous) reopens the booking panel
 # --------------------------------------------------------------------------
 
 
@@ -225,7 +225,7 @@ def test_se_connecter_pour_reserver_rouvre_le_panneau_de_reservation(
     page, django_shell, e2e_slugs
 ):
     """
-    Anonyme sur la page d'un événement : « Se connecter pour réserver » ouvre le panneau
+    Anonyme sur la page d'un événement : « Réserver » (anonyme) ouvre le panneau
     de connexion. Après le code, la page de l'événement revient avec le panneau de
     réservation ouvert, et le bouton « Payer maintenant » à la place du bouton de connexion.
     / Anonymous on an event page: after login, the event page comes back with the

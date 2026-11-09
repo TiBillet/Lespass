@@ -27,6 +27,26 @@
     {% endcomponent %}
 </div>
 
+{# Les réglages des envois : récap du matin, rapports H/M/A, destinataires.       #}
+{# `reglages_des_envois_url` vient de ClotureCaisseAdmin.changelist_view.          #}
+{# / Mail settings card: morning recap, H/M/A reports, recipients.                 #}
+{% if reglages_des_envois_url %}
+<div class="mb-4" data-testid="bandeau-reglages-des-envois">
+    {% component "unfold/components/card.html" with title=_("Envoi des rapports") %}
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <p class="text-base-500 text-sm m-0">
+                {% translate "Choisir les mails envoyés (récap du matin, rapports hebdomadaire, mensuel, annuel) et les personnes qui les reçoivent." %}
+            </p>
+            <a href="{{ reglages_des_envois_url }}"
+               data-testid="comptabilite-bouton-reglages-des-envois"
+               class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md font-medium text-sm no-underline transition-colors">
+                {% translate "Régler les envois" %}
+            </a>
+        </div>
+    {% endcomponent %}
+</div>
+{% endif %}
+
 {% if export_fiscal_url %}
 <div class="mb-4" data-testid="bandeau-export-fiscal">
     {% component "unfold/components/card.html" with title=_("Export fiscal") %}

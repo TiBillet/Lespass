@@ -24,7 +24,8 @@
     {# Le @font-face et la classe .material-symbols-outlined sont dans          #}
     {# components.css. Plus de Google Fonts ni de FontAwesome.                  #}
     {# / Local variable Material Symbols font, declared in components.css.       #}
-    <link rel="icon" href="{% static 'images/favicon.ico' %}" />
+    <link rel="icon" type="image/svg+xml" href="{% static 'commun/img/favicon.svg' %}" />
+    <link rel="icon" href="{% static 'images/favicon.ico' %}" sizes="48x48" />
     {% block css %}
     {% endblock css %}
     <!-- passing django values to javascript - ex : state.demo.active -->

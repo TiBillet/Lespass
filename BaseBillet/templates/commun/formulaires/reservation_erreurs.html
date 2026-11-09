@@ -1,0 +1,31 @@
+{% load i18n %}
+{% comment %}
+ERREURS DU FORMULAIRE DE RÉSERVATION OU D'ADHÉSION
+/ Booking or membership form errors
+
+LOCALISATION : BaseBillet/templates/commun/formulaires/reservation_erreurs.html
+
+Rendu par BaseBillet/views.py quand une demande est refusée. htmx remplace
+SEULEMENT la zone d'erreurs du formulaire : les champs déjà remplis restent.
+- « Payer maintenant » : EventMVT.reservation() -> #reservation-erreurs
+  (commun/formulaires/reservation.html) et MembershipMVT.create() -> #adhesion-erreurs
+  (commun/adhesion/form.html). La zone est choisie par les en-têtes HX-Retarget /
+  HX-Reswap de la réponse.
+- « Ajouter au panier » : PanierMVT._refus_dans_le_formulaire(), pour les billets,
+  les adhésions et les créneaux (#ressource-erreurs, booking/partials/book_form.html).
+  La zone est choisie par le hx-target des boutons du panier.
+
+Contexte :
+- messages_d_erreur : liste de textes, déjà traduits.
+{% endcomment %}
+<div class="alert alert-danger mb-3" role="alert" data-testid="booking-server-errors-list">
+    {% if messages_d_erreur|length == 1 %}
+        {{ messages_d_erreur.0 }}
+    {% else %}
+        <ul class="mb-0 ps-3">
+            {% for message_d_erreur in messages_d_erreur %}
+                <li>{{ message_d_erreur }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>

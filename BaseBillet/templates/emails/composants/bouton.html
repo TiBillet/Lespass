@@ -1,0 +1,22 @@
+{% comment %}
+BOUTON PILULE PRIMARY (une ligne de tableau) / Primary pill button (one table row)
+LOCALISATION : BaseBillet/templates/emails/composants/bouton.html
+Variables : url, texte, centre (facultatif : vrai pour centrer le bouton).
+La zone cliquable fait 48 px de haut (cible tactile ≥ 44 px).
+Outlook Windows ignore le padding d'un lien : mso-padding-alt le reporte sur la cellule,
+et le lien perd le sien pour ne pas le compter deux fois.
+/ 48 px tap target. mso-padding-alt moves the link padding to the cell for Outlook.
+Exemple : {% include "emails/composants/bouton.html" with url=button.url texte=button.text %}
+{% endcomment %}
+<tr>
+    <td {% if centre %}align="center" {% endif %}style="padding:8px 0 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"{% if centre %} align="center"{% endif %}>
+            <tr>
+                <td bgcolor="#86ceff" style="border-radius:999px; mso-padding-alt:14px 28px;">
+                    <a href="{{ url }}" target="_blank"
+                       style="display:inline-block; padding:14px 28px; mso-padding-alt:0; font:700 16px/20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a; text-decoration:none;">{{ texte }}</a>
+                </td>
+            </tr>
+        </table>
+    </td>
+</tr>

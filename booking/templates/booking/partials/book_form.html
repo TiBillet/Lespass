@@ -37,20 +37,6 @@ DEPENDENCIES :
     </style>
 
     <!--
-    Message d'erreur generique (validation POST).
-    / Generic error message (POST validation).
-    -->
-    {% if error %}
-        <div class="alert alert-danger" role="alert" data-testid="booking-error-msg">
-            {% if error.non_field_errors %}
-                {% for msg in error.non_field_errors %}{{ msg }} {% endfor %}
-            {% else %}
-                {{ error }}
-            {% endif %}
-        </div>
-    {% endif %}
-
-    <!--
     Informations sur le creneau de depart.
     / Information about the starting slot.
     -->
@@ -97,15 +83,9 @@ DEPENDENCIES :
                 {# ce tarif est alors coché d'office. #}
                 {# / True when the resource has a single published price: it is pre-checked. #}
                 {% for price in resource.published_prices %}
-                    <div class="p-3 js-order" data-testid="booking-price-{{ price.uuid }}">
-                        <label for="amount-{{ price.uuid }}" class="form-label">
-                            <strong>{{ price.name }}</strong>
-                            {% if not price.free_price and price.prix > 0 %}&nbsp;:
-                                <span class="js-order-price">{{ price.prix }}</span>&nbsp;€  /h
-                            {% elif price.free_price %}
-                                <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
-                            {% endif %}
-                        </label>
+                    <div class="p-3" data-testid="booking-price-{{ price.uuid }}">
+                        {# Le nom et le prix du tarif sont dans le label du bouton radio, plus bas. #}
+                        {# / The price name and amount live in the radio button label, below. #}
                         {# Ni limite par personne ni stock ici : ces règles portent sur un #}
                         {# événement, pas sur une ressource. Le serveur refuse ce qu'il faut #}
                         {# refuser (booking_engine.validate_new_booking). #}
@@ -129,6 +109,7 @@ DEPENDENCIES :
                                                {% if price.out_of_stock %}disabled{% endif %}
                                                {% if forloop.first and forloop.last %}checked{% endif %}
                                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                               data-manual-validation="{% if price.manual_validation %}true{% else %}false{% endif %}"
                                                data-testid="membership-price-{{ price.uuid }}">
                                         <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                                for="price-{{ price.uuid }}">
@@ -165,6 +146,7 @@ DEPENDENCIES :
                                                {% if price.out_of_stock %}disabled{% endif %}
                                                {% if forloop.first and forloop.last %}checked{% endif %}
                                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                               data-manual-validation="{% if price.manual_validation %}true{% else %}false{% endif %}"
                                                data-testid="membership-price-{{ price.uuid }}">
                                         <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                                for="price-{{ price.uuid }}">
@@ -188,13 +170,14 @@ DEPENDENCIES :
                                        {% if price.out_of_stock %}disabled{% endif %}
                                        {% if forloop.first and forloop.last %}checked{% endif %}
                                        {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
+                                       data-manual-validation="{% if price.manual_validation %}true{% else %}false{% endif %}"
                                        data-testid="membership-price-{{ price.uuid }}">
                                 <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                        for="price-{{ price.uuid }}">
                                     {% if price.free_price %}
                                         {{ price.name }}
                                     {% else %}
-                                        {{ price.name }} - {{ price.prix }}€ {% translate 'par heure' %}
+                                        {{ price.name }} - {{ price.prix }}€ /h
                                     {% endif %}
                                     {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
                                 </label>
@@ -295,12 +278,29 @@ DEPENDENCIES :
                         }
                     }
 
+                    // Tarif à validation manuelle (dataset.manualValidation vaut 'true') :
+                    // on affiche « Envoyer la demande » et on cache le paiement et le panier.
+                    // Le panier refuse ces tarifs (services_panier.py) : ses boutons mèneraient à une erreur.
+                    // / Manual validation price: show "Send the request", hide pay and cart buttons.
+                    const boutonsDeReservationDirecte = form.querySelector('.js-boutons-reservation-directe');
+                    const boutonsDeDemande = form.querySelector('.js-boutons-demande');
+
+                    function updateBoutonsDeDemande() {
+                        if (!boutonsDeReservationDirecte || !boutonsDeDemande) return;
+                        const selectedRadio = form.querySelector('input[name="price"]:checked');
+                        const estUneDemande = selectedRadio && selectedRadio.dataset.manualValidation === 'true';
+                        boutonsDeReservationDirecte.classList.toggle('d-none', estUneDemande);
+                        boutonsDeDemande.classList.toggle('d-none', !estUneDemande);
+                    }
+
                     allRadios.forEach(radio => {
                         radio.addEventListener('change', updateCustomAmounts);
+                        radio.addEventListener('change', updateBoutonsDeDemande);
                     });
 
                     // Appel initial pour régler l'affichage au chargement
                     updateCustomAmounts();
+                    updateBoutonsDeDemande();
                 })();
             </script>
 
@@ -423,6 +423,25 @@ DEPENDENCIES :
         {% endif %}
 
         <!--
+        Zone d'erreurs, juste au-dessus des boutons. Deux sources, un seul endroit :
+        - « Payer maintenant » : _book_post réaffiche ce partial avec `error` (422) ;
+        - « Ajouter au panier » : PanierMVT.add_resource remplit cette zone seule
+          (hx-target des boutons du panier). Les champs remplis restent.
+        / Error zone above the buttons: direct booking (re-render) and cart (hx-target).
+        -->
+        <div id="ressource-erreurs" aria-live="assertive" data-testid="resource-server-errors">
+            {% if error %}
+                <div class="alert alert-danger" role="alert" data-testid="booking-error-msg">
+                    {% if error.non_field_errors %}
+                        {% for msg in error.non_field_errors %}{{ msg }} {% endfor %}
+                    {% else %}
+                        {{ error }}
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+
+        <!--
         Boutons d'action.
         / Action buttons.
         -->
@@ -431,55 +450,50 @@ DEPENDENCIES :
             {# autres vers l'accueil (BookingViewSet.book). #}
             {# / This form is only rendered for a logged-in person. #}
             {% if user.is_authenticated %}
-                {% if panier.count > 0 %}
-                    {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
-                    {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
-                    {# / Cart non-empty: both buttons end at cart. #}
-                    {# 1) Add to cart. 2) Add + pay: chain to checkout. #}
-                    <button type="button"
-                            class="btn btn-primary w-100 mb-2"
-                            hx-post="/panier/add/resource/"
-                            hx-include="closest form"
-                            hx-swap="none"
-                            data-loading-disable
-                            data-testid="resource-add-to-cart"
-                            aria-label="{% translate 'Add this resource to your cart' %}">
-                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                        {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-primary w-100 mb-2"
-                            hx-post="/panier/add/resource/"
-                            hx-include="closest form"
-                            hx-vals='{"then": "checkout"}'
-                            hx-swap="none"
-                            data-loading-disable
-                            data-testid="resource-add-and-pay"
-                            aria-label="{% translate 'Add to cart and pay all items' %}">
-                        <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                        {% translate "Add to cart and pay" %}
-                    </button>
-                {% else %}
-                    <button type="button"
-                            class="btn btn-primary w-100 mb-2"
-                            hx-post="/panier/add/resource/"
-                            hx-include="closest form"
-                            hx-swap="none"
-                            data-loading-disable
-                            data-testid="resource-add-to-cart"
-                            aria-label="{% translate 'Add this resource to your cart' %}">
-                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                        {% translate "Add to cart" %}
-                    </button>
+                {# Deux blocs : un seul est visible, selon le tarif coché (JS plus haut). #}
+                {# / Two blocks: only one is shown, depending on the checked price. #}
+                <div class="js-boutons-reservation-directe">
                     <button id="resource-submit" type="submit"
-                            class="btn btn-outline-primary w-100 mb-2"
+                            class="btn btn-primary w-100 mb-2"
                             data-loading-disable
-                            data-testid="resource-submit"
-                            aria-label="{% translate 'Pay this resource now' %}">
+                            data-testid="resource-submit">
                         <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
                         {% translate "Payer maintenant" %}
                     </button>
-                {% endif %}
+                    <button type="button"
+                            class="btn btn-secondary w-100 mb-2"
+                            hx-post="/panier/add/resource/"
+                            hx-include="closest form"
+                            hx-target="#ressource-erreurs"
+                            hx-swap="innerHTML"
+                            data-loading-disable
+                            data-testid="resource-add-to-cart"
+                            aria-label="{% trans 'Add these slots to your cart' %}">
+                        <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                        {% if panier.count > 0 %}
+                            {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
+                        {% else %}
+                            {% translate "Add to cart" %}
+                        {% endif %}
+                    </button>
+                </div>
+
+                {# Tarif à validation manuelle : une demande, sans paiement ni panier. #}
+                {# Visible aussi quand le panier n'est pas vide. #}
+                {# / Manual validation price: a request, no payment, no cart. #}
+                <div class="js-boutons-demande d-none" data-testid="booking-request-block">
+                    <div class="alert alert-info mb-2" role="note">
+                        <i class="bi bi-person-check" aria-hidden="true"></i>
+                        {% translate "Cette réservation doit être acceptée par l'équipe. Vous recevrez un mail." %}
+                    </div>
+                    <button type="submit"
+                            class="btn btn-primary w-100 mb-2"
+                            data-loading-disable
+                            data-testid="booking-send-request">
+                        <i class="bi bi-send me-2" aria-hidden="true"></i>
+                        {% translate "Envoyer la demande" %}
+                    </button>
+                </div>
             {% endif %}
             <button type="button" class="btn btn-link text-muted w-100 d-block test-resource-bt-cancel" data-bs-dismiss="offcanvas" aria-label="Annuler">
                 {% translate "Annuler" %}

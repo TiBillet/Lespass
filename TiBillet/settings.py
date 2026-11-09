@@ -767,9 +767,24 @@ UNFOLD = {
     #   show the current venue's name instead of a fixed string.
     "SITE_HEADER": "Administration.admin_tenant.nom_du_lieu",
     "SITE_SUBHEADER": _("Votre espace TiBillet"),
-    # Le glyphe de la pastille, quand aucun logo n'est fourni.
-    # / The tile glyph, when no logo is configured.
-    "SITE_SYMBOL": "confirmation_number",
+    # La pastille en haut du rail : le logo « ile », noir en theme clair, blanc en
+    # theme sombre (suit le theme de l'admin, pas celui du systeme).
+    # Des lambdas, car static() ne doit pas etre appele au chargement des settings.
+    # / The rail tile: the "island" logo, black in light theme, white in dark theme.
+    #   Lambdas, because static() must not run while settings are loading.
+    "SITE_ICON": {
+        "light": lambda request: static("commun/img/logo-ile-noir.svg"),
+        "dark": lambda request: static("commun/img/logo-ile-blanc.svg"),
+    },
+    # Favicon de l'onglet de l'admin : le meme que sur le site (ile « Soleil »).
+    # / Admin tab favicon: the same as on the site ("Soleil" island).
+    "SITE_FAVICONS": [
+        {
+            "rel": "icon",
+            "type": "image/svg+xml",
+            "href": lambda request: static("commun/img/favicon.svg"),
+        },
+    ],
     # Le menu qui s'ouvre sous le nom du lieu, en haut du rail.
     # / The menu that opens under the venue name, at the top of the rail.
     "SITE_DROPDOWN": [

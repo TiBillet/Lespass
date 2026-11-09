@@ -326,7 +326,6 @@ class TestFecEquilibre(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
         configuration.save()
 
         compte_des_marchandises = CompteComptable.objects.get(numero_de_compte="707000")

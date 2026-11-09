@@ -94,7 +94,11 @@
     <link rel="modulepreload" href="{% static 'commun/js/language-switcher.mjs' %}">
     <link rel="modulepreload" href="{% static 'commun/js/membership-form.mjs' %}">
 
-    <link rel="icon" type="image/png" href="{% static 'commun/img/favicon.png' %}">
+    {# Favicons : ile en degrade « Soleil » (SVG) (navigateurs modernes) + PNG 192 (Safari, Android) + apple-touch-icon (iOS). #}
+    {# / Favicons: island in the "Soleil" gradient (SVG) (modern browsers) + PNG 192 (Safari, Android) + apple-touch-icon (iOS). #}
+    <link rel="icon" type="image/svg+xml" href="{% static 'commun/img/favicon.svg' %}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'commun/img/favicon.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'commun/img/apple-touch-icon.png' %}">
     <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
     {# bootstrap-icons (~86 Ko) chargé sans bloquer le rendu : `media="print"` #}
     {# le rend non applicable au 1er paint, `onload` le rebranche une fois reçu. #}
@@ -130,6 +134,14 @@
     {# unstyled until the browser revalidates the file (~25 ms, even cached). #}
     {# The <head> is never swapped, so the sheet stays applied across pages. #}
     <link rel="stylesheet" href="{% static 'pages/css/tb-blocs.css' %}">
+    {# CSS du bénévolat (classes « bv- ») : planning, cartes « Coups de main », #}
+    {# « Mes créneaux ». Dans ce <head> pour la même raison que tb-blocs.css : #}
+    {# une page de planning arrivée par htmx est rendue avec headless.html, qui #}
+    {# n'a pas de bloc extra_meta. Un <link> posé par la page serait perdu. #}
+    {# Chargé AVANT V2.css, qui peut le surcharger. #}
+    {# / Volunteering CSS. In this <head> like tb-blocs.css: an htmx-loaded page #}
+    {# is rendered with headless.html, which has no extra_meta block. #}
+    <link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
     <link rel="stylesheet" href="{% static 'V2/css/V2.css' %}?v=1">
     <link rel="stylesheet" href="{% static 'commun/css/swal.css' %}">
 
@@ -186,6 +198,26 @@
                 evenement.detail.shouldSwap = true;
                 evenement.detail.isError = false;
                 evenement.detail.target = document.body;
+            }
+        });
+
+        /**
+         * Retour en haut de page apres une navigation HTMX qui remplace le body.
+         * / Scroll to top after an HTMX navigation that replaces the body.
+         *
+         * LOCALISATION : pages/templates/pages/V2/shell.html
+         *
+         * Un lien hx-target="body" remplace le contenu de la page, mais le
+         * navigateur garde la position de defilement. Sans ce script, on arrive
+         * sur la nouvelle page a la hauteur ou on etait sur l'ancienne (souvent
+         * tout en bas, apres une longue liste d'evenements).
+         * Seuls les swaps du body sont concernes : un partiel dans une zone de
+         * la page (offcanvas, formulaire) ne fait pas remonter.
+         * / Only body swaps scroll to top; partial swaps keep the position.
+         */
+        document.addEventListener("htmx:afterSwap", function (evenement) {
+            if (evenement.detail.target === document.body) {
+                window.scrollTo(0, 0);
             }
         });
 

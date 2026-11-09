@@ -39,7 +39,17 @@ def ticket_data_to_json_commands(ticket_data):
 
     LOCALISATION : laboutik/printing/sunmi_inner.py
 
-    :param ticket_data: dict avec header, articles, total, qrcode, footer
+    Le meme ticket part aussi en ESC/POS (laboutik/printing/escpos_builder.py) pour
+    les imprimantes reseau, cloud et mock. Les deux traductions doivent imprimer les
+    memes lignes, dans le meme ordre : un bloc ajoute d'un cote doit l'etre de
+    l'autre. Test de parite : tests/pytest/test_ticket_client_imprime.py
+    (test_la_sunmi_interne_imprime_les_memes_lignes_que_l_imprimante_escpos).
+    / The same receipt is also built as ESC/POS: both must print the same lines,
+    in the same order. A parity test enforces it.
+
+    :param ticket_data: dict avec header, legal, articles, total, cascade_detail,
+                        tva_breakdown, total_ht, total_tva, qrcode, footer,
+                        is_duplicata, is_simulation, unite
     :return: list de dicts (commandes JSON)
     """
     commands = []
@@ -89,7 +99,44 @@ def ticket_data_to_json_commands(ticket_data):
             "value": date_text,
             "align": "center",
         })
-    if title or subtitle or date_text:
+
+    # --- Mentions legales (raison sociale, adresse, SIRET, TVA) ---
+    # Obligatoires sur un ticket de vente (LNE exigence 3). Meme regle que
+    # escpos_builder.
+    # / Legal mentions (mandatory, LNE req. 3). Same rule as escpos_builder.
+    legal = ticket_data.get("legal")
+    if legal:
+        business_name = legal.get("business_name", "")
+        if business_name:
+            commands.append({
+                "type": "text",
+                "value": business_name,
+                "bold": True,
+                "align": "center",
+            })
+        address = legal.get("address", "")
+        if address:
+            commands.append({
+                "type": "text",
+                "value": address,
+                "align": "center",
+            })
+        siret = legal.get("siret", "")
+        if siret:
+            commands.append({
+                "type": "text",
+                "value": f"SIRET: {siret}",
+                "align": "center",
+            })
+        tva_number = legal.get("tva_number", "")
+        if tva_number:
+            commands.append({
+                "type": "text",
+                "value": f"TVA: {tva_number}",
+                "align": "center",
+            })
+
+    if title or subtitle or date_text or legal:
         commands.append({
             "type": "text",
             "value": "--------------------------------",
@@ -114,6 +161,23 @@ def ticket_data_to_json_commands(ticket_data):
                 "value": f"Imprimé le {date_d_impression}",
                 "align": "center",
             })
+        commands.append({
+            "type": "text",
+            "value": "--------------------------------",
+            "align": "left",
+        })
+
+    # --- Mention SIMULATION (mode ecole, LNE exigence 5). Meme regle que
+    # escpos_builder.
+    # / SIMULATION label (training mode, LNE req. 5). Same rule as escpos_builder.
+    if ticket_data.get("is_simulation", False):
+        commands.append({
+            "type": "text",
+            "value": "*** SIMULATION ***",
+            "bold": True,
+            "size": 2,
+            "align": "center",
+        })
 
     # --- Articles ---
     # / Articles
@@ -225,13 +289,66 @@ def ticket_data_to_json_commands(ticket_data):
                 "align": "left",
             })
 
+    # --- Ventilation TVA par taux, puis totaux HT et TVA ---
+    # Obligatoire sur un ticket de vente (LNE exigence 3). Meme regle et meme
+    # mise en colonnes que escpos_builder : la ligne tient en 32 caracteres.
+    # / VAT breakdown by rate, then HT and VAT totals (LNE req. 3). Same rule and
+    #   same columns as escpos_builder: a line fits in 32 characters.
+    tva_breakdown = ticket_data.get("tva_breakdown", [])
+    if tva_breakdown:
+        commands.append({
+            "type": "text",
+            "value": "--------------------------------",
+            "align": "left",
+        })
+        commands.append({
+            "type": "text",
+            "value": "TVA%     HT       TVA      TTC",
+            "align": "left",
+        })
+        for tva_ligne in tva_breakdown:
+            taux = tva_ligne.get("rate", "0.00")
+            ht_euros = f"{tva_ligne.get('ht', 0) / 100:.2f}"
+            tva_euros = f"{tva_ligne.get('tva', 0) / 100:.2f}"
+            ttc_euros = f"{tva_ligne.get('ttc', 0) / 100:.2f}"
+            commands.append({
+                "type": "text",
+                "value": f"{taux:>5}% {ht_euros:>7} {tva_euros:>7} {ttc_euros:>7}",
+                "align": "left",
+            })
+
+        total_ht = ticket_data.get("total_ht", 0)
+        total_tva = ticket_data.get("total_tva", 0)
+        if total_ht or total_tva:
+            commands.append({
+                "type": "text",
+                "value": "--------------------------------",
+                "align": "left",
+            })
+            commands.append({
+                "type": "text",
+                "value": f"Total HT:  {total_ht / 100:.2f} EUR",
+                "align": "left",
+            })
+            commands.append({
+                "type": "text",
+                "value": f"Total TVA: {total_tva / 100:.2f} EUR",
+                "align": "left",
+            })
+
     # --- QR code ---
+    # Le type « qrCode » et la cle « modulesize » sont ceux que lit
+    # l'application Android (laboutik/static/js/manageSunmiPrint.js,
+    # sunmiInnerPrint) : une commande d'un autre type y est ignoree sans erreur.
+    # / Type "qrCode" and key "modulesize" are what the Android app reads; any
+    #   other type is silently skipped.
     qrcode_text = ticket_data.get("qrcode")
     if qrcode_text:
         commands.append({
-            "type": "qrcode",
+            "type": "qrCode",
             "value": qrcode_text,
-            "size": 5,
+            "modulesize": 5,
+            "align": "center",
         })
 
     # --- Pied de page ---

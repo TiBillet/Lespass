@@ -1,0 +1,148 @@
+{% load i18n unfold static tibitags %}
+<!--
+PANNEAU D'ACTIONS ADMINISTRATEUR — DEMANDE DE RÉSERVATION
+/ Admin action panel — booking request
+
+LOCALISATION : Administration/templates/admin/booking/actions_panel.html
+
+Affiché AVANT le formulaire de modification (BookingAdmin.change_form_before_template),
+seulement pour une demande non payée : en attente (WA) ou validée sans paiement (VA).
+
+FLUX PAR ACTION :
+- Valider la demande        : hx-post -> booking/views.py admin_accept (WA)
+- Renvoyer le lien          : hx-post -> admin_accept avec renvoyer_le_lien=true (VA)
+- Copier le lien            : presse-papier, même adresse que le mail (BookingViewSet.pay)
+- Refuser                   : <details> qui ouvre le motif, puis hx-post -> admin_refuse
+Chaque action répond « HX-Refresh » : la fiche se recharge avec le nouveau statut
+et le message (toast) de l'admin.
+/ Each action answers HX-Refresh: the page reloads with the new status and a message.
+
+CONTEXTE (injecté par BookingAdmin.changeform_view, Administration/admin/resources.py) :
+- booking_du_panneau  : le Booking (absent = pas de panneau)
+- tarif_de_la_demande : le tarif du créneau (information « adhésion »)
+- lien_de_paiement    : l'adresse du bouton « Payer » du mail
+-->
+{% if booking_du_panneau %}
+{% with booking=booking_du_panneau %}
+<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+<div class="mb-6"
+     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+     data-testid="booking-actions-panel">
+
+    {% component "unfold/components/card.html" with title=_("Demande de réservation") %}
+
+        {# ─── Information : ce que la personne demande ─────────────────── #}
+        <div style="display:flex;align-items:flex-start;gap:.5rem;padding:.875rem 1.125rem;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #2563eb;border-radius:.375rem">
+            <p style="font-size:.8125rem;color:#1e40af;margin:0;line-height:1.5625">
+                {% if booking.status == "WA" %}
+                    {% if booking.to_pay > 0 %}
+                        {% blocktrans with amount=booking.to_pay %}Cette réservation attend votre décision. Si vous la validez, la personne recevra un mail pour payer {{ amount }} €.{% endblocktrans %}
+                    {% else %}
+                        {% translate "Cette réservation gratuite attend votre décision. Si vous la validez, elle est confirmée tout de suite et la personne reçoit un mail." %}
+                    {% endif %}
+                {% else %}
+                    {% blocktrans with amount=booking.to_pay %}Demande validée : la personne a reçu le lien pour payer {{ amount }} €. Le créneau reste retenu jusqu'au paiement ou au refus.{% endblocktrans %}
+                {% endif %}
+            </p>
+        </div>
+
+        {# Information seulement : une demande peut être validée sans l'adhésion. #}
+        {# / Information only: a request can be accepted without the membership. #}
+        {% if tarif_de_la_demande and tarif_de_la_demande.adhesions_obligatoires.exists %}
+            <p style="font-size:.8125rem;margin:.75rem 0 0" data-testid="booking-action-membership-info">
+                {% if booking.user|is_membership:tarif_de_la_demande.adhesions_obligatoires %}
+                    ✓ {% translate "La personne a une adhésion valide, demandée par ce tarif." %}
+                {% else %}
+                    ⚠ {% translate "La personne n'a plus d'adhésion valide, demandée par ce tarif." %}
+                {% endif %}
+            </p>
+        {% endif %}
+
+        {# ─── Barre d'actions / Action bar ─────────────────────────────── #}
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:.75rem">
+
+            {% if booking.status == "WA" %}
+                <button type="button"
+                        data-testid="booking-action-accept"
+                        hx-post="{% url 'booking-admin-accept' pk=booking.pk %}"
+                        hx-swap="none"
+                        data-loading-disable
+                        style="display:inline-flex;align-items:center;gap:.375rem;padding:.4375rem 1rem;font-size:.8125rem;font-weight:600;border-radius:.375rem;background:#2563eb;color:#fff;border:none;cursor:pointer;white-space:nowrap">
+                    {% translate "Valider la demande" %}
+                </button>
+            {% else %}
+                <button type="button"
+                        data-testid="booking-action-resend-link"
+                        hx-post="{% url 'booking-admin-accept' pk=booking.pk %}"
+                        hx-vals='{"renvoyer_le_lien": "true"}'
+                        hx-swap="none"
+                        hx-confirm="{% translate 'Renvoyer le lien de paiement par mail ?' %}"
+                        style="display:inline-flex;align-items:center;gap:.375rem;padding:.375rem .875rem;font-size:.8125rem;font-weight:600;border-radius:.375rem;background:transparent;color:#b45309;border:1.5px solid #d97706;cursor:pointer;white-space:nowrap">
+                    {% translate "Renvoyer le lien de paiement" %}
+                </button>
+                <button type="button"
+                        id="booking-btn-copy-payment-link"
+                        data-testid="booking-action-copy-payment-link"
+                        data-lien="{{ lien_de_paiement }}"
+                        style="display:inline-flex;align-items:center;gap:.375rem;padding:.375rem .875rem;font-size:.8125rem;font-weight:600;border-radius:.375rem;background:transparent;color:#b45309;border:1.5px solid #d97706;cursor:pointer;white-space:nowrap">
+                    <span id="booking-btn-copy-payment-link-text">{% translate "Copier le lien" %}</span>
+                </button>
+                <script>
+                    /**
+                     * Copie le lien de paiement dans le presse-papier, avec une confirmation de 2 s.
+                     * / Copies the payment link to the clipboard, with a 2 s confirmation.
+                     *
+                     * LOCALISATION : Administration/templates/admin/booking/actions_panel.html
+                     */
+                    (function () {
+                        var bouton = document.getElementById('booking-btn-copy-payment-link');
+                        var texte = document.getElementById('booking-btn-copy-payment-link-text');
+                        bouton.addEventListener('click', function () {
+                            navigator.clipboard.writeText(bouton.dataset.lien).then(function () {
+                                var ancienTexte = texte.textContent;
+                                texte.textContent = '✓ {% translate "Copié !" %}';
+                                setTimeout(function () { texte.textContent = ancienTexte; }, 2000);
+                            });
+                        });
+                    })();
+                </script>
+            {% endif %}
+
+            {# Poussoir : le refus à droite / Spacer: refusal on the right #}
+            <span style="flex:1;min-width:.25rem" aria-hidden="true"></span>
+
+            {# Refuser : <details> ouvre le motif sans JavaScript. #}
+            {# / Refuse: <details> opens the reason field without JavaScript. #}
+            <details data-testid="booking-action-refuse-details">
+                <summary style="display:inline-flex;align-items:center;padding:.4375rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;border:1px solid #dc2626;color:#dc2626;cursor:pointer;list-style:none">
+                    {% if booking.status == "WA" %}{% translate "Refuser" %}{% else %}{% translate "Refuser / annuler" %}{% endif %}
+                </summary>
+                <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:.5rem;min-width:18rem">
+                    <label for="booking-motif-du-refus" style="font-size:.8125rem">
+                        {% translate "Motif (facultatif, envoyé à la personne)" %}
+                    </label>
+                    <textarea id="booking-motif-du-refus"
+                              name="motif_du_refus"
+                              rows="3"
+                              maxlength="2000"
+                              data-testid="booking-action-refuse-motif"
+                              style="font-size:.8125rem;padding:.5rem;border:1px solid var(--color-base-300,#d1d5db);border-radius:.375rem;background:transparent"></textarea>
+                    <button type="button"
+                            data-testid="booking-action-refuse"
+                            hx-post="{% url 'booking-admin-refuse' pk=booking.pk %}"
+                            hx-include="#booking-motif-du-refus"
+                            hx-swap="none"
+                            hx-confirm="{% translate 'Refuser cette demande ? La personne recevra un mail.' %}"
+                            data-loading-disable
+                            style="padding:.4375rem .875rem;font-size:.8125rem;font-weight:600;border-radius:.375rem;background:#dc2626;color:#fff;border:none;cursor:pointer">
+                        {% translate "Confirmer le refus" %}
+                    </button>
+                </div>
+            </details>
+
+        </div>
+
+    {% endcomponent %}
+</div>
+{% endwith %}
+{% endif %}

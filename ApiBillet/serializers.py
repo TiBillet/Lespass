@@ -236,7 +236,6 @@ class PriceSerializer(serializers.ModelSerializer):
         return super().validate(attrs)
 
 
-# Utilisé par /here
 class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration

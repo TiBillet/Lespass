@@ -93,9 +93,21 @@ update:
 # MIGRER, EXECUTEUR et COMPLET sont transmis : vides, le script choisit seul.
 # L'image est tiree tout de suite (sans effet sur la prod) : a 02:05 le pull est instantane.
 # Voir la tache : atq — l'annuler : atrm <numero>.
+# Refus si une mise a jour est deja programmee : deux taches partiraient a 02:05 ensemble.
+# On lit le contenu de chaque tache (at -c) et on cherche la ligne ecrite plus bas
+# (« ... COMPLET=... make update »). atq ne montre que l'heure, pas la commande.
 # / Schedules `make update` at 02:05 with at; pins the target commit and pre-pulls the image now.
+# / Refuses if an update is already scheduled (reads each job with at -c).
 update_nuit:
 	@command -v at >/dev/null || { echo "at n'est pas installe : apt install at" >&2; exit 1; }
+	@for numero_de_tache in $$(atq | awk '{print $$1}'); do \
+		if at -c "$$numero_de_tache" | grep -q 'COMPLET=.* make update$$'; then \
+			echo "Une mise a jour est deja programmee (tache at $$numero_de_tache) :" >&2; \
+			atq >&2; \
+			echo "Pour l'annuler : atrm $$numero_de_tache" >&2; \
+			exit 1; \
+		fi; \
+	done
 	@git fetch --quiet
 	@docker pull tibillet/lespass:latest
 	@cible=$$(git rev-parse '@{u}') && \

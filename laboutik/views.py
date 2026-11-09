@@ -107,11 +107,10 @@ from QrcodeCashless.services import (
     FedowInjoignable,
     trouver_ou_rapatrier_la_carte,
 )
-# La cloture unique du lieu (la J) et ses lecteurs : exports, presentation, envoi.
-# / The venue's single closure (J) and its readers.
-from comptabilite.csv_export import generer_csv_cloture
+# La cloture unique du lieu (la J) et sa presentation. Les telechargements et
+# l'envoi du rapport sont dans l'admin, jamais a la caisse.
+# / The venue's single closure (J) and its presentation. Downloads: admin only.
 from comptabilite.models import ClotureCaisse as ClotureCaisseUnique
-from comptabilite.pdf import generer_pdf_cloture
 from comptabilite.presentation import (
     codes_des_moyens_dans_l_ordre,
     euros_a_la_francaise,
@@ -124,7 +123,6 @@ from comptabilite.presentation import (
 from comptabilite.tasks import (
     creer_la_cloture_journaliere_de_la_caisse,
     demander_l_email_automatique_si_configure,
-    envoyer_email_cloture_demande,
 )
 from laboutik.models import (
     LaboutikConfiguration,
@@ -1456,6 +1454,14 @@ def _jeton_fed_de_la_fiche(fiche_de_la_carte):
     return None
 
 
+# Une vente attend cette lecture. Le délai vaut pour la connexion, puis pour la réponse.
+# Gunicorn tue un worker après 30 s, et un paiement fait jusqu'à trois lectures : une par
+# carte, plus une après le rattachement d'une adhésion.
+# / A sale waits for this read: 10 s to connect, then 10 s for the reply. Gunicorn kills
+# a worker after 30 s, and a payment makes up to three reads.
+DELAI_DE_LECTURE_DU_FED_EN_SECONDES = 10
+
+
 def lire_depensable_fed_frais(carte):
     """
     Lit le FED dépensable d'une carte EN TEMPS RÉEL sur l'ancien Fedow, par sa fiche.
@@ -1489,7 +1495,9 @@ def lire_depensable_fed_frais(carte):
         if not fedow_config.can_fedow():
             return 0, False
         fedow_api = FedowAPI(fedow_config=fedow_config)
-        fiche_de_la_carte = fedow_api.NFCcard.retrieve(carte.tag_id)
+        fiche_de_la_carte = fedow_api.NFCcard.retrieve(
+            carte.tag_id, timeout=DELAI_DE_LECTURE_DU_FED_EN_SECONDES
+        )
     except CarteInconnueDeFedow:
         return 0, True
     except Exception as erreur_fedow:
@@ -1744,11 +1752,11 @@ def _calculer_soldes_apres_paiement(wallet, lignes_debitees):
       even when a free top-up was credited just before the debits.
 
     Les lignes legacy (Fedow) portent un uuid d'asset distant, pas un Asset
-    local : elles sont ignorees, comme avant (leur solde n'etait pas affiche).
-    / Legacy lines carry a remote asset uuid, not a local Asset: skipped, as before.
+    local : elles sont ignorees ici. _carte_pour_l_ecran_de_succes ajoute leur ligne.
+    / Legacy lines carry a remote asset uuid, not a local Asset: skipped here.
+    _carte_pour_l_ecran_de_succes adds their row.
 
-    APPELE PAR : PaiementViewSet (paiement NFC, paiement complementaire, 2e carte).
-    Les appelants regroupent ensuite le resultat par carte dans cartes_apres_paiement.
+    APPELE PAR : _carte_pour_l_ecran_de_succes.
     AFFICHE PAR : laboutik/templates/laboutik/partial/_succes_carte.html
 
     :param wallet: wallet de la carte debitee
@@ -1798,6 +1806,122 @@ def _calculer_soldes_apres_paiement(wallet, lignes_debitees):
             }
         )
     return soldes_apres_paiement
+
+
+def _fed_avant_le_paiement(carte, adherent, fed_lu, fed_disponible, fed_debite):
+    """
+    Le FED de la carte avant la vente, pour l'écran de succès.
+    / The card's FED before the sale, for the success screen.
+
+    LOCALISATION : laboutik/views.py
+
+    Une adhésion peut rattacher la carte au portefeuille de l'adhérent pendant la vente :
+    le FED lu avant le débit ne compte alors pas celui de ce portefeuille. On le relit.
+    Le FED relu a déjà subi le débit de cette vente : on le rajoute pour retrouver le
+    montant d'avant la vente.
+    / A membership may attach the card to the member's wallet during the sale: FED is
+    read again. The new value already includes this sale's debit, so it is added back.
+
+    :param carte: CarteCashless qui a payé
+    :param adherent: dict de _declarer_adherent_au_reseau, ou None
+    :param fed_lu: FED lu avant le débit, en centimes
+    :param fed_disponible: bool rendu par cette lecture
+    :param fed_debite: FED débité par cette vente, en centimes
+    :return: tuple (fed_avant_paiement_centimes: int, fed_disponible: bool)
+    """
+    carte_rattachee_a_l_adherent = (
+        adherent is not None and adherent["fusion_locale_autorisee"]
+    )
+    if not carte_rattachee_a_l_adherent:
+        return fed_lu, fed_disponible
+
+    fed_apres_paiement_centimes, fed_relu_disponible = lire_depensable_fed_frais(carte)
+    return fed_apres_paiement_centimes + fed_debite, fed_relu_disponible
+
+
+def _carte_pour_l_ecran_de_succes(
+    carte,
+    lignes_debitees,
+    fed_avant_paiement_centimes,
+    fed_disponible,
+    fed_debite_centimes,
+):
+    """
+    Prépare une carte pour l'écran de succès : le détail payé et son solde total.
+    / Prepares a card for the success screen: paid detail and total balance.
+
+    LOCALISATION : laboutik/views.py
+
+    Le FED vit sur l'ancien Fedow. Il n'est PAS lu ici : l'appelant fournit sa valeur
+    avant le débit (lire_depensable_fed_frais). Le solde après la vente se calcule :
+    FED avant la vente - FED débité.
+    / FED lives on the old Fedow and is NOT read here: the caller provides its value
+    before the debit. The balance after the sale is computed.
+
+    Le total en euros suit la même règle que le check carte : ce que la cascade de
+    paiement peut encore dépenser ici (_soldes_de_la_cascade_fiduciaire), plus le FED.
+    / The euro total follows the card check's rule: what the cascade can still spend.
+
+    Le portefeuille est relu sur la carte APRÈS la vente : une adhésion peut lier une
+    carte anonyme pendant le paiement, et son portefeuille éphémère est alors fusionné
+    dans celui de l'adhérent.
+    / The wallet is read from the card AFTER the sale: a membership may link an
+    anonymous card, merging its ephemeral wallet into the member's.
+
+    APPELÉ PAR : PaiementViewSet (paiement NFC, complément, 2ᵉ carte)
+    AFFICHÉ PAR : laboutik/templates/laboutik/partial/_succes_carte.html
+
+    :param carte: CarteCashless qui a payé
+    :param lignes_debitees: tuples (article, asset, montant_centimes, payment_method)
+    :param fed_avant_paiement_centimes: FED de la carte avant le débit (int)
+    :param fed_disponible: bool rendu par lire_depensable_fed_frais
+    :param fed_debite_centimes: FED débité par cette vente sur cette carte (int)
+    :return: dict {tag_id, soldes, solde_total_centimes, reseau_indisponible}
+    """
+    carte.refresh_from_db()
+    wallet_de_la_carte = _obtenir_ou_creer_wallet(carte)
+
+    soldes_de_la_carte = _calculer_soldes_apres_paiement(
+        wallet=wallet_de_la_carte,
+        lignes_debitees=lignes_debitees,
+    )
+
+    fed_apres_paiement_centimes = fed_avant_paiement_centimes - fed_debite_centimes
+    if fed_debite_centimes > 0:
+        soldes_de_la_carte.append(
+            {
+                # Nom de marque, non traduit, comme au check carte.
+                # / Brand name, not translated, as on the card check.
+                "name": "TiBillet",
+                "unite": "",
+                "solde_euros": fed_apres_paiement_centimes / 100,
+                "solde_avant_centimes": fed_avant_paiement_centimes,
+                "debite_centimes": fed_debite_centimes,
+                "solde_centimes": fed_apres_paiement_centimes,
+            }
+        )
+
+    assets_accessibles = AssetService.obtenir_assets_accessibles(connection.tenant)
+    soldes_locaux_restants = _soldes_de_la_cascade_fiduciaire(
+        wallet_de_la_carte, assets_accessibles
+    )
+    solde_total_centimes = fed_apres_paiement_centimes
+    for solde_local_en_centimes in soldes_locaux_restants.values():
+        solde_total_centimes += solde_local_en_centimes
+
+    # fed_disponible vaut aussi False pour un lieu qui n'a pas d'ancien Fedow : il n'y
+    # a alors aucune panne à signaler au caissier.
+    # / fed_disponible is also False for a venue without the old Fedow: nothing to report.
+    reseau_indisponible = (
+        not fed_disponible and FedowConfig.get_solo().can_fedow()
+    )
+
+    return {
+        "tag_id": carte.tag_id,
+        "soldes": soldes_de_la_carte,
+        "solde_total_centimes": solde_total_centimes,
+        "reseau_indisponible": reseau_indisponible,
+    }
 
 
 def _debiter_legacy(carte, tag_id_carte_primaire, montant_centimes, uuid_transaction):
@@ -3686,7 +3810,8 @@ class CaisseViewSet(viewsets.ViewSet):
         LOCALISATION : laboutik/views.py
 
         FLUX :
-        1. Validation (point de vente, carte primaire).
+        1. Validation (point de vente, carte primaire en mode gerant : refus en 400
+           dans #messages sinon).
         2. `comptabilite.tasks.creer_la_cloture_journaliere_de_la_caisse` : la J, avec
            l'operateur et le point de vente. Rien a cloturer (aucune vente reglee
            depuis la derniere J) : 400, aucun autre effet.
@@ -3713,10 +3838,49 @@ class CaisseViewSet(viewsets.ViewSet):
 
         uuid_pv = serializer.validated_data["uuid_pv"]
 
-        # --- 2. Verifier que la carte primaire a acces au PV ---
-        # --- 2. Check that the primary card has access to the PV ---
+        # --- 2. Seule une carte primaire en MODE GERANT peut cloturer ---
+        # La J couvre tout le lieu : la carte n'a pas besoin d'etre liee au point
+        # de vente d'ou elle clique. Le mode gerant est LU EN BASE
+        # (CartePrimaire.edit_mode), jamais une valeur envoyee par le navigateur.
+        # Sans carte primaire (session admin) : pas de restriction.
+        # Le refus est rendu dans #messages (HX-Retarget) : la popup s'affiche
+        # par-dessus l'ecran Ventes, qui reste en place.
+        # / 2. Only a primary card in MANAGER MODE may close. The J covers the
+        #   whole venue: no point of sale link needed. Read from the database.
+        #   No card (admin session): no restriction. Refusal rendered in #messages.
         tag_id_carte_manager = request.POST.get("tag_id_cm", "")
-        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
+        if tag_id_carte_manager:
+            carte_primaire_obj, erreur_de_carte = _charger_carte_primaire(
+                tag_id_carte_manager
+            )
+            carte_en_mode_gerant = (
+                carte_primaire_obj is not None and carte_primaire_obj.edit_mode
+            )
+            if not carte_en_mode_gerant:
+                logger.warning(
+                    f"Cloture refusee : la carte {tag_id_carte_manager} "
+                    f"n'est pas une carte primaire en mode gerant."
+                )
+                if erreur_de_carte is not None:
+                    message_de_refus = erreur_de_carte
+                else:
+                    message_de_refus = _(
+                        "Seule une carte en mode gérant peut clôturer les caisses."
+                    )
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": message_de_refus,
+                    "selector_bt_retour": "#messages",
+                }
+                reponse_de_refus = render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+                reponse_de_refus["HX-Retarget"] = "#messages"
+                reponse_de_refus["HX-Reswap"] = "outerHTML"
+                return reponse_de_refus
 
         # --- 3. Charger le point de vente ---
         # --- 3. Load the point of sale ---
@@ -3793,14 +3957,7 @@ class CaisseViewSet(viewsets.ViewSet):
         printer_de_ce_terminal = imprimante_du_terminal(request.user)
         if printer_de_ce_terminal:
             try:
-                ticket_z_data = formatter_ticket_cloture(cloture)
-                ticket_z_data["impression_meta"] = {
-                    "uuid_transaction": None,
-                    "cloture_uuid": str(cloture.uuid),
-                    "type_justificatif": ImpressionLog.CLOTURE,
-                    "operateur_pk": str(operateur.pk) if operateur else None,
-                    "format_emission": "P",
-                }
+                ticket_z_data = _ticket_z_avec_sa_trace(cloture, operateur)
                 imprimer_async.delay(
                     str(printer_de_ce_terminal.pk),
                     ticket_z_data,
@@ -3835,115 +3992,96 @@ class CaisseViewSet(viewsets.ViewSet):
         # L'essentiel du rapport stocke dans la J, mis en forme par
         # `comptabilite/presentation.py` (aucune regle d'affichage recopiee ici) :
         # chiffre d'affaires, reglements, tiroir, phrase de reconciliation. Le Z
-        # couvre aussi les ventes en ligne : le reste est sur la fiche de l'admin.
+        # couvre aussi les ventes en ligne : le reste est sur la fiche de l'admin,
+        # que la caisse n'ouvre pas.
         # / The Z screen: the essential sections of the J's stored report, formatted
         #   by comptabilite/presentation.py; the rest is on the admin page.
         context = _contexte_de_l_ecran_du_z(cloture)
         return render(request, "laboutik/partial/hx_cloture_rapport.html", context)
 
     # ----------------------------------------------------------------------- #
-    #  Export PDF / CSV / Email du rapport de cloture (Phase 5)                #
-    #  PDF / CSV / Email export of the closure report (Phase 5)                #
+    #  Duplicata du ticket Z (seul geste de l'ecran du Z, avec « Fermer »)     #
+    #  Z ticket duplicate (the Z screen's only action, besides "Close")        #
     # ----------------------------------------------------------------------- #
-
-    @action(
-        detail=True, methods=["get"], url_path="rapport_pdf", url_name="rapport_pdf"
-    )
-    def rapport_pdf(self, request, pk=None):
-        """
-        GET /laboutik/caisse/<uuid>/rapport_pdf/
-        Telecharge le PDF de la cloture unique : le meme que celui de l'admin
-        (`comptabilite/pdf.py`).
-        / Downloads the single closure's PDF, the same as the admin's.
-
-        LOCALISATION : laboutik/views.py
-        """
-        cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
-        contenu_du_pdf, nom_du_fichier, type_du_fichier = generer_pdf_cloture(cloture)
-        response = HttpResponse(contenu_du_pdf, content_type=type_du_fichier)
-        response["Content-Disposition"] = f'attachment; filename="{nom_du_fichier}"'
-        return response
-
-    @action(
-        detail=True, methods=["get"], url_path="rapport_csv", url_name="rapport_csv"
-    )
-    def rapport_csv(self, request, pk=None):
-        """
-        GET /laboutik/caisse/<uuid>/rapport_csv/
-        Telecharge le CSV de la cloture unique : le meme que celui de l'admin
-        (`comptabilite/csv_export.py`).
-        / Downloads the single closure's CSV, the same as the admin's.
-
-        LOCALISATION : laboutik/views.py
-        """
-        cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
-        contenu_du_csv, nom_du_fichier, type_du_fichier = generer_csv_cloture(cloture)
-        response = HttpResponse(contenu_du_csv, content_type=type_du_fichier)
-        response["Content-Disposition"] = f'attachment; filename="{nom_du_fichier}"'
-        return response
 
     @action(
         detail=True,
         methods=["post"],
-        url_path="envoyer_rapport",
-        url_name="envoyer_rapport",
+        url_path="imprimer_duplicata_z",
+        url_name="imprimer_duplicata_z",
     )
-    def envoyer_rapport(self, request, pk=None):
+    def imprimer_duplicata_z(self, request, pk=None):
         """
-        POST /laboutik/caisse/<uuid>/envoyer_rapport/
-        Envoie l'email de la cloture unique (PDF en piece jointe) aux destinataires
-        du lieu (`Configuration.rapport_emails`), quelle que soit la periodicite du
-        rapport : c'est un clic explicite. Une adresse postee avec le formulaire est
-        ignoree. Sans destinataire : message clair, rien n'est envoye.
-        / Sends the single closure's e-mail to the venue's recipients, whatever the
-        report periodicity. A posted address is ignored. No recipient: clear message.
+        POST /laboutik/caisse/<uuid>/imprimer_duplicata_z/
+        Re-imprime le ticket Z d'une cloture, sur l'imprimante du terminal qui le
+        demande. Appele par le bouton « Imprimer un duplicata » de l'ecran du Z
+        (hx_cloture_rapport.html).
+        / Reprints a closure's Z ticket on the requesting terminal's printer.
 
         LOCALISATION : laboutik/views.py
+
+        La tache d'impression compte les impressions de la J (`ImpressionLog`, type
+        CLOT) : un Z deja imprime ressort marque DUPLICATA (LNE exigence 9).
+        La caisse ne telecharge et n'envoie aucun rapport : c'est le role de
+        l'admin (fiche de la cloture).
+        / The print task counts the J's prints: an already printed Z comes out as
+        DUPLICATE. Downloads and e-mails are admin-only.
+
+        Les refus repondent en 400 : la caisse n'affiche que les 400 et les 422
+        (laboutik/base.html, htmx:beforeSwap).
+        / Refusals answer 400: the register only swaps 400 and 422.
         """
         cloture = get_object_or_404(ClotureCaisseUnique, uuid=pk)
 
-        destinataires_du_lieu = Configuration.get_solo().rapport_emails or ""
-        if not destinataires_du_lieu.strip():
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _(
-                    "Aucun destinataire de rapport n'est configuré pour le lieu."
-                ),
-                "selector_bt_retour": "#messages",
-            }
+        printer_de_ce_terminal = imprimante_du_terminal(request.user)
+        if not printer_de_ce_terminal:
             return render(
-                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+                request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Aucune imprimante configurée pour ce terminal"),
+                },
+                status=400,
             )
 
-        # La demande part au broker (Celery). Un broker en panne ne doit pas donner
-        # une erreur 500 : l'erreur est journalisée et la caisse le dit en mots.
-        # / The request goes to the broker; a broken broker gives a clear message.
+        # La demande d'impression part au broker (Celery). Un broker en panne ne doit
+        # pas donner une erreur 500 : l'erreur est journalisee et la caisse le dit.
+        # / The print request goes to the broker; a broken broker gives a message.
+        operateur = request.user if request.user.is_authenticated else None
         try:
-            envoyer_email_cloture_demande.delay(
+            ticket_z_data = _ticket_z_avec_sa_trace(cloture, operateur)
+            imprimer_async.delay(
+                str(printer_de_ce_terminal.pk),
+                ticket_z_data,
                 connection.schema_name,
-                str(cloture.uuid),
             )
         except Exception:
             logger.exception(
-                f"[{connection.schema_name}] Échec de la demande d'envoi du rapport "
-                f"de la clôture n° {cloture.numero_sequentiel}."
+                f"[{connection.schema_name}] Échec de la demande d'impression "
+                f"du duplicata du Z n° {cloture.numero_sequentiel}."
             )
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _(
-                    "L'envoi du rapport n'a pas pu être demandé. Réessayez plus tard."
-                ),
-                "selector_bt_retour": "#messages",
-            }
             return render(
-                request, "laboutik/partial/hx_messages.html", context_erreur, status=503
+                request,
+                "laboutik/partial/hx_print_feedback.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Le duplicata n'a pas pu être envoyé à l'imprimante. "
+                        "Réessayez plus tard."
+                    ),
+                },
+                status=400,
             )
 
-        context = {
-            "msg_type": "info",
-            "msg_content": _("Envoi du rapport demandé"),
-        }
-        return render(request, "laboutik/partial/hx_messages.html", context)
+        return render(
+            request,
+            "laboutik/partial/hx_print_feedback.html",
+            {
+                "msg_type": "success",
+                "msg_content": _("Duplicata envoyé à l'imprimante"),
+            },
+        )
 
     # ----------------------------------------------------------------------- #
     #  Imprimer Ticket X (consultation temporaire, pas de cloture)             #
@@ -5487,11 +5625,11 @@ def _contexte_de_l_ecran_du_z(cloture):
 
     L'ecran montre le chiffre d'affaires, les reglements (argent, cashless, hors
     argent : offerts et points), le tiroir (caisse especes) et la phrase de
-    reconciliation, plus un lien vers la fiche complete de la cloture dans l'admin.
-    Aucune regle d'affichage n'est recopiee ici : les sections viennent telles
-    quelles de `sections_pour_affichage`.
-    / Revenue, payments, cash drawer, reconciliation sentence, and a link to the
-      admin page. No display rule is copied here.
+    reconciliation. Aucun lien vers l'admin ni aucun telechargement : ils sont
+    reserves a l'admin. Aucune regle d'affichage n'est recopiee ici : les sections
+    viennent telles quelles de `sections_pour_affichage`.
+    / Revenue, payments, cash drawer, reconciliation sentence. No admin link nor
+      download. No display rule is copied here.
 
     :param cloture: la `comptabilite.ClotureCaisse` (J) creee par le bouton
     :return: dict de contexte
@@ -5515,10 +5653,40 @@ def _contexte_de_l_ecran_du_z(cloture):
         "section_reglements": sections_par_cle.get("reglements"),
         "section_caisse_especes": sections_par_cle.get("caisse_especes"),
         "phrase_de_reconciliation": phrase_de_reconciliation,
-        "adresse_de_la_fiche_de_la_cloture": reverse(
-            "staff_admin:comptabilite_cloturecaisse_change", args=[cloture.pk]
-        ),
     }
+
+
+def _ticket_z_avec_sa_trace(cloture, operateur):
+    """
+    Le ticket Z d'une cloture, pret pour `imprimer_async`, avec ses metadonnees de
+    tracabilite : type CLOT, uuid de la J, operateur.
+    / A closure's Z ticket, ready for imprimer_async, with its tracking metadata.
+
+    LOCALISATION : laboutik/views.py
+
+    APPELEE PAR : `CaisseViewSet.cloturer` (premiere impression) et
+    `CaisseViewSet.imprimer_duplicata_z` (re-impression).
+    La tache d'impression lit `impression_meta` : elle ecrit l'`ImpressionLog` lie a
+    la J et marque DUPLICATA toute impression apres la premiere (LNE exigence 9).
+    / The print task reads impression_meta: it logs the print and marks DUPLICATE.
+
+    :param cloture: la `comptabilite.ClotureCaisse`
+    :param operateur: l'utilisateur connecte, ou None
+    :return: dict du ticket (`formatter_ticket_cloture`) + `impression_meta`
+    """
+    ticket_z_data = formatter_ticket_cloture(cloture)
+    if operateur is not None:
+        cle_de_l_operateur = str(operateur.pk)
+    else:
+        cle_de_l_operateur = None
+    ticket_z_data["impression_meta"] = {
+        "uuid_transaction": None,
+        "cloture_uuid": str(cloture.uuid),
+        "type_justificatif": ImpressionLog.CLOTURE,
+        "operateur_pk": cle_de_l_operateur,
+        "format_emission": "P",
+    }
+    return ticket_z_data
 
 
 def _contexte_des_chiffres_du_recap(
@@ -6118,7 +6286,8 @@ def _soldes_de_la_cascade_fiduciaire(wallet, assets_accessibles):
     of a venue outside the federation.
 
     Utilisée par / Used by : _payer_par_nfc (phase 1), payer_complementaire (carte 1
-    et 2ᵉ carte), obtenir_solde_complet_carte (check carte, écran d'identification).
+    et 2ᵉ carte), obtenir_solde_complet_carte (check carte, écran d'identification),
+    _carte_pour_l_ecran_de_succes (solde total après la vente).
     Le paiement et l'affichage lisent donc le MÊME solde.
 
     :param wallet: Wallet de la carte
@@ -7952,7 +8121,7 @@ def _fedow_a_deja_lie_la_carte(carte, user):
     return f"{carte_chez_fedow.get('wallet_uuid')}" == f"{user.wallet.uuid}"
 
 
-def _identifier_adherent(request, articles_panier):
+def _identifier_adherent(request, articles_panier, tag_id_de_la_carte=None):
     """
     Identifie le membre d'une adhesion. AUCUN appel reseau, AUCUNE ecriture.
     / Identifies the membership's member. NO network call, NO write.
@@ -7970,6 +8139,8 @@ def _identifier_adherent(request, articles_panier):
 
     :param request: HttpRequest (pour lire le POST)
     :param articles_panier: liste de dicts de _extraire_articles_du_panier()
+    :param tag_id_de_la_carte: la carte de l'adherent, si le champ `tag_id` du formulaire
+        n'est pas elle : dans le complement, `tag_id` porte la 2e carte.
     :return: tuple (user, carte) — ou None si le panier ne contient pas d'adhesion
     :raises ValueError: identification impossible ; le message est destine au caissier.
     """
@@ -7986,7 +8157,9 @@ def _identifier_adherent(request, articles_panier):
     # Si la carte porte deja un membre, c'est LUI l'adherent — l'email saisi ne peut pas
     # detourner une carte deja rattachee.
     # / A card already carrying a member wins: a typed email cannot hijack it.
-    tag_id_client = request.POST.get("tag_id", "").upper().strip()
+    tag_id_client = tag_id_de_la_carte
+    if tag_id_client is None:
+        tag_id_client = request.POST.get("tag_id", "").upper().strip()
     if tag_id_client:
         # Appelée hors de tout bloc atomic : une carte inconnue en local peut être
         # rapatriée depuis l'ancien Fedow. Si elle ne l'est pas, on passe à l'email.
@@ -8138,6 +8311,116 @@ def _declarer_adherent_au_reseau(user_adhesion, carte_client, ip_du_client):
         "fusion_locale_autorisee": carte_a_lier is not None,
         "avertissements": avertissements,
     }
+
+
+def _declarer_l_adherent_du_complement(
+    request,
+    adherent_identifie,
+    ip_du_client,
+    message_d_incident_legacy,
+    montant_debite_sur_le_reseau,
+):
+    """
+    Declare l'adherent d'un complement au reseau, juste avant le bloc atomic.
+    / Declares a complement's member to the network, right before the atomic block.
+
+    LOCALISATION : laboutik/views.py
+
+    Le FED des cartes est peut-etre deja debite, et ce debit ne s'annule pas. Si la
+    declaration echoue apres lui, le caissier doit le savoir : l'adhesion n'existe pas,
+    et relancer le paiement debiterait une 2e fois.
+    / Card FED may already be debited, and that cannot be undone. If the declaration then
+    fails, the cashier is told not to retry.
+
+    APPELE PAR : _executer_paiement_complementaire (especes / CB, et 2e carte).
+
+    :param adherent_identifie: tuple (user, carte) de _identifier_adherent
+    :param ip_du_client: str
+    :param message_d_incident_legacy: journal du debit reseau, vide sans debit
+    :param montant_debite_sur_le_reseau: int, en centimes
+    :return: tuple (adherent, reponse_de_refus), l'un des deux vaut None
+    """
+    user_adhesion, carte_adhesion = adherent_identifie
+    try:
+        adherent = _declarer_adherent_au_reseau(
+            user_adhesion, carte_adhesion, ip_du_client
+        )
+    except ValueError as erreur_adherent:
+        contexte_du_refus = {
+            "action": "initUrlAddition();",
+            "msg_type": "warning",
+            "msg_content": f"{erreur_adherent}",
+            "selector_bt_retour": "#messages",
+        }
+        if message_d_incident_legacy:
+            logger.error(
+                f"{message_d_incident_legacy} "
+                f"Déclaration de l'adhérent au réseau refusée : {erreur_adherent}"
+            )
+            contexte_du_refus["msg_type"] = "error"
+            contexte_du_refus["msg_content"] = _(
+                "ATTENTION : le réseau a débité %(montant)s €, mais l'adhésion "
+                "n'a pas été enregistrée. Ne relancez pas le paiement : le client "
+                "paierait ce montant une seconde fois. Prévenez un responsable du "
+                "lieu pour régulariser."
+            ) % {"montant": f"{montant_debite_sur_le_reseau / 100:.2f}"}
+        reponse_de_refus = render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            contexte_du_refus,
+            status=400,
+        )
+        return None, reponse_de_refus
+    except Exception as erreur_imprevue_de_declaration:
+        if message_d_incident_legacy:
+            logger.error(
+                f"{message_d_incident_legacy} Exception imprévue pendant la "
+                f"déclaration de l'adhérent : {erreur_imprevue_de_declaration}"
+            )
+        raise
+    return adherent, None
+
+
+def _rattacher_la_carte_a_l_adherent(adherent, ip_du_client):
+    """
+    Fusionne le portefeuille ephemere de la carte dans celui de l'adherent.
+    / Merges the card's ephemeral wallet into the member's.
+
+    LOCALISATION : laboutik/views.py
+
+    A APPELER DANS le bloc atomic, APRES les debits de la carte : ils s'appuient sur le
+    portefeuille ephemere. Un refus ne bloque pas la vente : l'adhesion reste due, et
+    l'ecran de succes previent le caissier.
+    / Call INSIDE the atomic, AFTER the card debits. A refusal never blocks the sale.
+
+    APPELE PAR : _executer_paiement_complementaire (especes / CB, et 2e carte).
+
+    :param adherent: dict de _declarer_adherent_au_reseau
+    :param ip_du_client: str
+    """
+    carte_de_l_adherent = adherent["carte"]
+    if not adherent["fusion_locale_autorisee"] or carte_de_l_adherent is None:
+        return
+    try:
+        CarteService.lier_a_user(
+            qrcode_uuid=carte_de_l_adherent.uuid,
+            user=adherent["user"],
+            ip=ip_du_client,
+        )
+    except (
+        CarteIntrouvable,
+        CarteDejaLiee,
+        UserADejaCarte,
+        SoldeInsuffisant,
+    ) as erreur_liaison:
+        logger.warning(
+            f"Adhesion POS complement : fusion locale de la carte "
+            f"{carte_de_l_adherent.tag_id} impossible : {erreur_liaison}"
+        )
+        adherent["avertissements"].append(_(
+            "La carte n'a pas pu etre rattachee au membre. L'adhesion "
+            "est bien enregistree, le solde de la carte est intact."
+        ))
 
 
 def _resoudre_adherent_hors_atomic(request, articles_panier):
@@ -10671,24 +10954,29 @@ class PaiementViewSet(viewsets.ViewSet):
         # complément reste (le legacy PARTIEL sera géré par payer_complementaire — C2.3).
         # / LEGACY tier: after locals, before complement. If the fresh legacy balance covers ALL the
         # remainder → "covered" sale (debit at validation). Otherwise keep the complement.
+        # Le FED est lu à chaque vente, même si le local couvre tout : Lespass n'en a
+        # aucune copie, et l'écran de succès affiche le solde total de la carte. Sa
+        # lecture est dégradée en silence : Fedow en panne ne bloque pas une vente payée
+        # en local.
+        # / FED is read on every sale, even when local covers all: Lespass has no copy,
+        # and the success screen shows the card's total. Fedow down never blocks a sale.
         legacy_couvre_tout = False
         montant_legacy = 0
-        if total_complementaire > 0:
-            depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte_client)
-            if legacy_disponible and depensable_legacy > 0:
-                # Le legacy couvre ce qu'il peut (tout ou une PARTIE) ; le reste ira au complément.
-                # / Legacy covers what it can (all or PART); the rest goes to the complement.
-                montant_legacy = min(depensable_legacy, total_complementaire)
-                total_complementaire -= montant_legacy
-                if total_complementaire == 0:
-                    # Couvert entièrement (locaux + legacy) → sortie « couverte » : débit à la
-                    # validation (PHASE 7), on saute l'écran complément.
-                    # / Fully covered → "covered" sale: debit at validation (PHASE 7).
-                    legacy_couvre_tout = True
-                # Sinon : legacy PARTIEL → l'écran complément s'affiche avec le reste réduit. Le
-                # débit FED partiel se fera dans payer_complementaire (qui re-lit le FED frais).
-                # / Otherwise: PARTIAL legacy → complement screen shows the reduced remainder; the
-                # partial FED debit happens in payer_complementaire (which re-reads fresh FED).
+        depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte_client)
+        if total_complementaire > 0 and legacy_disponible and depensable_legacy > 0:
+            # Le legacy couvre ce qu'il peut (tout ou une PARTIE) ; le reste ira au complément.
+            # / Legacy covers what it can (all or PART); the rest goes to the complement.
+            montant_legacy = min(depensable_legacy, total_complementaire)
+            total_complementaire -= montant_legacy
+            if total_complementaire == 0:
+                # Couvert entièrement (locaux + legacy) → sortie « couverte » : débit à la
+                # validation (PHASE 7), on saute l'écran complément.
+                # / Fully covered → "covered" sale: debit at validation (PHASE 7).
+                legacy_couvre_tout = True
+            # Sinon : legacy PARTIEL → l'écran complément s'affiche avec le reste réduit. Le
+            # débit FED partiel se fera dans payer_complementaire (qui re-lit le FED frais).
+            # / Otherwise: PARTIAL legacy → complement screen shows the reduced remainder; the
+            # partial FED debit happens in payer_complementaire (which re-reads fresh FED).
 
         # =====================================================Type d'actif=========== #
         #  PHASE 6 : Si complémentaire > 0 → écran fonds insuffisants       #
@@ -10737,13 +11025,20 @@ class PaiementViewSet(viewsets.ViewSet):
 
             total_nfc = sum(debits_par_asset_pour_affichage.values())
 
+            # Le « Payé par la carte » de l'écran compte aussi le FED, sinon l'addition
+            # (total - payé = reste) ne tombe pas juste. Le champ caché total_nfc_carte1
+            # reste le montant local.
+            # / The shown "paid by card" includes FED, so the sum adds up. The hidden
+            # total_nfc_carte1 field stays the local amount.
+            total_affiche_carte1 = total_nfc + montant_legacy
+
             context_complement = {
                 "action": "initUrlAddition();",
                 "tag_id_carte1": tag_id_client,
                 "detail_cascade": detail_cascade_affichage,
                 "cascade_carte1_json": cascade_json,
                 "total_nfc_carte1": total_nfc,
-                "total_nfc_carte1_euros": f"{total_nfc / 100:.2f}",
+                "total_nfc_carte1_euros": f"{total_affiche_carte1 / 100:.2f}",
                 "total_panier_euros": f"{total_centimes / 100:.2f}",
                 "reste_euros": f"{total_complementaire / 100:.2f}",
                 "accepte_especes": point_de_vente.accepte_especes,
@@ -11229,21 +11524,27 @@ class PaiementViewSet(viewsets.ViewSet):
         #  PHASE 8: Success — multi-asset balances                          #
         # ================================================================ #
 
-        # Avant / apres de TOUS les assets débités (pas seulement TLF) :
-        # non-fiduciaires + cascade locale. Le legacy (Fedow) n'est pas affiché.
-        # / Before / after of ALL debited assets: non-fiduciary + local cascade.
-        soldes_apres_paiement = _calculer_soldes_apres_paiement(
-            wallet=wallet_client,
-            lignes_debitees=lignes_non_fidu + lignes_nfc,
+        fed_avant_paiement_centimes, fed_disponible = _fed_avant_le_paiement(
+            carte_client, adherent, depensable_legacy, legacy_disponible, montant_legacy
         )
+
+        # Avant / apres de TOUS les assets débités (non-fiduciaires, cascade locale, FED)
+        # et solde total de la carte.
+        # / Before / after of ALL debited assets, and the card's total balance.
+        carte_pour_le_succes = _carte_pour_l_ecran_de_succes(
+            carte=carte_client,
+            lignes_debitees=lignes_non_fidu + lignes_nfc,
+            fed_avant_paiement_centimes=fed_avant_paiement_centimes,
+            fed_disponible=fed_disponible,
+            fed_debite_centimes=montant_legacy,
+        )
+        soldes_apres_paiement = carte_pour_le_succes["soldes"]
 
         # Regroupement par carte pour l'ecran de succes (un cadre par carte)
         # / Grouped per card for the success screen (one frame per card)
         cartes_apres_paiement = []
         if soldes_apres_paiement:
-            cartes_apres_paiement.append(
-                {"tag_id": carte_client.tag_id, "soldes": soldes_apres_paiement}
-            )
+            cartes_apres_paiement.append(carte_pour_le_succes)
 
         # Pour la rétro-compatibilité du template, on passe aussi le solde
         # du 1er asset débité comme nouveau_solde et monnaie_name.
@@ -11987,6 +12288,32 @@ class PaiementViewSet(viewsets.ViewSet):
 
         articles_pour_cascade = articles_fiduciaires + articles_adhesion
 
+        # GARDE ADHESION, AVANT TOUT DEBIT : une carte anonyme n'a pas de titulaire,
+        # l'adherent est donc celui de l'e-mail saisi au comptoir. Sa declaration au
+        # reseau attend la derniere seconde avant le bloc atomic.
+        # La carte de l'adherent est la carte 1 : `tag_id` porte la 2e carte.
+        # / MEMBERSHIP GUARD, BEFORE ANY DEBIT: an anonymous card has no owner, the
+        #   member is the typed email. The member's card is card 1: `tag_id` is card 2.
+        adherent_identifie = None
+        if articles_adhesion and carte1.user is None:
+            try:
+                adherent_identifie = _identifier_adherent(
+                    request, articles_panier, tag_id_de_la_carte=tag_id_carte1
+                )
+            except ValueError as erreur_adherent:
+                context_erreur = {
+                    "action": "initUrlAddition();",
+                    "msg_type": "warning",
+                    "msg_content": f"{erreur_adherent}",
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
         # Cascade carte1 (recalcul)
         # / Card1 cascade (recalculation)
         lignes_nfc_carte1 = []
@@ -12119,10 +12446,9 @@ class PaiementViewSet(viewsets.ViewSet):
             montant_legacy = 0
             lignes_locales_c1 = [t for t in lignes_nfc_carte1 if t[1] is not None]
             lignes_complement_c1 = [t for t in lignes_nfc_carte1 if t[1] is None]
-            if lignes_complement_c1:
-                depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte1)
-                if legacy_disponible and depensable_legacy > 0:
-                    montant_legacy = min(depensable_legacy, total_complementaire)
+            depensable_legacy, legacy_disponible = lire_depensable_fed_frais(carte1)
+            if lignes_complement_c1 and legacy_disponible and depensable_legacy > 0:
+                montant_legacy = min(depensable_legacy, total_complementaire)
 
             # Montant reellement regle en especes/CB : le reste moins la part legacy.
             # / Amount actually settled in cash/CC: remainder minus the legacy part.
@@ -12205,6 +12531,22 @@ class PaiementViewSet(viewsets.ViewSet):
                     f"régularisation manuelle requise."
                 )
 
+            adherent = None
+            if adherent_identifie is not None:
+                adherent, reponse_de_refus = _declarer_l_adherent_du_complement(
+                    request,
+                    adherent_identifie,
+                    ip_client,
+                    message_d_incident_legacy,
+                    montant_legacy,
+                )
+                if reponse_de_refus is not None:
+                    return reponse_de_refus
+
+            client_de_la_vente = carte1.user
+            if adherent is not None:
+                client_de_la_vente = adherent["user"]
+
             try:
                 with db_transaction.atomic():
                     # 6.0) Ouvrir la vente du paiement
@@ -12213,9 +12555,11 @@ class PaiementViewSet(viewsets.ViewSet):
                     # d'idempotence est l'identifiant du paiement, le même que sur les
                     # lignes : un rejeu retrouve cette vente. Un panier en points n'arrive
                     # jamais ici (garde en tête de fonction) : la vente est en euros.
-                    # Le client est le titulaire de la carte 1.
+                    # Le client est l'adhérent s'il y en a un, sinon le titulaire de la
+                    # carte 1.
                     # / 6.0) Open the payment's sale: one sale for the whole payment. The
-                    #   payment id is its idempotency key. Always in euros.
+                    #   payment id is its idempotency key. Always in euros. The customer
+                    #   is the member if there is one, else card 1's holder.
                     vente = ouvrir_vente(
                         origine=SaleOrigin.LABOUTIK,
                         nature=Vente.Nature.VENTE,
@@ -12223,7 +12567,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         operateur=_operateur_de_la_caisse(
                             request, request.POST.get("tag_id_cm", "")
                         ),
-                        client=carte1.user,
+                        client=client_de_la_vente,
                         carte=carte1,
                         idempotency_key=str(uuid_transaction),
                     )
@@ -12399,11 +12743,28 @@ class PaiementViewSet(viewsets.ViewSet):
                             if product_uuid_str not in lignes_par_product:
                                 lignes_par_product[product_uuid_str] = ligne_creee
 
+                        # Le rattachement passe APRES les debits de la carte 1.
+                        # / The card is attached AFTER card 1's debits.
+                        if adherent is not None:
+                            _rattacher_la_carte_a_l_adherent(adherent, ip_client)
+
                         for article_ad in articles_adhesion:
+                            # Prix libre : le montant choisi par le client.
+                            # / Free price: the amount the customer picked.
+                            contribution = None
+                            montant_libre = article_ad.get("custom_amount_centimes")
+                            if montant_libre is not None:
+                                contribution = Decimal(montant_libre) / 100
+
                             membership = _creer_ou_renouveler_adhesion(
-                                carte1.user,
+                                client_de_la_vente,
                                 article_ad["product"],
                                 article_ad["price"],
+                                contribution_value=contribution,
+                                first_name=request.POST.get(
+                                    "prenom_adhesion", ""
+                                ).strip(),
+                                last_name=request.POST.get("nom_adhesion", "").strip(),
                             )
                             if membership:
                                 product_uuid_ad = str(article_ad["product"].uuid)
@@ -12497,20 +12858,25 @@ class PaiementViewSet(viewsets.ViewSet):
             # Succès espèces/CB → affichage
             # / Cash/CC success → display
             # ---------------------------------------------------------- #
-            # Avant / apres de la carte : non-fiduciaires + cascade locale
-            # / Card before / after: non-fiduciary + local cascade
-            soldes_apres_paiement = _calculer_soldes_apres_paiement(
-                wallet=wallet_carte1,
-                lignes_debitees=lignes_non_fidu + lignes_nfc_carte1,
+            # Avant / apres de la carte (non-fiduciaires, cascade locale, FED) et solde total
+            # / Card before / after (non-fiduciary, local cascade, FED) and total balance
+            fed_avant_paiement_centimes, fed_disponible = _fed_avant_le_paiement(
+                carte1, adherent, depensable_legacy, legacy_disponible, montant_legacy
             )
+            carte_pour_le_succes = _carte_pour_l_ecran_de_succes(
+                carte=carte1,
+                lignes_debitees=lignes_non_fidu + lignes_nfc_carte1,
+                fed_avant_paiement_centimes=fed_avant_paiement_centimes,
+                fed_disponible=fed_disponible,
+                fed_debite_centimes=montant_legacy,
+            )
+            soldes_apres_paiement = carte_pour_le_succes["soldes"]
 
             # Regroupement par carte pour l'ecran de succes (un cadre par carte)
             # / Grouped per card for the success screen (one frame per card)
             cartes_apres_paiement = []
             if soldes_apres_paiement:
-                cartes_apres_paiement.append(
-                    {"tag_id": carte1.tag_id, "soldes": soldes_apres_paiement}
-                )
+                cartes_apres_paiement.append(carte_pour_le_succes)
 
             nouveau_solde_euros = None
             nom_monnaie_principal = ""
@@ -12545,6 +12911,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
                 "cartes_apres_paiement": cartes_apres_paiement,
+                "avertissements_adhesion": adherent["avertissements"] if adherent else [],
                 "produits_stock_negatif": produits_stock_negatif,
             }
             return render(
@@ -12636,10 +13003,9 @@ class PaiementViewSet(viewsets.ViewSet):
             total_complement_c1 = sum(
                 amount for _a, _u, amount, _p in lignes_complement_c1
             )
-            if total_complement_c1 > 0:
-                depensable_legacy_c1, dispo_c1 = lire_depensable_fed_frais(carte1)
-                if dispo_c1 and depensable_legacy_c1 > 0:
-                    montant_legacy_c1 = min(depensable_legacy_c1, total_complement_c1)
+            depensable_legacy_c1, dispo_c1 = lire_depensable_fed_frais(carte1)
+            if total_complement_c1 > 0 and dispo_c1 and depensable_legacy_c1 > 0:
+                montant_legacy_c1 = min(depensable_legacy_c1, total_complement_c1)
             if montant_legacy_c1 > 0:
                 # On découpe le complément de carte1 : la part couverte par son FED (différée)
                 # et le reste, que la carte2 (puis espèces/CB) devra couvrir.
@@ -12703,12 +13069,13 @@ class PaiementViewSet(viewsets.ViewSet):
             lignes_legacy_c2 = []
             transactions_legacy_c2 = []
             montant_legacy_c2 = 0
-            if total_reste_apres_carte2 > 0:
-                depensable_legacy_c2, legacy_dispo_c2 = lire_depensable_fed_frais(
-                    carte2
-                )
-                if legacy_dispo_c2 and depensable_legacy_c2 >= total_reste_apres_carte2:
-                    montant_legacy_c2 = total_reste_apres_carte2
+            depensable_legacy_c2, legacy_dispo_c2 = lire_depensable_fed_frais(carte2)
+            if (
+                total_reste_apres_carte2 > 0
+                and legacy_dispo_c2
+                and depensable_legacy_c2 >= total_reste_apres_carte2
+            ):
+                montant_legacy_c2 = total_reste_apres_carte2
             if montant_legacy_c2 > 0:
                 # Les lignes complément (asset=None) de la carte2 sont entièrement couvertes par le FED.
                 # / The card2 complement lines (asset=None) are fully covered by FED.
@@ -12784,6 +13151,18 @@ class PaiementViewSet(viewsets.ViewSet):
                             "montant_euros": f"{montant_d / 100:.2f}",
                         }
                     )
+                # Le FED de la carte 1 sera débité à la fin du paiement : il compte déjà
+                # dans le reste, l'écran le montre donc. La carte 2 n'a pas de FED ici :
+                # son FED n'est pris que s'il couvre tout le reste.
+                # / Card 1's FED, debited at the end, already counts in the remainder.
+                # Card 2 has none here: its FED is only taken if it covers everything.
+                if montant_legacy_c1 > 0:
+                    detail_cascade_affichage.append(
+                        {
+                            "name": f"TiBillet ({tag_id_carte1})",
+                            "montant_euros": f"{montant_legacy_c1 / 100:.2f}",
+                        }
+                    )
 
                 # Resérialiser cascade carte1 pour le re-render
                 # / Re-serialize card1 cascade for re-render
@@ -12807,7 +13186,11 @@ class PaiementViewSet(viewsets.ViewSet):
                     "detail_cascade": detail_cascade_affichage,
                     "cascade_carte1_json": cascade_json_rerender,
                     "total_nfc_carte1": total_nfc_carte1_centimes,
-                    "total_nfc_carte1_euros": f"{total_nfc_carte1_centimes / 100:.2f}",
+                    # Montant affiché : local + FED. Le champ caché ci-dessus reste local.
+                    # / Shown amount: local + FED. The hidden field above stays local.
+                    "total_nfc_carte1_euros": (
+                        f"{(total_nfc_carte1_centimes + montant_legacy_c1) / 100:.2f}"
+                    ),
                     "total_panier_euros": f"{total_centimes / 100:.2f}",
                     "reste_euros": f"{total_reste_apres_carte2 / 100:.2f}",
                     "accepte_especes": point_de_vente.accepte_especes,
@@ -12962,6 +13345,22 @@ class PaiementViewSet(viewsets.ViewSet):
                     f"régularisation manuelle requise."
                 )
 
+            adherent = None
+            if adherent_identifie is not None:
+                adherent, reponse_de_refus = _declarer_l_adherent_du_complement(
+                    request,
+                    adherent_identifie,
+                    ip_client,
+                    message_d_incident_legacy,
+                    montant_legacy_c1 + montant_legacy_c2,
+                )
+                if reponse_de_refus is not None:
+                    return reponse_de_refus
+
+            client_de_la_vente = carte1.user
+            if adherent is not None:
+                client_de_la_vente = adherent["user"]
+
             # Carte2 couvre tout le reste (ou le reste est réglé en espèces / CB) →
             # bloc atomic
             # / Card2 covers all remainder (or the rest is paid in cash / CC) → atomic
@@ -12973,11 +13372,12 @@ class PaiementViewSet(viewsets.ViewSet):
                     # espèces ou en CB. La clé d'idempotence est l'identifiant du
                     # paiement, le même que sur les lignes : un rejeu retrouve cette
                     # vente. Un panier en points n'arrive jamais ici (garde en tête de
-                    # fonction) : la vente est en euros. Le client et la carte de la
-                    # vente sont ceux de la carte 1.
+                    # fonction) : la vente est en euros. La carte de la vente est la
+                    # carte 1. Le client est l'adhérent s'il y en a un, sinon le
+                    # titulaire de la carte 1.
                     # / Open the payment's sale: one sale for the whole payment. The
-                    #   payment id is its idempotency key. Always in euros. Card 1 gives
-                    #   the sale's customer and card.
+                    #   payment id is its idempotency key. Always in euros. The sale's
+                    #   card is card 1; the customer is the member, else card 1's holder.
                     vente = ouvrir_vente(
                         origine=SaleOrigin.LABOUTIK,
                         nature=Vente.Nature.VENTE,
@@ -12985,7 +13385,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         operateur=_operateur_de_la_caisse(
                             request, request.POST.get("tag_id_cm", "")
                         ),
-                        client=carte1.user,
+                        client=client_de_la_vente,
                         carte=carte1,
                         idempotency_key=str(uuid_transaction),
                     )
@@ -13219,11 +13619,28 @@ class PaiementViewSet(viewsets.ViewSet):
                             if product_uuid_str not in lignes_par_product:
                                 lignes_par_product[product_uuid_str] = ligne_creee
 
+                        # Le rattachement passe APRES les debits de la carte 1.
+                        # / The card is attached AFTER card 1's debits.
+                        if adherent is not None:
+                            _rattacher_la_carte_a_l_adherent(adherent, ip_client)
+
                         for article_ad in articles_adhesion:
+                            # Prix libre : le montant choisi par le client.
+                            # / Free price: the amount the customer picked.
+                            contribution = None
+                            montant_libre = article_ad.get("custom_amount_centimes")
+                            if montant_libre is not None:
+                                contribution = Decimal(montant_libre) / 100
+
                             membership = _creer_ou_renouveler_adhesion(
-                                carte1.user,
+                                client_de_la_vente,
                                 article_ad["product"],
                                 article_ad["price"],
+                                contribution_value=contribution,
+                                first_name=request.POST.get(
+                                    "prenom_adhesion", ""
+                                ).strip(),
+                                last_name=request.POST.get("nom_adhesion", "").strip(),
                             )
                             if membership:
                                 product_uuid_ad = str(article_ad["product"].uuid)
@@ -13314,26 +13731,33 @@ class PaiementViewSet(viewsets.ViewSet):
             # Succès 2ème carte → avant / apres, un cadre par carte a l'ecran.
             # Les non-fiduciaires sont débités sur la carte 1.
             # / 2nd card success → before / after, one frame per card on screen.
-            soldes_carte1 = _calculer_soldes_apres_paiement(
-                wallet=wallet_carte1,
+            fed_avant_paiement_c1, fed_disponible_c1 = _fed_avant_le_paiement(
+                carte1, adherent, depensable_legacy_c1, dispo_c1, montant_legacy_c1
+            )
+            carte1_pour_le_succes = _carte_pour_l_ecran_de_succes(
+                carte=carte1,
                 lignes_debitees=lignes_non_fidu + lignes_couvertes_c1,
+                fed_avant_paiement_centimes=fed_avant_paiement_c1,
+                fed_disponible=fed_disponible_c1,
+                fed_debite_centimes=montant_legacy_c1,
             )
-            soldes_carte2 = _calculer_soldes_apres_paiement(
-                wallet=wallet_carte2,
+            carte2_pour_le_succes = _carte_pour_l_ecran_de_succes(
+                carte=carte2,
                 lignes_debitees=lignes_couvertes_c2,
+                fed_avant_paiement_centimes=depensable_legacy_c2,
+                fed_disponible=legacy_dispo_c2,
+                fed_debite_centimes=montant_legacy_c2,
             )
+            soldes_carte1 = carte1_pour_le_succes["soldes"]
+            soldes_carte2 = carte2_pour_le_succes["soldes"]
 
-            # Une entree par carte qui a vraiment paye en local
-            # / One entry per card that actually paid locally
+            # Une entree par carte qui a vraiment paye
+            # / One entry per card that actually paid
             cartes_apres_paiement = []
             if soldes_carte1:
-                cartes_apres_paiement.append(
-                    {"tag_id": tag_id_carte1, "soldes": soldes_carte1}
-                )
+                cartes_apres_paiement.append(carte1_pour_le_succes)
             if soldes_carte2:
-                cartes_apres_paiement.append(
-                    {"tag_id": tag_id_carte2, "soldes": soldes_carte2}
-                )
+                cartes_apres_paiement.append(carte2_pour_le_succes)
 
             # Liste a plat, gardee pour nouveau_solde / monnaie_name
             # / Flat list, kept for nouveau_solde / monnaie_name
@@ -13372,6 +13796,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
                 "cartes_apres_paiement": cartes_apres_paiement,
+                "avertissements_adhesion": adherent["avertissements"] if adherent else [],
                 "produits_stock_negatif": produits_stock_negatif,
             }
             return render(

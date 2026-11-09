@@ -800,17 +800,36 @@ def _reconstruire_la_galerie(bloc, donnees_postees, fichiers_choisis):
         if donnees_postees.get(f"{prefixe}-DELETE") == "on":
             continue
 
-        image_existante = images_en_base.get(donnees_postees.get(f"{prefixe}-id", ""))
+        # La cle primaire d'ImageGalerie s'appelle `uuid` : le formset poste
+        # donc `<prefixe>-uuid`, pas `<prefixe>-id`. On lit le nom reel.
+        # / ImageGalerie's primary key is `uuid`: the formset posts
+        # `<prefix>-uuid`, not `<prefix>-id`. Read the real name.
+        nom_de_la_cle_primaire = ImageGalerie._meta.pk.name
+        image_existante = images_en_base.get(
+            donnees_postees.get(f"{prefixe}-{nom_de_la_cle_primaire}", "")
+        )
         fichier_choisi = f"{prefixe}-image" in fichiers_choisis
-        if image_existante is None and not fichier_choisi:
-            # Ligne neuve restee vide. / New row left empty.
+        legende_saisie = donnees_postees.get(f"{prefixe}-legende", "")
+        tags_saisis = donnees_postees.get(f"{prefixe}-tags", "")
+        # Une ligne neuve sans fichier compte quand meme si elle a une legende
+        # ou des tags : dans une EQUIPE, c'est une personne sans photo.
+        # / A new row without a file still counts with a caption or tags: in
+        # an EQUIPE, it is a person without a photo.
+        ligne_neuve_restee_vide = (
+            image_existante is None
+            and not fichier_choisi
+            and not legende_saisie.strip()
+            and not tags_saisis.strip()
+        )
+        if ligne_neuve_restee_vide:
             continue
 
         if image_existante is not None:
             image_pour_l_apercu = image_existante
         else:
             image_pour_l_apercu = ImageGalerie(bloc=bloc)
-        image_pour_l_apercu.legende = donnees_postees.get(f"{prefixe}-legende", "")
+        image_pour_l_apercu.legende = legende_saisie
+        image_pour_l_apercu.tags = tags_saisis
         image_pour_l_apercu.lien_url = donnees_postees.get(f"{prefixe}-lien_url", "")
         if fichier_choisi:
             _poser_un_fichier_sans_le_valider(

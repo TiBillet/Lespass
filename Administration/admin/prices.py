@@ -171,7 +171,10 @@ class PriceChangeForm(ModelForm):
                 self.fields["subscription_type"].widget = HiddenInput()
                 self.fields["recurring_payment"].widget = HiddenInput()
                 self.fields["iteration"].widget = HiddenInput()
-                self.fields["manual_validation"].widget = HiddenInput()
+                # La validation manuelle sert aux adhésions et aux ressources.
+                # / Manual validation applies to memberships and resources.
+                if instance.product.categorie_article != Product.RESOURCE:
+                    self.fields["manual_validation"].widget = HiddenInput()
                 self.fields[
                     "product"
                 ].widget = HiddenInput()  # caché sauf si bouton + en haut a droite

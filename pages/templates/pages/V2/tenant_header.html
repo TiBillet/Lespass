@@ -54,8 +54,11 @@ pour ne pas être coupés par ce défilement.
                     </span>
                 </span>
             </div>
-            {% if config.module_crowdfunding %}
-                <a class="btn btn-primaire" href="/contrib/">{{ crowd_config.title }}</a>
+            {# Condition calculée dans BaseBillet/views.py get_context() : module actif, #}
+            {# config Crowds active et au moins une initiative non archivée. #}
+            {# / Condition computed in get_context(): module on, Crowds active, one initiative. #}
+            {% if afficher_bouton_contribuer %}
+                <a class="btn btn-primaire" href="/contrib/" data-testid="tenant-header-contribuer">{{ crowd_config.title }}</a>
             {% endif %}
         </div>
 

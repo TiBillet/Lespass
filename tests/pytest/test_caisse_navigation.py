@@ -74,7 +74,7 @@ def ancien_fedow_simule_qui_confirme_les_cartes_primaires():
             "Appel réseau réel vers l'ancien Fedow interdit dans un test pytest."
         )
 
-    def faux_retrieve(self, tag_id):
+    def faux_retrieve(self, tag_id, timeout=30):
         return {"first_tag_id": tag_id, "is_primary": True}
 
     with mock.patch.object(FedowConfig, "can_fedow", return_value=True):

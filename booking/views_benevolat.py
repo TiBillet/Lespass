@@ -41,8 +41,9 @@ import logging
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.text import Truncator
 from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions, serializers, viewsets
 from rest_framework.authentication import CSRFCheck
@@ -59,11 +60,13 @@ from booking.benevolat import (
     lire_la_semaine_demandee,
     peut_s_inscrire_au_planning,
     plage_horaire,
+    plannings_publies_avec_des_besoins_a_venir,
     resumes_des_plannings_a_venir,
     retirer_une_inscription,
 )
 from booking.models import BesoinBenevole, InscriptionBenevole, PlanningBenevole
 from booking.tasks import envoyer_confirmation_benevole
+from booking.views import texte_brut_d_un_texte_riche
 
 logger = logging.getLogger(__name__)
 
@@ -323,9 +326,32 @@ class BenevolatViewSet(viewsets.ViewSet):
         en cartes (les mêmes que le bloc d'accueil « Coups de main »). C'est la page de
         l'entrée « Bénévolat » du menu du site (BaseBillet/views.py, get_context).
         / The upcoming plannings, as cards; target of the site menu entry.
+
+        Un seul planning à venir : il n'y a rien à choisir, on ouvre directement sa page.
+        / Only one upcoming planning: nothing to choose, open its page directly.
         """
+        plannings_a_venir = resumes_des_plannings_a_venir(50)
+
+        il_y_a_un_seul_planning = len(plannings_a_venir) == 1
+        if il_y_a_un_seul_planning:
+            le_seul_planning = plannings_a_venir[0]["planning"]
+            return redirect("benevolat-planning", slug=le_seul_planning.slug)
+
         context = get_context(request)
-        context["plannings"] = resumes_des_plannings_a_venir(50)
+        context["plannings"] = plannings_a_venir
+
+        # Texte de partage et des moteurs (meta description, og, twitter) : le texte
+        # d'introduction de la page en texte brut (texte_brut_d_un_texte_riche),
+        # coupé à 20 mots, sinon la phrase affichée par défaut sous le titre (liste.html).
+        # / Sharing and search text: the intro text as plain text, else the default sentence.
+        config = context["config"]
+        introduction_en_texte_brut = texte_brut_d_un_texte_riche(config.description_benevolat_page)
+        description_de_la_page_benevolat = Truncator(introduction_en_texte_brut).words(20)
+        if not description_de_la_page_benevolat:
+            description_de_la_page_benevolat = _(
+                "Les coups de main dont le lieu a besoin. Choisis un planning, puis une case : c'est noté."
+            )
+        context["description_de_la_page_benevolat"] = description_de_la_page_benevolat
         return render(request, "booking/benevolat/liste.html", context)
 
     def retrieve(self, request, slug=None):
@@ -359,6 +385,22 @@ class BenevolatViewSet(viewsets.ViewSet):
         context.update(zone_du_planning)
         context["adhesions_requises"] = list(planning.adhesions_requises.all())
         context["lettre_active"] = lettre_d_information_active()
+
+        # Texte de partage et des moteurs (meta description, og, twitter) : la
+        # présentation du planning coupée à 20 mots, sinon la phrase de la page liste.
+        # La présentation est du texte simple (rendu |linebreaks) : pas de balises.
+        # / Sharing and search text: the planning presentation, 20 words, else the list sentence.
+        description_du_planning = Truncator(" ".join(planning.description.split())).words(20)
+        if not description_du_planning:
+            description_du_planning = _(
+                "Les coups de main dont le lieu a besoin. Choisis un planning, puis une case : c'est noté."
+            )
+        context["description_du_planning"] = description_du_planning
+
+        # Le fil d'Ariane passe par la page liste seulement si elle existe : avec un
+        # seul planning à venir, /booking/benevolat/ redirige vers ce planning.
+        # / The breadcrumb goes through the list only when it is a real page.
+        context["plusieurs_plannings_a_venir"] = len(plannings_publies_avec_des_besoins_a_venir()) > 1
         return render(request, "booking/benevolat/planning.html", context)
 
     def inscrire(self, request, pk=None):

@@ -72,6 +72,8 @@ demain. Rien n'est perdu, rien n'est envoyé deux fois.
 
 ### 3.2 Les rubriques (v1)
 
+> **Remplacé par le chantier 02** ([CHANTIER-02-recap-allege.md](CHANTIER-02-recap-allege.md), 2026-10-22) : plus de stocks, rubriques regroupées.
+
 Une rubrique n'apparaît que si elle a au moins une ligne.
 
 | Rubrique | Modèle | Filtre | Date |
@@ -79,7 +81,8 @@ Une rubrique n'apparaît que si elle a au moins une ligne.
 | Nouvelles adhésions | `Membership` (champ **`status`**, pas `state`) | sauf `WAITING_PAYMENT` (paiement abandonné), `CANCELED`, `ADMIN_CANCELED`, et `ADMIN_WAITING` (déjà dans la rubrique suivante, pas de doublon) | `date_added` ✅ |
 | Demandes d'adhésion en attente | `Membership` | `status=ADMIN_WAITING` — **tout le stock**, avec « dont N nouvelles hier » | `date_added` ✅ |
 | Nouvelles réservations d'événements | `Reservation` | sauf `CREATED`, `UNPAID`, `CANCELED` | ⚠️ voir §3.3 |
-| Nouvelles réservations de ressources | `booking.Booking` | sauf `WAITING_PAYMENT`, `ADMIN_CANCELED`, `USER_CANCELED` (la docstring du modèle, « annulation = suppression », est périmée) | `booked_at` ✅ |
+| Nouvelles réservations de ressources | `booking.Booking` | sauf `WAITING_PAYMENT`, `ADMIN_WAITING` (déjà dans la rubrique suivante), `ADMIN_CANCELED`, `USER_CANCELED` (la docstring du modèle, « annulation = suppression », est périmée) | `booked_at` ✅ |
+| Demandes de réservation en attente | `booking.Booking` | `status=ADMIN_WAITING` — **tout le stock**, avec « dont N nouvelles hier » ; le lien filtre la liste sur ce statut (voir `TECH_DOC/SESSIONS/BOOKING/SPEC.md` §5.10) | `booked_at` ✅ |
 | Nouvelles inscriptions bénévoles | `InscriptionBenevole` | — (un retrait supprime la ligne : une inscription d'hier retirée avant le récap n'y est pas) | `created_at` ✅ |
 | Nouveaux événements | `Event` | **tous** (créés par l'équipe ou proposés par le public), chaque ligne avec son état : « publié », « brouillon », « proposition en attente » (`is_proposal=True, published=False`). Filtrer sur `is_proposal=True` raterait une proposition créée et validée le même jour : la validation (`Administration/admin_tenant.py`, action d'approbation) remet `is_proposal=False` | ⚠️ voir §3.3 |
 | Propositions d'événements en attente | `Event` | `is_proposal=True, published=False` — **tout le stock**, avec « dont N nouvelles hier » (même filtre que l'admin et `Administration/admin/dashboard.py`) | ⚠️ voir §3.3 |
@@ -170,6 +173,8 @@ Le statut à la main dans l'admin (vérifié le 2026-10-18) :
 l'affiche ni ne l'écrit.
 
 ### 3.5 Pas de mail pour rien
+
+> **Remplacé par le chantier 02** ([CHANTIER-02-recap-allege.md](CHANTIER-02-recap-allege.md), 2026-10-22) : plus de stocks, rubriques regroupées.
 
 Le récap part si **au moins une** de ces conditions est vraie :
 - une rubrique « nouveau » a au moins une ligne (toutes les rubriques du §3.2 sauf les stocks) ;

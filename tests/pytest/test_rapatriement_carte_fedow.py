@@ -193,7 +193,7 @@ def ancien_fedow_simule(
         can_fedow=lambda: lieu_relie,
     )
 
-    def faux_retrieve(self, tag_id):
+    def faux_retrieve(self, tag_id, timeout=30):
         tags_demandes.append(tag_id)
         if erreur is not None:
             raise erreur

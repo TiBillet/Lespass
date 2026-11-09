@@ -12,9 +12,7 @@ PIN_CODE="$1"
 SERVER="$2"
 RFID_TYPE="${3:-RC522}"
 GIT_REPO="${4:-https://github.com/TiBillet/Lespass.git}"
-# NOTE : à repointer vers la branche stable après merge de main-fedow-import.
-# / NOTE: re-target to the stable branch once main-fedow-import is merged.
-GIT_BRANCH="${5:-main-fedow-import}"
+GIT_BRANCH="${5:-main}"
 
 # Dossier Pi/ = parent du dossier config/ où vit ce script.
 # / Pi/ folder = parent of the config/ folder where this script lives.

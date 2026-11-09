@@ -85,7 +85,6 @@ def envoyer_email_otp(
     On reutilise `BaseBillet.tasks.CeleryMailerClass` plutot que `send_mail`
     direct pour beneficier (DRY) :
       - du fallback `DEFAULT_FROM_EMAIL` -> `EMAIL_HOST_USER`,
-      - du header `List-Unsubscribe`,
       - du check `config_valid()` (EMAIL_HOST, EMAIL_PORT, return_email...),
       - de la cohabitation avec les autres envois du projet (logs unifies).
 

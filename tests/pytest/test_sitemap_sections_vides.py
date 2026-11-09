@@ -48,6 +48,11 @@ class _FauxManager:
     def exists(self):
         return not self._vide
 
+    def count(self):
+        # Deux elements : une page liste n'est declaree qu'a partir de deux.
+        # / Two items: a list page is declared from two on.
+        return 0 if self._vide else 2
+
 
 def test_la_home_est_toujours_declaree():
     """
@@ -71,6 +76,8 @@ def test_les_sections_vides_sortent_du_sitemap():
     with patch.object(module_sitemap.Event, "objects", _FauxManager(vide=True)), \
          patch("BaseBillet.models.Product.objects", _FauxManager(vide=True)), \
          patch("BaseBillet.models.FederatedPlace.objects", _FauxManager(vide=True)), \
+         patch("booking.models.Resource.objects", _FauxManager(vide=True)), \
+         patch("booking.benevolat.plannings_publies_avec_des_besoins_a_venir", return_value=[]), \
          patch("BaseBillet.models.FederationConfiguration.get_solo") as faux_fed:
         faux_fed.return_value.afficher_lieux_entrants = False
         items = _items_du_sitemap()

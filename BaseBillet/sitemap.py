@@ -196,6 +196,21 @@ class StaticViewSitemap(TenantSitemap):
             if FederatedPlace.objects.exists() or voisins_entrants_ou_par_tags:
                 pages.append('federation-list')
 
+        # Les pages liste du module booking. Avec UNE seule ressource (ou un seul
+        # planning), la vue redirige vers sa page : l'adresse de la liste n'est
+        # alors pas une page, et le sitemap ne doit pas la declarer. Memes regles
+        # que BookingViewSet.list et BenevolatViewSet.list.
+        # / With ONE resource (or planning) the list view redirects: not a page.
+        if config.module_booking:
+            from booking.models import Resource
+            if Resource.objects.count() > 1:
+                pages.append('booking-list')
+
+        if config.module_benevolat:
+            from booking.benevolat import plannings_publies_avec_des_besoins_a_venir
+            if len(plannings_publies_avec_des_besoins_a_venir()) > 1:
+                pages.append('benevolat-liste')
+
         return pages
 
     def location(self, item):
@@ -211,3 +226,7 @@ class StaticViewSitemap(TenantSitemap):
             # Page "Reseau local" — explorer carte/liste des lieux federes
             # / "Local network" page — federated lieux explorer (map/list)
             return reverse('federation-list')
+        elif item == 'booking-list':
+            return reverse('booking-list')
+        elif item == 'benevolat-liste':
+            return reverse('benevolat-liste')

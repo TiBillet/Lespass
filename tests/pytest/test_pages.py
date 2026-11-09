@@ -835,7 +835,10 @@ def test_conditional_fields_se_resserrent_par_affichage():
     # / JSON fields are typed through line editors (no more JSON).
     assert admin.conditional_fields["points_gps_editeur"] == "type_bloc == 'LIEU'"
     assert admin.conditional_fields["contenu_lieu"] == "type_bloc == 'LIEU'"
-    assert "EQUIPE" in admin.conditional_fields["contenu_cartes"]
+    assert "FRISE" in admin.conditional_fields["contenu_cartes"]
+    # Les personnes d'une EQUIPE vivent dans ImageGalerie, pas dans `contenu`.
+    # / EQUIPE people live in ImageGalerie, not in `contenu`.
+    assert "EQUIPE" not in admin.conditional_fields["contenu_cartes"]
     assert "hauteur_px" in admin.fields
 
 

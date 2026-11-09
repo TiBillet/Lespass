@@ -1,4 +1,5 @@
-{% load i18n %}<!DOCTYPE html>
+{% extends 'emails/base.html' %}
+{% load i18n %}
 {% comment %}
 EMAIL DE CLÔTURE — le résumé, le rapport complet en PDF joint
 / Closure email — the summary, the full report as an attached PDF
@@ -7,29 +8,51 @@ LOCALISATION : comptabilite/templates/comptabilite/email/cloture_rapport_email.h
 
 Envoyé par comptabilite/tasks.py `envoyer_email_cloture`, qui passe `config`, `cloture`,
 `chiffre_affaires_ttc_en_euros` (comptabilite/presentation.py `euros_a_la_francaise`) et
-la période déjà écrite en heure du lieu (`debut_en_heure_du_lieu`, `fin_en_heure_du_lieu`).
+la période déjà écrite en heure du lieu (`debut_en_heure_du_lieu`, `fin_en_heure_du_lieu`),
+et, pour une H ou une M, `compteurs_de_l_activite` : les compteurs non nuls de l'activité
+de la période, sans détail (Administration/recap_quotidien.py `compteurs_de_la_periode`),
+et `lien_des_reglages_des_envois` (le lien de désabonnement).
 Styles inline : un client mail ne lit pas de feuille externe.
 / Sent by envoyer_email_cloture. Inline styles for mail clients.
 {% endcomment %}
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family: Arial, sans-serif; color: #222; max-width: 600px; margin: auto; padding: 16px;">
-    <h1 style="font-size: 18pt; margin: 0 0 12px 0;">
-        {{ config.organisation }} — {% translate "Rapport de clôture" %}
-    </h1>
-    <p>
-        {% blocktranslate with niveau=cloture.get_niveau_display numero=cloture.numero_sequentiel %}Clôture {{ niveau }} n° {{ numero }}.{% endblocktranslate %}
-    </p>
-    <p>
-        <strong>{% translate "Période" %} :</strong>
-        {{ debut_en_heure_du_lieu }} → {{ fin_en_heure_du_lieu }}<br>
-        <strong>{% translate "Ventes" %} :</strong> {{ cloture.nombre_transactions }}<br>
-        <strong>{% translate "Chiffre d'affaires TTC" %} :</strong> {{ chiffre_affaires_ttc_en_euros }}
-    </p>
-    <p>{% translate "Rapport complet en pièce jointe (PDF)." %}</p>
-    <hr>
-    <p style="font-size: 8pt; color: #888; margin-top: 16px;">
-        {% translate "Envoyé automatiquement par le module de comptabilité. Pour ne plus recevoir ces rapports, demandez à un administrateur du tenant de modifier la configuration." %}
-    </p>
-</body>
-</html>
+
+{% block texte_d_apercu %}{% blocktranslate with niveau=cloture.get_niveau_display numero=cloture.numero_sequentiel %}Clôture {{ niveau }} n° {{ numero }}.{% endblocktranslate %} {{ chiffre_affaires_ttc_en_euros }}{% endblock %}
+
+{% block contenu %}
+    {% translate "Rapport de clôture" as titre %}
+    {% include "emails/composants/titre.html" with texte=titre %}
+    <tr>
+        <td style="padding:0 0 16px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            {% blocktranslate with niveau=cloture.get_niveau_display numero=cloture.numero_sequentiel %}Clôture {{ niveau }} n° {{ numero }}.{% endblocktranslate %}
+        </td>
+    </tr>
+
+    <tr>
+        <td style="padding:0 0 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                {% with periode=debut_en_heure_du_lieu|add:" → "|add:fin_en_heure_du_lieu %}
+                {% translate "Période" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=periode %}
+                {% endwith %}
+                {% translate "Ventes" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=cloture.nombre_transactions %}
+                {% translate "Chiffre d'affaires TTC" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=chiffre_affaires_ttc_en_euros %}
+                {% if compteurs_de_l_activite %}
+                {% translate "L'activité de la période" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=compteurs_de_l_activite|join:" · " %}
+                {% endif %}
+            </table>
+        </td>
+    </tr>
+
+    <tr>
+        <td style="font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#584854;">
+            {% translate "Rapport complet en pièce jointe (PDF)." %}
+        </td>
+    </tr>
+{% endblock %}
+
+{% comment %}
+Désabonnement : la page des réglages des envois, réservée aux admins du lieu.
+/ Unsubscribe: the mail settings page, for the venue's admins.
+{% endcomment %}
+{% block raison_du_mail %}<span data-testid="cloture-desabonnement">{% translate "Envoyé automatiquement par le module de comptabilité." %}
+    {% translate "Vous pouvez vous désabonner de cette lettre d'information :" %}
+    <a href="{{ lien_des_reglages_des_envois }}" style="color:#584854;">{% translate "réglages des envois" %}</a></span>{% endblock %}

@@ -6,7 +6,6 @@ from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge, CancelSubscription
 router = routers.DefaultRouter()
 # router.register(r'place', api_view.TenantViewSet, basename='place')
 # router.register(r'artist', api_view.TenantViewSet, basename='artist')
-router.register(r'here', api_view.HereViewSet, basename='here')
 router.register(r'events', api_view.EventsViewSet, basename='event')
 router.register(r'eventslug', api_view.EventsSlugViewSet, basename='eventslug')
 router.register(r'products', api_view.ProductViewSet, basename='product')

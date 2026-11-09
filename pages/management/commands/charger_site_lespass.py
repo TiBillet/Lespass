@@ -237,7 +237,7 @@ class Command(BaseCommand):
     # blocks keep an empty `titre` so the heading is not shown twice.
     # ------------------------------------------------------------------
     def _construire_qui_sommes_nous(self):
-        from pages.models import Bloc
+        from pages.models import Bloc, ImageGalerie
 
         page = self._creer_page(
             "qui-sommes-nous", "Qui sommes-nous ?", 3,
@@ -330,20 +330,27 @@ class Command(BaseCommand):
                 "- Des collectifs résidents et un conseil d'administration\n"
             ),
         )
-        # `contenu` = des DONNÉES texte : titre = le nom, texte = le rôle,
-        # badge = une précision courte. L'initiale du nom sert d'avatar (V2).
-        # / `contenu` is text DATA: titre = name, texte = role, badge = detail.
-        bloc(
-            type_bloc=Bloc.SECTION, affichage=Bloc.EQUIPE,
-            contenu=[
-                {"titre": "Awa Diallo", "texte": "Coordination", "badge": "Salariée"},
-                {"titre": "Naïm Berger", "texte": "Animation du café associatif",
-                 "badge": "Salarié"},
-                {"titre": "Sofia Le Goff", "texte": "Ateliers et numérique",
-                 "badge": "Bénévole"},
-                {"titre": "Théo Marchand", "texte": "Vie associative", "badge": "Bénévole"},
-            ],
-        )
+        # Les personnes sont les ImageGalerie du bloc : legende = le nom,
+        # tags = les badges (séparés par des virgules), image = la photo,
+        # recadrée en rond au rendu. La dernière personne n'a volontairement
+        # pas de photo : le gabarit affiche alors l'initiale de son nom.
+        # Pas de portraits dans les assets du projet : les photos de démo sont
+        # des images génériques.
+        # / People are the block's ImageGalerie: caption = name, tags = badges,
+        # image = photo cropped round. The last person has no photo on
+        # purpose: the template then shows the initial.
+        equipe = bloc(type_bloc=Bloc.SECTION, affichage=Bloc.EQUIPE)
+        for position, (nom, tags, photo) in enumerate([
+            ("Awa Diallo", "Coordination, Salariée", "404-12.jpg"),
+            ("Naïm Berger", "Café associatif, Salarié", "404-Card-1.jpg"),
+            ("Sofia Le Goff", "Ateliers et numérique, Bénévole", "404-6.jpg"),
+            ("Théo Marchand", "Vie associative, Bénévole", None),
+        ], start=1):
+            personne = ImageGalerie.objects.create(
+                bloc=equipe, position=position, legende=nom, tags=tags,
+            )
+            if photo:
+                self._poser_fichier(personne, "image", IMG + photo)
 
         # === 6-7. L'histoire : l'intertitre, puis la frise chronologique ===
         bloc(
@@ -396,35 +403,28 @@ class Command(BaseCommand):
                 "Les espaces et les équipements accessibles au lieu.\n"
             ),
         )
-        # `url` est optionnelle, et le gabarit ne pose un lien que si l'adresse
-        # commence par « http » ou « / ». Les deux cas sont représentés ici :
-        # des espaces sans lien, et le journal du lieu en lien interne.
-        # / `url` is optional and only linked when it starts with http or /.
-        # Both cases appear here: spaces without a link, and an internal one.
-        bloc(
-            type_bloc=Bloc.SECTION, affichage=Bloc.RESSOURCES,
-            contenu=[
-                {"titre": "Café associatif", "badge": "Espace",
-                 "texte": "Un lieu convivial pour se poser, boire un café, jouer, "
-                          "se rencontrer."},
-                {"titre": "Espaces de coworking", "badge": "Espace",
-                 "texte": "Bureaux partagés et salles de réunion pour travailler "
-                          "et se réunir."},
-                {"titre": "Ateliers partagés", "badge": "Atelier",
-                 "texte": "Bois, sérigraphie, couture, électronique : machines et "
-                          "outils pour créer, avec accompagnement."},
-                {"titre": "Espace numérique", "badge": "Accompagnement",
-                 "texte": "Accès et aide aux démarches en ligne, ouvert à toutes "
-                          "et tous."},
-                {"titre": "Les statuts de l'association", "badge": "PDF",
-                 "texte": "À demander à l'accueil : la ressource n'a pas de lien, "
-                          "le gabarit n'en pose donc aucun."},
-                {"titre": "Le journal du lieu", "badge": "Page",
-                 "texte": "Récits d'ateliers, coulisses et annonces, publiés au "
-                          "fil de l'eau.",
-                 "url": "/journal/"},
-            ],
-        )
+        # Les ressources sont les ImageGalerie du bloc : legende = le titre,
+        # tags = les badges, lien_url = le lien (facultatif), image = la
+        # vignette (facultative, recadrée en carré au rendu). Les cas sont tous
+        # représentés : espaces avec vignette, documents sans vignette (icône
+        # document), une ressource sans lien et une avec lien interne.
+        # / Resources are the block's ImageGalerie: caption = title, tags =
+        # badges, optional link and thumbnail. Every case appears here.
+        ressources = bloc(type_bloc=Bloc.SECTION, affichage=Bloc.RESSOURCES)
+        for position, (titre, tags, lien, vignette) in enumerate([
+            ("Café associatif", "Espace", "", "404-18.jpg"),
+            ("Espaces de coworking", "Espace", "", "404-20.jpg"),
+            ("Ateliers partagés", "Atelier, Accompagnement", "", "404-19.jpg"),
+            ("Espace numérique", "Accompagnement", "", None),
+            ("Les statuts de l'association", "PDF, À demander à l'accueil", "", None),
+            ("Le journal du lieu", "Page", "/journal/", None),
+        ], start=1):
+            ressource = ImageGalerie.objects.create(
+                bloc=ressources, position=position, legende=titre, tags=tags,
+                lien_url=lien,
+            )
+            if vignette:
+                self._poser_fichier(ressource, "image", IMG + vignette)
 
         # === 11. CTA final — la page se termine sur son invitation ===
         bloc(

@@ -9,13 +9,12 @@ Inclus par pages/{V2,classic}/partials/bloc_liste.html (bloc LISTE, source COUPS
 et par pages/V2/vues/accueil.html (section « Coups de main »).
 Contexte : plannings = balise plannings_benevoles_a_venir (pages/templatetags/pages_tags.py).
 Le même gabarit sert aux deux skins : ses styles sont ceux du planning (benevolat.css,
-classes « bv- »), chargés ici, une fois par bloc.
+classes « bv- »), chargés dans le <head> du shell (pages/<skin>/shell.html).
 Chaque carte : nom, période et créneaux libres (« ces prochains jours… » pour un planning
 chaque semaine), et les 5 prochains jours colorés comme les
 en-têtes du planning (D20). La carte mène à la page du planning.
-/ Shared by both skins; styles come from benevolat.css, loaded here.
+/ Shared by both skins; styles come from benevolat.css, loaded in the shell <head>.
 -->
-<link rel="stylesheet" href="{% static 'booking/css/benevolat.css' %}">
 
 <div class="benevolat bv-cartes" data-testid="bloc-liste-coups-de-main">
     {% for resume in plannings %}

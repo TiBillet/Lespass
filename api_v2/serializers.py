@@ -2,19 +2,17 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 import random
 import string
-import socket
-import ipaddress
-import requests
-from urllib.parse import urlparse
+import uuid
 
 from rest_framework import serializers
 from django.db import connection, transaction
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
-from django.core.files.base import ContentFile
+from django.db.models import Max
 
 from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, Price, PriceSold, Product, ProductFormField, Reservation, Membership
 from BaseBillet.models_vente import Vente
+from booking.models import Resource
 from BaseBillet.services_vente import (
     ajouter_article,
     ajouter_reglement,
@@ -81,12 +79,52 @@ def _url_absolue_du_media(chemin_du_media, domaine_primaire=None):
     return f"https://{domaine_primaire.domain}{chemin_du_media}"
 
 
-def _validate_uploaded_image(file_obj):
-    """Strictly validate that the uploaded object is an image and <= 10 MiB.
-    - checks declared content_type when available
-    - checks file size (<= 10 * 1024 * 1024 bytes)
-    - attempts to open via Pillow
-    - resets file pointer afterwards
+# Formats d'image acceptes, et l'extension donnee au fichier enregistre.
+# Pillow lit certaines photos d'appareil comme MPO (un JPEG qui contient
+# plusieurs images) : on les accepte, et on les enregistre en .jpg.
+# / Accepted image formats, and the extension given to the stored file.
+# Some camera photos are read as MPO (multi-picture JPEG): accepted, as .jpg.
+EXTENSION_PAR_FORMAT_IMAGE_ACCEPTE = {
+    "JPEG": ".jpg",
+    "MPO": ".jpg",
+    "PNG": ".png",
+    "GIF": ".gif",
+    "WEBP": ".webp",
+}
+
+# Au-dela de cette taille en pixels, une image est refusee. Une photo de
+# telephone en 48 Mpx passe. Plus grand, les variations calculees par stdimage
+# PENDANT la requete decodent trop de memoire : un fichier leger en octets peut
+# faire tomber un worker.
+# / Above this pixel count an image is refused: the stdimage variations decoded
+# during the request would use too much memory.
+NOMBRE_MAX_DE_PIXELS_PAR_IMAGE = 50_000_000
+
+MESSAGE_IMAGE_TROP_GRANDE_EN_PIXELS = _("Image trop grande en pixels (50 mégapixels au maximum).")
+
+
+def _validate_uploaded_image(file_obj) -> str:
+    """
+    Verifie qu'un fichier envoye est une vraie image, et renvoie l'extension de
+    son format REEL (".jpg", ".png", ".gif" ou ".webp").
+    / Checks an uploaded file is a real image and returns its REAL format's extension.
+
+    LOCALISATION : api_v2/serializers.py
+
+    Controles, dans l'ordre :
+    - type declare `image/*` (quand le client le donne) ;
+    - taille <= 10 Mo ;
+    - format reel lu par Pillow : JPEG (ou MPO), PNG, GIF ou WebP seulement ;
+    - au plus NOMBRE_MAX_DE_PIXELS_PAR_IMAGE pixels (lus dans l'en-tete, rien
+      n'est decode) ;
+    - structure verifiee par Pillow (`verify()`).
+    Le curseur du fichier est remis a sa place a la fin.
+
+    L'extension renvoyee sert a nommer le fichier cote serveur : le nom et
+    l'extension envoyes par le client ne sont jamais gardes (voir
+    api_v2/views.py:_appliquer_fichiers_multipart et ImageDeGalerieCreateSerializer).
+
+    Appelants : events et adresses (img, sticker_img), blocs de page.
     """
     MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
 
@@ -111,12 +149,26 @@ def _validate_uploaded_image(file_obj):
     if size is not None and int(size) > MAX_BYTES:
         raise serializers.ValidationError('Image exceeds maximum size of 10 MiB.')
 
-    # Verify with Pillow
+    # Verification par Pillow : format reel, dimensions, structure.
+    # / Pillow check: real format, dimensions, structure.
     pos = None
     try:
         if hasattr(file_obj, 'tell'):
             pos = file_obj.tell()
-        Image.open(file_obj).verify()  # type: ignore
+        with Image.open(file_obj) as image_ouverte:
+            format_reel = image_ouverte.format
+            if format_reel not in EXTENSION_PAR_FORMAT_IMAGE_ACCEPTE:
+                raise serializers.ValidationError(
+                    _("Format d'image refusé : JPEG, PNG, GIF ou WebP seulement."))
+            largeur, hauteur = image_ouverte.size
+            if largeur * hauteur > NOMBRE_MAX_DE_PIXELS_PAR_IMAGE:
+                raise serializers.ValidationError(MESSAGE_IMAGE_TROP_GRANDE_EN_PIXELS)
+            image_ouverte.verify()
+    except Image.DecompressionBombError:
+        # INDISPENSABLE a part : cette erreur n'herite PAS d'OSError. Sans ce
+        # `except`, une image annoncee au-dela de 178 Mpx sortirait en 500.
+        # / REQUIRED separately: not an OSError subclass, it would become a 500.
+        raise serializers.ValidationError(MESSAGE_IMAGE_TROP_GRANDE_EN_PIXELS)
     except (UnidentifiedImageError, OSError):
         raise serializers.ValidationError('Invalid image file.')
     finally:
@@ -126,90 +178,26 @@ def _validate_uploaded_image(file_obj):
         except Exception:
             pass
 
+    return EXTENSION_PAR_FORMAT_IMAGE_ACCEPTE[format_reel]
 
-def _hote_est_interne(hote: str) -> bool:
-    """Vrai si l'hote resout vers une IP interne/privee (anti-SSRF).
-    / True if the host resolves to an internal/private IP (anti-SSRF).
 
-    On refuse loopback, prive, link-local, reserve, multicast, non specifie.
-    Si l'hote ne resout pas, on refuse aussi (prudence).
+def nommer_le_fichier_image_cote_serveur(fichier_image):
     """
-    if not hote:
-        return True
-    try:
-        infos = socket.getaddrinfo(hote, None)
-    except Exception:
-        return True
-    for famille, type_socket, proto, nom_canon, sockaddr in infos:
-        ip_txt = sockaddr[0]
-        try:
-            adr = ipaddress.ip_address(ip_txt)
-        except ValueError:
-            return True
-        if (adr.is_private or adr.is_loopback or adr.is_link_local
-                or adr.is_reserved or adr.is_multicast or adr.is_unspecified):
-            return True
-    return False
+    Valide un fichier image envoye et lui donne un nom choisi par le serveur :
+    un identifiant aleatoire + l'extension de son format reel.
+    / Validates an uploaded image file and gives it a server-chosen name.
 
+    LOCALISATION : api_v2/serializers.py
 
-def telecharger_et_valider_image(url: str):
-    """Telecharge une image distante, la valide (Pillow), renvoie un ContentFile.
-    / Downloads a remote image, validates it (Pillow), returns a ContentFile.
-
-    Securite : schema http/https uniquement, anti-SSRF (refuse les hotes internes),
-    pas de redirection, timeout, content-type image/*, taille max 10 Mo, verify Pillow.
-    Renvoie None si url vide. Leve ValidationError si invalide ou dangereuse.
-
-    NB (limite connue) : il subsiste un petit TOCTOU entre la resolution DNS du
-    controle anti-SSRF et la requete reelle ; allow_redirects=False reduit le risque.
+    Le nom envoye par le client n'est jamais garde : il pourrait porter une
+    extension trompeuse (`photo.php`, `logo.pdf`) servie telle quelle depuis
+    /media, dossier partage par tous les lieux.
+    Appelants : api_v2/views.py:_appliquer_fichiers_multipart et
+    ImageDeGalerieCreateSerializer.
     """
-    if not url:
-        return None
-    parse = urlparse(url)
-    if parse.scheme not in ("http", "https"):
-        raise serializers.ValidationError(_("Schema d'URL non autorise (http/https seulement)."))
-    if not parse.hostname or _hote_est_interne(parse.hostname):
-        raise serializers.ValidationError(_("Hote d'image non autorise (cible interne refusee)."))
-    MAX_OCTETS = 10 * 1024 * 1024  # 10 Mo
-    try:
-        resp = requests.get(url, timeout=10, allow_redirects=False, stream=True)
-        resp.raise_for_status()
-    except serializers.ValidationError:
-        raise
-    except Exception:
-        raise serializers.ValidationError(_("Image distante inaccessible : %(u)s") % {"u": url})
-
-    ctype = resp.headers.get("Content-Type", "")
-    if ctype and not ctype.lower().startswith("image/"):
-        raise serializers.ValidationError(_("L'URL ne pointe pas vers une image."))
-
-    # Refus precoce si l'entete Content-Length annonce deja trop gros.
-    # / Early refusal if the Content-Length header already announces too big.
-    taille_annoncee = resp.headers.get("Content-Length")
-    if taille_annoncee:
-        try:
-            if int(taille_annoncee) > MAX_OCTETS:
-                raise serializers.ValidationError(_("Image trop grande (> 10 Mo)."))
-        except (TypeError, ValueError):
-            pass  # entete non numerique : on se rabat sur la lecture bornee ci-dessous
-
-    # Lecture bornee : on accumule par blocs et on stoppe des qu'on depasse 10 Mo,
-    # sans jamais charger un corps geant en memoire. / Bounded read: accumulate by
-    # chunks and stop as soon as we exceed 10 MB, never loading a huge body in memory.
-    contenu = b""
-    for bloc_octets in resp.iter_content(chunk_size=65536):
-        if not bloc_octets:
-            continue
-        contenu += bloc_octets
-        if len(contenu) > MAX_OCTETS:
-            resp.close()
-            raise serializers.ValidationError(_("Image trop grande (> 10 Mo)."))
-    fichier = ContentFile(contenu)
-    fichier.content_type = ctype or "image/*"
-    _validate_uploaded_image(fichier)
-    nom = url.split("?")[0].rsplit("/", 1)[-1] or "image"
-    fichier.name = nom
-    return fichier
+    extension_du_format_reel = _validate_uploaded_image(fichier_image)
+    fichier_image.name = uuid.uuid4().hex + extension_du_format_reel
+    return fichier_image
 
 
 class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
@@ -504,7 +492,8 @@ class EventCreateSerializer(serializers.Serializer):
       - additionalProperty: [
           {"name":"optionsRadio","value":["OptionName", ...]},
           {"name":"optionsCheckbox","value":["OptionName", ...]},
-          {"name":"customConfirmationMessage","value":"..."}
+          {"name":"customConfirmationMessage","value":"..."},
+          {"name":"blockedResource","value":<booking Resource id>}  (endDate required, write-only)
         ]
     """
     # Core fields
@@ -550,6 +539,38 @@ class EventCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 "endDate": _("La fin de l'évènement doit être après son début."),
             })
+
+        # additionalProperty "blockedResource" = l'id d'une ressource du module
+        # réservation (celui de l'URL /booking/<id>/resource/). L'événement occupe
+        # la ressource : ses créneaux qui chevauchent l'événement ne sont plus
+        # réservables. Même règle que l'admin (EventForm.clean) : sans date de fin,
+        # on ne sait pas jusqu'à quand bloquer.
+        # Champ interne : on l'accepte en entrée, il ne sort jamais dans la réponse.
+        # / "blockedResource" = a booking Resource id. Same rule as the admin: end date
+        # required. Internal field: write-only, never in the response.
+        attrs["ressource_a_bloquer"] = None
+        for propriete in attrs.get("additionalProperty") or []:
+            if str(propriete.get("name")).lower() != "blockedresource":
+                continue
+
+            identifiant_de_la_ressource = propriete.get("value")
+            try:
+                ressource_a_bloquer = Resource.objects.get(pk=int(identifiant_de_la_ressource))
+            except (TypeError, ValueError, Resource.DoesNotExist):
+                raise serializers.ValidationError({
+                    "additionalProperty": _("Ressource à bloquer introuvable : %(identifiant)s.") % {
+                        "identifiant": identifiant_de_la_ressource,
+                    },
+                })
+
+            if not date_de_fin:
+                raise serializers.ValidationError({
+                    "endDate": _("Une date de fin est obligatoire pour bloquer une ressource."),
+                })
+
+            attrs["ressource_a_bloquer"] = ressource_a_bloquer
+            break
+
         return attrs
 
     def create(self, validated_data: Dict[str, Any]) -> Event:
@@ -651,6 +672,7 @@ class EventCreateSerializer(serializers.Serializer):
             "private": private,
             "categorie": cat_code,
             "parent": parent_obj,
+            "ressource_bloquee": validated_data.get("ressource_a_bloquer"),
         }
         if max_cap is not None:
             create_kwargs["jauge_max"] = max_cap
@@ -1706,11 +1728,37 @@ class ReservationSchemaSerializer(serializers.Serializer):
                 "ticketQuantity": qty,
             })
 
+        # Statut TiBillet -> statut schema.org. Payee ou e-mail verifie : confirmee.
+        # Annulee : annulee. Le reste (creee, paiement ou e-mail en attente) : en attente.
+        # / TiBillet status -> schema.org status. Paid or e-mail verified: confirmed.
         status_map = {
             Reservation.VALID: "https://schema.org/ReservationConfirmed",
-            Reservation.FREERES: "https://schema.org/ReservationPending",
+            Reservation.PAID: "https://schema.org/ReservationConfirmed",
+            Reservation.PAID_ERROR: "https://schema.org/ReservationConfirmed",
+            Reservation.PAID_NOMAIL: "https://schema.org/ReservationConfirmed",
+            Reservation.FREERES_USERACTIV: "https://schema.org/ReservationConfirmed",
+            Reservation.CANCELED: "https://schema.org/ReservationCancelled",
+            Reservation.CREATED: "https://schema.org/ReservationPending",
             Reservation.UNPAID: "https://schema.org/ReservationPending",
+            Reservation.FREERES: "https://schema.org/ReservationPending",
         }
+
+        # Montant paye, en euros : lignes payees, moins les avoirs et les remboursements.
+        # total_paid() renvoie l'entier 0 quand rien n'est paye : Decimal() le
+        # ramene au format "0.00" des autres montants.
+        # / Amount paid, in euros, credit notes and refunds deducted.
+        montant_paye_en_euros = Decimal(instance.total_paid()).quantize(Decimal("0.01"))
+
+        # Reponses au formulaire dynamique de l'evenement, rangees par libelle de question.
+        # Meme nom "customForm" qu'a la creation (ReservationCreateSerializer).
+        # / Dynamic form answers, keyed by question label. Same "customForm" name as on creation.
+        proprietes_additionnelles = []
+        if instance.custom_form:
+            proprietes_additionnelles.append({
+                "@type": "PropertyValue",
+                "name": "customForm",
+                "value": instance.custom_form,
+            })
 
         return {
             "@context": "https://schema.org",
@@ -1724,9 +1772,14 @@ class ReservationSchemaSerializer(serializers.Serializer):
             "underName": {
                 "@type": "Person",
                 "email": instance.user_commande.email,
+                "givenName": instance.user_commande.first_name or None,
+                "familyName": instance.user_commande.last_name or None,
             },
             "reservationStatus": status_map.get(instance.status, "https://schema.org/ReservationPending"),
             "reservedTicket": reserved_ticket,
+            "totalPrice": str(montant_paye_en_euros),
+            "priceCurrency": "EUR",
+            "additionalProperty": proprietes_additionnelles or None,
         }
 
 
@@ -2055,12 +2108,24 @@ class MembershipStatusSerializer(serializers.Serializer):
 # App pages : Bloc <-> schema.org/WebPageElement
 # / pages app: Bloc <-> schema.org/WebPageElement
 # ---------------------------------------------------------------------------
-from pages.models import Bloc, Page, valider_slug_non_reserve
+from pages.models import Bloc, ImageGalerie, Page, valider_slug_non_reserve
 from pages.blocs_catalogue import (
     CHAMPS_BLOC_AUTORISES,
     CHAMPS_FICHIER,
     CHAMPS_IMAGE_URL,
     TYPES_AVEC_GALERIE,
+    AFFICHAGES_AVEC_GALERIE,
+    AFFICHAGES_SECTION_EN_GALERIE,
+)
+
+# Reponse a toute image envoyee autrement qu'en fichier. Le serveur ne
+# telecharge aucune URL : c'est le client qui envoie les octets.
+# Lu aussi par api_v2/views.py (PATCH d'un bloc, ajout d'un bloc en multipart).
+# / Answer to any image not sent as a file: the server downloads no URL.
+MESSAGE_IMAGES_EN_FICHIER = _(
+    "Les images s'envoient en fichier : en multipart sur le bloc, ou par "
+    "POST /api/v2/blocs/{uuid}/images/ pour une galerie, une équipe ou des "
+    "ressources. Le serveur ne télécharge aucune URL."
 )
 
 # Champs « standard » schema.org mappes a un champ modele (les autres passent
@@ -2096,15 +2161,29 @@ class BlocSchemaSerializer(serializers.Serializer):
         # `url` = lien cible du logo (PARTENAIRES), absent si vide.
         # / GALLERY / PARTNERS: expose the image list as ImageObject[]. `url` = the
         # logo's target link (PARTNERS), omitted when empty.
-        if instance.type_bloc in TYPES_AVEC_GALERIE:
+        # EQUIPE / RESSOURCES : une ImageGalerie = un element (personne ou
+        # ressource). `caption` = le nom ou le titre, `keywords` = les tags
+        # (separes par des virgules), `url` = le lien. L'image est
+        # facultative : un element sans image sort sans `contentUrl`.
+        # / EQUIPE / RESSOURCES: one ImageGalerie = one item. caption = name
+        # or title, keywords = comma-separated tags, url = link. Optional
+        # image: no image, no contentUrl.
+        section_a_elements_en_galerie = (
+            instance.type_bloc == "SECTION"
+            and instance.affichage in AFFICHAGES_SECTION_EN_GALERIE
+        )
+        if instance.type_bloc in TYPES_AVEC_GALERIE or section_a_elements_en_galerie:
             image_sortie = []
             for ig in instance.images_galerie.all().order_by("position"):
-                if not ig.image:
+                if not ig.image and not section_a_elements_en_galerie:
                     continue
-                image_object = {"@type": "ImageObject", "contentUrl": ig.image.url,
-                                "caption": ig.legende or None}
+                image_object = {"@type": "ImageObject", "caption": ig.legende or None}
+                if ig.image:
+                    image_object["contentUrl"] = ig.image.url
                 if ig.lien_url:
                     image_object["url"] = ig.lien_url
+                if ig.tags:
+                    image_object["keywords"] = ig.tags
                 image_sortie.append(image_object)
         else:
             image_sortie = image_url
@@ -2188,9 +2267,12 @@ class BlocCreateSerializer(serializers.Serializer):
     headline = serializers.CharField(required=False, allow_blank=True)
     alternativeHeadline = serializers.CharField(required=False, allow_blank=True)
     text = serializers.CharField(required=False, allow_blank=True)
-    # image accepte une URL (string) OU une liste d'ImageObject (GALERIE).
-    # / image accepts a URL (string) OR a list of ImageObject (GALLERY).
-    image = serializers.JSONField(required=False)
+    # image : jamais une URL ni un fichier en JSON. Seule une liste d'objets
+    # SANS contentUrl est acceptee, pour une SECTION Equipe ou Ressources (les
+    # personnes ou les ressources, sans photo). Voir validate().
+    # / image: never a URL nor a file in JSON. Only a list of objects WITHOUT
+    # contentUrl, for an EQUIPE or RESSOURCES SECTION. See validate().
+    image = serializers.JSONField(required=False, allow_null=True)
     position = serializers.IntegerField(required=False)
     additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
 
@@ -2201,103 +2283,75 @@ class BlocCreateSerializer(serializers.Serializer):
                 _("Type de bloc inconnu : %(t)s") % {"t": value})
         return value
 
-    def _pre_telecharger_images(self, validated_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Phase 1 (HORS transaction) : telecharge toutes les images distantes.
-        / Phase 1 (OUTSIDE any transaction): download all remote images.
+    @staticmethod
+    def _affichage_demande(donnees_du_bloc: Dict[str, Any]) -> str:
+        """L'affichage demande dans additionalProperty ("" s'il n'y en a pas).
+        / The affichage requested in additionalProperty ("" if none)."""
+        affichage_demande = ""
+        for propriete in (donnees_du_bloc.get("additionalProperty") or []):
+            if propriete.get("name") == "affichage":
+                affichage_demande = propriete.get("value") or ""
+        return affichage_demande
 
-        Renvoie un dict de fichiers prets a persister. Leve ValidationError si une URL
-        est invalide / dangereuse / interne (SSRF). AUCUNE ecriture DB ici.
-        / Returns a dict of ready-to-persist files. Raises ValidationError on any
-        invalid/dangerous/internal URL. NO DB write here.
+    def _est_une_section_a_elements(self, donnees_du_bloc: Dict[str, Any]) -> bool:
+        """Vrai pour une SECTION en affichage EQUIPE ou RESSOURCES : ses elements
+        (personnes, ressources) arrivent dans la liste `image`.
+        / True for an EQUIPE or RESSOURCES SECTION: its items come in `image`."""
+        return (
+            donnees_du_bloc.get("additionalType") == "SECTION"
+            and self._affichage_demande(donnees_du_bloc) in AFFICHAGES_SECTION_EN_GALERIE
+        )
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
         """
-        type_bloc = validated_data["additionalType"]
-        fichier_image = None
-        fichiers_galerie = []          # liste de (ContentFile, legende, position)
-        fichiers_additional = {}       # nom_champ -> ContentFile
+        Refuse toute image envoyee autrement qu'en fichier.
+        / Refuses any image sent other than as a file.
 
-        # Champs image passes en additionalProperty (image_secondaire, auteur_photo).
-        # / Image fields passed via additionalProperty.
-        for prop in (validated_data.get("additionalProperty") or []):
-            nom = prop.get("name")
-            valeur = prop.get("value")
-            if (nom in CHAMPS_FICHIER and nom in CHAMPS_IMAGE_URL
-                    and isinstance(valeur, str) and valeur):
-                fichier = telecharger_et_valider_image(valeur)
-                if fichier:
-                    fichiers_additional[nom] = fichier
+        LOCALISATION : api_v2/serializers.py
 
-        # Champ image standard : URL string -> 1 image ; liste -> GALERIE.
-        # / Standard image field: URL string -> 1 image; list -> GALLERY.
-        valeur_image = validated_data.get("image")
-        if isinstance(valeur_image, str) and valeur_image:
-            fichier_image = telecharger_et_valider_image(valeur_image)
-        elif isinstance(valeur_image, list) and type_bloc in TYPES_AVEC_GALERIE:
-            for index, img in enumerate(valeur_image):
-                url = img.get("contentUrl") if isinstance(img, dict) else img
-                fichier = telecharger_et_valider_image(url)
-                if fichier:
-                    legende = (img.get("caption") if isinstance(img, dict) else "") or ""
-                    # Lien cible du logo (PARTENAIRES) : cle "url" de l'ImageObject.
-                    # Neutralise les schemas dangereux (l'ImageGalerie n'est pas
-                    # validee par full_clean cote API). / Logo target link (PARTNERS):
-                    # ImageObject "url" key, dangerous-scheme neutralized.
-                    lien = (img.get("url") if isinstance(img, dict) else "") or ""
-                    if url_a_schema_dangereux(lien):
-                        lien = ""
-                    fichiers_galerie.append((fichier, legende, index, lien))
-        elif isinstance(valeur_image, list):
-            # Une liste d'images n'est acceptee que pour GALERIE et PARTENAIRES.
-            # / A list of images is only accepted for the IMAGES type.
-            raise serializers.ValidationError(
-                {"image": _("Une liste d'images n'est acceptee que pour les blocs IMAGES.")})
+        Le serveur ne telecharge aucune URL. Une image arrive en fichier :
+        multipart sur l'endpoint du bloc, ou POST /api/v2/blocs/{uuid}/images/
+        pour une galerie, une equipe ou des ressources.
 
-        # Bloc TEXTE : on importe les images referencees dans le markdown
-        # (![alt](http...)) et on reecrit le texte en ![alt](galerie:N), le mecanisme
-        # que rendre_bloc_markdown resout au rendu (via les ImageGalerie du bloc). Ainsi
-        # un article de blog est autonome : ses images sont posees sur le tenant, pas
-        # servies depuis une source distante. Echec de telechargement -> on garde l'URL.
-        # / MARKDOWN block: download images referenced in the markdown and rewrite them
-        # to ![alt](galerie:N) (resolved at render time via the block's ImageGalerie),
-        # so the article is self-hosted. Download failure -> keep the external URL.
-        texte_markdown_reecrit = None
-        if type_bloc == "TEXTE":
-            import re as _re_md
-
-            texte_md = validated_data.get("text") or ""
-            compteur = {"n": len(fichiers_galerie)}
-
-            def _remplacer_image_md(correspondance):
-                alt, url = correspondance.group(1), correspondance.group(2)
-                # Une image inaccessible/invalide/SSRF fait LEVER telecharger_et_valider_image.
-                # Dans un article, on ne veut pas casser tout le POST pour une image morte :
-                # on garde alors l'URL externe telle quelle (l'article reste creable).
-                # / A dead/invalid/SSRF image makes telecharger_et_valider_image RAISE. In an
-                # article we don't fail the whole POST for one dead image: keep the URL as-is.
-                try:
-                    fichier = telecharger_et_valider_image(url)
-                except serializers.ValidationError:
-                    return correspondance.group(0)
-                if not fichier:
-                    return correspondance.group(0)
-                compteur["n"] += 1
-                fichiers_galerie.append((fichier, alt, compteur["n"], ""))
-                return f"![{alt}](galerie:{compteur['n']})"
-
-            texte_markdown_reecrit = _re_md.sub(
-                r"!\[([^\]]*)\]\((https?://[^)\s]+)\)",
-                _remplacer_image_md,
-                texte_md,
+        La regle est une LISTE BLANCHE : seules les formes ci-dessous passent,
+        tout le reste est refuse par un 400. Une liste noire laisserait passer
+        en silence une forme oubliee (un dict, par exemple).
+        - `image` absent, None, "" ou [] : rien (compatibilite) ;
+        - `image` = liste d'objets SANS `contentUrl`, pour une SECTION Equipe
+          ou Ressources : les elements, sans photo ;
+        - dans additionalProperty, un champ image (image_secondaire,
+          auteur_photo) n'accepte qu'une valeur vide.
+        / Whitelist: only the shapes above pass, everything else is a 400.
+        """
+        valeur_image = attrs.get("image")
+        image_vide = valeur_image is None or valeur_image == "" or valeur_image == []
+        if not image_vide:
+            liste_d_elements_acceptee = (
+                isinstance(valeur_image, list) and self._est_une_section_a_elements(attrs)
             )
+            if not liste_d_elements_acceptee:
+                raise serializers.ValidationError({"image": [MESSAGE_IMAGES_EN_FICHIER]})
+            for element in valeur_image:
+                if not isinstance(element, dict):
+                    raise serializers.ValidationError({"image": [
+                        _("Équipe et Ressources : chaque élément doit être un objet ImageObject.")]})
+                if element.get("contentUrl"):
+                    raise serializers.ValidationError({"image": [MESSAGE_IMAGES_EN_FICHIER]})
 
-        return {"image": fichier_image, "galerie": fichiers_galerie,
-                "additional": fichiers_additional,
-                "markdown_texte": texte_markdown_reecrit}
+        for propriete in (attrs.get("additionalProperty") or []):
+            nom = propriete.get("name")
+            valeur = propriete.get("value")
+            valeur_vide = valeur is None or valeur == "" or valeur == [] or valeur == {}
+            if nom in CHAMPS_IMAGE_URL and not valeur_vide:
+                raise serializers.ValidationError({nom: [MESSAGE_IMAGES_EN_FICHIER]})
+        return attrs
 
-    def _persister(self, validated_data: Dict[str, Any], fichiers: Dict[str, Any],
-                   page) -> "Bloc":
-        """Phase 2 (DANS une transaction) : cree le bloc avec les fichiers deja
-        telecharges. AUCUN I/O reseau ici. / Phase 2 (INSIDE a transaction): create the
-        block with the already-downloaded files. NO network I/O here.
+    def _persister(self, validated_data: Dict[str, Any], page) -> "Bloc":
+        """Cree le bloc et, pour une SECTION Equipe ou Ressources, ses elements.
+        A appeler dans une transaction. / Creates the block and, for an EQUIPE or
+        RESSOURCES section, its items. Call inside a transaction.
+
+        Appelants : create() ci-dessous, et PageCreateSerializer.create (blocs de hasPart).
         """
         bloc = Bloc(page=page, type_bloc=validated_data["additionalType"])
         if "position" in validated_data:
@@ -2310,20 +2364,21 @@ class BlocCreateSerializer(serializers.Serializer):
                 valeur = validated_data[cle_std]
                 if nom_champ == "texte" and est_markdown:
                     # MARKDOWN : `texte` est de la SOURCE markdown, pas du HTML. On NE
-                    # clean_html PAS (mutilerait autoliens/tableaux/code) et on prend le
-                    # texte reecrit (images importees en galerie:N). La securite est au
-                    # rendu (rendre_markdown + nh3). Meme exception que BlocAdmin.save_model.
-                    # / MARKDOWN: `texte` is markdown SOURCE, not HTML. Don't clean_html
-                    # (would mangle it); use the rewritten text (galerie:N imported images).
-                    reecrit = fichiers.get("markdown_texte")
-                    valeur = reecrit if reecrit is not None else (valeur or "")
+                    # clean_html PAS (mutilerait autoliens/tableaux/code). Les images
+                    # externes ![alt](https://...) restent telles quelles : elles ne
+                    # sont pas importees. La securite est au rendu (rendre_markdown +
+                    # nh3). Meme exception que BlocAdmin.save_model.
+                    # / MARKDOWN: `texte` is markdown SOURCE, not HTML. No clean_html;
+                    # external images are kept as-is, not imported.
+                    valeur = valeur or ""
                 elif nom_champ in CHAMPS_TEXTE_RICHE:
                     valeur = clean_html(valeur or "")
                 setattr(bloc, nom_champ, valeur or "")
 
         # additionalProperty NON-fichier -> champs modele (whitelist stricte).
-        # Les champs fichier sont geres via `fichiers` (pre-telecharges en phase 1).
-        # / Non-file additionalProperty -> model fields; file fields come from `fichiers`.
+        # Un champ image non vide a deja ete refuse par validate().
+        # / Non-file additionalProperty -> model fields. A non-empty image field
+        # was already refused by validate().
         for prop in (validated_data.get("additionalProperty") or []):
             nom = prop.get("name")
             valeur = prop.get("value")
@@ -2333,59 +2388,161 @@ class BlocCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {nom: _("Ce champ doit etre une liste.")})
             if nom in CHAMPS_FICHIER:
-                continue  # gere en phase 1
+                continue  # securite : jamais de texte brut dans un champ fichier
             if nom in CHAMPS_TEXTE_RICHE:
                 valeur = clean_html(valeur or "")
             setattr(bloc, nom, valeur)
-
-        # Images fichier pre-telechargees (image_secondaire, auteur_photo).
-        # / Pre-downloaded file images.
-        for nom_champ, fichier in fichiers["additional"].items():
-            setattr(bloc, nom_champ, fichier)
 
         # Securite : vide les champs lien a schema dangereux. / Empty dangerous-scheme links.
         for champ_url in CHAMPS_URL_A_NEUTRALISER:
             if url_a_schema_dangereux(getattr(bloc, champ_url, "")):
                 setattr(bloc, champ_url, "")
 
-        # Image standard pre-telechargee. / Pre-downloaded standard image.
-        if fichiers["image"]:
-            bloc.image = fichiers["image"]
-
         # Validation du modele AVANT d'ecrire : c'est elle qui refuse un
         # affichage etranger au type. Sans elle, l'API stocke un couple que
         # AUCUN gabarit ne sait rendre, et la page publique qui porte ce bloc
         # sort en 500 — l'erreur apparait donc loin de l'appel qui l'a causee.
-        # Les champs fichiers sont exclus : ils viennent d'etre poses en memoire
-        # et leur validation d'upload a deja eu lieu.
         # / Model validation BEFORE writing: it rejects an affichage foreign to
         # the type. Without it the API stores a pair NO template can render, and
         # the public page holding that block returns a 500 — far from the call
-        # that caused it. File fields are excluded: they were just set in memory
-        # and their upload validation already ran.
+        # that caused it.
         _valider_le_bloc(bloc)
 
         bloc.save()
 
-        # Galerie pre-telechargee (FK : bloc deja persiste). / Pre-downloaded gallery.
-        if fichiers["galerie"]:
-            from pages.models import ImageGalerie
-            for fichier, legende, position, lien in fichiers["galerie"]:
+        # Elements d'une SECTION Equipe ou Ressources : une ImageGalerie par
+        # personne ou par ressource, SANS image (la photo s'ajoute ensuite par
+        # POST /api/v2/blocs/{uuid}/images/). La FK exige le bloc deja enregistre.
+        # / EQUIPE or RESSOURCES items: one ImageGalerie each, WITHOUT image.
+        valeur_image = validated_data.get("image")
+        if isinstance(valeur_image, list) and self._est_une_section_a_elements(validated_data):
+            for index, element in enumerate(valeur_image):
+                nom_ou_titre = element.get("caption") or ""
+                # keywords : texte « a, b » ou liste ["a", "b"] (schema.org).
+                # / keywords: "a, b" text or ["a", "b"] list (schema.org).
+                tags = element.get("keywords") or ""
+                if isinstance(tags, list):
+                    tags = ", ".join(str(tag) for tag in tags)
+                # Le lien n'est rendu que par RESSOURCES. Schema dangereux
+                # neutralise : l'ImageGalerie ne passe pas par full_clean ici.
+                # / The link is only rendered by RESSOURCES. Dangerous scheme
+                # neutralized: ImageGalerie skips full_clean here.
+                lien = element.get("url") or ""
+                if url_a_schema_dangereux(lien):
+                    lien = ""
+                # Un element sans image : un champ fichier vide s'ecrit "" (la
+                # colonne refuse NULL). / No image: an empty file field is "".
                 ImageGalerie.objects.create(
-                    bloc=bloc, image=fichier, legende=legende, position=position,
-                    lien_url=lien)
+                    bloc=bloc, image="", legende=nom_ou_titre,
+                    position=index, lien_url=str(lien), tags=str(tags))
         return bloc
 
     def create(self, validated_data: Dict[str, Any]) -> "Bloc":
-        # Phase 1 : telechargements HORS transaction (I/O reseau).
-        # Phase 2 : persistance en transaction courte (aucun reseau).
-        # / Phase 1: downloads OUTSIDE any transaction. Phase 2: short DB transaction.
         page = self.context["page"]
-        fichiers = self._pre_telecharger_images(validated_data)
         with transaction.atomic():
-            bloc = self._persister(validated_data, fichiers, page)
+            bloc = self._persister(validated_data, page)
         return bloc
 
+
+class ImageDeGalerieCreateSerializer(serializers.Serializer):
+    """
+    Ajoute UNE image a la galerie d'un bloc (une ImageGalerie), en multipart.
+    / Adds ONE image to a block's gallery (one ImageGalerie), as multipart.
+
+    LOCALISATION : api_v2/serializers.py
+    Utilise par api_v2/views.py:BlocViewSet.ajouter_image
+    (POST /api/v2/blocs/{uuid}/images/). Contexte requis : {"bloc": <Bloc>}.
+
+    Blocs acceptes : ceux qui AFFICHENT une galerie (AFFICHAGES_AVEC_GALERIE :
+    IMAGES en GRILLE ou BANDE_LOGOS, SECTION en EQUIPE ou RESSOURCES) et les
+    blocs TEXTE (image appelee dans le texte par ![legende](galerie:N)).
+    Le fichier est obligatoire, sauf pour Equipe et Ressources (photo facultative).
+
+    Champs : image (fichier), caption -> legende, url -> lien_url (schema
+    dangereux vide, comme partout dans l'API), keywords -> tags.
+    L'image s'ajoute a la FIN de la galerie.
+
+    Reponse (to_representation) : un ImageObject. `galerieReference` donne la
+    reference a ecrire dans le markdown d'un bloc TEXTE (`galerie:N`, N = rang
+    de l'image, 1 = premiere : voir pages_tags.rendre_bloc_markdown).
+    """
+    # FileField refuse lui-meme un texte a la place d'un fichier (400).
+    # / FileField itself refuses text instead of a file (400).
+    image = serializers.FileField(required=False)
+    caption = serializers.CharField(required=False, allow_blank=True)
+    url = serializers.CharField(required=False, allow_blank=True)
+    keywords = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        bloc = self.context["bloc"]
+        couple_type_affichage = (bloc.type_bloc, bloc.affichage)
+        bloc_affiche_une_galerie = couple_type_affichage in AFFICHAGES_AVEC_GALERIE
+        bloc_est_un_texte = bloc.type_bloc == "TEXTE"
+        if not bloc_affiche_une_galerie and not bloc_est_un_texte:
+            raise serializers.ValidationError(_(
+                "Ce bloc n'affiche pas de galerie. Blocs acceptés : Images en grille ou "
+                "en bande de logos, Section en Équipe ou Ressources, et Texte."))
+
+        fichier_image = attrs.get("image")
+        photo_facultative = bloc.type_bloc == "SECTION"
+        if not fichier_image and not photo_facultative:
+            raise serializers.ValidationError({"image": [_("Le fichier image est obligatoire.")]})
+        if fichier_image:
+            nommer_le_fichier_image_cote_serveur(fichier_image)
+        return attrs
+
+    def create(self, validated_data: Dict[str, Any]) -> "ImageGalerie":
+        bloc = self.context["bloc"]
+
+        lien = validated_data.get("url") or ""
+        if url_a_schema_dangereux(lien):
+            lien = ""
+
+        # L'image va a la fin : une position de plus que la derniere.
+        # / The image goes last: one position after the last one.
+        derniere_position = bloc.images_galerie.aggregate(Max("position"))["position__max"]
+        if derniere_position is None:
+            position_de_la_nouvelle_image = 0
+        else:
+            position_de_la_nouvelle_image = derniere_position + 1
+
+        image_de_galerie = ImageGalerie(
+            bloc=bloc,
+            image=validated_data.get("image") or "",
+            legende=validated_data.get("caption") or "",
+            lien_url=lien,
+            tags=validated_data.get("keywords") or "",
+            position=position_de_la_nouvelle_image,
+        )
+        # full_clean borne aussi la longueur de la legende et des tags. Son
+        # erreur Django est traduite en 400 (sinon : 500).
+        # / full_clean also bounds caption and tags length; translated to a 400.
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            image_de_galerie.full_clean()
+        except DjangoValidationError as erreur:
+            raise serializers.ValidationError(erreur.message_dict)
+        image_de_galerie.save()
+        return image_de_galerie
+
+    def to_representation(self, instance: "ImageGalerie") -> Dict[str, Any]:
+        # Rang = nombre d'images apres l'ajout, puisque l'image est la derniere.
+        # / Rank = image count after insertion, since the image is the last one.
+        rang_dans_la_galerie = instance.bloc.images_galerie.count()
+        image_object = {
+            "@type": "ImageObject",
+            "identifier": str(instance.uuid),
+            "caption": instance.legende or None,
+            "position": instance.position,
+            "galerieReference": f"galerie:{rang_dans_la_galerie}",
+        }
+        if instance.image:
+            image_object["contentUrl"] = instance.image.url
+        if instance.lien_url:
+            image_object["url"] = instance.lien_url
+        if instance.tags:
+            image_object["keywords"] = instance.tags
+        return image_object
 
 # ---------------------------------------------------------------------------
 # App pages : Page <-> schema.org/WebPage
@@ -2494,19 +2651,17 @@ class PageCreateSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data: Dict[str, Any]) -> "Page":
-        # --- Phase 1 : validation + PRE-TELECHARGEMENT de tous les blocs (HORS transaction) ---
-        # / Phase 1: validate + pre-download every block's images (OUTSIDE any transaction).
+        # Valide TOUS les blocs avant la moindre ecriture : un bloc refuse
+        # (image par URL, par exemple) arrete tout, sans page ni bloc crees.
+        # / Validate EVERY block before any write: one refused block stops everything.
         meta = self._meta_depuis_props(validated_data)
-        blocs_prepares = []  # liste de (bloc_ser, fichiers)
+        blocs_valides = []
         for index, donnees_bloc in enumerate(validated_data.get("hasPart") or []):
             donnees_bloc.setdefault("position", index)
             bloc_ser = BlocCreateSerializer(data=donnees_bloc, context={"page": None})
             bloc_ser.is_valid(raise_exception=True)
-            fichiers = bloc_ser._pre_telecharger_images(bloc_ser.validated_data)
-            blocs_prepares.append((bloc_ser, fichiers))
+            blocs_valides.append(bloc_ser)
 
-        # --- Phase 2 : transaction courte, AUCUN I/O reseau ---
-        # / Phase 2: short transaction, NO network I/O.
         with transaction.atomic():
             page = Page(titre=validated_data["name"])
             if validated_data.get("description"):
@@ -2531,8 +2686,8 @@ class PageCreateSerializer(serializers.Serializer):
             except DjangoValidationError as e:
                 raise serializers.ValidationError(e.message_dict)
             page.save()
-            for bloc_ser, fichiers in blocs_prepares:
-                bloc_ser._persister(bloc_ser.validated_data, fichiers, page)
+            for bloc_ser in blocs_valides:
+                bloc_ser._persister(bloc_ser.validated_data, page)
         return page
 
 
@@ -2622,12 +2777,21 @@ class CompteComptableSerializer(serializers.Serializer):
     """
     Un compte du plan comptable du lieu : numero, libelle, actif ou non. Un compte
     inactif est seulement cache des menus : il sert encore aux exports.
-    / One account of the venue's chart: number, label, active or not.
+    `treasury` : l'argent d'une vente peut arriver sur ce compte (caisse, banque,
+    monnaie, avances des clients). La vue passe ces numeros dans le contexte
+    (`numeros_de_tresorerie`).
+    / One account of the venue's chart: number, label, active or not, and whether a
+    sale's money can land on it.
     """
 
     accountNumber = serializers.CharField(source="numero_de_compte")
     name = serializers.CharField(source="libelle_du_compte")
     active = serializers.BooleanField(source="est_actif")
+    treasury = serializers.SerializerMethodField()
+
+    def get_treasury(self, compte):
+        numeros_de_tresorerie = self.context.get("numeros_de_tresorerie", set())
+        return compte.numero_de_compte in numeros_de_tresorerie
 
 
 def _numero_ou_rien(compte):

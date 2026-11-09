@@ -1,0 +1,33 @@
+{% load i18n %}
+{% comment %}
+UN CRÉNEAU BÉNÉVOLE (lignes de tableau) : tâche, date et heures, planning, consignes.
+/ One volunteer slot (table rows): task, date and time, planning, instructions.
+LOCALISATION : booking/templates/booking/benevolat/emails/_creneau.html
+Utilisé par confirmation.html, rappel.html et desistement_equipe.html.
+
+Variables : besoin, plage, avec_consignes (vrai : affiche la description de la tâche),
+url_de_desistement (facultatif : affiche le lien « Je ne peux plus venir » sous le créneau).
+Les heures affichées sont les champs saisis en heure locale (plage), jamais debut()/fin(),
+qui seraient rendus en UTC.
+/ Shows local fields (plage), never debut()/fin() (UTC).
+{% endcomment %}
+<tr>
+    <td style="padding:0 0 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+                <td bgcolor="#f4ede0" style="padding:16px; border-radius:12px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+                    <strong style="font:700 18px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">{{ besoin.tache.name }}</strong><br/>
+                    {{ besoin.date|date:"l j F Y" }} · {{ plage }}<br/>
+                    <span style="color:#584854;">{{ besoin.planning.name }}</span>
+                    {% if url_de_desistement %}
+                    <br/><a href="{{ url_de_desistement }}" style="color:#1f5172;">{% translate "Je ne peux plus venir" %}</a>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </td>
+</tr>
+{% if avec_consignes and besoin.tache.description %}
+{% translate "Consignes" as titre_des_consignes %}
+{% include "emails/composants/message.html" with ton="info" titre=titre_des_consignes texte=besoin.tache.description %}
+{% endif %}

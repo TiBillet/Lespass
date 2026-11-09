@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://codecommun.coop">Code Commun Cooperative</a> ·
-  <a href="https://tibillet.org">Documentation</a> ·
+  <a href="https://tibillet.coop">Documentation</a> ·
   <a href="https://codecommun.tibillet.coop/contrib">Contributory budget</a> ·
   <a href="https://discord.gg/ecb5jtP7vY">Discord</a> ·
   <a href="./README.md">🇫🇷 Français</a>
@@ -82,7 +82,7 @@ Optional but impactful:
 
 ---
 
-Documentation being written collaboratively and available in French at: https://tibillet.org/
+Documentation being written collaboratively and available in French at: https://tibillet.coop/
 
 The old EN/FR documentation is still available here: https://tibillet.github.io/documentation_v2/
 
@@ -103,39 +103,52 @@ A few examples of what TiBillet makes possible today:
 
 ## Quick start
 
-TiBillet runs in Docker. A single command to launch the development environment:
+TiBillet runs in Docker. To launch the development environment:
 
 ```bash
 git clone https://github.com/TiBillet/Lespass.git
 cd Lespass
 cp env_example .env        # Configure environment variables
+                           # (defaults are fine for dev)
 
-# network
+# Dev HTTPS certificate (mkcert) — see TLS_CERT_NAME in .env.
+# Once per machine: install mkcert, then its local CA
+sudo apt install libnss3-tools mkcert    # Fedora: sudo dnf install nss-tools mkcert
+mkcert -install
+# In the repo (single quotes around the wildcard are REQUIRED):
+mkdir -p certs
+mkcert -cert-file certs/dev.pem -key-file certs/dev-key.pem 'tibillet.localhost' '*.tibillet.localhost'
+# Check: output must contain DNS:tibillet.localhost, DNS:*.tibillet.localhost
+openssl x509 -in certs/dev.pem -noout -ext subjectAltName
+
+# network (once per machine)
 docker network create frontend
 
-# Lespass only:
+# Start the stack (first run builds the image: expect ~15 min):
 docker compose up -d
-# Lespass + Laboutik
-docker compose -f docker-compose-laboutik-V1.yml up -d
 
-# for demo / dev data
-docker exec -ti lespass_django bash
-./flush.sh # the first time, it installs all the fixtures and starts the server
-rsp # If the install has already been done, starts the dev server
+# Demo / dev data (database reset, fixtures installed).
+# Stop Celery during the flush: otherwise it creates the venue Configuration at the
+# same time as `install` -> IntegrityError "BaseBillet_configuration_pkey".
+docker compose stop lespass_celery
+docker exec lespass_django ./flush.sh --no-runserver
+docker compose start lespass_celery
 
-# same for Laboutik:
-docker exec -ti laboutik_django bash
-./flush.sh # the first time, it installs all the fixtures and starts the server
-rsp # If the install has already been done, starts the dev server
+# Start the dev server (also on later runs, without flushing again)
+docker exec -ti lespass_django bash -ic rsp
+# E-mails (account confirmation, etc.) land in Mailpit:
+# https://mailpit.tibillet.localhost
 ```
 
 The application is accessible at 
 - `https://lespass.tibillet.localhost`
-- `https://laboutik.tibillet.localhost`
+- `https://lespass.tibillet.localhost/laboutik/caisse/` (LaBoutik POS, built into Lespass)
 
 > **Prerequisites:** Docker, Docker Compose, and a Traefik reverse proxy (included in the compose).
 
-For installation, configuration and production deployment details: [→ Full documentation](https://tibillet.org)
+> **Flushing again:** Fedow has its own database (`fedow_database` volume), which `flush.sh` does not reset. A second flush then fails with `Public pem not match`. Start from empty volumes, then replay the flush sequence: `docker compose down -v && docker compose up -d`.
+
+For installation, configuration and production deployment details: [→ Full documentation](https://tibillet.coop)
 
 ---
 
@@ -309,5 +322,5 @@ TiBillet is driven by the [Code Commun Cooperative](https://codecommun.coop), a 
 - **Discord**: [discord.gg/ecb5jtP7vY](https://discord.gg/ecb5jtP7vY)
 - **Matrix**: https://matrix.to/#/#tibillet:tiers-lieux.org
 - **Email**: [contact@tibillet.re](mailto:contact@tibillet.re)
-- **Site**: [tibillet.org](https://tibillet.org)
+- **Site**: [tibillet.coop](https://tibillet.coop)
 - **Cooperative**: [codecommun.coop](https://codecommun.coop)

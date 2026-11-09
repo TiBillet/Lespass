@@ -12,6 +12,14 @@ set -e
 SUPERVISOR_CONF=/DjangoFiles/supervisor/supervisord.conf
 SUPERVISOR_SOCK=/DjangoFiles/logs/supervisor/supervisor.sock
 
+# --no-runserver : ne lance pas le serveur de dev à la fin (rend la main,
+# pratique avec `docker exec lespass_django ./flush.sh --no-runserver`).
+# / --no-runserver: do not start the dev server at the end (returns control).
+NO_RUNSERVER=0
+if [ "$1" = "--no-runserver" ]; then
+  NO_RUNSERVER=1
+fi
+
 if [ "$DEBUG" = "1" ]; then
   if [ -S "$SUPERVISOR_SOCK" ]; then
     echo "Supervisord détecté : arrêt des services le temps du flush."
@@ -33,8 +41,8 @@ if [ "$DEBUG" = "1" ]; then
   poetry run python manage.py migrate_schemas
   poetry run python manage.py install
 
-  # Mode light par défaut (1 tenant, 3 events, 2 adhésions).
-  # Ajouter --full pour charger toutes les données de démo (5 tenants, initiatives, fédérations).
+  # Charge toutes les données de démo (5 tenants, initiatives, fédérations).
+  # --quick restaure à la place le dump SQL d'une exécution précédente.
   poetry run python manage.py demo_data_v2
 
   poetry run python manage.py collectstatic --no-input
@@ -52,6 +60,8 @@ if [ "$DEBUG" = "1" ]; then
     # Relance gunicorn + daphne + celery / Restart gunicorn + daphne + celery
     supervisorctl -c $SUPERVISOR_CONF start all
     echo "Services relancés : https://"$SUB"."$DOMAIN"/"
+  elif [ "$NO_RUNSERVER" = "1" ]; then
+    echo "Flush terminé. Serveur de dev non lancé (--no-runserver) : rsp pour le lancer."
   else
     echo "start dev server : https://"$SUB"."$DOMAIN"/"
     poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002

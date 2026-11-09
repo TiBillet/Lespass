@@ -1,0 +1,42 @@
+{% comment %}
+MESSAGE D'ÉTAT (une ligne de tableau), §12 du kit / Status message (one table row)
+LOCALISATION : BaseBillet/templates/emails/composants/message.html
+Variables :
+- ton : "info", "succes", "alerte" ou "erreur" ;
+- titre : le titre en mots (« Bon à savoir », « Paiement refusé »…) ;
+- texte : le corps du message (les retours à la ligne sont gardés).
+Icône + titre en mots + teinte, toujours les trois : la couleur n'est jamais seule.
+Les icônes sont des PNG (Gmail retire les SVG). Décoratives : alt vide.
+/ Icon + worded title + tint, always the three. PNG icons, decorative.
+Exemple : {% include "emails/composants/message.html" with ton="info" titre=... texte=... %}
+{% endcomment %}
+<tr>
+    <td style="padding:0 0 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+                {% if ton == "erreur" %}
+                <td bgcolor="#fbeaea" style="padding:16px; border:2px solid #922220; border-radius:12px;">
+                {% elif ton == "succes" %}
+                <td bgcolor="#e6f3ea" style="padding:16px; border:2px solid #155829; border-radius:12px;">
+                {% elif ton == "alerte" %}
+                <td bgcolor="#fbf2d9" style="padding:16px; border:2px solid #61490a; border-radius:12px;">
+                {% else %}
+                <td bgcolor="#e6f0f8" style="padding:16px; border:2px solid #1f5172; border-radius:12px;">
+                {% endif %}
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td width="32" valign="top" style="padding:2px 0 0;">
+                                <img src="{{ url_des_images_mail }}icone-{% if ton == 'erreur' or ton == 'succes' or ton == 'alerte' %}{{ ton }}{% else %}info{% endif %}.png"
+                                     width="20" height="20" alt="" style="display:block;"/>
+                            </td>
+                            <td valign="top" style="font:400 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+                                <strong style="font:700 16px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:{% if ton == 'erreur' %}#922220{% elif ton == 'succes' %}#155829{% elif ton == 'alerte' %}#61490a{% else %}#1f5172{% endif %};">{{ titre }}</strong>{% if texte %}<br/>
+                                {{ texte|linebreaksbr }}{% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </td>
+</tr>

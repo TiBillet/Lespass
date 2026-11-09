@@ -9,7 +9,7 @@ from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
-from django.utils.translation import gettext_lazy as _, activate
+from django.utils.translation import gettext_lazy as _, activate, ngettext
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
 
@@ -752,7 +752,7 @@ class ReservationValidator(serializers.Serializer):
             raise serializers.ValidationError(_("Cet événement n'est plus en vente."))
 
         if self.event.complet():
-            raise serializers.ValidationError(_(f'Max capacity reached: event full.'))
+            raise serializers.ValidationError(_("Cet événement est complet."))
         return value
 
     def validate_email(self, value):
@@ -762,7 +762,7 @@ class ReservationValidator(serializers.Serializer):
             request = self.context.get('request')
             if request.user.is_authenticated:
                 if request.user.email != value:
-                    raise serializers.ValidationError(_(f"Email does not match logged-in user."))
+                    raise serializers.ValidationError(_("Cette adresse e-mail ne correspond pas au compte connecté."))
 
         self.user = get_or_create_user(value)
         return value
@@ -778,7 +778,9 @@ class ReservationValidator(serializers.Serializer):
             for option in value:
                 option: OptionGenerale
                 if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
-                    raise serializers.ValidationError(_(f'Option {option.name} unavailable for event'))
+                    raise serializers.ValidationError(
+                        _("L'option « %(option)s » n'est pas proposée pour cet événement.") % {'option': option.name}
+                    )
         return value
 
     def validate_promotional_code(self, value):
@@ -835,7 +837,7 @@ class ReservationValidator(serializers.Serializer):
         # existe au moins un billet pour la reservation ?
         if not event.easy_reservation:
             if not products_dict or len(products_dict) < 1:
-                raise serializers.ValidationError(_(f'No products.'))
+                raise serializers.ValidationError(_("Choisissez au moins un billet."))
 
         # Validate promotional code is linked to a selected product
         if hasattr(self, 'promo_code'):
@@ -849,12 +851,17 @@ class ReservationValidator(serializers.Serializer):
             logger.info(f"Promotional code {promo_code.name} validated for product {promo_code.product.name}")
 
         if event.max_per_user_reached_on_this_event(user):
-            raise serializers.ValidationError(_(f'You have reached the maximum number of tickets for this event.'))
+            raise serializers.ValidationError(
+                _("Vous avez déjà atteint le nombre maximum de billets par personne pour cet événement.")
+            )
 
         for product, price_dict in products_dict.items():
             # Si le maximum par user produit est déja atteint :
             if product.max_per_user_reached(user, event=event):
-                raise serializers.ValidationError(_(f'Maximum capacity reached for this product.'))
+                raise serializers.ValidationError(
+                    _("Vous avez déjà atteint le nombre maximum de billets « %(produit)s » par personne.")
+                    % {'produit': product.name}
+                )
 
             # les produits sont prévu par l'évent ?
             if product not in event.products.all():
@@ -874,19 +881,33 @@ class ReservationValidator(serializers.Serializer):
                     status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
                 ).count()
                 if billets_deja_pris_pour_ce_produit + quantite_demandee_pour_ce_produit > product.max_per_user:
-                    raise serializers.ValidationError(_('Maximum capacity reached for this product.'))
+                    raise serializers.ValidationError(ngettext(
+                        "Limite de %(max)s billet « %(produit)s » par personne. Demandés : %(demandes)s, déjà réservés : %(deja)s.",
+                        "Limite de %(max)s billets « %(produit)s » par personne. Demandés : %(demandes)s, déjà réservés : %(deja)s.",
+                        product.max_per_user,
+                    ) % {
+                        'max': product.max_per_user,
+                        'produit': product.name,
+                        'deja': billets_deja_pris_pour_ce_produit,
+                        'demandes': quantite_demandee_pour_ce_produit,
+                    })
 
             # chaque maximum par user est respecté ?
             for price, qty in price_dict.items():
                 # Si l'user a déja reservé avant :
                 if price.max_per_user_reached(user, event=event):
-                    raise serializers.ValidationError(_(f'Maximum capacity reached for this price.'))
+                    raise serializers.ValidationError(
+                        _("Vous avez déjà atteint le nombre maximum de billets au tarif « %(tarif)s » par personne.")
+                        % {'tarif': price.name}
+                    )
 
                 # Le stock du tarif doit pouvoir accueillir la quantité demandée
                 # (vendus + en cours de paiement + demandés, voir Price.out_of_stock).
                 # / The price stock must fit the requested quantity.
                 if price.out_of_stock(event=event, quantite_demandee=qty):
-                    raise serializers.ValidationError(_(f'Maximum capacity reached for this price.'))
+                    raise serializers.ValidationError(
+                        _("Plus assez de places au tarif « %(tarif)s ».") % {'tarif': price.name}
+                    )
 
                 # Limite par personne du tarif : billets déjà pris + billets demandés.
                 # / Price per-person limit: tickets already held + requested.
@@ -898,8 +919,16 @@ class ReservationValidator(serializers.Serializer):
                         status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
                     ).count()
                     if billets_deja_pris_pour_ce_tarif + qty > price.max_per_user:
-                        raise serializers.ValidationError(
-                            _('Bookings exceed capacity for this rate.'))
+                        raise serializers.ValidationError(ngettext(
+                            "Limite de %(max)s billet au tarif « %(tarif)s » par personne. Demandés : %(demandes)s, déjà réservés : %(deja)s.",
+                            "Limite de %(max)s billets au tarif « %(tarif)s » par personne. Demandés : %(demandes)s, déjà réservés : %(deja)s.",
+                            price.max_per_user,
+                        ) % {
+                            'max': price.max_per_user,
+                            'tarif': price.name,
+                            'deja': billets_deja_pris_pour_ce_tarif,
+                            'demandes': qty,
+                        })
                 total_ticket_qty += qty
 
                 # Check adhésion
@@ -908,12 +937,20 @@ class ReservationValidator(serializers.Serializer):
                         price__product__in=price.adhesions_obligatoires.all(),
                         deadline__gte=timezone.now(),
                     ).exists():
-                        logger.warning(_(f"User is not subscribed."))
-                        raise serializers.ValidationError(_(f"User is not subscribed."))
+                        logger.warning(f"Adhesion requise manquante pour le tarif {price.name}")
+                        noms_des_adhesions_requises = []
+                        for adhesion_requise in price.adhesions_obligatoires.all():
+                            noms_des_adhesions_requises.append(adhesion_requise.name)
+                        raise serializers.ValidationError(
+                            _("Le tarif « %(tarif)s » demande une adhésion à jour : %(adhesions)s.") % {
+                                'tarif': price.name,
+                                'adhesions': ", ".join(noms_des_adhesions_requises),
+                            }
+                        )
 
         # existe au moins un ticket validable pour la reservation ?
         if not total_ticket_qty > 0:
-            raise serializers.ValidationError(_(f'No ticket.'))
+            raise serializers.ValidationError(_("Choisissez au moins un billet."))
 
         # Limite par personne de l'événement : billets déjà pris + billets demandés.
         # / Event per-person limit: tickets already held + requested.
@@ -924,7 +961,15 @@ class ReservationValidator(serializers.Serializer):
                 status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
             ).count()
             if billets_deja_pris_pour_cet_evenement + total_ticket_qty > event.max_per_user:
-                raise serializers.ValidationError(_('Order quantity surpasses maximum allowed per user.'))
+                raise serializers.ValidationError(ngettext(
+                    "Limite de %(max)s billet par personne pour cet événement. Demandés : %(demandes)s, déjà réservés : %(deja)s.",
+                    "Limite de %(max)s billets par personne pour cet événement. Demandés : %(demandes)s, déjà réservés : %(deja)s.",
+                    event.max_per_user,
+                ) % {
+                    'max': event.max_per_user,
+                    'deja': billets_deja_pris_pour_cet_evenement,
+                    'demandes': total_ticket_qty,
+                })
 
 
         # Vérification de la jauge
@@ -932,7 +977,13 @@ class ReservationValidator(serializers.Serializer):
         under_purchase = event.under_purchase()
         if valid_tickets_count + total_ticket_qty + under_purchase > event.jauge_max:
             remains = event.jauge_max - valid_tickets_count - under_purchase
-            raise serializers.ValidationError(_('Number of places available : ') + f"{remains}")
+            if remains <= 0:
+                raise serializers.ValidationError(_("Cet événement est complet."))
+            raise serializers.ValidationError(ngettext(
+                "Il ne reste que %(n)s place pour cet événement.",
+                "Il ne reste que %(n)s places pour cet événement.",
+                remains,
+            ) % {'n': remains})
 
         # Vérification que l'utilisateur peut reserer une place s'il est déja inscrit sur un horaire
         if not Configuration.get_solo().allow_concurrent_bookings:
@@ -949,7 +1000,7 @@ class ReservationValidator(serializers.Serializer):
                 Q(event__end_datetime__range=(start_this_event, end_this_event)) |
                 Q(event__datetime__lte=start_this_event, event__end_datetime__gte=end_this_event)
             ).exists():
-                raise serializers.ValidationError(_(f'You have already booked this slot.'))
+                raise serializers.ValidationError(_("Vous avez déjà une réservation sur ce créneau horaire."))
 
         # Build validated custom_form from dynamic fields (prefixed with 'form__') across selected products
         request = self.context.get('request')
@@ -1412,12 +1463,19 @@ class TenantCreateValidator:
             user.groups.add(staff_group)
             user.save()
 
+            # Le premier admin reçoit le récap du matin et les rapports. C'est le seul
+            # abonné d'office : un admin ajouté plus tard s'inscrit lui-même dans
+            # l'admin (« Envoi des rapports »). Ajout par pk : le M2M vise le proxy
+            # HumanUser et refuse une instance TibilletUser.
+            # / The first admin gets the mails. Added by pk: the M2M targets HumanUser.
+            from comptabilite.models import ConfigurationDesRapports
+            ConfigurationDesRapports.get_solo().destinataires.add(user.pk)
+
             from BaseBillet.models import Configuration
             config = Configuration.get_solo()
             config.organisation = name
             config.site_web = waiting_config.site_web
             config.short_description = waiting_config.short_description
-            config.long_description = """<div><strong>Bienvenue dans votre nouvel espace !</strong><br>Pour changer ce texte visible par tout le monde, allez découvrir votre panneau d\'administration dans votre espace "Mon Compte".<br><br>Hésitez surtout pas à venir discuter avec nous sur l\'un de nos canaux :<br>- <a href="https://discord.gg/7FJvtYx">Discord</a><br>- <a href="https://matrix.to/#/#tibillet:tiers-lieux.org">Matrix</a><br>- <a href="https://pouet.chapril.org/@tibillet">Mastodon</a><br><br>Nous vous accompagnerons avec plaisir !</div>"""
             config.slug = slugify(name)
             config.email = user.email
 

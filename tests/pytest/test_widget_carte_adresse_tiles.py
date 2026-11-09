@@ -28,6 +28,7 @@ behaviour is checked manually with Playwright (spec section 6.2).
 
 import re
 from pathlib import Path
+from unittest import mock
 
 from django.conf import settings
 from django.template.loader import render_to_string
@@ -74,8 +75,16 @@ def test_widget_recoit_la_cle_maptiler_quand_elle_est_configuree():
     """
     Avec une cle : le conteneur du widget porte data-maptiler-key.
     / With a key: the widget container carries data-maptiler-key.
+
+    MapTiler est remplace par un faux qui accepte la cle : sans lui, le serveur
+    sonderait le vrai MapTiler (cf. TiBillet/maptiler.py), qui refuse cette cle.
+    Le cache est court-circuite pour ne lire ni ecrire l'etat du serveur de dev.
+    / MapTiler is faked as accepting the key, and the cache is bypassed.
     """
-    html = _rendre_widget()
+    with mock.patch("TiBillet.maptiler.cache.get", return_value=None), \
+            mock.patch("TiBillet.maptiler.cache.set"), \
+            mock.patch("TiBillet.maptiler.sonder_maptiler", return_value="ok"):
+        html = _rendre_widget()
     assert 'data-maptiler-key="MAcleDeTest123"' in html
 
 

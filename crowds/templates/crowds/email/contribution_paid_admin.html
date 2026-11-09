@@ -1,33 +1,43 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <title>{{ title }}</title>
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; line-height: 1.5; color:#212529 }
-    .card { border:1px solid #e9ecef; border-radius:8px; padding:16px; }
-    .muted { color:#6c757d }
-    .small { font-size: 0.9rem; }
-  </style>
-</head>
-<body>
-  <h1 style="margin:0 0 .5rem 0;">{{ organisation }} — {{ title }}</h1>
-  <p class="muted small" style="margin-top:0">{{ now|date:"Y-m-d H:i" }}</p>
+{% extends 'emails/base.html' %}
+{% load i18n %}
+{% comment %}
+MAIL AUX ADMINS : UNE CONTRIBUTION A ÉTÉ PAYÉE (financement participatif)
+/ Admins: a crowds contribution was paid
+LOCALISATION : crowds/templates/crowds/email/contribution_paid_admin.html
+Envoyé par : crowds/tasks.py (email_contribution_paid_admin).
 
-  <div class="card">
-    <p>
-      Une contribution financière a été marquée comme <strong>payée</strong> pour le projet <strong>{{ initiative.name }}</strong>.
-    </p>
-    <ul>
-      <li><strong>Contributeur·ice :</strong> {{ contributor_name }} <span class="muted">({{ contributor_email }})</span></li>
-      <li><strong>Montant :</strong> {{ amount_eur|floatformat:2 }} {{ currency }}</li>
-      <li><strong>Statut :</strong> {{ payment_status }}</li>
-      <li><strong>Payée le :</strong> {{ paid_at|date:"Y-m-d H:i" }}</li>
-    </ul>
-  </div>
+Variables : title, initiative, contributor_name, contributor_email, amount_eur, currency,
+payment_status, paid_at. url_du_site vient du contexte commun des mails.
+{% endcomment %}
 
-  <p class="small muted">
-    Lien public : {{ initiative.get_absolute_url }}
-  </p>
-</body>
-</html>
+{% block texte_d_apercu %}{{ initiative.name }} · {{ amount_eur|floatformat:2 }} {{ currency }}{% endblock %}
+
+{% block contenu %}
+    {% translate "Contribution payée" as titre %}
+    {% include "emails/composants/titre.html" with texte=titre %}
+
+    <tr>
+        <td style="padding:0 0 16px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            {% blocktranslate trimmed with projet=initiative.name %}Une contribution financière a été marquée comme <strong>payée</strong> pour le projet <strong>{{ projet }}</strong>.{% endblocktranslate %}
+        </td>
+    </tr>
+
+    <tr>
+        <td style="padding:0 0 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                {% translate "Contributeur·ice" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=contributor_name %}
+                {% translate "Email" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=contributor_email %}
+                {% with montant=amount_eur|floatformat:2|add:" "|add:currency %}
+                {% translate "Montant" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=montant %}
+                {% endwith %}
+                {% translate "Statut" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=payment_status %}
+                {% translate "Payée le" as libelle %}{% include "emails/composants/ligne.html" with libelle=libelle valeur=paid_at|date:"d/m/Y H:i" %}
+            </table>
+        </td>
+    </tr>
+
+    {% translate "Voir le projet" as texte_du_bouton %}
+    {% include "emails/composants/bouton.html" with url=url_du_site|add:initiative.get_absolute_url texte=texte_du_bouton %}
+{% endblock %}
+
+{% block raison_du_mail %}{% blocktranslate trimmed %}Vous recevez ce mail car vous administrez {{ organisation }}.{% endblocktranslate %}{% endblock %}

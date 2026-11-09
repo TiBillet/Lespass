@@ -6,7 +6,7 @@ Conversion de tests/playwright/tests/19-reservation-limits.spec.ts
 
 Scénario couvert / Covered scenario:
 1. Stock épuisé → message "n'est plus disponible" pour un anonyme, qui ne voit
-   que le bouton « Se connecter pour réserver »
+   que le bouton « Réserver » (anonyme)
 2. Max par tarif atteint → message "nombre maximum de réservations" pour le user
 3. Max par événement atteint → message sur la page event
 4. Tarif réservé aux adhérents → messages anonyme ("Connectez-vous") et

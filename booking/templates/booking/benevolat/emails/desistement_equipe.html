@@ -1,41 +1,33 @@
-<!DOCTYPE html>
+{% extends 'emails/base.html' %}
 {% load i18n %}
 {% comment %}
-MAIL À L'ÉQUIPE : UNE PERSONNE NE VIENDRA PLUS (retrait après le délai, P10)
-/ Team email: someone withdrew after the deadline
+MAIL « UNE PERSONNE NE POURRA PAS VENIR »
+/ "Someone can't come" email
 
 LOCALISATION : booking/templates/booking/benevolat/emails/desistement_equipe.html
-Envoyé par booking/tasks.py, prevenir_l_equipe_d_un_desistement.
+Envoyé par booking/tasks.py, prevenir_l_equipe_d_un_desistement : à l'adresse du lieu
+(nom complet) et à chaque personne encore inscrite sur le créneau (prénom seul).
+
+Variables : nom_de_la_personne, besoin, plage, nombre_inscrits, url_du_planning.
+/ Sent to the venue (full name) and to the remaining volunteers (first name only).
 {% endcomment %}
-{% get_current_language as LANGUAGE_CODE %}
-<html lang="{{ LANGUAGE_CODE }}">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ title }}</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111; }
-        .container { max-width: 640px; margin: 0 auto; padding: 24px; }
-        .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; }
-        .muted { color: #6b7280; font-size: 14px; }
-        .title { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
-        .btn { display: inline-block; background: #111827; color: #fff; padding: 10px 16px; border-radius: 8px; text-decoration: none; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <div class="card">
-        <h1 class="title">{% blocktranslate with nom=nom_de_la_personne %}{{ nom }} ne pourra pas venir{% endblocktranslate %}</h1>
-        <p>
-            <strong>{{ besoin.tache.name }}</strong><br>
-            {{ besoin.date|date:"l j F Y" }} · {{ plage }}<br>
-            <span class="muted">{{ besoin.planning.name }}</span>
-        </p>
-        <p>
+
+{% block texte_d_apercu %}{{ besoin.tache.name }} · {{ besoin.date|date:"l j F" }} · {{ plage }}{% endblock %}
+
+{% block contenu %}
+    {% blocktranslate asvar titre with nom=nom_de_la_personne %}{{ nom }} ne pourra pas venir{% endblocktranslate %}
+    {% include "emails/composants/titre.html" with texte=titre %}
+
+    {% include "booking/benevolat/emails/_creneau.html" with besoin=besoin plage=plage %}
+
+    <tr>
+        <td style="padding:0 0 16px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
             {% blocktranslate count inscrits=nombre_inscrits with souhaite=besoin.nombre_souhaite %}Il reste {{ inscrits }} personne inscrite, pour {{ souhaite }} souhaitée(s).{% plural %}Il reste {{ inscrits }} personnes inscrites, pour {{ souhaite }} souhaitée(s).{% endblocktranslate %}
-        </p>
-        <p><a class="btn" href="{{ url_de_l_admin }}">{% translate "Voir le planning dans l'administration" %}</a></p>
-    </div>
-</div>
-</body>
-</html>
+        </td>
+    </tr>
+
+    {% translate "Voir le planning" as texte_du_bouton %}
+    {% include "emails/composants/bouton.html" with url=url_du_planning texte=texte_du_bouton %}
+{% endblock %}
+
+{% block raison_du_mail %}{% translate "Vous recevez ce mail car vous êtes admin du lieu, ou parce que vous vous êtes inscrit·e sur le même créneau." %}{% endblock %}

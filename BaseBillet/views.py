@@ -64,6 +64,12 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
 from BaseBillet.validators import MembershipValidator, LinkQrCodeValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
     WizardEventSerializer
 from BaseBillet.models_vente import Vente
+from BaseBillet.services_libelle_prix import (
+    TYPE_ADHESION,
+    TYPE_EVENEMENT,
+    libelle_prix,
+    tarifs_publies_de_l_evenement,
+)
 from BaseBillet.services_vente import (
     MOYENS_DU_CHAMP_REMBOURSE_PAR,
     ajouter_article,
@@ -78,6 +84,7 @@ from BaseBillet.services_vente import (
 from Administration.utils import clean_html as admin_clean_html
 from Customers.models import Client, Domain, lieu_en_moteur_legacy
 from TiBillet import settings
+from TiBillet.maptiler import cle_maptiler_a_exposer
 from booking.models import Booking, Resource, ResourceGroup
 # Le settings PARESSEUX de Django, sous alias : `TiBillet.settings` ci-dessus est
 # le module brut, fige a l'import, qu'un `override_settings()` de test ne touche
@@ -338,7 +345,7 @@ def get_context(request):
         # Utilisee par la carte de la page event (geoloc.html), meme fond que la
         # carto federation. / MapTiler key for basemaps (empty -> OSM France HOT
         # fallback). Used by the event page map, same basemap as the federation map.
-        "maptiler_key": settings.MAPTILER_KEY,
+        "maptiler_key": cle_maptiler_a_exposer(),
         "header": True,
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,
@@ -397,14 +404,17 @@ def get_context(request):
             'icon': 'diagram-2-fill'
         })
 
-    # Remove from navbar, it is now a button in the tenant_header
-    # if crowd_config.active and Initiative.objects.exists() and config.module_crowdfunding:
-    #     navbar.append({
-    #         'name': 'crowd-list',
-    #         'url': '/contrib/',
-    #         'label': f'{crowd_config.title}',
-    #         'icon': 'people-fill'
-    #     })
+    # Bouton « Contribuez » de l'en-tete du lieu (pages/V2/tenant_header.html).
+    # Il s'affiche seulement si les trois conditions sont vraies :
+    # - le module financement participatif est active (tableau de bord admin) ;
+    # - la fonction est activee dans la config Crowds (champ « Activer ») ;
+    # - il existe au moins une initiative non archivee a montrer.
+    # / "Contribute" button of the venue header: shown only when the module is
+    # on, the Crowds config is active, and at least one initiative is listed.
+    afficher_bouton_contribuer = False
+    if config.module_crowdfunding and crowd_config.active:
+        afficher_bouton_contribuer = Initiative.objects.filter(archived=False).exists()
+    context["afficher_bouton_contribuer"] = afficher_bouton_contribuer
 
 
     # V2 -> a déterminer - POUR L'INSTANT ACTIVÉ NORMALEMENT
@@ -950,8 +960,8 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             )
         except Exception as erreur_liaison_locale:
             # INCOHERENCE : Fedow a accepte la liaison, la base locale la refuse
-            # (`CarteDejaLiee`, `UserADejaCarte`, ou autre). Les deux bases divergent sur le
-            # proprietaire de la carte, et c'est la version LOCALE que lit le point de vente.
+            # (`UserADejaCarte`, ou autre). Les deux bases divergent sur le proprietaire
+            # de la carte, et c'est la version LOCALE que lit le point de vente.
             # A remonter, pas seulement a journaliser.
             # / INCONSISTENCY: Fedow accepted the link, the local database refuses it. The
             #   two bases disagree on who owns the card, and the POS reads the LOCAL one.
@@ -1639,7 +1649,7 @@ class MyAccount(viewsets.ViewSet):
             # Get booking info (only upcoming, more detail on booking specific page)
             bookings = (
                 Booking.objects
-                .filter(user=user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
+                .filter(user=user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.ADMIN_WAITING, Booking.FREERES,
                                   Booking.FREERES_USERACTIV], end_datetime__gt=now)
                 .select_related('resource')
                 .order_by('start_datetime')
@@ -1798,14 +1808,14 @@ class MyAccount(viewsets.ViewSet):
 
         upcoming_bookings = (
             Booking.objects
-            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.ADMIN_WAITING, Booking.FREERES,
                                   Booking.FREERES_USERACTIV], end_datetime__gt=now)
             .select_related('resource')
             .order_by('start_datetime')
         )
         past_bookings = (
             Booking.objects
-            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
+            .filter(user=request.user, status__in=[Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.ADMIN_WAITING, Booking.FREERES,
                                   Booking.FREERES_USERACTIV], end_datetime__lte=now)
             .select_related('resource')
             .order_by('-start_datetime')
@@ -3085,12 +3095,12 @@ def index(request):
     # Tri les évènements par datetime
     events_a_afficher.sort(key=lambda event: event.datetime)
 
-    # Le libelle de prix des cartes (event.price_min) est DEJA pose par
+    # Le libelle de prix des cartes (event.libelle_prix) est DEJA pose par
     # federated_events_filter, dans le tenant_context de chaque evenement
-    # (EventMVT._libelle_prix_agenda). Ne pas le recalculer ici : hors de ce
+    # (BaseBillet/services_libelle_prix.py). Ne pas le recalculer ici : hors de ce
     # contexte, les tarifs d'un evenement federe seraient lus dans le schema du
     # lieu courant, et il s'afficherait toujours « Entré libre ».
-    # / price_min is ALREADY set by federated_events_filter inside each event's
+    # / libelle_prix is ALREADY set by federated_events_filter inside each event's
     # tenant_context. Recomputing it here would read a federated event's prices
     # from the current schema ("Entré libre" every time).
 
@@ -3397,12 +3407,11 @@ class FederationViewset(viewsets.ViewSet):
 
         # Contexte standard du skin + variables specifiques a l'explorer
         # / Standard skin context + explorer-specific variables
-        from django.conf import settings
         template_context = get_context(request)
         template_context.update({
             'explorer_data': explorer_data,
             'current_tenant_uuid': current_uuid,
-            'maptiler_key': settings.MAPTILER_KEY,
+            'maptiler_key': cle_maptiler_a_exposer(),
             'has_other_federated_places': has_other_federated_places,
             'federation_json_ld': federation_json_ld,
             'breadcrumb_json_ld': breadcrumb_json_ld,
@@ -3470,68 +3479,6 @@ class EventMVT(viewsets.ViewSet):
         # / Other EventMVT views are public. Admin create actions live in EventWizardAdmin.
         return [permissions.AllowAny()]
 
-    def _calculer_prix_min_max_event(self, event):
-        """
-        Pose sur l'event les prix min et max, et le drapeau prix libre.
-        / Sets min/max prices and the free-price flag on the event.
-
-        LOCALISATION : BaseBillet/views.py — EventMVT
-
-        Ces attributs ne sont pas des champs du modele : ils vivent en memoire.
-        Ils sont lus par partials/reservation_declencheur.html.
-        Utilise par federated_events_get() et federated_events_get_hex8().
-
-        A appeler DANS le tenant_context de l'event : les tarifs vivent
-        dans le schema du tenant.
-        / Must be called INSIDE the event's tenant_context.
-        """
-        # Un tarif archive (« supprime ») n'est jamais pris en compte.
-        # / An archived ("deleted") price is never counted.
-        prices = []
-        for product in event.products.all():
-            for price in product.prices.all():
-                if not price.archived and price.publish:
-                    prices.append(price)
-
-        tarifs = [price.prix for price in prices]
-        event.price_min = min(tarifs) if tarifs else None
-        event.price_max = max(tarifs) if tarifs else None
-        event.free_price = any(price.free_price for price in prices)
-
-    @staticmethod
-    def _libelle_prix_agenda(event):
-        """
-        Renvoie le texte du prix affiche sur la carte d'un event dans l'agenda.
-        / Returns the price label shown on an event card in the agenda.
-
-        LOCALISATION : BaseBillet/views.py — EventMVT
-
-        Meme format que index() : « A partir de X € », « Prix libre » ou « Entré libre ».
-        Le resultat va dans event.price_min, lu par cotton/V2/event_card.html.
-
-        A appeler DANS le tenant_context de l'event : les tarifs vivent
-        dans le schema du tenant.
-        / Must be called INSIDE the event's tenant_context.
-        """
-        # Un tarif archive (« supprime ») n'est jamais pris en compte.
-        # On lit products.all() et prices.all() : ils sont deja precharges
-        # par le prefetch_related de federated_events_filter (pas de requete en plus).
-        # / Archived prices are skipped. Reads the prefetched relations (no extra query).
-        prices = []
-        for product in event.products.all():
-            for price in product.prices.all():
-                if not price.archived and price.publish:
-                    prices.append(price)
-
-        tarifs = [price.prix for price in prices]
-        il_y_a_un_prix_libre = any(price.free_price for price in prices)
-
-        if tarifs:
-            return _("À partir de %(price)s €") % {"price": min(tarifs)}
-        if il_y_a_un_prix_libre:
-            return _("Prix libre")
-        return _("Entrée libre")
-
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all().select_related('tenant'):
             tenant = place.tenant
@@ -3543,7 +3490,11 @@ class EventMVT(viewsets.ViewSet):
                         'tag', 'products', 'products__prices',
                     ).get(slug=slug)
                     event.img = event.get_img()
-                    self._calculer_prix_min_max_event(event)
+                    # Texte du prix, calcule ici : on est dans le tenant_context du lieu
+                    # / Price label, computed here inside the place's tenant_context
+                    event.libelle_prix = libelle_prix(
+                        tarifs_publies_de_l_evenement(event), TYPE_EVENEMENT,
+                    )
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -3561,7 +3512,11 @@ class EventMVT(viewsets.ViewSet):
                         'tag', 'products', 'products__prices',
                     ).get(uuid__startswith=hex8)
                     event.img = event.get_img()
-                    self._calculer_prix_min_max_event(event)
+                    # Texte du prix, calcule ici : on est dans le tenant_context du lieu
+                    # / Price label, computed here inside the place's tenant_context
+                    event.libelle_prix = libelle_prix(
+                        tarifs_publies_de_l_evenement(event), TYPE_EVENEMENT,
+                    )
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -3588,14 +3543,14 @@ class EventMVT(viewsets.ViewSet):
             # / List-cache version token for this tenant (default 'v0' if never written)
             version = cache.get(f'event_list_version_{connection.tenant.uuid}', 'v0')
             # La langue fait partie de la cle : le resultat contient le prix
-            # deja traduit (event.price_min, ex : « A partir de 12 € »).
+            # deja traduit (event.libelle_prix, ex : « De 10 à 25 € »).
             # Sans elle, tous les visiteurs verraient la langue du premier.
             # / Language is part of the key: the result holds translated price labels.
             langue = get_language()
             if date_seule:
-                cache_key = f'event_list_{connection.tenant.uuid}_{version}_{langue}_date_{date_filter.isoformat()}'
+                cache_key = f'event_list_v2_{connection.tenant.uuid}_{version}_{langue}_date_{date_filter.isoformat()}'
             else:
-                cache_key = f'event_list_{connection.tenant.uuid}_{version}_{langue}'
+                cache_key = f'event_list_v2_{connection.tenant.uuid}_{version}_{langue}'
             cached = cache.get(cache_key)
             if cached:
                 return cached
@@ -3666,8 +3621,14 @@ class EventMVT(viewsets.ViewSet):
                 ).prefetch_related(
                     'tag', 'products', 'products__prices', 'artists', 'artists__artist',
                 ).filter(
+                    # À venir (à partir d'hier) OU en cours : un événement commencé
+                    # (ex : une expo de plusieurs semaines) reste dans l'agenda tant
+                    # que sa date de fin n'est pas passée.
+                    # / Upcoming (from yesterday) OR ongoing: a started event stays
+                    # listed until its end date has passed.
+                    Q(datetime__gte=timezone.localtime() - timedelta(days=1))
+                    | Q(end_datetime__gte=timezone.localtime()),
                     published=True,
-                    datetime__gte=timezone.localtime() - timedelta(days=1),  # On prend les évènement a partir d'hier
                     # Un event ARCHIVE est un event retiré de l'agenda. Il ne doit plus
                     # y apparaitre, meme s'il reste publié. Le cache SEO (carte,
                     # explorateur) applique déjà ce filtre partout : sans lui ici,
@@ -3726,7 +3687,24 @@ class EventMVT(viewsets.ViewSet):
                 # Collecte de TOUTES les dates et tags avant pagination
                 # Requêtes légères : dates() et values_list() évitent les subqueries lourdes
                 # / Collect ALL dates and tags before pagination (lightweight queries)
-                all_dates_set.update(events.dates('datetime', 'day'))
+                # Les jours du menu « Trier par date » : le jour de début de chaque
+                # événement. Un événement en cours, commencé avant aujourd'hui, compte
+                # pour aujourd'hui : son jour de début est passé, mais il a lieu aujourd'hui.
+                # / Dropdown days: each event's start day. An ongoing event that
+                # started before today counts for today.
+                aujourd_hui = timezone.localdate()
+                maintenant = timezone.now()
+                for debut_de_l_evenement, fin_de_l_evenement in events.order_by().values_list('datetime', 'end_datetime'):
+                    jour_de_debut = timezone.localdate(debut_de_l_evenement)
+                    commence_avant_aujourd_hui_et_toujours_en_cours = (
+                        jour_de_debut < aujourd_hui
+                        and fin_de_l_evenement is not None
+                        and fin_de_l_evenement >= maintenant
+                    )
+                    if commence_avant_aujourd_hui_et_toujours_en_cours:
+                        all_dates_set.add(aujourd_hui)
+                    else:
+                        all_dates_set.add(jour_de_debut)
                 tag_pks = set(events.order_by().values_list('tag__pk', flat=True))
                 tag_pks.discard(None)
                 for tag in Tag.objects.filter(pk__in=tag_pks):
@@ -3745,7 +3723,14 @@ class EventMVT(viewsets.ViewSet):
                 # / Applied AFTER collecting dates/tags so dropdowns stay complete.
                 events_a_afficher = events
                 if date_filter:
-                    events_a_afficher = events_a_afficher.filter(datetime__date=date_filter)
+                    # Le jour choisi : les événements qui commencent ce jour-là, et ceux
+                    # qui ont commencé avant et durent jusqu'à ce jour (une expo).
+                    # / The chosen day: events starting that day, and earlier ones
+                    # still running that day (an exhibition).
+                    events_a_afficher = events_a_afficher.filter(
+                        Q(datetime__date=date_filter)
+                        | Q(datetime__date__lt=date_filter, end_datetime__date__gte=date_filter)
+                    )
 
                 events_tries = events_a_afficher.order_by('datetime').distinct()
 
@@ -3772,9 +3757,17 @@ class EventMVT(viewsets.ViewSet):
 
                     # Texte du prix affiche sur la carte de l'agenda
                     # / Price label shown on the agenda card
-                    event.price_min = EventMVT._libelle_prix_agenda(event)
+                    event.libelle_prix = libelle_prix(
+                        tarifs_publies_de_l_evenement(event), TYPE_EVENEMENT,
+                    )
 
-                    date = event.datetime.date()
+                    # Un jour est choisi : tout est rangé sous ce jour, y compris une
+                    # expo commencée avant. Sinon : sous le jour de début.
+                    # / A day is chosen: everything goes under it, ongoing events included.
+                    if date_filter:
+                        date = date_filter
+                    else:
+                        date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
 
@@ -4016,6 +4009,7 @@ class EventMVT(viewsets.ViewSet):
         # / Stays None for a federated event: it does not live in the current schema,
         # so its capacity counters are meaningless here.
         places_restantes = None
+        event_payant = None
 
         try:
             if hex8:
@@ -4031,7 +4025,7 @@ class EventMVT(viewsets.ViewSet):
             event.img = event.get_img()
 
             # Récupération des produits et des prix pour :
-            # - afficher le min / max
+            # - afficher le libelle de prix
             # - vérifier le max par user
 
             # Précharger les prix en même temps que les produits
@@ -4070,15 +4064,20 @@ class EventMVT(viewsets.ViewSet):
             # call costs two COUNT queries, it must never run inside the price loop.
             places_restantes = event.places_restantes()
 
-            tarifs = [price.prix for price in prices]
-            # Calcul des prix min et max
-            event.price_min = min(tarifs) if tarifs else None
-            event.price_max = max(tarifs) if tarifs else None
 
-            # Vérification de l'existence d'un prix libre (sans requêtes supplémentaires)
-            event.free_price = any(
-                price.free_price for price in prices
+            tarifs_publies = tarifs_publies_de_l_evenement(event)
+            # Texte du prix lu par partials/reservation_declencheur.html
+            # / Price label read by partials/reservation_declencheur.html
+            event.libelle_prix = libelle_prix(
+                tarifs_publies, TYPE_EVENEMENT,
             )
+
+            # Un flag pour déterminer si un event est payant
+            event_payant = False
+            for tarif in tarifs_publies:
+                if tarif.prix > 0 or tarif.free_price:
+                    event_payant = True
+                    break
 
             event_in_this_tenant = True
 
@@ -4105,6 +4104,7 @@ class EventMVT(viewsets.ViewSet):
         template_context['price_max_per_user_reached'] = price_max_per_user_reached
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
+        template_context['event_payant'] = event_payant
         template_context['event_max_per_user_reached'] = event_max_per_user_reached
         template_context['places_restantes'] = places_restantes
         # Lu par le gabarit du skin faire_festival (vues/evenement.html).
@@ -4236,9 +4236,27 @@ class EventMVT(viewsets.ViewSet):
             # / Same call as in action_reservation above: a business refusal is not an
             # app error, so warning level and no Sentry alert.
             logger.warning(f"ReservationViewset CREATE : validation refusee : {validator.errors}")
-            for error in validator.errors:
-                messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
+            # Les erreurs s'affichent DANS le formulaire, sans recharger la page : la
+            # personne garde tout ce qu'elle a saisi (e-mail, quantités, réponses).
+            # HX-Retarget / HX-Reswap : htmx ne remplace que la zone #reservation-erreurs
+            # du formulaire (commun/formulaires/reservation.html), pas le formulaire entier.
+            # Statut 200 : htmx ignore le contenu d'une réponse 4xx.
+            # / Errors are shown INSIDE the form, no reload: filled fields are kept.
+            # Status 200: htmx ignores 4xx bodies.
+            messages_d_erreur = []
+            for liste_d_erreurs_du_champ in validator.errors.values():
+                for erreur in liste_d_erreurs_du_champ:
+                    messages_d_erreur.append(str(erreur))
+
+            reponse_avec_les_erreurs = render(
+                request,
+                "commun/formulaires/reservation_erreurs.html",
+                context={"messages_d_erreur": messages_d_erreur},
+            )
+            reponse_avec_les_erreurs["HX-Retarget"] = "#reservation-erreurs"
+            reponse_avec_les_erreurs["HX-Reswap"] = "innerHTML"
+            return reponse_avec_les_erreurs
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -4261,11 +4279,21 @@ class EventMVT(viewsets.ViewSet):
             logger.debug("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
-        # Réservation sans paiement : elle est validée tout de suite.
-        # La personne est connectée, son compte est donc activé.
-        # / No payment needed: the booking is validated right away.
-        messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
-        return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
+        # On passe l'user resolu par le validator (via l'email saisi),
+        # pas request.user qui peut etre AnonymousUser si le visiteur n'est pas connecte.
+        # Le template choisit son message selon user.is_active : il doit refleter
+        # l'etat reel utilise par TicketCreator pour decider d'envoyer
+        # les billets immediatement (user actif) ou un mail de validation (user inactif).
+
+        if validator.reservation.user_commande.is_active:
+            messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
+            return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
+
+        from BaseBillet.models import DUREE_D_UN_PAIEMENT_EN_COURS
+        return render(request, "fonctionnel/event/reservation_ok.html", context={
+            "user": validator.reservation.user_commande,
+            "minutes_de_reservation": int(DUREE_D_UN_PAIEMENT_EN_COURS.total_seconds() // 60),
+        })
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
@@ -4381,6 +4409,10 @@ class EventMVT(viewsets.ViewSet):
         question_filters = _read_question_filters(request, form_questions)
 
         filters_are_active = bool(email_filter or ticket_status_filter or question_filters)
+
+        # Au premier chargement de la page, si aucun filtre n'est actif, on affiche seulement les billets actif et non scanné.
+        if not request.htmx and not filters_are_active:
+            ticket_status_filter=Ticket.NOT_SCANNED
 
         # Les réservations qui passent les filtres email et questions.
         # / Reservations matching the email and question filters.
@@ -4833,9 +4865,23 @@ class MembershipMVT(viewsets.ViewSet):
             # generer de bruit dans Sentry sur une soumission invalide attendue.
             # / Failed input validation (often a bot posting an empty/partial form). Not a server error.
             logger.info(f"Membership create — validation refusee : {membership_validator.errors}")
-            error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
-            messages.add_message(request, messages.ERROR, error_messages)
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
+            # Les erreurs s'affichent DANS le formulaire, sans recharger la page : la
+            # personne garde sa saisie. HX-Retarget envoie le partiel dans la zone
+            # #adhesion-erreurs du pied du formulaire (commun/adhesion/form.html).
+            # / Errors are shown inside the form, without reloading: input is kept.
+            messages_d_erreur = []
+            for liste_d_erreurs_du_champ in membership_validator.errors.values():
+                for erreur in liste_d_erreurs_du_champ:
+                    messages_d_erreur.append(str(erreur))
+            reponse_avec_les_erreurs = render(
+                request,
+                "commun/formulaires/reservation_erreurs.html",
+                context={"messages_d_erreur": messages_d_erreur},
+            )
+            reponse_avec_les_erreurs["HX-Retarget"] = "#adhesion-erreurs"
+            reponse_avec_les_erreurs["HX-Reswap"] = "innerHTML"
+            return reponse_avec_les_erreurs
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -4898,45 +4944,16 @@ class MembershipMVT(viewsets.ViewSet):
             # Les tarifs en points ou en temps se vendent a la caisse seulement :
             # ils ne comptent pas dans le prix affiche en euros.
             # / Points or time prices are sold at the POS only: not an euro price.
-            prices = product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False, publish=True)
-            tarifs = [price.prix for price in prices]
-            # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
-            # la caisse seulement), la carte n'affiche pas de prix.
-            # / Min price. Without a euro price, the card shows no price.
-            product.price_min = None
-            if tarifs:
-                product.price_min = f"{min(tarifs)} €"
+            # libelle_prix() les met de cote lui-meme.
+            # / libelle_prix() sets them aside itself.
+            prices = product.prices.filter(archived=False, publish=True)
+            product.libelle_prix = libelle_prix(prices, TYPE_ADHESION)
 
         template_context['products'] = products
 
         # On utilise le template par "défaut" adhésion, sauf si le module booking est activé, dans ce cas là on change de template
         template_path = "vues/adhesions.html"
         config = Configuration.get_solo()
-
-        # V2 -> a déterminer
-        # if config.module_booking:
-        #     # On récupère les ressources, puis on les met dans un tableau organisé selon leur group
-        #     ressources = Resource.objects.select_related('group', 'product').order_by('product__name')
-        #     for ressource in ressources:
-        #         # Les tarifs en points ou en temps se vendent a la caisse seulement :
-        #         # ils ne comptent pas dans le prix affiche en euros.
-        #         # / Points or time prices are sold at the POS only: not an euro price.
-        #         prices = ressource.product.prices.filter(asset__isnull=True, non_fiduciaire=False, archived=False)
-        #         tarifs = [price.prix for price in prices]
-        #         # Calcul du prix min. Sans tarif en euros (adhesion vendue en points a
-        #         # la caisse seulement), la carte n'affiche pas de prix.
-        #         # / Min price. Without a euro price, the card shows no price.
-        #         ressource.product.price_min = None
-        #         if tarifs:
-        #             ressource.product.price_min = f"{min(tarifs)} €"
-        #
-        #     ressources_grouped = defaultdict(list)
-        #     for ressource in ressources:
-        #         ressources_grouped[ressource.group].append(ressource)
-        #
-        #     template_context['ressources_grouped'] = ressources_grouped
-        #     template_path = "vues/services.html"
-
 
         # Le paramètre GET "open" (optionnel) contient l'uuid d'un produit d'adhésion à ouvrir directement au chargement de la page
         # On vérifie que le produit adhésion exist, puis c'est le JS qui gère l'ouverture
@@ -7454,6 +7471,49 @@ class PanierMVT(viewsets.ViewSet):
             })
         return response
 
+    def _refus_dans_le_formulaire(self, request, message):
+        """
+        Refus d'un ajout au panier, affiché DANS le formulaire d'origine.
+        / Cart add refusal, shown INSIDE the originating form.
+
+        LOCALISATION : BaseBillet/views.py (dans PanierMVT).
+
+        Les boutons « Ajouter au panier » des formulaires visent la zone d'erreurs de
+        leur formulaire (hx-target) :
+        - commun/formulaires/reservation.html -> #reservation-erreurs ;
+        - commun/adhesion/form.html -> #adhesion-erreurs ;
+        - booking/partials/book_form.html -> #ressource-erreurs.
+        Le message s'y affiche comme ceux de « Payer maintenant » (même partiel).
+        Pas de toast : panier_scripts.html ne ferme alors pas le panneau.
+        / Cart buttons target their form's error zone; same partial as direct payment.
+        No toast, so panier_scripts.html keeps the panel open.
+
+        La réponse porte aussi le badge du panier (hx-swap-oob) : « Ajouter au panier et
+        payer » ajoute l'article AVANT de payer. Si le paiement est refusé, l'article
+        reste au panier, et le badge doit le montrer. htmx retire le badge de la réponse,
+        la zone d'erreurs ne reçoit que le message.
+        / The response also carries the OOB cart badge: on a refused "add and pay", the
+        item stays in the cart and the badge must show it.
+
+        Un ajout réussi répond avec _render_badge_and_toast : son corps ne contient
+        que le badge (hx-swap-oob), la zone d'erreurs est donc vidée.
+        / A successful add returns only the OOB badge: the error zone is emptied.
+        """
+        from django.template.loader import render_to_string
+        from django.http import HttpResponse
+
+        message_html = render_to_string(
+            "commun/formulaires/reservation_erreurs.html",
+            context={"messages_d_erreur": [str(message)]},
+            request=request,
+        )
+        badge_html = render_to_string(
+            "htmx/components/panier_badge.html",
+            context=get_context(request),
+            request=request,
+        )
+        return HttpResponse(message_html + badge_html)
+
     # --- GET /panier/ ---
     def list(self, request):
         """Page panier : récap complet, modif, total, bouton checkout."""
@@ -7544,7 +7604,7 @@ class PanierMVT(viewsets.ViewSet):
                 request, [tarif_choisi.product],
             )
             if erreur_du_formulaire:
-                return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+                return self._refus_dans_le_formulaire(request, erreur_du_formulaire)
 
         panier = PanierSession(request)
         try:
@@ -7559,18 +7619,16 @@ class PanierMVT(viewsets.ViewSet):
                 newsletter=newsletter_cochee,
             )
         except InvalidItemError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
+            return self._refus_dans_le_formulaire(request, exc)
         except Exception as exc:
             logger.error(f"add_membership unexpected error: {exc}")
-            return self._render_badge_and_toast(
-                request, message=_("Unable to add membership."), level='error'
-            )
+            return self._refus_dans_le_formulaire(request, _("Unable to add membership."))
         # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
         # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
         # / If the "Add to cart and pay" button sent `then=checkout`, chain
         # directly to checkout (Stripe redirect or free order).
         if request.POST.get('then') == 'checkout':
-            return self.checkout(request)
+            return self.checkout(request, refus_dans_le_formulaire=True)
         return self._render_badge_and_toast(request, message=_("Membership added to cart."))
 
     # --- POST /panier/remove/<int:pk>/ ---
@@ -7642,12 +7700,22 @@ class PanierMVT(viewsets.ViewSet):
 
     # --- POST /panier/checkout/ ---
     @action(detail=False, methods=['POST'], url_path='checkout')
-    def checkout(self, request):
+    def checkout(self, request, refus_dans_le_formulaire=False):
         """
         Matérialise le panier en Commande → redirect Stripe (payant) ou
         my_account (gratuit). Utilise request.user comme buyer (auth required).
         / Materialize cart → Stripe redirect (paid) or my_account (free).
         Uses request.user as buyer (auth required).
+
+        `refus_dans_le_formulaire` : True quand un bouton « Ajouter au panier et
+        payer » d'un formulaire enchaîne sur le paiement (add_*). Un refus s'affiche
+        alors dans le formulaire. Depuis la page panier, il reste un toast.
+        / True when chained from a form's "Add to cart and pay": refusals go in the form.
+
+        Exception : si un AUTRE article du panier n'est plus valide au moment de payer
+        (materialiser renvoie success=False), on renvoie toujours vers la page panier,
+        avec les messages. Le problème concerne le panier, pas le formulaire en cours.
+        / Exception: an invalid OTHER cart item always redirects to the cart page.
         """
         from BaseBillet.services_commande import CommandeService, CommandeServiceError
         from BaseBillet.services_panier import PanierSession, InvalidItemError
@@ -7687,6 +7755,7 @@ class PanierMVT(viewsets.ViewSet):
                 backup_first_name = membership_temp.get("firstname")
                 backup_last_name = membership_temp.get("lastname")
 
+        message_du_refus = None
         try:
             commande, success = CommandeService.materialiser(
                 panier, user,
@@ -7694,15 +7763,16 @@ class PanierMVT(viewsets.ViewSet):
                 last_name=user.last_name or backup_last_name,
                 email=user.email,
             )
-        except InvalidItemError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
-        except CommandeServiceError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except (InvalidItemError, CommandeServiceError) as exc:
+            message_du_refus = str(exc)
         except Exception as exc:
             logger.error(f"CommandeService.materialiser failed: {exc}")
-            return self._render_badge_and_toast(
-                request, message=_("Checkout failed. Please try again."), level='error'
-            )
+            message_du_refus = _("Checkout failed. Please try again.")
+
+        if message_du_refus is not None:
+            if refus_dans_le_formulaire:
+                return self._refus_dans_le_formulaire(request, message_du_refus)
+            return self._render_badge_and_toast(request, message=message_du_refus, level='error')
 
         # Check si l'état du flag success, puis affiche les erreurs retournées par "materialiser"
         if not success:
@@ -7779,30 +7849,42 @@ class PanierMVT(viewsets.ViewSet):
             except Event.DoesNotExist:
                 event = None
         if event is None:
-            return self._render_badge_and_toast(
-                request, message=_("Event not found."), level='error',
-            )
+            return self._refus_dans_le_formulaire(request, _("Event not found."))
 
         panier = PanierSession(request)
         added_count_before = len(panier.items())
+        # Copie du panier avant la demande : les limites y lisent « déjà au panier »,
+        # sans compter les tarifs ajoutés plus tôt dans cette même demande.
+        # / Cart copy before the request: limits read "already in cart" from it.
+        items_du_panier_avant_la_demande = panier.items()
 
         # Extraire options de l'event / Extract event options
         options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
-        # Réponses au formulaire personnalisé : on ne lit que les questions des produits
-        # dont au moins un billet est demandé (comme ReservationValidator). Sinon une
-        # question obligatoire d'un produit non choisi bloquerait l'ajout.
-        # / Custom form answers: only questions of products with a requested ticket.
+        # On relève ce que demande le formulaire, avant tout ajout :
+        # - quantites_de_la_demande : chaque tarif demandé et sa quantité. Les limites
+        #   par personne sont vérifiées sur la demande entière, comme en réservation
+        #   directe (services_panier.validate_ticket_cart_limits) ;
+        # - produits_demandes : les produits dont au moins un billet est demandé. On ne
+        #   lit que leurs questions (comme ReservationValidator) : une question
+        #   obligatoire d'un produit non choisi ne doit pas bloquer l'ajout.
+        # / What the form asks for, before any add:
+        # - quantites_de_la_demande: each requested price and its quantity (limits);
+        # - produits_demandes: products with a requested ticket (their questions only).
+        quantites_de_la_demande = {}
         produits_demandes = []
         for produit_de_l_evenement in event.products.all():
             for tarif_du_produit in produit_de_l_evenement.prices.filter(archived=False):
-                if quantite_de_billets_demandee(request.POST.get(str(tarif_du_produit.uuid))):
+                quantite = quantite_de_billets_demandee(request.POST.get(str(tarif_du_produit.uuid)))
+                if quantite is None:
+                    continue
+                quantites_de_la_demande[tarif_du_produit] = quantite
+                if produit_de_l_evenement not in produits_demandes:
                     produits_demandes.append(produit_de_l_evenement)
-                    break
         custom_form, erreur_du_formulaire = reponses_du_formulaire_personnalise_pour_le_panier(
             request, produits_demandes,
         )
         if erreur_du_formulaire:
-            return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+            return self._refus_dans_le_formulaire(request, erreur_du_formulaire)
 
         # Code promo saisi dans booking_form (champ `promotional_code`).
         # Valide cote serveur dans PanierSession.add_ticket (existence, actif,
@@ -7820,9 +7902,7 @@ class PanierMVT(viewsets.ViewSet):
                 is_active=True,
             ).exists()
             if not code_saisi_existe:
-                return self._render_badge_and_toast(
-                    request, message=_("Invalid or inactive promotional code."), level='error',
-                )
+                return self._refus_dans_le_formulaire(request, _("Invalid or inactive promotional code."))
 
         items_added = 0
         code_promo_applique_a_un_billet = False
@@ -7872,6 +7952,8 @@ class PanierMVT(viewsets.ViewSet):
                         options=options_ids,
                         custom_form=custom_form,
                         promotional_code_name=item_promo,
+                        items_du_panier_avant_la_demande=items_du_panier_avant_la_demande,
+                        quantites_de_la_demande=quantites_de_la_demande,
                     )
                     items_added += 1
 
@@ -7888,14 +7970,10 @@ class PanierMVT(viewsets.ViewSet):
             added_after = len(panier.items())
             for _idx in range(added_after - added_count_before):
                 panier.remove_item(added_count_before)
-            return self._render_badge_and_toast(
-                request, message=str(exc), level='error',
-            )
+            return self._refus_dans_le_formulaire(request, exc)
 
         if items_added == 0:
-            return self._render_badge_and_toast(
-                request, message=_("No tickets selected."), level='error',
-            )
+            return self._refus_dans_le_formulaire(request, _("No tickets selected."))
 
         message = ngettext(
             "%(count)d ticket added to cart.",
@@ -7906,7 +7984,7 @@ class PanierMVT(viewsets.ViewSet):
         # on enchaine directement sur le checkout.
         # / If "Add to cart and pay" button sent `then=checkout`, chain to checkout.
         if request.POST.get('then') == 'checkout':
-            return self.checkout(request)
+            return self.checkout(request, refus_dans_le_formulaire=True)
         return self._render_badge_and_toast(request, message=message)
 
     @action(detail=False, methods=["POST"], url_path="add/resource")
@@ -7949,9 +8027,7 @@ class PanierMVT(viewsets.ViewSet):
 
         # If it doesn't exist, return an error
         if resource is None:
-            return self._render_badge_and_toast(
-                request, message=_("Resource not found."), level='error',
-            )
+            return self._refus_dans_le_formulaire(request, _("Resource not found."))
 
         # Validation centralisée du formulaire ressource.
         # / Centralized resource form validation.
@@ -7962,35 +8038,7 @@ class PanierMVT(viewsets.ViewSet):
         )
 
         if error_message:
-            start_datetime = validation_result.get('start_datetime')
-            requested_slot = validation_result.get('requested_slot')
-            consecutive_slots = validation_result.get('consecutive_slots', [])
-            window_end = validation_result.get('window_end')
-
-            cancellation_deadline = None
-            cancellation_possible = False
-            if start_datetime:
-                cancellation_deadline = start_datetime - timedelta(
-                    hours=resource.cancellation_deadline_hours,
-                )
-                cancellation_possible = timezone.now() <= cancellation_deadline
-
-            context = get_context(request)
-            context.update({
-                'resource': resource,
-                'slot': requested_slot,
-                'consecutive_slots': consecutive_slots,
-                'max_slot_count': validation_result.get('max_slot_count', 0),
-                'slot_duration_minutes': validation_result.get('slot_duration_minutes'),
-                'start_datetime': start_datetime,
-                'group_end': consecutive_slots[-1].end if consecutive_slots else window_end,
-                'cancellation_deadline': cancellation_deadline,
-                'cancellation_possible': cancellation_possible,
-                'error': validation_result.get('error', error_message),
-            })
-            if request.htmx:
-                return render(request, 'booking/partials/book_form.html', context, status=422)
-            return render(request, 'booking/views/book.html', context)
+            return self._refus_dans_le_formulaire(request, error_message)
 
         start_datetime = validation_result['start_datetime']
         slot_duration_minutes = validation_result['slot_duration_minutes']
@@ -8024,8 +8072,8 @@ class PanierMVT(viewsets.ViewSet):
 
         # Réponses au formulaire dynamique du produit de la ressource, validées comme
         # dans la réservation directe (booking/views.py _book_post). Une question
-        # obligatoire sans réponse bloque l'ajout au panier avec un toast.
-        # / Dynamic form answers, validated like the direct flow; toast on error.
+        # obligatoire sans réponse bloque l'ajout au panier.
+        # / Dynamic form answers, validated like the direct flow.
         produits_avec_questions = []
         if resource.product is not None:
             produits_avec_questions = [resource.product]
@@ -8033,7 +8081,7 @@ class PanierMVT(viewsets.ViewSet):
             request, produits_avec_questions,
         )
         if erreur_du_formulaire:
-            return self._render_badge_and_toast(request, message=erreur_du_formulaire, level='error')
+            return self._refus_dans_le_formulaire(request, erreur_du_formulaire)
 
         panier = PanierSession(request)
         try:
@@ -8053,16 +8101,14 @@ class PanierMVT(viewsets.ViewSet):
                 promotional_code_name=item_promo,
             )
         except InvalidItemError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
+            return self._refus_dans_le_formulaire(request, exc)
         except Exception as exc:
             logger.error(f"add_resource unexpected error: {exc}")
-            return self._render_badge_and_toast(
-                request, message=_("Unable to add resource."), level='error'
-            )
+            return self._refus_dans_le_formulaire(request, _("Unable to add resource."))
         # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
         # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
         # / If the "Add to cart and pay" button sent `then=checkout`, chain
         # directly to checkout (Stripe redirect or free order).
         if request.POST.get('then') == 'checkout':
-            return self.checkout(request)
+            return self.checkout(request, refus_dans_le_formulaire=True)
         return self._render_badge_and_toast(request, message=_("Resource added to cart."))

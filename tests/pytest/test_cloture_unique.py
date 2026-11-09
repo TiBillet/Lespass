@@ -228,7 +228,6 @@ class TestClotureUnique(FastTenantTestCase):
         configuration.heure_de_fermeture = time(2, 0)
         configuration.module_billetterie = True
         configuration.module_adhesion = True
-        configuration.rapport_emails = ""
         configuration.save()
 
         self.tarif_du_jus = creer_tarif_vendu(

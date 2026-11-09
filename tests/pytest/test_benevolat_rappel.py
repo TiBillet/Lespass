@@ -215,8 +215,17 @@ def test_les_deux_mails_portent_un_lien_de_desistement_qui_marche(lieu, mails_en
 
     mails = [mail for mail in mails_envoyes if mail.email == inscription.user.email]
     assert len(mails) == 2
+    # Le rappel liste les créneaux, chacun avec son lien ; la confirmation a un seul lien.
+    # / The reminder lists slots, each with its link; the confirmation has a single link.
+    liens = []
     for mail in mails:
-        chemin = re.sub(r"^https://[^/]+", "", mail.context["url_de_desistement"])
+        if "creneaux" in mail.context:
+            liens += [creneau["url_de_desistement"] for creneau in mail.context["creneaux"]]
+        else:
+            liens.append(mail.context["url_de_desistement"])
+    assert len(liens) == 2
+    for lien in liens:
+        chemin = re.sub(r"^https://[^/]+", "", lien)
         html = navigateur().get(chemin).content.decode()
         assert 'data-testid="benevolat-desistement-confirmer"' in html
 
@@ -249,6 +258,120 @@ def test_apres_le_delai_le_lien_marche_et_previent_l_equipe(lieu, django_capture
 
     assert "L'équipe est prévenue" in reponse.content.decode()
     assert "prevenir_l_equipe_d_un_desistement" in noms_des_taches(lieu.taches_demandees)
+
+
+def configuration_avec_l_email(adresse_du_lieu):
+    """
+    La vraie Configuration du lieu, avec un email choisi par le test, sans l'enregistrer.
+    La valeur en base dépend de la machine : le test ne doit pas en dépendre.
+    / The real Configuration with a test-chosen email, never saved (the DB value varies).
+    """
+    from BaseBillet.models import Configuration
+
+    configuration = Configuration.get_solo()
+    configuration.email = adresse_du_lieu
+    return patch("booking.tasks.Configuration.get_solo", return_value=configuration)
+
+
+def test_le_mail_de_desistement_part_a_l_equipe_et_a_chaque_personne_restante(lieu, mails_envoyes):
+    """
+    Un désistement tardif prévient l'équipe (Configuration.email) ET chaque personne
+    encore inscrite sur le créneau, un mail par adresse. Le lien mène à la page
+    publique du planning, pas à l'admin.
+    / The team and each remaining volunteer get one email each; the link is the public page.
+    """
+    from booking.tasks import prevenir_l_equipe_d_un_desistement
+
+    besoin = creer_un_besoin(1)
+    premiere_personne_restante = inscrire(besoin)
+    deuxieme_personne_restante = inscrire(besoin)
+
+    with configuration_avec_l_email("equipe-du-lieu@mock.test"):
+        assert prevenir_l_equipe_d_un_desistement(str(besoin.pk), "Camille Martin") is True
+
+    adresses_attendues = {
+        "equipe-du-lieu@mock.test",
+        premiere_personne_restante.user.email,
+        deuxieme_personne_restante.user.email,
+    }
+    adresses_recues = [mail.email for mail in mails_envoyes]
+    # Une adresse par mail : personne ne voit l'adresse des autres.
+    # / One address per email: nobody sees the others' addresses.
+    assert sorted(adresses_recues) == sorted(adresses_attendues)
+    for mail in mails_envoyes:
+        assert mail.context["url_du_planning"].endswith(f"/booking/benevolat/{besoin.planning.slug}/")
+        assert "/admin/" not in mail.context["url_du_planning"]
+
+
+def test_les_benevoles_ne_recoivent_que_le_prenom_de_la_personne_qui_se_retire(lieu, mails_envoyes):
+    """
+    L'équipe reçoit le nom complet. Les autres bénévoles ne reçoivent que le prénom,
+    dans le sujet comme dans le corps : le nom de famille n'est jamais public.
+    / The team gets the full name; volunteers get the first name only.
+    """
+    from booking.tasks import prevenir_l_equipe_d_un_desistement
+
+    besoin = creer_un_besoin(1)
+    personne_restante = inscrire(besoin)
+
+    with configuration_avec_l_email("equipe-du-lieu@mock.test"):
+        prevenir_l_equipe_d_un_desistement(str(besoin.pk), "Camille Martin", "Camille")
+
+    mail_par_adresse = {mail.email: mail for mail in mails_envoyes}
+    mail_de_l_equipe = mail_par_adresse["equipe-du-lieu@mock.test"]
+    mail_du_benevole = mail_par_adresse[personne_restante.user.email]
+
+    assert mail_de_l_equipe.context["nom_de_la_personne"] == "Camille Martin"
+    assert "Camille Martin" in mail_de_l_equipe.title
+    assert mail_du_benevole.context["nom_de_la_personne"] == "Camille"
+    assert "Martin" not in mail_du_benevole.title
+
+def test_le_mail_de_desistement_part_aux_inscrits_quand_le_lieu_n_a_pas_d_email(lieu, mails_envoyes):
+    """Lieu sans email : les personnes inscrites sont prévenues quand même."""
+    from booking.tasks import prevenir_l_equipe_d_un_desistement
+
+    besoin = creer_un_besoin(1)
+    personne_restante = inscrire(besoin)
+
+    with configuration_avec_l_email(""):
+        assert prevenir_l_equipe_d_un_desistement(str(besoin.pk), "Camille Martin") is True
+
+    assert [mail.email for mail in mails_envoyes] == [personne_restante.user.email]
+
+
+def test_le_mail_de_desistement_n_est_envoye_qu_une_fois_a_une_adresse_en_double(lieu, mails_envoyes):
+    """Une personne inscrite avec l'adresse du lieu reçoit un seul mail."""
+    from booking.tasks import prevenir_l_equipe_d_un_desistement
+
+    besoin = creer_un_besoin(1)
+    personne_restante = inscrire(besoin)
+
+    with configuration_avec_l_email(personne_restante.user.email):
+        prevenir_l_equipe_d_un_desistement(str(besoin.pk), "Camille Martin")
+
+    assert [mail.email for mail in mails_envoyes] == [personne_restante.user.email]
+
+
+def test_un_envoi_qui_plante_n_empeche_pas_les_autres_mails_de_desistement(lieu):
+    """Un envoi qui lève une exception est journalisé ; les destinataires suivants reçoivent le mail."""
+    from booking.tasks import prevenir_l_equipe_d_un_desistement
+
+    besoin = creer_un_besoin(1)
+    personne_restante = inscrire(besoin)
+    envois = []
+
+    class MailerQuiPlanteSurLeLieu(FauxMailer):
+        def send(self):
+            if self.email == "equipe-du-lieu@mock.test":
+                raise ValueError("adresse refusée")
+            envois.append(self.email)
+            self.sended = True
+
+    with configuration_avec_l_email("equipe-du-lieu@mock.test"):
+        with patch("booking.tasks.CeleryMailerClass", MailerQuiPlanteSurLeLieu):
+            assert prevenir_l_equipe_d_un_desistement(str(besoin.pk), "Camille Martin") is True
+
+    assert envois == [personne_restante.user.email]
 
 
 def test_le_post_exige_le_jeton_csrf(lieu):
@@ -373,3 +496,29 @@ def test_csrf_echoue_sur_le_desistement_affiche_la_page_avec_un_message(lieu):
     assert reponse.status_code == 403
     assert 'data-testid="benevolat-desistement-page-perimee"' in reponse.content.decode()
     assert InscriptionBenevole.objects.filter(pk=inscription.pk).exists()
+
+
+def test_une_personne_inscrite_a_deux_creneaux_demain_recoit_un_seul_rappel(lieu, mails_envoyes):
+    """
+    Deux créneaux demain pour la même personne : un seul mail, qui liste les deux,
+    chacun avec son propre lien de désistement. Les deux inscriptions sont marquées.
+    / Two slots tomorrow for one person: one email listing both, both sign-ups marked.
+    """
+    from booking.tasks import rappeler_les_benevoles_du_lendemain_du_lieu
+
+    personne = creer_utilisateur()
+    premiere = inscrire(creer_un_besoin(1), utilisateur=personne)
+    seconde = inscrire(creer_un_besoin(1, journee=True), utilisateur=personne)
+
+    rappeler_les_benevoles_du_lendemain_du_lieu()
+
+    mails_de_cette_personne = [mail for mail in mails_envoyes if mail.email == personne.email]
+    assert len(mails_de_cette_personne) == 1
+    creneaux = mails_de_cette_personne[0].context["creneaux"]
+    assert [creneau["besoin"].pk for creneau in creneaux] == [seconde.besoin.pk, premiere.besoin.pk]
+    assert creneaux[0]["url_de_desistement"] != creneaux[1]["url_de_desistement"]
+    assert "2 créneaux" in mails_de_cette_personne[0].title
+    premiere.refresh_from_db()
+    seconde.refresh_from_db()
+    assert premiere.rappel_envoye_le is not None
+    assert seconde.rappel_envoye_le is not None

@@ -30,7 +30,8 @@ These guidelines define how to build the v2 API with a strong focus on semantic,
 
 Image uploads (security)
 - For Event and PostalAddress create endpoints, image uploads are accepted via multipart/form-data using fields `img` and `sticker_img`.
-- The serializers perform strict validation using Pillow: only `image/*` content-types are accepted and files must open/verify as images. Non-images are rejected with 400.
+- The serializers perform strict validation using Pillow (`api_v2/serializers.py:_validate_uploaded_image`, shared by events, postal addresses and page blocks): only `image/*` content-types are accepted, the real format must be JPEG, PNG, GIF or WebP, the image must be ≤ 10 MB and ≤ 50 megapixels, and it must open/verify as an image. Anything else is rejected with 400.
+- The API never downloads an image from a URL: images are always uploaded as files.
 - Example (multipart): see `openapi-schema.yaml` for `POST /api/v2/events/` and `POST /api/v2/postal-addresses/`.
 
 PostalAddress endpoints (schema.org/PostalAddress)
@@ -211,10 +212,10 @@ This single permission covers both `/api/v2/pages/` and `/api/v2/blocs/` routes.
 | POST | `/api/v2/pages/` | Crée une page + ses blocs (nested `hasPart`), **atomique** | 201 WebPage |
 | GET | `/api/v2/pages/block-types/` | **Catalogue** des types de blocs et champs autorisés | 200 `{"blockTypes":[...]}` |
 | GET | `/api/v2/pages/{uuid}/` | Détail (lookup par **uuid OU slug**) | 200 WebPage / 404 |
-| PATCH | `/api/v2/pages/{uuid}/` | Édite les **méta** de la page (titre, slug, publie, SEO…) | 200 WebPage |
-| DELETE | `/api/v2/pages/{uuid}/` | Supprime la page (cascade blocs) | 204 |
-| POST | `/api/v2/pages/{uuid}/blocs/` | Ajoute **un** bloc (JSON ou multipart) | 201 WebPageElement |
-| PATCH | `/api/v2/blocs/{uuid}/` | Édite un bloc (JSON ou multipart) | 200 WebPageElement |
+| PATCH | `/api/v2/pages/{uuid}/` | Édite les **méta** de la page (titre, slug, publie, SEO…) ; **uuid OU slug** | 200 WebPage / 404 |
+| DELETE | `/api/v2/pages/{uuid}/` | Supprime la page (cascade blocs) ; **uuid OU slug** | 204 / 404 |
+| POST | `/api/v2/pages/{uuid}/blocs/` | Ajoute **un** bloc (JSON ou multipart) ; **uuid OU slug** | 201 WebPageElement / 404 |
+| PATCH | `/api/v2/blocs/{uuid}/` | Édite un bloc (JSON ou multipart ; images en multipart uniquement) | 200 WebPageElement |
 | DELETE | `/api/v2/blocs/{uuid}/` | Supprime un bloc | 204 |
 
 ### Mapping Page → WebPage (schema.org)
@@ -277,20 +278,20 @@ Exemple sortie avec parent :
 ```
 @type              = "WebPageElement"
 identifier         = uuid
-additionalType     = type_bloc   ← champ pivot (ex: "HERO", "GALERIE"…)
+additionalType     = type_bloc   ← champ pivot (ex: "SECTION", "IMAGES"…)
 headline           = titre
 alternativeHeadline = sous_titre
-text               = texte HTML nettoyé par nh3
-image              = URL (string) ou ImageObject[] pour GALERIE / PARTENAIRES
+text               = texte : markdown pour TEXTE (gardé tel quel), HTML nettoyé par nh3 sinon
+image              = en écriture : jamais une URL (cf. § Images) ; en lecture : URL ou ImageObject[]
 position           = ordre dans la page
 additionalProperty = PropertyValue[] pour tout le reste (voir ci-dessous)
 ```
 
 Champs portés par `additionalProperty` (PropertyValue[]) :
-`surtitre`, `badge`, `image_secondaire`, `image_position`,
-`bouton_label`, `bouton_url`, `bouton2_label`, `bouton2_url`,
-`auteur_nom`, `auteur_role`, `auteur_photo`,
-`points_gps`, `contenu`, `nombre_max`, `repliable`, `embed_url`, `hauteur_px`.
+`affichage`, `source`, `badge`, `bouton_label`, `bouton_url`, `bouton2_label`, `bouton2_url`,
+`auteur_nom`, `auteur_role`, `points_gps`, `donnees_carte_figee`, `contenu`, `nombre_max`,
+`embed_url`, `hauteur_px`. (`image_secondaire` et `auteur_photo` sont des fichiers : en
+multipart seulement, cf. § Images.)
 (`video` n'est PAS settable via l'API — cf. § Vidéo. Un `video` en additionalProperty
 est silencieusement ignoré.)
 
@@ -299,15 +300,28 @@ Format PropertyValue : `{"@type":"PropertyValue","name":"<clé>","value":<valeur
 
 ### Les types de blocs (additionalType)
 
-`HERO`, `PARAGRAPHE`, `IMAGE_TEXTE`, `CTA`, `TEMOIGNAGE`, `VIDEO_TEXTE`,
-`CARTE`, `IMAGE`, `CARTE_LEAFLET`, `INFOS`, `FAQ`, `EVENEMENTS`, `GALERIE`, `EMBED`,
-`MARKDOWN`, `LISTE_SOUS_PAGES`, `IFRAME`, `PARTENAIRES`, `NEWSLETTER`.
+8 types, organisés par intention ; la variation visuelle est portée par `affichage`
+(dans `additionalProperty`), validé contre le type (`pages/blocs_catalogue.py:AFFICHAGES_PAR_TYPE`) :
 
-- **`IFRAME`** : contenu intégré libre. `embed_url` (rendu seulement si l'hôte est
-  autorisé par le superadmin ROOT) + `hauteur_px`.
-- **`NEWSLETTER`** : formulaire d'inscription Ghost. `embed_url` = instance Ghost
-  (data-site), `headline`/`alternativeHeadline` = titre/description du formulaire.
-- **`PARTENAIRES`** : bande de logos (images via ImageObject[], cf. § Images).
+| Type | Affichages |
+|---|---|
+| `SECTION` | `BANNIERE`, `TEXTE_IMAGE_GAUCHE`, `TEXTE_IMAGE_DROITE`, `TEXTE_VIDEO`, `MEDIA_ET_CARTES`, `CARTE`, `APPEL_ACTION`, `CITATION`, `EQUIPE`, `FRISE`, `RESSOURCES` |
+| `TEXTE` | — (markdown) |
+| `IMAGES` | `PLEINE_LARGEUR`, `VIGNETTE_TITRE`, `GRILLE`, `BANDE_LOGOS` |
+| `INTEGRATION` | `VIDEO`, `WIDGET`, `NEWSLETTER` |
+| `LIEU` | `VERTICAL`, `HORIZONTAL` |
+| `FAQ`, `CARTE_FIGEE` | — |
+| `LISTE` | — (`source` = `SOUS_PAGES` ou `EVENEMENTS`) |
+
+- **`INTEGRATION` en `WIDGET`** : contenu intégré libre. `embed_url` (rendu seulement si
+  l'hôte est autorisé par le superadmin ROOT) + `hauteur_px`.
+- **`INTEGRATION` en `NEWSLETTER`** : formulaire d'inscription Ghost. `embed_url` =
+  instance Ghost (data-site), `headline`/`alternativeHeadline` = titre/description.
+- **`IMAGES` en `BANDE_LOGOS`** : bande de logos (images envoyées par
+  `POST /api/v2/blocs/{uuid}/images/`, cf. § Images).
+
+Les anciens types (HERO, PARAGRAPHE, GALERIE, IFRAME, etc., avant juillet 2026) sont
+refusés : « Type de bloc inconnu ».
 
 Les champs autorisés par type sont donnés par `GET /api/v2/pages/block-types/`
 (source unique : `pages/blocs_catalogue.py`) — **toujours** interroger cet endpoint
@@ -315,33 +329,49 @@ plutôt que coder la liste en dur.
 
 ### Images
 
-**Par URL (JSON)** — champ `image` = URL `http`/`https` → téléchargée par le serveur
-(validation Pillow, ≤ 10 Mo).
-Pour **GALERIE** et **PARTENAIRES** : `image` = liste d'ImageObject
-`[{"@type":"ImageObject","contentUrl":"https://...","caption":"..."}]`.
-Pour **PARTENAIRES**, la clé optionnelle `"url"` rend le logo cliquable (nouvel onglet) :
-`{"@type":"ImageObject","contentUrl":"https://…/logo.png","caption":"Partenaire","url":"https://partenaire.exemple/"}`
-(les schémas dangereux sont neutralisés côté serveur).
+**Le serveur ne télécharge aucune URL.** Une image s'envoie toujours **en fichier**
+(multipart). Toute autre forme (URL, liste d'ImageObject avec `contentUrl`, dict, texte à
+la place du fichier) renvoie un **400** qui dit quoi faire. Spec :
+`TECH_DOC/SESSIONS/PAGES/CHANTIER-09-images-sans-telechargement.md`.
 
-**Upload multipart** (`POST /api/v2/pages/{uuid}/blocs/` ou `PATCH /api/v2/blocs/{uuid}/`) :
-champs fichier `image`, `image_secondaire`, `auteur_photo` en `multipart/form-data`.
+**Image simple** (`image`, `image_secondaire`, `auteur_photo`) : en `multipart/form-data`
+sur `POST /api/v2/pages/{uuid}/blocs/`, ou ensuite par `PATCH /api/v2/blocs/{uuid}/`.
 
-**Vidéo** : utiliser le bloc **EMBED** (`embed_url` = URL YouTube/Vimeo/PeerTube, rendu en iframe).
+**Galerie, Équipe, Ressources, images d'un article** : créer le bloc (JSON), puis envoyer
+chaque image par **`POST /api/v2/blocs/{uuid}/images/`** (multipart : `image`, `caption`,
+`url`, `keywords`). Blocs acceptés : IMAGES en `GRILLE` ou `BANDE_LOGOS`, SECTION en
+`EQUIPE` ou `RESSOURCES`, TEXTE. L'image s'ajoute à la fin. Pour une bande de logos,
+`url` rend le logo cliquable (schéma dangereux vidé). La réponse porte
+`galerieReference` (`galerie:N`), à écrire dans le markdown d'un bloc TEXTE :
+`![légende](galerie:N)`. Les images externes d'un markdown (`![x](https://…)`) ne sont
+pas importées : elles restent servies par le site d'origine.
+
+**Équipe et Ressources en JSON** : une SECTION en affichage `EQUIPE` ou `RESSOURCES`
+reçoit ses éléments dans `image`, **sans `contentUrl`** :
+`[{"@type":"ImageObject","caption":"Awa Diallo","keywords":"Coordination"}]`. Les photos
+s'ajoutent ensuite par l'endpoint ci-dessus.
+
+**Fichier accepté** : JPEG, PNG, GIF ou WebP, ≤ 10 Mo, ≤ 50 mégapixels. Le serveur lui
+donne un nom aléatoire avec l'extension de son format réel.
+
+**Vidéo** : utiliser le bloc **`INTEGRATION` en `VIDEO`** (`embed_url` = URL YouTube/Vimeo/PeerTube, rendu en iframe).
 L'upload de fichier vidéo n'est **pas exposé** par l'API pour éviter d'héberger des fichiers lourds.
 Le champ modèle `video` reste accessible via l'admin Django.
 
 ### Sécurité
 
-- **Anti-SSRF** : une URL vers un hôte interne/privé/loopback est refusée (400).
-  Les schémas non `http`/`https` sont également refusés.
+- **Aucun téléchargement** : le serveur ne contacte jamais une URL fournie par le
+  client (pas de SSRF possible par ce chemin). Les images arrivent en fichier.
+- **Fichiers image** : format réel vérifié (JPEG, PNG, GIF, WebP), ≤ 50 mégapixels,
+  nom choisi par le serveur (le nom et l'extension du client ne sont jamais gardés).
 - **Neutralisation des champs lien** (`bouton_url`, `bouton2_url`, `embed_url`) :
   les schémas dangereux (`javascript:`, `data:`, `vbscript:`) sont vidés
   silencieusement à la création/édition (pas d'erreur, champ vide).
 - **Sanitisation HTML** : `text` (WYSIWYG) est nettoyé par nh3 (whitelist de balises),
   rendu sûr côté serveur.
 - **Slug réservé** : `admin`, `event`, `api`, etc. sont refusés à la création/édition (400).
-- **Création atomique** : une erreur dans un bloc (URL image invalide, slug réservé)
-  annule toute la création — pas d'enregistrement partiel.
+- **Création atomique** : une erreur dans un bloc (image envoyée autrement qu'en
+  fichier, slug réservé) annule toute la création — pas d'enregistrement partiel.
 - **Isolation multi-tenant** : chaque clé ne voit que les pages de son propre tenant.
 
 ### Exemple de payload — création nested
@@ -358,18 +388,26 @@ POST /api/v2/pages/
   ],
   "hasPart": [
     {
-      "additionalType": "HERO",
+      "additionalType": "SECTION",
       "headline": "Bienvenue",
-      "image": "https://exemple.fr/hero.jpg",
+      "alternativeHeadline": "Un lieu culturel coopératif",
       "additionalProperty": [
-        {"@type": "PropertyValue", "name": "bouton_label", "value": "Voir l'agenda"},
-        {"@type": "PropertyValue", "name": "bouton_url",   "value": "/event/"}
+        {"@type": "PropertyValue", "name": "affichage", "value": "BANNIERE"}
       ]
     },
     {
-      "additionalType": "PARAGRAPHE",
+      "additionalType": "TEXTE",
       "headline": "À propos",
-      "text": "<p>Un lieu culturel <strong>coopératif</strong>.</p>"
+      "text": "Un lieu culturel **coopératif**."
+    },
+    {
+      "additionalType": "SECTION",
+      "headline": "Venez nous voir",
+      "additionalProperty": [
+        {"@type": "PropertyValue", "name": "affichage",    "value": "APPEL_ACTION"},
+        {"@type": "PropertyValue", "name": "bouton_label", "value": "Voir l'agenda"},
+        {"@type": "PropertyValue", "name": "bouton_url",   "value": "/event/"}
+      ]
     }
   ]
 }
@@ -382,9 +420,11 @@ docker exec -e API_KEY=dummy lespass_django poetry run pytest tests/pytest/test_
 ```
 
 Tests (`tests/pytest/test_pages_api.py`) : CRUD page, catalogue block-types, ajout/édition/
-suppression bloc, images par URL, upload multipart, anti-SSRF, neutralisation XSS dans les
-champs lien, isolation tenant, slug réservé, atomicité, et création des blocs IFRAME
-(hauteur_px), NEWSLETTER (embed_url) et PARTENAIRES (logos cliquables `url`).
+suppression bloc, refus des images par URL, upload multipart, endpoint images de galerie,
+validation des fichiers image (format, pixels, nom serveur), neutralisation XSS dans les
+champs lien, isolation tenant, slug réservé, atomicité, et création des blocs
+INTEGRATION (WIDGET avec hauteur_px, NEWSLETTER avec embed_url) et IMAGES en bande de
+logos (logos cliquables `url`).
 
 Comptabilité — closures, entries, chart of accounts (spec `TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-06-connecteurs-comptables/CHANTIER-06-A-api-comptable.md`)
 - Read by an accounting software (Dolibarr, Paheko…) every night. Read-only (`GET` only).
@@ -423,7 +463,7 @@ Bénévolat — tasks, plannings, needs, sign-ups (spec `TECH_DOC/SESSIONS/TODO/
   - `BesoinBenevole` → `Event` with `additionalType: "Volunteering"`, `superEvent` (planning), `about` (task), `remainingAttendeeCapacity`, `attendee` (first names only), `additionalProperty`: `nombreSouhaite`, `nombreInscrits`, `renforts`, `fermeture` (closure label or null).
   - `InscriptionBenevole` → `RsvpAction` with `object` (the need), `agent` (`email`, `givenName`, `familyName`: the key belongs to the venue team), `startTime`, `additionalProperty`: `inscritPar`, `rappelEnvoyeLe`.
 - Dates of a need: the model stores day + local hours without timezone. `startDate` = a date only (whole day, no `endDate`) or a datetime (`endDate` required). No offset = venue local time; with an offset = converted to the venue timezone. The end is the same day (after the start) or the next day (before the start, e.g. 21:00 → 00:00); otherwise 400. Output carries the venue offset (`2026-11-06T21:00:00+01:00`). A need on a closed day is accepted, with `fermeture` filled.
-- Sign-up creation = the team sign-up rules: account created if missing (inactive, attached to the venue, no login mail), first/last name written only if empty; missing in the account AND in the request → 400 and nothing is created; planning published and need not past, else 400; no membership check; `inscritPar` = the key's user. **201** when created, **200** with the existing sign-up when replayed. On creation the person gets "L'équipe t'a inscrit·e" with the signed "Je ne peux plus venir" link. DELETE: anytime, no mail. No PATCH.
+- Sign-up creation = the team sign-up rules: account created if missing (inactive, attached to the venue, no login mail), first/last name written only if empty; missing in the account AND in the request → 400 and nothing is created; planning published and need not past, else 400; no membership check; `inscritPar` = the key's user. **201** when created, **200** with the existing sign-up when replayed. On creation the person gets "L'équipe vous a inscrit·e" with the signed "Je ne peux plus venir" link. DELETE: anytime, no mail. No PATCH.
 - Lists are wrapped in `{"results": [...]}`, not paginated. Needs: `?planning=`, `?task=`, `?dateFrom=`, `?dateTo=` (past needs included). Sign-ups: `?need=`, `?planning=`.
 - Not in the API (light version, D24): repeating needs (admin only), sign-up filters by email or date, writing memberships or closing calendar.
 

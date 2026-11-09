@@ -4,9 +4,11 @@
     {
       "id": 0,
       "name": "doc-docs-vers-page-upop-bar",
-      "prompt": "Transformer le document Docs « Upop' Bar » (contenu figé fourni) en une page d'accueil complète du tenant la-maison-des-communs, via l'API v2 : HERO (H1) + 3 images téléchargées par URL + paragraphes de section (H2/H3), avec meta_description et image de partage depuis le frontmatter.",
-      "expected_output": "Page 'accueil' créée (est_accueil, publiée), titre 'Upop' Bar', ~8 blocs dans l'ordre (HERO, IMAGE, PARAGRAPHE x2, IMAGE, PARAGRAPHE, IMAGE, PARAGRAPHE), 3 images effectivement téléchargées, contenu des sections présent.",
-      "files": ["../tibillet-api-workspace/doc-upop-bar.md"]
+      "prompt": "Transformer le document Docs « Upop' Bar » (contenu figé fourni) en une page d'accueil complète du tenant la-maison-des-communs, via l'API v2 : une SECTION en BANNIERE (H1) + 3 images (téléchargées localement par l'agent, puis envoyées en fichier : le serveur ne télécharge aucune URL) + paragraphes de section (H2/H3) en blocs TEXTE, avec meta_description depuis le frontmatter.",
+      "expected_output": "Page 'accueil' créée (est_accueil, publiée), titre 'Upop' Bar', ~8 blocs dans l'ordre (SECTION/BANNIERE, IMAGES, TEXTE x2, IMAGES, TEXTE, IMAGES, TEXTE), 3 images envoyées en multipart (PATCH du bloc IMAGES ou POST /api/v2/blocs/{uuid}/images/), aucune URL d'image envoyée en JSON, contenu des sections présent.",
+      "files": [
+        "../tibillet-api-workspace/doc-upop-bar.md"
+      ]
     }
   ]
 }

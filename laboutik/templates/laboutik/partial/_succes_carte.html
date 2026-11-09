@@ -1,7 +1,7 @@
 {% load i18n laboutik_filters %}
 {% comment %}
-UNE CARTE CASHLESS DANS L'ECRAN DE SUCCES : avant / paye / apres
-/ One cashless card in the success screen: before / paid / after
+UNE CARTE CASHLESS DANS L'ECRAN DE SUCCES : ce qui est paye, et le solde total
+/ One cashless card in the success screen: what was paid, and the total balance
 
 LOCALISATION : laboutik/templates/laboutik/partial/_succes_carte.html
 INCLUS PAR : laboutik/templates/laboutik/partial/hx_return_payment_success.html
@@ -9,19 +9,21 @@ INCLUS PAR : laboutik/templates/laboutik/partial/hx_return_payment_success.html
 STYLE : laboutik/static/css/overlay.css (bloc ECRAN DE SUCCES)
 
 PARAMETRES :
-- carte            : {"tag_id": str, "soldes": [...]}. Les soldes viennent de
-                     views.py:_calculer_soldes_apres_paiement() : une entree par
-                     monnaie debitee, montants en centimes. `unite` : nom de la
-                     monnaie pour des points ou du temps (montants ecrits dans
-                     cette monnaie), vide pour de l'argent (euros).
+- carte            : dict rendu par views.py:_carte_pour_l_ecran_de_succes() :
+                     tag_id, soldes (une entree par monnaie debitee, FED compris,
+                     montants en centimes), solde_total_centimes, reseau_indisponible.
+                     `unite` : nom de la monnaie pour des points ou du temps
+                     (montants ecrits dans cette monnaie), vide pour de l'argent.
 - rang             : 1 ou 2 (position de la carte dans le paiement)
 - nombre_de_cartes : 1 ou 2. L'etiquette « 1re carte / 2e carte » n'apparait
                      que quand deux cartes ont paye.
 
 AFFICHAGE :
-- une seule monnaie debitee : avant → (montant paye) → apres, en gros ;
-- plusieurs monnaies : un tableau Monnaie · Avant · Payé · Après.
-/ One currency: before → (paid) → after. Several: a small table.
+- une ligne par monnaie debitee : son nom et le montant paye ;
+- le solde total, le plus gros chiffre de la carte. Le solde de chaque monnaie est au
+  check carte. Les points et le temps ne sont pas dans ce total : leur reste s'affiche.
+/ One row per debited currency, then the total, the biggest figure. Each currency's
+balance is on the card check, except points and time, which the total leaves out.
 {% endcomment %}
 <div class="succes-carte" data-testid="succes-carte-{{ rang }}">
   <div class="succes-carte-ref">
@@ -32,43 +34,34 @@ AFFICHAGE :
     {% endif %}
   </div>
 
-  {% if carte.soldes|length == 1 %}
-    {% with solde=carte.soldes.0 %}
-      <div class="succes-avant-apres" data-testid="solde-carte{{ rang }}-asset-1">
-        <div class="succes-solde-bloc succes-solde-avant">
-          <span>{% translate "Avant" %}</span>
-          <b data-testid="paiement-carte{{ rang }}-solde-avant">{{ solde.solde_avant_centimes|montant_dans_la_monnaie:solde.unite }}</b>
-        </div>
-        <div class="succes-passage">
-          <b data-testid="paiement-carte{{ rang }}-debite"><span class="sr-only">{% translate "Payé" %}</span>− {{ solde.debite_centimes|montant_dans_la_monnaie:solde.unite }}</b>
-          <svg class="succes-fleche" viewBox="0 0 34 10" aria-hidden="true" focusable="false"><path d="M0 4h28V0l6 5-6 5V6H0z"/></svg>
-        </div>
-        <div class="succes-solde-bloc succes-solde-apres">
-          <span>{% translate "Sur la carte" %} · {{ solde.name }}</span>
-          <b data-testid="paiement-carte{{ rang }}-solde-apres">{{ solde.solde_centimes|montant_dans_la_monnaie:solde.unite }}</b>
-        </div>
-      </div>
-    {% endwith %}
-  {% else %}
-    <table class="succes-assets">
-      <thead>
-        <tr>
-          <th scope="col">{% translate "Monnaie" %}</th>
-          <th scope="col" class="num">{% translate "Avant" %}</th>
-          <th scope="col" class="num">{% translate "Payé" %}</th>
-          <th scope="col" class="num">{% translate "Après" %}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for solde in carte.soldes %}
-          <tr data-testid="solde-carte{{ rang }}-asset-{{ forloop.counter }}">
-            <td>{{ solde.name }}</td>
-            <td class="num">{{ solde.solde_avant_centimes|montant_dans_la_monnaie:solde.unite }}</td>
-            <td class="num succes-paye">− {{ solde.debite_centimes|montant_dans_la_monnaie:solde.unite }}</td>
-            <td class="num">{{ solde.solde_centimes|montant_dans_la_monnaie:solde.unite }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {# Ce que la vente a pris, monnaie par monnaie. Le solde de chaque monnaie est au check carte. #}
+  {# / What the sale took, per currency. Each currency's balance is on the card check.           #}
+  <ul class="succes-paiements">
+    {% for solde in carte.soldes %}
+      <li class="succes-paiement" data-testid="solde-carte{{ rang }}-asset-{{ forloop.counter }}">
+        <span>{{ solde.name }}</span>
+        <b{% if forloop.first %} data-testid="paiement-carte{{ rang }}-debite"{% endif %}><span class="sr-only">{% translate "Payé" %}</span>− {{ solde.debite_centimes|montant_dans_la_monnaie:solde.unite }}</b>
+      </li>
+      {# Points et temps : absents du solde total en euros, leur reste s'affiche ici. #}
+      {# / Points and time are not in the euro total: their balance stays here.        #}
+      {% if solde.unite %}
+        <li class="succes-paiement">
+          <span>{% translate "Sur la carte" %}</span>
+          <b{% if forloop.first %} data-testid="paiement-carte{{ rang }}-solde-apres"{% endif %}>{{ solde.solde_centimes|montant_dans_la_monnaie:solde.unite }}</b>
+        </li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+
+  {# Tout ce que la carte peut encore dépenser ici, FED compris #}
+  {# / Everything the card can still spend here, FED included #}
+  <div class="succes-solde-total">
+    <span>{% translate "Solde total" %}</span>
+    <b data-testid="paiement-carte{{ rang }}-solde-total">{{ carte.solde_total_centimes|montant_dans_la_monnaie:"" }}</b>
+  </div>
+  {% if carte.reseau_indisponible %}
+    <div class="succes-reseau-indisponible" role="status" data-testid="paiement-carte{{ rang }}-reseau-indisponible">
+      TiBillet : {% translate "Indisponible" %}
+    </div>
   {% endif %}
 </div>

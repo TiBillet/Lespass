@@ -15,6 +15,95 @@ Guidelines for building Django applications with HTMX. Code must be **FALC** (Fa
 - **Bilingual comments FR/EN** — French comments are written in FALC (Facile a Lire et a Comprendre): simple words, short sentences, one idea per sentence, no jargon, no abbreviations. English comments are just a one-line summary of the French comment.
 - **Code reads top-to-bottom** — no jumping across 5 files to understand a flow
 
+## Faire simple, sans jamais sacrifier FALC
+
+Faire simple réduit ce qu'on **construit**. FALC rend lisible ce qu'on construit. Les deux
+vont ensemble, et **FALC gagne en cas de doute**. Une fonctionnalité en trop se supprime. Un
+nom long ou un commentaire FALC reste.
+
+**Avant d'écrire du code, se poser ces questions dans l'ordre :**
+
+1. **Ce code doit-il exister ?** Ne pas ajouter de fonctionnalité ni d'option « au cas où ».
+2. **Existe-t-il déjà dans le projet ?** Chercher le helper ou le pattern, puis le réutiliser.
+3. **Python ou Django le font-ils déjà, sans sucre caché ?**
+4. **Une dépendance installée le fait-elle déjà, sans sucre caché ?** Ne pas ajouter de
+   dépendance pour quelques lignes.
+
+**Faire simple ne retire jamais :** les commentaires FALC, les noms verbeux, les méthodes
+explicites d'un `ViewSet`, l'i18n, les `aria-*`, les `data-testid`, le fichier `CHANGELOG/`
+et les tests. Le sucre reste refusé même quand il est disponible : pas de `ModelViewSet`
+sous prétexte que DRF est installé.
+
+## Plugins d'agent : superpowers, caveman
+
+Ces plugins sont optionnels et installés par chaque dev. Si un plugin est absent, ignorer
+ce qui le concerne. Ils agissent chacun à un niveau différent :
+
+| Plugin | Agit sur | Usage |
+|---|---|---|
+| **superpowers** | Le **processus** : quand réfléchir, planifier, tester, vérifier | Brainstorming, plans, TDD, débogage, vérification |
+| **caveman** | La **prose du chat** : réponses courtes | Comptes rendus et réponses au mainteneur |
+
+**Ordre de priorité, du plus fort au plus faible :**
+
+1. `CLAUDE.md`, `GUIDELINES.md` et ce skill (FALC, pas de sucre, règles git, accessibilité, i18n)
+2. superpowers (le processus)
+3. caveman (le style du chat)
+
+Caveman s'injecte par hook dans **chaque session et chaque subagent**. Ses règles ne disent
+pas qu'elles passent après celles du projet. Cet ordre doit donc être appliqué à la main.
+
+### Arbitrages avec caveman
+
+- **Caveman ne s'applique qu'au chat.** Le code, les commentaires, les fichiers `CHANGELOG/`,
+  les specs, les plans et les mémoires s'écrivent en phrases complètes.
+- **En français correct, accents compris.** On coupe le remplissage, pas la grammaire.
+- **Phrases complètes obligatoires** pour : une action irréversible, une opération sur de
+  l'argent ou des données de production, une question au mainteneur, un test en échec, et le
+  détail de ce qui n'a pas été vérifié.
+- **`/caveman-compress` : jamais sur un fichier du dépôt ni sur une mémoire.** Il écrase
+  l'original par une version compressée et envoie le texte au fournisseur du modèle.
+- **`/caveman-init` : jamais sans accord.** Il dépose des fichiers de règles dans le dépôt.
+- **`/caveman-commit` rédige un message, rien de plus.** Le commit reste au mainteneur.
+
+### Sorties dans le chat : FALC, courtes et complètes
+
+Caveman coupe le remplissage, **jamais l'explication**. Les sorties suivent les règles FALC :
+mots simples, phrases courtes, une idée par phrase, pas de jargon inutile. Le mainteneur doit
+pouvoir comprendre tous les choix et lire le code modifié sans ouvrir les fichiers.
+
+Quand du code a été modifié, le compte rendu contient, dans cet ordre :
+
+1. **Ce qui a changé** : une phrase par changement.
+2. **Le code modifié** : un extrait par changement, avec `fichier:ligne`. L'extrait montre les
+   lignes changées et une ou deux lignes de contexte, jamais le fichier entier. Si le même
+   changement se répète, un seul extrait suffit, avec le nombre d'endroits touchés.
+3. **Les choix faits** : chaque choix, avec sa raison en une phrase. Si une autre option a été
+   écartée, la nommer.
+4. **Ce qui n'a pas été vérifié** : les tests non lancés et les risques restants.
+
+Pas de récit de session, ni de répétition. Si une phrase n'explique ni un changement, ni un
+choix, ni un risque, elle est supprimée.
+
+### Subagents
+
+Les subagents reçoivent les règles de caveman, mais **pas ce skill**, sauf si le brief le
+demande. Quand un subagent écrit du code, le brief contient donc, juste après la règle git :
+
+```
+Load the `djc` skill first. Project rules override caveman:
+FALC bilingual comments, verbose names, no framework sugar.
+Your final report stays complete: commands run, results, what was not verified.
+```
+
+Les agents `cavecrew-*` ne remplacent pas les subagents habituels :
+
+- `cavecrew-investigator` et `cavecrew-reviewer` conviennent pour localiser et relire.
+- `cavecrew-builder` est réservé aux éditions mécaniques (renommage, coquille). Ses
+  consignes interdisent d'ajouter des commentaires, ce qui est incompatible avec FALC.
+- Son fichier affirme qu'il n'a pas accès à `Bash`, mais aucune restriction technique ne
+  l'impose. La règle git reste obligatoire en tête de son brief.
+
 ## FALC Commenting Method
 
 Use this commenting structure for **all code** (JavaScript, Python, Django templates):
@@ -1286,6 +1375,8 @@ Le mainteneur decide. Jamais l'assistant.
 | `git checkout --`, `git stash`, `git reset --hard` | Alerter le mainteneur, attendre ses instructions | Efface le travail non committe (incident Session 32 : 4h perdues) |
 | `ruff format <fichier-existant>` | Ne lancer que sur des fichiers **neufs** ; sinon alerter le mainteneur | Reformate des milliers de lignes pre-existantes non liees a la session |
 | `ruff check --fix` sur `admin*.py`, `apps.py`, `signals.py`, `triggers.py`, `settings.py`, `__init__.py` | Inspecter **a la main** les imports « inutilises » AVANT ; apres tout `--fix` lancer `manage.py check` + la suite complete | `--fix` supprime les imports a effet de bord **nus** (`@admin.register`, `@receiver`) → `admin.E039`, Django ne boote plus (incident : 319 tests en erreur) |
+| Réduire les commentaires FALC ou les noms verbeux pour faire plus court | Garder FALC ; faire simple coupe des fonctionnalités, pas de la lisibilité | Le projet doit rester lisible par des devs non experts |
+| Écrire du code, un `CHANGELOG/` ou une spec en style caveman | Caveman reste dans le chat | Ces fichiers sont relus dans six mois, par d'autres |
 
 ## Tests
 

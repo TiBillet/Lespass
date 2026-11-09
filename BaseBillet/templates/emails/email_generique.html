@@ -1,94 +1,74 @@
 {% extends 'emails/base.html' %}
-{% load humanize static i18n %}
+{% load i18n %}
+{% comment %}
+MAIL GÉNÉRIQUE : un titre, quelques paragraphes, un tableau d'informations, un bouton.
+/ Generic email: title, paragraphs, info table, button.
 
-{% block content %}
+LOCALISATION : BaseBillet/templates/emails/email_generique.html
+
+Variables attendues (toutes facultatives sauf title) :
+- sub_title : petit libellé au-dessus du titre (ex. « Paiement ») ;
+- title : le titre (c'est aussi le sujet du mail) ;
+- username : le prénom pour « Bonjour … » ;
+- main_text, main_text_2, main_text_3 : les paragraphes ;
+- table_info : un dictionnaire { libellé : valeur } ;
+- button : { "text": …, "url": … } ;
+- next_text_1, next_text_2 : un texte après le bouton ;
+- end_text, signature : la formule de fin.
+
+ATTENTION : main_text_2 est rendu avec |safe. Il ne doit contenir que du HTML nettoyé
+(clean_html), jamais un texte tapé par un client. Les mails de paiement le rendent
+échappé (bloc texte_2 surchargé).
+/ main_text_2 is rendered |safe: only cleaned HTML, never raw user input.
+{% endcomment %}
+
+{% block texte_d_apercu %}{{ main_text|default:"" }}{% endblock %}
+
+{% block contenu %}
+    {% include "emails/composants/titre.html" with texte=title etiquette=sub_title %}
+
     <tr>
-        <td class="pt-28 td_content"
-            style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
-            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
-                   style="max-width:472px; margin:0 auto;" width="472">
-                <tr>
-                    <td>
-                        <table style="border-spacing: 0px;">
-                            <tr>
-                                <td valign="middle"><span
-                                        style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{{ sub_title }}</span><span
-                                        style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
-                            {{ title }}</h1><span
-                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
-                            Bonjour {{ username }},
-                            <br/> <br/>
-                            {{ main_text }}
-                            {% if main_text_2 %}
-                                <br/>
-                                {{ main_text_2 | safe }}
-                                <br/>
-                            {% endif %}
-                            {% if main_text_3 %}
-                                <br/>
-                                {{ main_text_3 }}
-                                <br/>
-                            {% endif %}
-                        </p>
-                        {% for k, v in table_info.items %}
-                            {% if forloop.last %}
-                                <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
-                                    {% else %}
-                                <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;">
-                            {% endif %}
-                        {{ k }} : <span style="color: #1d1d1b">{{ v }}</span></p>
-                        {% endfor %}
-
-                    </td>
-                </tr>
-                {% if button %}
-                    <tr>
-                        <td style="padding: 0 0 24px 0;">
-                            <table style="width:100%;border-spacing: 0px;padding: 0px;">
-                                <tr>
-                                    <td class="active-t btn" align="center"
-                                        style="background:{{ button_color }};font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
-                                        <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
-                                           target="_blank"
-                                           href="{{ button.url }}">{{ button.text }}</a></td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                {% endif %}
-                <tr>
-                    {% if next_text_1 %}
-                        <td>
-                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;">
-                                <b>{{ next_text_1 }}</b> <br/>
-                        </td>
-                    {% endif %}
-                    {% if next_text_2 %}
-                        <td>
-                            {{ next_text_2 }} <br/>
-                        </td>
-                    {% endif %}
-                </tr>
-                <tr>
-                    <td>
-                        <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:32px;">
-                            {{ end_text }},<br/>{{ signature }}</p></td>
-                </tr>
-            </table>
+        <td style="padding:0 0 16px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            {% if username %}{% translate "Bonjour" %} {{ username }},<br/><br/>{% endif %}
+            {{ main_text }}
+            {% if main_text_2 %}<br/><br/>{% block texte_2 %}{{ main_text_2|safe }}{% endblock %}{% endif %}
+            {% if main_text_3 %}<br/><br/>{{ main_text_3 }}{% endif %}
         </td>
     </tr>
 
+    {% if table_info %}
+    <tr>
+        <td style="padding:0 0 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                {% for libelle, valeur in table_info.items %}
+                    {% include "emails/composants/ligne.html" with libelle=libelle valeur=valeur %}
+                {% endfor %}
+            </table>
+        </td>
+    </tr>
+    {% endif %}
+
+    {% if button %}
+        {% include "emails/composants/bouton.html" with url=button.url texte=button.text %}
+    {% endif %}
+
+    {% if next_text_1 or next_text_2 %}
+    <tr>
+        <td style="padding:0 0 16px; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
+            {% if next_text_1 %}<strong>{{ next_text_1 }}</strong>{% endif %}
+            {% if next_text_1 and next_text_2 %}<br/>{% endif %}
+            {% if next_text_2 %}{{ next_text_2 }}{% endif %}
+        </td>
+    </tr>
+    {% endif %}
+
+    {% if end_text or signature %}
+    <tr>
+        <td style="padding:8px 0 0; font:400 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#584854;">
+            {{ end_text }}{% if end_text and signature %},<br/>{% endif %}{{ signature }}
+        </td>
+    </tr>
+    {% endif %}
 {% endblock %}
+
+{% block raison_du_mail %}{% blocktranslate trimmed %}Vous recevez ce mail suite à votre activité auprès de {{ organisation }}.{% endblocktranslate %}{% endblock %}

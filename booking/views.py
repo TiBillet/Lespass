@@ -11,10 +11,13 @@ import calendar
 import datetime
 import html
 import logging
+import re
 from collections import defaultdict
 from urllib.parse import urlencode
+
+import stripe
 from django_htmx.http import HttpResponseClientRedirect
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Count, Q
 from django.http import HttpResponseBadRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -29,17 +32,52 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 from rest_framework.decorators import action
 
-from BaseBillet.models import Event, Price, PaymentMethod, ProductFormField, Ticket
+from BaseBillet.models import Configuration, Event, Paiement_stripe, Price, PaymentMethod, ProductFormField, Ticket
+from BaseBillet.services_libelle_prix import TYPE_RESSOURCE, libelle_prix
 from BaseBillet.views import get_context, reponses_du_formulaire_personnalise_pour_le_panier
 from booking.benevolat import lire_la_semaine_demandee, lundi_de_la_semaine, titre_de_la_semaine
-from booking.booking_engine import Interval, compute_slots, validate_new_booking
+from booking.booking_engine import Interval, compute_slots, confirmer_booking_gratuit, get_checkout_stripe, validate_new_booking
 from booking.booking_engine import annotate_slots_for_display, get_existing_bookings_for_resource
 from booking.booking_engine import validate_resource_booking_form
 from booking.models import Booking, Resource
 from booking.tasks import send_booking_cancellation_user
+from booking.tasks import send_booking_request_admin, send_booking_request_user
+from booking.tasks import send_booking_accepted_user, send_booking_refused_user
+from booking.serializers import MotifDuRefusSerializer
+from root_billet.models import RootConfiguration
+from ApiBillet.permissions import TenantAdminPermissionWithRequest
 
 
 logger = logging.getLogger(__name__)
+
+
+def texte_brut_d_un_texte_riche(texte_riche):
+    """
+    Transforme un texte riche (HTML de l'éditeur de l'admin) en texte brut d'une ligne,
+    pour la meta description et les cartes de partage.
+    / Turns rich text (admin editor HTML) into single-line plain text, for metas.
+
+    LOCALISATION : booking/views.py
+    Utilisée par : BookingViewSet.list, BookingViewSet.resource_page,
+    booking/views_benevolat.py (BenevolatViewSet.list).
+
+    Retirer les balises sans précaution colle la fin d'un paragraphe au début du
+    suivant (« …6 prises.Réservez… ») : on pose d'abord une espace à chaque fin de
+    bloc et à chaque <br>, comme jsonld_page (pages/templatetags/pages_tags.py).
+    html.unescape remet les entités (&amp; -> &) : le gabarit échappe UNE seule fois.
+    / Insert a space at each block end before stripping, then unescape entities.
+
+    :param texte_riche: str ou None
+    :return: str, espaces multiples ramenées à une seule
+    """
+    texte_avec_espaces = re.sub(
+        r"<br\s*/?>|</(p|li|div|h[1-6])\s*>",
+        " ",
+        texte_riche or "",
+        flags=re.IGNORECASE,
+    )
+    texte_sans_balises = html.unescape(strip_tags(texte_avec_espaces))
+    return " ".join(texte_sans_balises.split())
 
 
 # ── Affichage des créneaux / Slot display ───────────────────────────────────
@@ -93,41 +131,57 @@ class BookingViewSet(viewsets.ViewSet):
 
         return resources_groups, ungrouped_resources
 
-    def _ajouter_les_infos_admin_aux_creneaux(self, resource, fenetre, slot_groups):
+    def _ajouter_les_infos_aux_creneaux(self, resource, fenetre, slot_groups, utilisateur_est_admin):
         """
-        Pour un admin du lieu : dit QUI occupe chaque créneau de la semaine.
-        / For a venue admin: tells WHO occupies each slot of the week.
+        Dit QUI occupe chaque créneau de la semaine, selon la personne qui regarde.
+        / Tells WHO occupies each slot of the week, depending on the viewer.
 
         LOCALISATION : booking/views.py
 
-        Pose sur chaque créneau occupé (DisplaySlot) un dict `infos_admin` :
+        Pose sur chaque créneau occupé (DisplaySlot) un dict `infos_creneau` :
         - evenements : les événements qui bloquent la ressource (titre, horaires, jauge)
         - reservations : les réservations qui occupent le créneau (personne, statut, horaires)
-        - libelle_court : le texte écrit dans la case (titre, nom, ou « N réservations »)
-        Un créneau que personne n'occupe garde infos_admin à None.
-        Lu par booking/partials/resource_semaine.html et infos_creneau_admin.html.
+        - libelles_de_la_case : les lignes écrites dans la case (un titre par événement,
+          sinon le nom, sinon « N réservations »)
+        Un créneau sans occupant à montrer garde infos_creneau à None.
+        Lu par booking/partials/resource_semaine.html et infos_creneau.html.
 
-        Deux requêtes pour toute la semaine, quel que soit le nombre de créneaux.
-        Les filtres sont ceux du moteur (booking_engine.py) : réservations par
-        get_existing_bookings_for_resource(), événements comme
+        Ce que voit le public (tout ce qui n'est pas admin du lieu) :
+        - jamais les réservations : elles portent le nom et l'e-mail des personnes ;
+        - jamais un événement non publié, qui bloque pourtant la ressource : son créneau
+          reste « complet », sans titre ;
+        - la jauge et les horaires seulement si l'événement les affiche déjà au public
+          (Event.show_gauge, Event.show_time).
+
+        Deux requêtes pour toute la semaine pour un admin, une pour le public, quel que
+        soit le nombre de créneaux. Les filtres sont ceux du moteur (booking_engine.py) :
+        réservations par get_existing_bookings_for_resource(), événements comme
         get_event_intervals_blocking_resource(). Si ces filtres changent là-bas,
         ils doivent changer ici, sinon l'admin verrait d'autres occupants que
         ceux qui bloquent vraiment le créneau.
-        / Two queries per week. Same filters as the booking engine: keep them in sync.
+        / Two queries per week for an admin, one for the public. The public never gets
+        bookings nor unpublished events. Same filters as the booking engine: keep in sync.
         """
-        reservations_de_la_semaine = list(
-            get_existing_bookings_for_resource(resource, window=fenetre)
-            .select_related('user')
-            .order_by('start_datetime')
-        )
-        evenements_de_la_semaine = list(
-            Event.objects.filter(
-                ressource_bloquee=resource,
-                archived=False,
-                end_datetime__isnull=False,
-                datetime__lt=fenetre.end,
-                end_datetime__gt=fenetre.start,
+        reservations_de_la_semaine = []
+        if utilisateur_est_admin:
+            reservations_de_la_semaine = list(
+                get_existing_bookings_for_resource(resource, window=fenetre)
+                .select_related('user')
+                .order_by('start_datetime')
             )
+
+        evenements_qui_bloquent = Event.objects.filter(
+            ressource_bloquee=resource,
+            archived=False,
+            end_datetime__isnull=False,
+            datetime__lt=fenetre.end,
+            end_datetime__gt=fenetre.start,
+        )
+        if not utilisateur_est_admin:
+            evenements_qui_bloquent = evenements_qui_bloquent.filter(published=True)
+
+        evenements_de_la_semaine = list(
+            evenements_qui_bloquent
             .annotate(
                 nombre_de_billets_valides=Count(
                     'reservation__tickets',
@@ -152,6 +206,8 @@ class BookingViewSet(viewsets.ViewSet):
                             'fin': evenement.end_datetime,
                             'billets_valides': evenement.nombre_de_billets_valides,
                             'jauge_max': evenement.jauge_max,
+                            'afficher_les_horaires': utilisateur_est_admin or evenement.show_time,
+                            'afficher_la_jauge': utilisateur_est_admin or evenement.show_gauge,
                         })
 
                 reservations_du_creneau = []
@@ -174,24 +230,27 @@ class BookingViewSet(viewsets.ViewSet):
                 if not creneau_occupe:
                     continue
 
-                # Le texte de la case : l'événement d'abord, sinon la personne,
-                # sinon le nombre de réservations.
-                # / Cell text: the event first, else the person, else the booking count.
+                # Les lignes écrites dans la case : le titre de CHAQUE événement
+                # (plusieurs événements peuvent se chevaucher sur un créneau),
+                # sinon la personne, sinon le nombre de réservations.
+                # / Cell lines: every event title, else the person, else the booking count.
+                libelles_de_la_case = []
                 if evenements_du_creneau:
-                    libelle_court = evenements_du_creneau[0]['titre']
+                    for evenement_du_creneau in evenements_du_creneau:
+                        libelles_de_la_case.append(evenement_du_creneau['titre'])
                 elif len(reservations_du_creneau) == 1:
                     premiere_reservation = reservations_du_creneau[0]
-                    libelle_court = premiere_reservation['prenom_et_nom'] or premiere_reservation['email']
+                    libelles_de_la_case.append(premiere_reservation['prenom_et_nom'] or premiere_reservation['email'])
                 else:
                     nombre_de_reservations = len(reservations_du_creneau)
-                    libelle_court = ngettext(
+                    libelles_de_la_case.append(ngettext(
                         "%(nombre)s réservation",
                         "%(nombre)s réservations",
                         nombre_de_reservations,
-                    ) % {'nombre': nombre_de_reservations}
+                    ) % {'nombre': nombre_de_reservations})
 
-                slot.infos_admin = {
-                    'libelle_court': libelle_court,
+                slot.infos_creneau = {
+                    'libelles_de_la_case': libelles_de_la_case,
                     'evenements': evenements_du_creneau,
                     'reservations': reservations_du_creneau,
                 }
@@ -269,7 +328,7 @@ class BookingViewSet(viewsets.ViewSet):
                     'slot_duration_minutes': slot.slot_duration_minutes,
                     'remaining_capacity': slot.remaining_capacity,
                     'in_cart': slot.in_cart,
-                    'infos_admin': slot.infos_admin,
+                    'infos_creneau': slot.infos_creneau,
                     'row_start': row_start,
                     'row_end': row_end,
                 })
@@ -452,30 +511,57 @@ class BookingViewSet(viewsets.ViewSet):
 
         Accès : public.
         / Access: public.
-        """
-        context = get_context(request)
-        resources_groups, ungrouped_resources = self._group_resources()
 
-        # Prix « à partir de » de chaque carte (cotton/V2/ressource_card.html).
-        # Les tarifs en points ou en temps se vendent à la caisse seulement :
-        # ils ne comptent pas dans le prix affiché en euros. Sans tarif en euros,
-        # la carte n'affiche pas de prix.
-        # / "From" price of each card; points/time prices are POS-only.
+        Une seule ressource : il n'y a rien à choisir, on ouvre directement sa page.
+        / Only one resource: nothing to choose, open its page directly.
+        """
+        resources_groups, ungrouped_resources = self._group_resources()
         toutes_les_ressources = list(ungrouped_resources)
         for group_entry in resources_groups:
             toutes_les_ressources.extend(group_entry['resources'])
+
+        il_y_a_une_seule_ressource = len(toutes_les_ressources) == 1
+        if il_y_a_une_seule_ressource:
+            la_seule_ressource = toutes_les_ressources[0]
+            return redirect('booking-resource', pk=la_seule_ressource.pk)
+
+        context = get_context(request)
+
+        # Texte du prix de chaque carte (cotton/V2/ressource_card.html).
+        # Les regles sont dans BaseBillet/services_libelle_prix.py.
+        # / Price label of each card. Rules live in services_libelle_prix.py.
         for resource in toutes_les_ressources:
-            tarifs_en_euros = resource.published_prices().filter(
-                asset__isnull=True,
-                non_fiduciaire=False,
-            ).values_list('prix', flat=True)
-            resource.price_min = None
-            if tarifs_en_euros:
-                resource.price_min = f"{min(tarifs_en_euros)} €"
+            resource.libelle_prix = libelle_prix(
+                resource.published_prices(), TYPE_RESSOURCE,
+            )
+
+        # Texte de partage et des moteurs (meta description, og, twitter) : le texte
+        # d'introduction de la page en texte brut (texte_brut_d_un_texte_riche),
+        # coupé à 20 mots. / Sharing and search text: the intro as plain text, 20 words.
+        config = context['config']
+        introduction_en_texte_brut = texte_brut_d_un_texte_riche(config.description_booking_page)
+        description_de_la_page_ressources = Truncator(introduction_en_texte_brut).words(20)
+        if not description_de_la_page_ressources:
+            description_de_la_page_ressources = _("Réservez une ressource en ligne.")
+
+        # Image de partage : celle de la première ressource qui en a une.
+        # Aucune : le gabarit garde l'image du lieu (bloc og_image du shell).
+        # Son nom sert de texte alternatif à l'image (og:image:alt).
+        # / Sharing image: the first resource that has one, else the venue's; its name is the alt.
+        image_de_partage_des_ressources = None
+        nom_de_la_ressource_de_partage = None
+        for resource in toutes_les_ressources:
+            if resource.img:
+                image_de_partage_des_ressources = resource.img.social_card.url
+                nom_de_la_ressource_de_partage = resource.name
+                break
 
         context.update({
             'resources_groups': resources_groups,
             'ungrouped_resources':  ungrouped_resources,
+            'description_de_la_page_ressources': description_de_la_page_ressources,
+            'image_de_partage_des_ressources': image_de_partage_des_ressources,
+            'nom_de_la_ressource_de_partage': nom_de_la_ressource_de_partage,
         })
         return render(request, 'booking/views/resources_list.html', context)
 
@@ -598,14 +684,16 @@ class BookingViewSet(viewsets.ViewSet):
                         slot.in_cart = True
                         break
 
-        # Un admin du lieu voit qui occupe chaque créneau (événement, réservations).
-        # / A venue admin sees who occupies each slot (event, bookings).
+        # Tout le monde voit les événements qui occupent les créneaux. Un admin du lieu
+        # voit en plus les réservations et les événements non publiés.
+        # / Everyone sees the events; a venue admin also sees bookings and unpublished events.
         utilisateur_est_admin_du_lieu = (
             request.user.is_authenticated
             and request.user.is_tenant_admin(connection.tenant)
         )
-        if utilisateur_est_admin_du_lieu:
-            self._ajouter_les_infos_admin_aux_creneaux(resource, semaine['fenetre'], slot_groups)
+        self._ajouter_les_infos_aux_creneaux(
+            resource, semaine['fenetre'], slot_groups, utilisateur_est_admin_du_lieu,
+        )
 
         calendar_weeks, min_hour, max_hour = self._build_calendar_weeks(slot_groups)
         mobile_days, mobile_time_rows, mobile_min_hour, mobile_max_hour = self._build_mobile_days(slot_groups)
@@ -674,11 +762,11 @@ class BookingViewSet(viewsets.ViewSet):
         context['resource_choices'] = resource_choices
         context['plusieurs_ressources'] = nombre_de_ressources > 1
 
-        # Meta description : la description sans balises ni entités HTML (« &amp; »
-        # redevient « & »). Le gabarit l'échappe ensuite UNE seule fois.
-        # Avec |striptags dans le gabarit, « & » sortirait « &amp;amp; ».
-        # / Meta description: tags stripped and entities decoded; escaped once by the template.
-        description_en_texte_brut = html.unescape(strip_tags(resource.description or ""))
+        # Meta description : la description en texte brut (texte_brut_d_un_texte_riche).
+        # Le gabarit l'échappe ensuite UNE seule fois : avec |striptags dans le
+        # gabarit, « & » sortirait « &amp;amp; ».
+        # / Meta description: plain text, escaped once by the template.
+        description_en_texte_brut = texte_brut_d_un_texte_riche(resource.description)
         context['meta_description_de_la_ressource'] = Truncator(description_en_texte_brut).words(20)
         return render(request, 'booking/views/resource.html', context)
 
@@ -914,6 +1002,9 @@ class BookingViewSet(viewsets.ViewSet):
 
         Succès    → redirige vers /my_account/my_bookings/?new=<pk> si la réservation est gratuite.
                   → redirige vers stripe si la réservation est payante
+                  → redirige vers /my_account/my_bookings/?new=<pk> si c'est une demande
+                    à validation manuelle (tarif manual_validation), avec les deux mails
+                    « demande reçue » (admin et personne)
         Échec     → re-render du formulaire avec message d'erreur
 
         / Success → redirect to /my_account/my_bookings/?new=<pk> if booking is free
@@ -1013,7 +1104,21 @@ class BookingViewSet(viewsets.ViewSet):
             # En requete HTMX, on utilise une redirection client pour eviter le swap.
             # / For HTMX requests, use client redirect to avoid swap.
 
-            if checkout_url is None:
+            # Une demande à validation manuelle : pas de paiement maintenant.
+            # Les deux mails « demande reçue » partent après le commit : la tâche
+            # Celery doit trouver le booking en base.
+            # / A manual validation request: no payment now. Both "request received"
+            # emails are sent after commit, so the task finds the booking.
+            est_une_demande_a_valider = result.status == Booking.ADMIN_WAITING
+            if est_une_demande_a_valider:
+                pk_de_la_demande = str(result.pk)
+                transaction.on_commit(lambda: send_booking_request_admin.delay(pk_de_la_demande))
+                transaction.on_commit(lambda: send_booking_request_user.delay(pk_de_la_demande))
+                messages.success(request, _(
+                    "Votre demande de réservation a été envoyée. "
+                    "Vous recevrez une confirmation ou une invitation à payer par mail."
+                ))
+            elif checkout_url is None:
                 messages.success(request, _("Réservation créée avec succès."))
 
             if request.htmx:
@@ -1100,6 +1205,223 @@ class BookingViewSet(viewsets.ViewSet):
     # ── Mes réservations ─────────────────────────────────────────────────────
     # Déplacé dans BaseBillet.views.MyAccount pour plus de cohérence
 
+    # ── Paiement d'une demande validée ───────────────────────────────────────
+
+    @action(detail=True, methods=['get'], url_path="pay", url_name="pay")
+    def pay(self, request, pk=None):
+        """
+        Envoie la personne vers Stripe pour payer une demande validée par l'admin.
+        / Sends the person to Stripe to pay an admin-validated request.
+
+        LOCALISATION : booking/views.py
+
+        Lien du mail « demande acceptée » et du bouton « Payer » de « Mes réservations ».
+        Même logique que BaseBillet/views.py, get_checkout_for_membership.
+        / Link of the "request accepted" email and of the "Pay" button in my bookings.
+
+        FLUX :
+        1. Personne non connectée -> page de connexion, puis retour ici.
+        2. Booking d'une autre personne -> 404.
+        3. Déjà payé, ou validé sans reste à payer -> page « déjà payée ».
+        4. Pas encore validé -> page « en attente de validation » (409).
+        5. Plus validé (refusé, annulé...) -> page « lien plus valable » (409).
+        6. Une session Stripe existe encore : ouverte -> on la réutilise ;
+           terminée -> page « paiement en cours » ; sinon -> marquée EXPIRE.
+        7. Sinon : nouvelle session Stripe (get_checkout_stripe garde ADMIN_VALID).
+
+        Accès : la personne qui a fait la demande, connectée.
+        / Access: the logged-in person who made the request.
+        """
+        if not request.user.is_authenticated:
+            login_url = reverse('connexion')
+            return redirect(f'{login_url}?next={request.get_full_path()}')
+
+        booking = get_object_or_404(
+            Booking.objects.select_related('resource'),
+            pk=pk,
+            user=request.user,
+        )
+
+        context = get_context(request)
+        context['booking'] = booking
+
+        # Validée mais déjà réglée (statut changé à la main) : rien à payer.
+        # / Validated but already settled (status changed by hand): nothing to pay.
+        deja_reglee = (
+            booking.status == Booking.ADMIN_VALID and not booking.est_une_demande_non_payee()
+        )
+        if booking.status == Booking.PAID_BY_USER or deja_reglee:
+            context['situation'] = 'deja_payee'
+            return render(request, 'booking/views/pay_info.html', context)
+
+        if booking.status == Booking.ADMIN_WAITING:
+            context['situation'] = 'en_attente_de_validation'
+            return render(request, 'booking/views/pay_info.html', context, status=409)
+
+        if booking.status != Booking.ADMIN_VALID:
+            context['situation'] = 'lien_plus_valable'
+            return render(request, 'booking/views/pay_info.html', context, status=409)
+
+        # Une session Stripe déjà créée pour ce booking, pas encore encaissée.
+        # / A Stripe session already created for this booking, not yet collected.
+        paiement_stripe_existant = booking.paiements.filter(
+            status__in=[Paiement_stripe.PENDING, Paiement_stripe.OPEN],
+            checkout_session_id_stripe__isnull=False,
+        ).order_by('-order_date').first()
+
+        if paiement_stripe_existant:
+            try:
+                stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+                config = Configuration.get_solo()
+                session_stripe = stripe.checkout.Session.retrieve(
+                    paiement_stripe_existant.checkout_session_id_stripe,
+                    stripe_account=config.get_stripe_connect_account(),
+                )
+            except Exception as erreur_stripe:
+                # En cas de doute, on NE recrée PAS de session : ce pourrait être un
+                # deuxième paiement. La personne réessaiera plus tard.
+                # / When in doubt, do NOT create a new session: it could be a 2nd payment.
+                logger.warning(f"pay : session Stripe du booking {booking.pk} illisible : {erreur_stripe}")
+                context['situation'] = 'paiement_en_cours'
+                return render(request, 'booking/views/pay_info.html', context)
+
+            # Session encore ouverte : la personne n'a pas fini de payer.
+            # / Session still open: the person has not finished paying.
+            if session_stripe.status == 'open' and session_stripe.url:
+                return redirect(session_stripe.url)
+
+            # Session terminée : le paiement est fait, le retour de Stripe arrive.
+            # / Session complete: payment done, Stripe's confirmation is on its way.
+            if session_stripe.status == 'complete':
+                context['situation'] = 'paiement_en_cours'
+                return render(request, 'booking/views/pay_info.html', context)
+
+            # Session expirée chez Stripe : on la marque et on en crée une nouvelle.
+            # / Session expired at Stripe: mark it and create a new one.
+            paiement_stripe_existant.status = Paiement_stripe.EXPIRE
+            paiement_stripe_existant.save(update_fields=['status'])
+
+        # La vente de la demande, ouverte à sa création (validate_new_booking).
+        # / The request's sale, opened when it was created.
+        vente_de_la_demande = booking.lignearticles.first().vente
+        checkout_url = get_checkout_stripe(booking, vente=vente_de_la_demande)
+        return redirect(checkout_url)
+
+    # ── Décision de l'admin sur une demande ──────────────────────────────────
+
+    def _recharger_la_fiche_admin(self):
+        """
+        Recharge la fiche admin du booking après une décision.
+        / Reloads the booking admin page after a decision.
+
+        Rechargement complet, pas un simple partiel : le formulaire sous le panneau
+        montre le statut. Resté à l'ancien statut, un clic sur « Enregistrer »
+        remettrait la demande en attente.
+        / Full reload: the form below shows the status; a stale form saved again
+        would put the request back to waiting.
+        """
+        reponse = HttpResponse("")
+        reponse["HX-Refresh"] = "true"
+        return reponse
+
+    @action(detail=True, methods=['post'], url_path="admin_accept", url_name="admin-accept")
+    def admin_accept(self, request, pk=None):
+        """
+        L'admin accepte une demande de réservation, ou renvoie le lien de paiement.
+        / The admin accepts a booking request, or resends the payment link.
+
+        LOCALISATION : booking/views.py
+
+        Appelée par le panneau Administration/templates/admin/booking/actions_panel.html.
+
+        FLUX :
+        - ADMIN_WAITING, reste à payer -> ADMIN_VALID + mail « Payer ma réservation ».
+        - ADMIN_WAITING, gratuit -> confirmer_booking_gratuit (FREERES / FREERES_USERACTIV,
+          vente encaissée à 0) + mail « réservation confirmée ».
+        - ADMIN_VALID non payée, avec renvoyer_le_lien=true -> renvoie seulement le mail.
+        - Sinon -> rien, un avertissement.
+
+        Le booking est verrouillé (select_for_update) et son statut relu : un double clic,
+        ou deux admins en même temps, n'envoient qu'un mail. Le mail part après le commit :
+        la tâche lit le statut posé ici.
+        / Locked and re-read: a double click sends one email. Email sent after commit.
+
+        Accès : admin du lieu (403 sinon).
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            return HttpResponse(status=403)
+
+        demande_de_renvoi_du_lien = request.POST.get("renvoyer_le_lien") == "true"
+
+        with transaction.atomic():
+            booking = get_object_or_404(Booking.objects.select_for_update(), pk=pk)
+
+            if booking.status == Booking.ADMIN_WAITING:
+                if booking.to_pay() > 0:
+                    booking.status = Booking.ADMIN_VALID
+                    booking.save(update_fields=["status"])
+                    message_pour_l_admin = _("Demande acceptée. La personne a reçu le lien de paiement par mail.")
+                else:
+                    ligne_du_creneau = booking.lignearticles.get()
+                    confirmer_booking_gratuit(booking, ligne_du_creneau, ligne_du_creneau.vente, booking.user)
+                    message_pour_l_admin = _("Demande acceptée. La réservation gratuite est confirmée, la personne a reçu un mail.")
+
+            elif booking.status == Booking.ADMIN_VALID and demande_de_renvoi_du_lien and booking.est_une_demande_non_payee():
+                message_pour_l_admin = _("Le lien de paiement a été renvoyé par mail.")
+
+            else:
+                messages.warning(request, _("Cette réservation n'est pas en attente de validation."))
+                return self._recharger_la_fiche_admin()
+
+            pk_du_booking = str(booking.pk)
+            transaction.on_commit(lambda: send_booking_accepted_user.delay(pk_du_booking))
+
+        messages.success(request, message_pour_l_admin)
+        return self._recharger_la_fiche_admin()
+
+    @action(detail=True, methods=['post'], url_path="admin_refuse", url_name="admin-refuse")
+    def admin_refuse(self, request, pk=None):
+        """
+        L'admin refuse une demande de réservation non payée, avec un motif facultatif.
+        / The admin refuses an unpaid booking request, with an optional reason.
+
+        LOCALISATION : booking/views.py
+
+        Appelée par le panneau Administration/templates/admin/booking/actions_panel.html.
+
+        FLUX : demande en attente (ADMIN_WAITING) ou validée non payée (ADMIN_VALID)
+        -> Booking.annuler_la_demande_non_payee(ADMIN_CANCELED) : session Stripe fermée,
+        vente et lignes annulées, créneau libéré, motif enregistré.
+        Puis mail de refus, après le commit.
+        Une réservation déjà payée ne se refuse pas ici : rien ne change, un avertissement.
+        / Waiting or validated-unpaid request -> cancelled, then refusal email after commit.
+
+        Accès : admin du lieu (403 sinon).
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            return HttpResponse(status=403)
+
+        validateur_du_motif = MotifDuRefusSerializer(data=request.POST)
+        if not validateur_du_motif.is_valid():
+            messages.error(request, _("Le motif est trop long (2000 caractères au plus)."))
+            return self._recharger_la_fiche_admin()
+        motif_du_refus = validateur_du_motif.validated_data.get("motif_du_refus", "")
+
+        with transaction.atomic():
+            booking = get_object_or_404(Booking.objects.select_for_update(), pk=pk)
+
+            if not booking.est_une_demande_non_payee():
+                messages.warning(request, _("Seule une demande non payée peut être refusée."))
+                return self._recharger_la_fiche_admin()
+
+            booking.annuler_la_demande_non_payee(Booking.ADMIN_CANCELED, motif_du_refus=motif_du_refus)
+
+            pk_du_booking = str(booking.pk)
+            transaction.on_commit(lambda: send_booking_refused_user.delay(pk_du_booking))
+
+        messages.success(request, _("Demande refusée. La personne a reçu un mail."))
+        return self._recharger_la_fiche_admin()
+
     # ── Confirmation d'annulation ────────────────────────────────────────────
 
     @action(detail=True, methods=['get', 'post'], url_path="cancel", url_name="cancel")
@@ -1127,12 +1449,18 @@ class BookingViewSet(viewsets.ViewSet):
             Booking.objects.select_related('resource'),
             pk     = pk,
             user   = request.user,
-            status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.FREERES,
-                           Booking.FREERES_USERACTIV],
+            status__in = [Booking.PAID_BY_USER, Booking.ADMIN_VALID, Booking.ADMIN_WAITING,
+                           Booking.FREERES, Booking.FREERES_USERACTIV],
         )
 
+        # Une demande non payée se retire jusqu'au début du créneau, sans tenir compte
+        # du délai d'annulation (Booking.annulation_possible) : sa date limite affichée
+        # est donc le début du créneau. Le gabarit garde le nom deadline_passed.
+        # / An unpaid request can be withdrawn until the slot starts: that is its deadline.
         deadline = booking.deadline()
-        deadline_passed = booking.deadline_passed()
+        if booking.est_une_demande_non_payee():
+            deadline = booking.start_datetime
+        deadline_passed = not booking.annulation_possible()
 
         if request.method == 'GET':
             context = get_context(request)
@@ -1144,7 +1472,7 @@ class BookingViewSet(viewsets.ViewSet):
             return render(request, 'booking/views/cancel_booking.html', context)
 
         # POST — recompute deadline to guard against race condition.
-        deadline_passed = booking.deadline_passed()
+        deadline_passed = not booking.annulation_possible()
         if deadline_passed:
             context = get_context(request)
             context.update({
@@ -1155,10 +1483,16 @@ class BookingViewSet(viewsets.ViewSet):
             return render(request, 'booking/views/cancel_booking.html', context)
 
         try:
+            # Lu AVANT l'annulation : après, le statut est USER_CANCELED.
+            # / Read BEFORE cancelling: afterwards the status is USER_CANCELED.
+            etait_une_demande_non_payee = booking.est_une_demande_non_payee()
             cancel_text = booking.cancel_and_refund_booking()
 
             try:
-                send_booking_cancellation_user.delay(str(booking.pk))
+                send_booking_cancellation_user.delay(
+                    str(booking.pk),
+                    demande_non_payee=etait_une_demande_non_payee,
+                )
             except Exception as ce:
                 logger.error(f"Failed to queue cancellation email for booking {booking.pk}: {ce}")
 

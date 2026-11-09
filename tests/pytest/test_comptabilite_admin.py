@@ -202,7 +202,6 @@ class TestComptabiliteAdmin(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
         configuration.postal_address = None
         configuration.postal_code = None
         configuration.city = "Ville du lieu de test"

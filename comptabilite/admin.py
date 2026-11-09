@@ -19,6 +19,7 @@ from django.contrib import admin, messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from solo.admin import SingletonModelAdmin
 
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
@@ -29,7 +30,7 @@ from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 
 from comptabilite.fec import generer_fec_cloture
-from comptabilite.models import ClotureCaisse
+from comptabilite.models import ClotureCaisse, ConfigurationDesRapports
 from comptabilite.presentation import euros_a_la_francaise, sections_pour_affichage
 from comptabilite.rapport import RapportDesVentes
 from comptabilite.ventilation import EcritureDesequilibree
@@ -123,6 +124,11 @@ class ClotureCaisseAdmin(ModelAdmin):
         extra_context = extra_context or {}
         extra_context["export_fiscal_url"] = reverse(
             "staff_admin:comptabilite_cloturecaisse_export_fiscal"
+        )
+        # La page des réglages des envois (récap du matin, rapports H/M/A).
+        # / The mail settings page.
+        extra_context["reglages_des_envois_url"] = reverse(
+            "staff_admin:comptabilite_configurationdesrapports_changelist"
         )
         return super().changelist_view(request, extra_context)
 
@@ -418,3 +424,57 @@ class ClotureCaisseAdmin(ModelAdmin):
     @admin.display(description=_("Chiffre d'affaires TTC"), ordering="total_general")
     def ca_ttc(self, obj):
         return euros_a_la_francaise(obj.total_general)
+
+
+@admin.register(ConfigurationDesRapports, site=staff_admin_site)
+class ConfigurationDesRapportsAdmin(SingletonModelAdmin, ModelAdmin):
+    """
+    Les réglages des envois du lieu : un booléen par mail (récap du matin, rapports
+    hebdomadaire, mensuel, annuel) et la liste des destinataires.
+    / The venue's mail settings: one boolean per mail and the recipient list.
+
+    LOCALISATION : comptabilite/admin.py
+
+    Ouverte par le menu « Ventes & comptabilité » (Administration/admin/dashboard.py),
+    par le bandeau de la liste des clôtures (changelist_before.html) et par le lien
+    « se désabonner » des mails.
+    / Opened from the menu, the closure list banner and the mails' unsubscribe link.
+    """
+
+    # Mis à None : sinon SingletonModelAdmin impose son gabarit Django et celui
+    # d'Unfold n'est pas utilisé (même réglage que ConfigurationAdmin).
+    # / Set to None so the Unfold template is used.
+    change_form_template = None
+
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    fields = (
+        "envoyer_le_recap_quotidien",
+        "envoyer_le_rapport_hebdomadaire",
+        "envoyer_le_rapport_mensuel",
+        "envoyer_le_rapport_annuel",
+        "destinataires",
+    )
+
+    # La recherche passe par HumanUserAdmin (Administration/admin_tenant.py) et ses
+    # search_fields : elle ne propose que les personnes du lieu. Le formulaire valide
+    # les pk postés contre HumanUser.objects, filtré sur le lieu.
+    # / Search goes through HumanUserAdmin: only this venue's people.
+    autocomplete_fields = ["destinataires"]
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        # Le singleton est créé par get_solo() : jamais d'ajout.
+        # / The singleton is created by get_solo(): never added.
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        # Le singleton ne se supprime pas.
+        # / The singleton is never deleted.
+        return False

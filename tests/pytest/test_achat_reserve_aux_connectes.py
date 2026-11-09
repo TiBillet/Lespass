@@ -286,7 +286,7 @@ def test_un_connecte_non_adherent_n_obtient_pas_le_tarif_adherent_avec_l_email_d
 
 
 def test_un_anonyme_voit_seulement_se_connecter_pour_reserver(lieu):
-    """Page d'un événement : un seul bouton « Se connecter pour réserver », qui ouvre
+    """Page d'un événement : un seul bouton « Réserver » (anonyme), qui ouvre
     #loginPanel et demande le retour avec le panneau de réservation ouvert. Ni champ
     email, ni bouton « Payer maintenant ». Le panneau de connexion mène au guichet.
     / Event page: a single "log in to book" button, no email field, no submit button."""
@@ -323,7 +323,7 @@ def test_un_connecte_voit_son_email_en_lecture_seule_et_payer_maintenant(lieu):
 
 
 def test_un_anonyme_voit_seulement_se_connecter_pour_adherer(lieu):
-    """Formulaire d'adhésion : un seul bouton « Se connecter pour adhérer », ni champ
+    """Formulaire d'adhésion : un seul bouton « Adhérer » (anonyme), ni champ
     email ni bouton d'envoi.
     / Membership form: a single "log in to join" button, no email field, no submit."""
     adhesion = creer_adhesion(prix="15.00")

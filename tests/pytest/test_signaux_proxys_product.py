@@ -96,7 +96,7 @@ def test_aucun_proxy_product_oublie_dans_proxys_product():
 def test_tous_les_proxys_sont_connectes_aux_quatre_receivers():
     """
     Chaque proxy doit declencher les 4 receivers du modele concret :
-    post_save_Product (poids + tarif FREERES), send_membership_and_badge
+    post_save_Product (poids + tarif FREERES), send_membership_product_to_fedow
     (asset Fedow), trigger_product_update (notification LaBoutik) et
     unpublish_if_archived (depublication a l'archivage).
     / Every proxy must trigger the concrete model's 4 receivers.
@@ -107,9 +107,9 @@ def test_tous_les_proxys_sont_connectes_aux_quatre_receivers():
             f"{proxy.__name__} : post_save_Product non connecte"
         )
         assert (
-            basebillet_signals.send_membership_and_badge_product_to_fedow
+            basebillet_signals.send_membership_product_to_fedow
             in recepteurs_post_save
-        ), f"{proxy.__name__} : send_membership_and_badge_product_to_fedow non connecte"
+        ), f"{proxy.__name__} : send_membership_product_to_fedow non connecte"
         assert basebillet_signals.trigger_product_update in recepteurs_post_save, (
             f"{proxy.__name__} : trigger_product_update non connecte"
         )

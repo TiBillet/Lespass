@@ -1,5 +1,5 @@
 {% extends "booking/booking_base.html" %}
-{% load i18n static l10n tibitags %}
+{% load i18n static l10n tibitags pages_tags %}
 
 <!--
 LOCALISATION : booking/templates/booking/views/resource.html
@@ -29,8 +29,35 @@ DEPENDENCIES :
   - booking/views.py:book()                   -> partial HTMX booking/partials/book_form.html
   - htmx (charge par le skin base.html)
 -->
+{# PARTAGE ET MOTEURS : chaque bloc og_* a son jumeau twitter_* (un bloc Django ne #}
+{# se rend qu'une fois). Sans surcharge, le shell sert ceux de l'accueil. #}
+{# / SHARING: each og_* block has its twitter_* twin; otherwise the shell serves the home ones. #}
 {% block title %}{{ resource.name }}{% endblock %}
-{% block meta_description %}{{ meta_description_de_la_ressource }}{% endblock %}
+{% block meta_description %}{{ meta_description_de_la_ressource|default:resource.name }}{% endblock %}
+{% block og_title %}{{ resource.name }} | {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{{ resource.name }} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ meta_description_de_la_ressource|default:resource.name }}{% endblock %}
+{% block twitter_description %}{{ meta_description_de_la_ressource|default:resource.name }}{% endblock %}
+{% block og_image %}{% if resource.img %}https://{{ request.get_host }}{{ resource.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image %}{% if resource.img %}https://{{ request.get_host }}{{ resource.img.social_card.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_image_alt %}{% if resource.img %}{{ resource.name }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image_alt %}{% if resource.img %}{{ resource.name }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+
+{# Fil d'Ariane structuré, construit en Python (pages/templatetags/pages_tags.py) : #}
+{# Accueil > Ressources > la ressource. Avec une seule ressource, /booking/ redirige #}
+{# ici : le maillon « Ressources » est omis. #}
+{# Pas de JSON-LD Product : le tarif est horaire, souvent multiple, et absent de la #}
+{# page avant le clic sur un créneau. Google exige un prix vrai ET visible. #}
+{# extra_meta n'existe que dans le <head> du shell : absent en navigation htmx. #}
+{# / Structured breadcrumb only. No Product: hourly, multiple prices, not shown on the page. #}
+{% block extra_meta %}
+    {% if plusieurs_ressources %}
+        {% url 'booking-list' as adresse_de_la_liste %}
+        {% jsonld_fil_ariane config.booking_menu_name|default:_("Ressources") adresse_de_la_liste resource.name %}
+    {% else %}
+        {% jsonld_fil_ariane "" "" resource.name %}
+    {% endif %}
+{% endblock %}
 
 {% block booking_content %}
 
@@ -203,11 +230,11 @@ DEPENDENCIES :
                 opacity: 0.9;
             }
 
-            /* Admin seulement : qui occupe le créneau (booking/views.py,
-               _ajouter_les_infos_admin_aux_creneaux). Le bouton (i) partage la case
+            /* Qui occupe le créneau (booking/views.py,
+               _ajouter_les_infos_aux_creneaux). Le bouton (i) partage la case
                de grille du créneau : en haut à droite, ou sur tout le bloc (-bloc)
                quand le créneau n'est pas réservable.
-               / Admin only: slot occupant label, (i) button and its popover. */
+               / Slot occupant label, (i) button and its popover. */
             .calendar-slot-occupant {
                 font-size: 0.7rem;
                 white-space: nowrap;
@@ -216,7 +243,7 @@ DEPENDENCIES :
                 padding-right: 1.25rem;
             }
 
-            .calendar-slot-infos-admin {
+            .calendar-slot-infos {
                 justify-self: end;
                 align-self: start;
                 z-index: 1;
@@ -237,7 +264,7 @@ DEPENDENCIES :
                pastilles sur photo de la D.A. V2. Les jetons V2 ont un repli Bootstrap
                pour le skin classic.
                / The (i) icon is a round pill; V2 tokens fall back to Bootstrap. */
-            .calendar-slot-infos-admin i {
+            .calendar-slot-infos i {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
@@ -250,7 +277,7 @@ DEPENDENCIES :
                 transition: background-color 0.15s ease;
             }
 
-            .calendar-slot-infos-admin-bloc {
+            .calendar-slot-infos-bloc {
                 justify-self: stretch;
                 align-self: stretch;
                 display: flex;
@@ -264,15 +291,15 @@ DEPENDENCIES :
                pastille se remplit de la couleur d'action (encre dessus : lisible).
                / Hover keeps the slot colour: inner action-colour ring, faint ink veil,
                filled pill. */
-            .calendar-slot-infos-admin:hover,
-            .calendar-slot-infos-admin:focus-visible {
+            .calendar-slot-infos:hover,
+            .calendar-slot-infos:focus-visible {
                 background: var(--color-overlay-hover, rgba(0, 0, 0, 0.04));
                 box-shadow: inset 0 0 0 2px var(--color-action-signal, var(--bs-primary));
                 outline: none;
             }
 
-            .calendar-slot-infos-admin:hover i,
-            .calendar-slot-infos-admin:focus-visible i {
+            .calendar-slot-infos:hover i,
+            .calendar-slot-infos:focus-visible i {
                 background: var(--color-action-signal, var(--bs-primary));
                 color: var(--encre, #fff);
                 box-shadow: none;

@@ -56,10 +56,13 @@ from .serializers import (
     PageCreateSerializer,
     BlocSchemaSerializer,
     BlocCreateSerializer,
+    ImageDeGalerieCreateSerializer,
+    MESSAGE_IMAGES_EN_FICHIER,
     CHAMPS_PAGE_AUTORISES,
     CHAMPS_BLOC_AUTORISES,
     CHAMPS_TEXTE_RICHE,
     CHAMPS_FICHIER,
+    CHAMPS_IMAGE_URL,
     CHAMPS_URL_A_NEUTRALISER,
 )
 from pages.models import Page, Bloc, valider_slug_non_reserve
@@ -149,6 +152,27 @@ def get_event_par_identifiant_ou_404(identifiant):
     return event
 
 
+def get_page_par_uuid_ou_slug_ou_404(identifiant):
+    """
+    Trouve une Page par son uuid OU son slug, ou leve Http404.
+    / Find a Page by its uuid OR its slug, or raise Http404.
+
+    LOCALISATION : api_v2/views.py
+
+    Toutes les routes /api/v2/pages/{x}/ acceptent les deux formes, comme le GET.
+    Un texte qui n'est pas un uuid est cherche comme slug : jamais de 500.
+    La recherche elle-meme est dans api_v2/serializers.py:_resoudre_page,
+    deja utilisee pour la page parente (isPartOf).
+    / Every /api/v2/pages/{x}/ route accepts both forms. Lookup is done by
+    _resoudre_page, also used for the parent page (isPartOf).
+    """
+    from api_v2.serializers import _resoudre_page
+    page = _resoudre_page(identifiant)
+    if page is None:
+        raise Http404("Page not found")
+    return page
+
+
 def _ressemble_uuid(valeur) -> bool:
     """True si la chaine est un UUID valide. / True if the string is a valid UUID."""
     try:
@@ -169,7 +193,7 @@ def _appliquer_fichiers_multipart(request, bloc):
     """
     if not hasattr(request, "FILES"):
         return
-    from api_v2.serializers import _validate_uploaded_image
+    from api_v2.serializers import nommer_le_fichier_image_cote_serveur
     # Upload de fichiers IMAGE uniquement (image principale, secondaire, photo d'auteur).
     # L'upload de fichiers VIDEO est volontairement retire : pour une video, utiliser le
     # bloc EMBED (embed_url YouTube/Vimeo/PeerTube, rendu en iframe). Cela evite d'heberger
@@ -178,8 +202,32 @@ def _appliquer_fichiers_multipart(request, bloc):
     for nom_fichier in ("image", "image_secondaire", "auteur_photo"):
         fichier = request.FILES.get(nom_fichier)
         if fichier:
-            _validate_uploaded_image(fichier)
+            # Valide l'image et la renomme : le nom envoye par le client n'est
+            # jamais garde. / Validates and renames: the client's name is never kept.
+            nommer_le_fichier_image_cote_serveur(fichier)
             setattr(bloc, nom_fichier, fichier)
+
+
+def _refuser_les_images_envoyees_sans_fichier(request):
+    """Refuse (400) un champ image present dans la requete sans fichier joint.
+    / Refuses (400) an image field present in the request without an attached file.
+
+    LOCALISATION : api_v2/views.py
+
+    Une image s'envoie en fichier (multipart). Une URL, une liste, null ou un
+    texte a la place du fichier est refuse : sinon la valeur serait ignoree et
+    la reponse ferait croire que l'image a change. Le serveur ne telecharge
+    aucune URL.
+    Appelants : BlocViewSet.partial_update (JSON ou multipart) et
+    PageViewSet.ajouter_bloc (multipart seulement : en JSON, c'est
+    BlocCreateSerializer.validate qui decide).
+    """
+    for nom_du_champ_image in CHAMPS_IMAGE_URL:
+        champ_present = nom_du_champ_image in request.data
+        fichier_joint = nom_du_champ_image in request.FILES
+        if champ_present and not fichier_joint:
+            raise serializers.ValidationError(
+                {nom_du_champ_image: [MESSAGE_IMAGES_EN_FICHIER]})
 
 
 class CrowdInitiativeViewSet(viewsets.ViewSet):
@@ -200,7 +248,7 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
         return Response({"results": serializer.data})
 
     def retrieve(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid, archived=False)
         serializer = InitiativeSchemaSerializer(initiative)
         return Response(serializer.data)
 
@@ -212,13 +260,13 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid)
         initiative.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["get", "post"], url_path="budget-items")
     def budget_items(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid)
         if request.method.lower() == "get":
             items = initiative.budget_items.all().order_by("-created_at")
             serializer = BudgetItemSchemaSerializer(items, many=True)
@@ -243,7 +291,7 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["get", "post"], url_path="votes")
     def votes(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid, archived=False)
         if request.method.lower() == "post":
             obj, created = Vote.objects.get_or_create(initiative=initiative, user=request.user)
             count = Vote.objects.filter(initiative=initiative).count()
@@ -253,7 +301,7 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["get", "post"], url_path="participations")
     def participations(self, request, uuid=None):
-        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        initiative = get_objet_par_uuid_ou_404(Initiative, uuid, archived=False)
         if request.method.lower() == "post":
             input_serializer = ParticipationCreateSerializer(data=request.data, context={"request": request})
             input_serializer.is_valid(raise_exception=True)
@@ -677,7 +725,7 @@ class ProductViewSet(viewsets.ViewSet):
         return reponse
 
     def retrieve(self, request, uuid=None):
-        product = get_object_or_404(Product, uuid=uuid, archive=False)
+        product = get_objet_par_uuid_ou_404(Product, uuid, archive=False)
         serializer = ProductSchemaSerializer(product)
         return Response(serializer.data)
 
@@ -692,13 +740,48 @@ class ProductViewSet(viewsets.ViewSet):
 
 class ReservationViewSet(viewsets.ViewSet):
     """
-    Semantic Reservation API (create + retrieve).
-    API Reservation semantique (creation + detail).
+    Semantic Reservation API (list + create + retrieve).
+    API Reservation semantique (liste + creation + detail).
     """
 
     permission_classes = [SemanticApiKeyPermission]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     lookup_field = "uuid"
+
+    def list(self, request):
+        """
+        Liste les reservations du lieu, les plus recentes d'abord.
+        / Lists the venue's reservations, most recent first.
+
+        Parametre facultatif : `event=<uuid>` pour ne garder que les reservations
+        d'un evenement. C'est la liste des inscrits a cet evenement.
+        / Optional `event=<uuid>`: only the reservations of one event.
+
+        Toutes les reservations sont renvoyees, annulees comprises : leur
+        `reservationStatus` permet de les trier.
+        / Every reservation is returned, cancelled ones included.
+        """
+        reservations = Reservation.objects.select_related(
+            "event", "user_commande",
+        ).prefetch_related(
+            "tickets__pricesold__price",
+        ).order_by("-datetime")
+
+        uuid_de_l_evenement = request.GET.get("event", None)
+        if uuid_de_l_evenement:
+            if not _ressemble_uuid(uuid_de_l_evenement):
+                return Response(
+                    {"detail": f"Invalid event identifier: {uuid_de_l_evenement}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            reservations = reservations.filter(event__uuid=uuid_de_l_evenement)
+
+        # TODO : totalPrice relit en base les lignes de vente de chaque reservation
+        # (Reservation.total_paid). A optimiser si un evenement depasse quelques
+        # centaines de reservations.
+        # / totalPrice queries each reservation's sale lines (N+1).
+        serializer = ReservationSchemaSerializer(reservations, many=True)
+        return Response({"results": serializer.data})
 
     def create(self, request):
         input_serializer = ReservationCreateSerializer(data=request.data, context={"request": request})
@@ -725,7 +808,7 @@ class ReservationViewSet(viewsets.ViewSet):
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, uuid=None):
-        reservation = get_object_or_404(Reservation, uuid=uuid)
+        reservation = get_objet_par_uuid_ou_404(Reservation, uuid)
         serializer = ReservationSchemaSerializer(reservation)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -748,7 +831,7 @@ class MembershipViewSet(viewsets.ViewSet):
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, uuid=None):
-        membership = get_object_or_404(Membership, uuid=uuid)
+        membership = get_objet_par_uuid_ou_404(Membership, uuid)
         serializer = MembershipSchemaSerializer(membership)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1334,7 +1417,7 @@ class PageViewSet(viewsets.ViewSet):
         return Response(PageSchemaSerializer(page).data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, uuid=None):
-        page = get_object_or_404(Page, uuid=uuid)
+        page = get_page_par_uuid_ou_slug_ou_404(uuid)
         # PATCH meta seulement. / PATCH meta only.
         meta = {}
         for prop in (request.data.get("additionalProperty") or []):
@@ -1371,7 +1454,7 @@ class PageViewSet(viewsets.ViewSet):
         return Response(PageSchemaSerializer(page).data)
 
     def destroy(self, request, uuid=None):
-        page = get_object_or_404(Page, uuid=uuid)
+        page = get_page_par_uuid_ou_slug_ou_404(uuid)
         page.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1389,7 +1472,7 @@ class PageViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["post"], url_path="blocs")
     def ajouter_bloc(self, request, uuid=None):
-        page = get_object_or_404(Page, uuid=uuid)
+        page = get_page_par_uuid_ou_slug_ou_404(uuid)
         # JSON -> dict normal ; multipart -> QueryDict (on aplatit en scalaires).
         # / JSON -> plain dict; multipart -> QueryDict (flatten to scalars).
         # Note : en DRF, request.data = _full_data qui inclut les fichiers uploadés.
@@ -1400,6 +1483,7 @@ class PageViewSet(viewsets.ViewSet):
         # We use .dict() to flatten scalars, then remove file fields (File objects, not strings).
         # These files are applied after the serializer save via _appliquer_fichiers_multipart.
         if hasattr(request.data, "dict"):
+            _refuser_les_images_envoyees_sans_fichier(request)
             donnees = request.data.dict()
             # Retire les champs fichier : ce sont des objets File, pas des scalaires.
             # / Remove file fields: they are File objects, not scalars.
@@ -1410,9 +1494,14 @@ class PageViewSet(viewsets.ViewSet):
         donnees.setdefault("position", page.blocs.count())
         ser = BlocCreateSerializer(data=donnees, context={"page": page})
         ser.is_valid(raise_exception=True)
-        bloc = ser.save()
-        _appliquer_fichiers_multipart(request, bloc)
-        bloc.save()
+        # Tout ou rien : si le fichier est refuse (format, pixels), le bloc deja
+        # cree par ser.save() est annule. Sans cette transaction, un 400 laisserait
+        # un bloc orphelin en base (ATOMIC_REQUESTS n'est pas active).
+        # / All or nothing: a refused file rolls back the block created by save().
+        with transaction.atomic():
+            bloc = ser.save()
+            _appliquer_fichiers_multipart(request, bloc)
+            bloc.save()
         return Response(BlocSchemaSerializer(bloc).data, status=status.HTTP_201_CREATED)
 
 
@@ -1423,11 +1512,18 @@ class BlocViewSet(viewsets.ViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def retrieve(self, request, uuid=None):
-        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc = get_objet_par_uuid_ou_404(Bloc, uuid)
         return Response(BlocSchemaSerializer(bloc).data)
 
     def partial_update(self, request, uuid=None):
-        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc = get_objet_par_uuid_ou_404(Bloc, uuid)
+
+        # Une image s'envoie en fichier (multipart) : une URL, une liste ou
+        # toute autre valeur est refusee par un 400, jamais ignoree.
+        # La galerie d'un bloc ne se modifie pas ici : voir ajouter_image.
+        # / An image is sent as a file: anything else is a 400, never ignored.
+        _refuser_les_images_envoyees_sans_fichier(request)
+
         if "headline" in request.data:
             bloc.titre = request.data["headline"] or ""
         if "alternativeHeadline" in request.data:
@@ -1466,6 +1562,11 @@ class BlocViewSet(viewsets.ViewSet):
                 nom = prop.get("name")
                 if nom not in CHAMPS_BLOC_AUTORISES:
                     continue  # securite : jamais setattr hors whitelist
+                # Image secondaire ou photo d'auteur en JSON : refus explicite,
+                # pour la meme raison que `image` plus haut (multipart uniquement).
+                # / Secondary image or author photo in JSON: explicit refusal.
+                if nom in CHAMPS_IMAGE_URL:
+                    raise serializers.ValidationError({nom: [MESSAGE_IMAGES_EN_FICHIER]})
                 if nom in CHAMPS_FICHIER:
                     continue  # securite : les fichiers ne se settent jamais via string
                 valeur = prop.get("value")
@@ -1499,9 +1600,31 @@ class BlocViewSet(viewsets.ViewSet):
         return Response(BlocSchemaSerializer(bloc).data)
 
     def destroy(self, request, uuid=None):
-        bloc = get_object_or_404(Bloc, uuid=uuid)
+        bloc = get_objet_par_uuid_ou_404(Bloc, uuid)
         bloc.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="images")
+    def ajouter_image(self, request, uuid=None):
+        """
+        Ajoute UNE image a la fin de la galerie d'un bloc (multipart).
+        / Adds ONE image at the end of a block's gallery (multipart).
+
+        LOCALISATION : api_v2/views.py
+        Route : POST /api/v2/blocs/{uuid}/images/ (droit de cle `page`,
+        basename `bloc`, comme le reste de ce viewset).
+
+        C'est le seul moyen de remplir par l'API une galerie (IMAGES en grille
+        ou en bande de logos), les photos d'une Equipe, les vignettes de
+        Ressources, et les images d'un bloc TEXTE (![legende](galerie:N)).
+        Regles et reponse : api_v2/serializers.py:ImageDeGalerieCreateSerializer.
+        """
+        bloc = get_objet_par_uuid_ou_404(Bloc, uuid)
+        serializer_de_l_image = ImageDeGalerieCreateSerializer(
+            data=request.data, context={"bloc": bloc})
+        serializer_de_l_image.is_valid(raise_exception=True)
+        serializer_de_l_image.save()
+        return Response(serializer_de_l_image.data, status=status.HTTP_201_CREATED)
 
 
 # --------------------------------------------------------------------------- #
@@ -1891,12 +2014,19 @@ class AccountViewSet(viewsets.ViewSet):
 
     def list(self, request):
         from laboutik.models import CompteComptable
-        from laboutik.plan_comptable import s_assurer_que_le_plan_existe
+        from laboutik.plan_comptable import (
+            numeros_des_comptes_de_tresorerie,
+            s_assurer_que_le_plan_existe,
+        )
 
         # Le filet : un lieu sans aucun compte recoit le plan par defaut.
         # / The safety net: a venue without any account gets the default chart.
         s_assurer_que_le_plan_existe()
 
         comptes = CompteComptable.objects.order_by("numero_de_compte")
-        serializer = CompteComptableSerializer(comptes, many=True)
+        serializer = CompteComptableSerializer(
+            comptes,
+            many=True,
+            context={"numeros_de_tresorerie": numeros_des_comptes_de_tresorerie()},
+        )
         return Response({"results": serializer.data})

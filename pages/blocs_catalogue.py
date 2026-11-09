@@ -10,10 +10,11 @@ Utilise par : `Bloc.clean()` (validation type x affichage), l'API v2 (validation
 block-types endpoint) and the admin (conditional_fields).
 
 LE CATALOGUE EST ORGANISE PAR INTENTION, PAS PAR RENDU.
-Sept types repondent chacun a une phrase que se dit la personne qui construit
+Huit types repondent chacun a une phrase que se dit la personne qui construit
 la page : « j'ecris du texte », « je mets quelque chose en avant », « je montre
 des images », « j'integre un truc externe », « je montre ou c'est », « je reponds
-a des questions », « je liste des choses automatiquement ».
+a des questions », « je liste des choses automatiquement », « je montre une carte
+de lieux et de leurs evenements ».
 
 La variation VISUELLE a l'interieur d'un type est portee par le champ
 `affichage` (cf. AFFICHAGES_PAR_TYPE). Regle non negociable : **jamais un
@@ -54,12 +55,14 @@ CHAMPS_PAR_TYPE = {
         "bouton_label", "bouton_url", "bouton2_label", "bouton2_url",
         "auteur_nom", "auteur_role", "auteur_photo",
         # `contenu` porte les elements de la section, en DONNEES TEXTE : les
-        # sous-cartes, les personnes, les dates, les ressources, ou les boutons
-        # d'un appel a l'action. Un element n'est pas un bloc : il vit a
+        # sous-cartes, les dates, ou les boutons d'un appel a l'action. Les
+        # personnes d'une EQUIPE et les ressources n'y sont pas : elles vivent
+        # dans ImageGalerie. Un element n'est pas un bloc : il vit a
         # l'interieur de sa section, la ou une liste de blocs ne saurait le
         # placer. Les cles de chaque affichage : CLES_ELEMENT_PAR_AFFICHAGE.
         # / `contenu` carries the section's items as TEXT DATA (sub-cards,
-        # people, dates, resources, call-to-action buttons). Keys per display:
+        # dates, call-to-action buttons; EQUIPE people and RESSOURCES live in
+        # ImageGalerie). Keys per display:
         # CLES_ELEMENT_PAR_AFFICHAGE.
         "contenu",
     ],
@@ -115,6 +118,19 @@ CHAMPS_PAR_TYPE = {
     # `page_source` is NOT listed here: it is a foreign key needing dedicated
     # API handling (see CHAMPS_RELATION).
     "LISTE": ["titre", "source", "nombre_max"],
+
+    # CARTE_FIGEE = « je montre une carte de lieux et de leurs evenements, a un
+    # moment donne ». C'est l'outil de carte de la page « Autour de nous »,
+    # nourri par un FICHIER JSON importe et non par la base (pages/carte_figee.py).
+    # Ce n'est pas un affichage du LIEU : le LIEU montre ou se trouve CE lieu,
+    # avec ses infos pratiques ; la carte figee montre un ensemble de lieux.
+    # `donnees_carte_figee` ne se saisit pas a la main : dans l'admin, il est
+    # remplace par le champ d'import `fichier_carte_figee` (pages/admin.py).
+    # / CARTE_FIGEE = "I show a map of venues and their events, at one point in
+    # time": the network map tool fed by an imported JSON file. Not a LIEU
+    # display: LIEU shows where THIS venue is. In the admin, the JSON field is
+    # replaced by the `fichier_carte_figee` upload field.
+    "CARTE_FIGEE": ["titre", "donnees_carte_figee"],
 }
 
 # Pour chaque type : les affichages autorises. Un type absent ou a tuple vide
@@ -156,6 +172,7 @@ AFFICHAGES_PAR_TYPE = {
     "LIEU": ("VERTICAL", "HORIZONTAL"),
     "FAQ": (),
     "LISTE": (),
+    "CARTE_FIGEE": (),
 }
 
 # Pour un couple (type, affichage) : les champs que son gabarit rend REELLEMENT.
@@ -201,15 +218,20 @@ CHAMPS_PAR_AFFICHAGE = {
             "contenu",
         ],
         "CITATION": ["texte", "auteur_nom", "auteur_role", "auteur_photo"],
-        # contenu = [{"titre": nom, "texte": rôle, "badge": …}, …]
-        # / contenu = [{"titre": name, "texte": role, "badge": …}, …]
-        "EQUIPE": ["titre", "texte", "contenu"],
+        # Les personnes ne sont PAS dans `contenu` : ce sont les ImageGalerie
+        # du bloc (photo facultative, legende = nom, tags = badges).
+        # / People are NOT in `contenu`: they are the block's ImageGalerie
+        # (optional photo, caption = name, tags = badges).
+        "EQUIPE": ["titre", "texte"],
         # contenu = [{"titre": année, "texte": récit}, …]
         # / contenu = [{"titre": year, "texte": story}, …]
         "FRISE": ["titre", "texte", "contenu"],
-        # contenu = [{"titre": …, "texte": …, "badge": …, "url": lien optionnel}, …]
-        # / contenu = [{"titre", "texte", "badge", "url" (optional link)}, …]
-        "RESSOURCES": ["titre", "texte", "contenu"],
+        # Les ressources ne sont PAS dans `contenu` : ce sont les ImageGalerie
+        # du bloc (vignette facultative, legende = titre, tags = badges,
+        # lien_url = lien).
+        # / Resources are NOT in `contenu`: they are the block's ImageGalerie
+        # (optional thumbnail, caption = title, tags = badges, link).
+        "RESSOURCES": ["titre", "texte"],
     },
     "IMAGES": {
         # Une seule image : le champ `image` du bloc.
@@ -231,16 +253,14 @@ CHAMPS_PAR_AFFICHAGE = {
 # Pour les affichages qui lisent `contenu` en liste d'elements : les cles
 # qu'un element peut porter ET que le gabarit rend reellement. Meme logique que
 # CHAMPS_PAR_AFFICHAGE, un cran plus bas : l'editeur de lignes de l'admin ne
-# montre que ces cles (une frise n'affiche pas de badge, seules les ressources
-# ont un lien).
+# montre que ces cles (une frise n'affiche pas de badge, seul l'appel a
+# l'action a un lien).
 # / For affichages reading `contenu` as a list of items: the keys an item may
 # carry AND that the template actually renders. The admin line editor only
 # shows these keys.
 CLES_ELEMENT_PAR_AFFICHAGE = {
     "MEDIA_ET_CARTES": ("titre", "texte", "badge"),
-    "EQUIPE": ("titre", "texte", "badge"),
     "FRISE": ("titre", "texte"),
-    "RESSOURCES": ("titre", "texte", "badge", "url"),
     # Un élément = un bouton de plus : son libellé et son lien.
     # / One item = one more button: its label and its link.
     "APPEL_ACTION": ("titre", "url"),
@@ -261,7 +281,16 @@ SKINS_PAR_CHAMP_DU_TYPE = {
 # Sert a n'afficher cet inline que la ou il sera lu.
 # / (type, affichage) pairs whose images live in the ImageGalerie inline. Used
 # to show that inline only where it will be read.
-AFFICHAGES_AVEC_GALERIE = frozenset({("IMAGES", "GRILLE"), ("IMAGES", "BANDE_LOGOS")})
+AFFICHAGES_AVEC_GALERIE = frozenset({
+    ("IMAGES", "GRILLE"),
+    ("IMAGES", "BANDE_LOGOS"),
+    # Une image = une personne de l'equipe (photo facultative).
+    # / One image = one team member (optional photo).
+    ("SECTION", "EQUIPE"),
+    # Une image = une ressource (vignette facultative, lien facultatif).
+    # / One image = one resource (optional thumbnail and link).
+    ("SECTION", "RESSOURCES"),
+})
 
 # Affichage pose d'office quand la personne n'en choisit pas. Un bloc sans
 # affichage explicite doit quand meme s'afficher : on prend le plus neutre.
@@ -275,6 +304,17 @@ AFFICHAGE_PAR_DEFAUT = {
     # without an explicit choice keeps the look it always had.
     "LIEU": "VERTICAL",
 }
+
+# Affichages de SECTION dont les ELEMENTS sont des ImageGalerie (une image
+# facultative par element). Deduit de AFFICHAGES_AVEC_GALERIE. Lu par l'API
+# (api_v2/serializers.py) pour accepter et exposer la liste `image`.
+# / SECTION affichages whose ITEMS are ImageGalerie rows (optional image per
+# item). Derived from AFFICHAGES_AVEC_GALERIE. Read by the API.
+AFFICHAGES_SECTION_EN_GALERIE = frozenset(
+    affichage
+    for type_bloc, affichage in AFFICHAGES_AVEC_GALERIE
+    if type_bloc == "SECTION"
+)
 
 # Types dont les images sont portees par ImageGalerie (relation multi-images).
 # / Types whose images are carried by ImageGalerie (multi-image relation).
@@ -292,13 +332,18 @@ CHAMPS_BLOC_AUTORISES = frozenset(
 )
 
 # Champs FICHIER : ne se settent JAMAIS via additionalProperty (string arbitraire =
-# corruption). Ils passent par URL (telechargement) ou upload multipart.
-# / FILE fields: never set via additionalProperty. They go through URL download or
-# multipart upload.
+# corruption). Ils arrivent uniquement en fichier (multipart). L'API ne telecharge
+# aucune URL.
+# / FILE fields: never set via additionalProperty. They only arrive as uploaded
+# files (multipart). The API downloads no URL.
 CHAMPS_FICHIER = frozenset({"image", "image_secondaire", "video", "auteur_photo"})
 
-# Champs IMAGE telechargeables par URL distante (pas la video : multipart only).
-# / IMAGE fields downloadable from a remote URL (not video: multipart only).
+# Champs IMAGE d'un bloc, envoyes en fichier par l'API (pas la video : l'API
+# n'accepte aucune video). Une valeur non vide envoyee autrement (URL, texte)
+# est refusee par un 400 (api_v2/serializers.py:BlocCreateSerializer.validate,
+# api_v2/views.py:_refuser_les_images_envoyees_sans_fichier).
+# / A block's IMAGE fields, sent as files to the API (no video). Anything else
+# non-empty is refused with a 400.
 CHAMPS_IMAGE_URL = frozenset({"image", "image_secondaire", "auteur_photo"})
 
 # Champs RELATION (cles etrangeres) : hors de CHAMPS_PAR_TYPE, donc hors de

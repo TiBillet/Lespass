@@ -4,33 +4,52 @@ BLOC SECTION / affichage EQUIPE — skin V2 (DA v1)
 / SECTION block / EQUIPE display — V2 skin (DA v1)
 
 LOCALISATION : pages/templates/pages/V2/partials/bloc_section_equipe.html
-Maquette : TEMP-tibillet-lespass-main/qui-sommes-nous.html, section « Le collectif »
 
-Les personnes viennent de `bloc.contenu`, une liste d'items TEXTE :
-    [{"titre": "Camille R.", "texte": "Coordination", "badge": "Bénévole"}, …]
-titre = le nom, texte = le rôle, badge = une précision courte (optionnelle).
-Ce sont des DONNÉES, pas des blocs. Le HTML et les classes vivent ici.
-Pas de photo : l'initiale du nom sert d'avatar (comme la maquette).
-/ People come from `bloc.contenu`: titre = name, texte = role, badge optional.
+Les personnes viennent de `bloc.images_galerie` (modèle ImageGalerie,
+l'encart « Images » de la fiche du bloc). Une image = une personne :
+- `legende` = le nom ;
+- `tags` = les badges sous le nom, séparés par des virgules
+  (lus par ImageGalerie.liste_des_tags) ;
+- `image` = la photo, FACULTATIVE.
+Avec photo : la variation `med` (480 px, proportions gardées) est recadrée en
+rond par le CSS (.avatar__photo, object-fit: cover). Sans photo : l'initiale
+du nom sert d'avatar.
+La photo a un `alt` vide : le nom est écrit juste à côté, un lecteur d'écran
+le lirait deux fois.
+/ People come from the block's ImageGalerie: caption = name, tags = badges,
+optional photo cropped round by CSS, initial as fallback. Empty alt: the name
+is written right next to it.
 {% endcomment %}
 <section class="tb-bloc tb-bloc--equipe" data-testid="bloc-section-equipe">
     <div class="tb-bloc__contenu">
         {% if bloc.titre %}<h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>{% endif %}
         {% if bloc.texte %}<div class="tb-bloc__texte">{{ bloc.texte|safe }}</div>{% endif %}
 
-        {% if bloc.contenu %}
-            <ul class="equipe-grille" role="list">
-                {% for membre in bloc.contenu %}
-                    <li class="team-card">
-                        <span class="avatar avatar--md" aria-hidden="true"><span class="ink-center-fix">{{ membre.titre|slice:":1"|upper }}</span></span>
-                        <span>
-                            <span class="team-card__name">{{ membre.titre }}</span>
-                            {% if membre.texte %}<span class="team-card__role">{{ membre.texte }}</span>{% endif %}
-                            {% if membre.badge %}<span class="badge badge--neutral equipe-grille__badge">{{ membre.badge }}</span>{% endif %}
-                        </span>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% endif %}
+        {% with membres=bloc.images_galerie.all %}
+            {% if membres %}
+                <ul class="equipe-grille" role="list">
+                    {% for membre in membres %}
+                        <li class="team-card" data-testid="equipe-membre">
+                            {% if membre.image %}
+                                <img class="avatar avatar--md avatar__photo" src="{{ membre.image.med.url }}"
+                                     alt="" width="48" height="48" loading="lazy" data-testid="equipe-membre-photo">
+                            {% else %}
+                                <span class="avatar avatar--md" aria-hidden="true" data-testid="equipe-membre-initiale"><span class="ink-center-fix">{{ membre.legende|slice:":1"|upper }}</span></span>
+                            {% endif %}
+                            <span>
+                                <span class="team-card__name">{{ membre.legende }}</span>
+                                {% with tags=membre.liste_des_tags %}
+                                    {% if tags %}
+                                        <span class="equipe-grille__tags">
+                                            {% for tag in tags %}<span class="badge badge--neutral">{{ tag }}</span>{% endfor %}
+                                        </span>
+                                    {% endif %}
+                                {% endwith %}
+                            </span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
     </div>
 </section>

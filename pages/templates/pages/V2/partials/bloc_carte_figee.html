@@ -1,0 +1,56 @@
+{% load static i18n pages_tags %}
+{% comment %}
+    BLOC CARTE FIGEE — skin V2.
+    / FROZEN MAP block — V2 skin.
+
+    LOCALISATION : pages/templates/pages/V2/partials/bloc_carte_figee.html
+
+    Meme outil de carte que la page « Autour de nous » du skin V2 : il inclut
+    la MEME coquille (pages/V2/partials/explorer_coquille.html). Seules les
+    donnees changent : elles viennent d'un fichier JSON importe dans l'editeur
+    de site (pages/carte_figee.py), et non de la base.
+    / Same map tool as the V2 "Around us" page, same shell. Only the data
+    changes: it comes from an imported JSON file.
+
+    Le socle commun aux autres skins est pages/classic/partials/bloc_carte_figee.html.
+    Le skin V2 a son propre gabarit car V2.css habille l'explorer avec le
+    balisage de sa coquille (.map-panel, .around-layout). Le widget du socle,
+    sans ce balisage, laisserait la carte recouvrir toute la page.
+    / V2 needs its own template: V2.css styles the explorer through its shell
+    markup; the base widget would let the map cover the whole page.
+
+    Une seule carte figee par page : explorer.js utilise des id fixes.
+    Bloc.clean() refuse la deuxieme. / One frozen map per page.
+{% endcomment %}
+<section class="tb-bloc tb-bloc--carte-figee" data-testid="bloc-carte-figee">
+    {% if bloc.titre %}
+        <h2 class="tb-bloc__titre">{{ bloc.titre }}</h2>
+    {% endif %}
+
+    {% if bloc.donnees_carte_figee %}
+        {# <link> dans le body : la navigation HTMX ne remplace jamais le <head>. #}
+        {# / <link> in the body: HTMX navigation never swaps the <head>. #}
+        <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
+        <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
+        <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
+        <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
+
+        {% donnees_explorer_carte_figee bloc as explorer_data %}
+        {% translate "Événements :" as libelle_evenements_popup %}
+        {% include "pages/V2/partials/explorer_coquille.html" with explorer_data=explorer_data current_tenant_uuid="" libelle_evenements_popup=libelle_evenements_popup %}
+
+        <script src="{% static 'seo/vendor/leaflet/leaflet.js' %}"></script>
+        <script src="{% static 'seo/vendor/leaflet/markercluster.js' %}"></script>
+        {# Fond de carte commun : AVANT explorer.js, qui appelle tbPoserFondDeCarte. #}
+        {# / Shared basemap: BEFORE explorer.js, which calls tbPoserFondDeCarte. #}
+        <script src="{% static 'cartes/tb_fond_de_carte.js' %}"></script>
+        <script src="{% static 'seo/explorer.js' %}"></script>
+    {% else %}
+        {# Bloc neuf, pas encore enregistre : l'apercu en direct n'envoie pas #}
+        {# les fichiers, la carte n'existe qu'apres l'import. #}
+        {# / New unsaved block: the live preview sends no files. #}
+        <p class="text-muted" role="status" data-testid="bloc-carte-figee-vide">
+            {% translate "Importez un fichier JSON, puis enregistrez le bloc pour voir la carte." %}
+        </p>
+    {% endif %}
+</section>

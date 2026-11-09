@@ -660,10 +660,10 @@ class Configuration(SingletonModel):
     def logo_variations(self):
         if self.logo:
             return {
-                'fhd': self.img.fhd.url,
-                'hdr': self.img.hdr.url,
-                'med': self.img.med.url,
-                'thumbnail': self.img.thumbnail.url,
+                'fhd': self.logo.fhd.url,
+                'hdr': self.logo.hdr.url,
+                'med': self.logo.med.url,
+                'thumbnail': self.logo.thumbnail.url,
             }
         else:
             return []
@@ -740,30 +740,11 @@ class Configuration(SingletonModel):
     # auto tag) now lives on FederationConfiguration. Enabled in the "Federation
     # options" admin, no longer in the modules dashboard.
 
-    ######### COMPTABILITE — RAPPORTS PERIODIQUES #########
-    # / Periodic reports — accounting app
-
-    PERIODICITE_NONE = "NONE"
-    PERIODICITE_JOURNALIER = "J"
-    PERIODICITE_HEBDOMADAIRE = "H"
-    PERIODICITE_MENSUEL = "M"
-    PERIODICITE_ANNUEL = "A"
-    PERIODICITE_CHOICES = [
-        (PERIODICITE_NONE, _("No email")),
-        (PERIODICITE_JOURNALIER, _("Chaque jour, dans le récap du matin")),
-        (PERIODICITE_HEBDOMADAIRE, _("Weekly")),
-        (PERIODICITE_MENSUEL, _("Monthly")),
-        (PERIODICITE_ANNUEL, _("Yearly")),
-    ]
-
-    rapport_emails = models.TextField(
-        blank=True,
-        default="",
-        verbose_name=_("Recipient emails for closure reports"),
-        help_text=_(
-            "Adresses séparées par des virgules. Elles reçoivent le récap du matin (périodicité « Journalier ») ou le rapport de chaque clôture (hebdomadaire, mensuelle, annuelle). Vide : aucun envoi."
-        ),
-    )
+    ######### COMPTABILITE — RÉCAP DU MATIN #########
+    # / Morning recap — accounting app
+    # Les réglages des envois (récap du matin, rapports H/M/A, destinataires) sont
+    # dans comptabilite.models.ConfigurationDesRapports.
+    # / The mail settings live in comptabilite.models.ConfigurationDesRapports.
 
     # Le dernier jour (en heure locale du lieu) dont le récap du matin a été traité.
     # / Last local day whose morning recap was processed.
@@ -772,13 +753,6 @@ class Configuration(SingletonModel):
         blank=True,
         editable=False,
         verbose_name=_("Récap du matin traité le"),
-    )
-
-    rapport_periodicite = models.CharField(
-        max_length=4,
-        choices=PERIODICITE_CHOICES,
-        default=PERIODICITE_NONE,
-        verbose_name=_("Closure report sending frequency"),
     )
 
     # FROM V2 : UNUSED
@@ -1985,9 +1959,9 @@ for _proxy_product in PROXYS_PRODUCT:
 
 
 """
-Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow
+Un autre post save existe dans .signals.py : send_membership_product_to_fedow
 Dans fichier signals pour éviter les doubles imports
-Il vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
+Il vérifie l'existence du produit Adhésion dans Fedow et le crée si besoin (lieux avec LaBoutik V1 seulement)
 Les proxys de Product y sont connectes aussi (voir PROXYS_PRODUCT ci-dessus).
 """
 
@@ -2449,6 +2423,16 @@ class Event(models.Model):
     reservation_button_name = models.CharField(max_length=150, blank=True, null=True,
                                                verbose_name=_("Button name for reservation"),
                                                help_text=_("If empty : I want to reserve one or more seats."))
+
+    # Faux par défaut : le panier est proposé sur tous les événements.
+    # Vrai : les billets de cet événement se réservent seulement en direct.
+    # Le refus est aussi fait côté serveur (PanierSession.add_ticket).
+    # / False by default: the cart is offered. True: direct booking only, enforced server-side.
+    panier_desactive = models.BooleanField(
+        default=False,
+        verbose_name=_("Désactiver le panier"),
+        help_text=_("Les billets de cet événement ne peuvent pas être ajoutés au panier : réservation directe uniquement."),
+    )
 
     img = StdImageField(upload_to='images/',
                         blank=True, null=True,

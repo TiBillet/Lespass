@@ -37,10 +37,15 @@ from rest_framework import serializers
 # ADDITIONAL_DOMAINS) through the single source of truth
 # `dns_suffixes_disponibles()`. No domain is hardcoded anymore. The 1st suffix
 # is the form's default choice.
+#
+# Pour l'instant, le formulaire ne propose QUE le 1er suffixe (tibillet.coop en
+# prod). Les autres domaines d'ADDITIONAL_DOMAINS servent aux tenants existants,
+# pas aux nouveaux. Pour rouvrir le choix : DNS_CHOICES = tuple(dns_suffixes_disponibles()).
+# / For now the form offers ONLY the 1st suffix (tibillet.coop in prod).
 from onboard.services import dns_suffixes_disponibles
 
-DNS_CHOICES = tuple(dns_suffixes_disponibles())
-DNS_DEFAUT = DNS_CHOICES[0]
+DNS_DEFAUT = dns_suffixes_disponibles()[0]
+DNS_CHOICES = (DNS_DEFAUT,)
 
 
 class OnboardIdentitySerializer(serializers.Serializer):

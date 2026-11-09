@@ -32,7 +32,7 @@ Le code appartient au **Terminal** de la tireuse (son Raspberry Pi), pas à la t
 > coupé, le terminal repasse en attente, et **la tireuse garde sa configuration et son historique**.
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/main-fedow-import/controlvanne/Pi/install_pi.sh && chmod +x install_pi.sh && ./install_pi.sh
+wget https://raw.githubusercontent.com/TiBillet/Lespass/main/controlvanne/Pi/install_pi.sh && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
 Le script pose quelques questions puis délègue à `make`. À la fin, redémarrer le Pi.
@@ -125,7 +125,7 @@ Généré par `make claim`. Les adresses (`SERVER_URL`, `CLAIM_SERVER_URL`) sont
 | `GPIO_FLOW_SENSOR` | Pin GPIO du débitmètre (défaut : 23) |
 | `VALVE_ACTIVE_HIGH` | `True` si GPIO HIGH = vanne ouverte (défaut : `True`) |
 | `SSL_VERIFY` | `True` pour vérifier le certificat TLS (défaut : `True`, mettre `False` en dev local) |
-| `GIT_BRANCH` | Branche git tirée au démarrage du service (défaut : `main-fedow-import`, à repointer après merge) |
+| `GIT_BRANCH` | Branche git tirée au démarrage du service (défaut : `main`) |
 | `GIT_REPO` | URL du dépôt git (défaut : `https://github.com/TiBillet/Lespass`) |
 
 ## Dépannage

@@ -41,13 +41,13 @@ from unfold.contrib.filters.admin import ChoicesDropdownFilter, RelatedDropdownF
 
 from Administration.admin_tenant import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
-from AuthBillet.models import Wallet
 from Customers.models import (
     MESSAGE_MODULE_FERME_AUX_LIEUX_LEGACY,
     Client,
     lieu_en_moteur_legacy,
 )
 from fedow_core.models import Asset, Federation, Token, Transaction
+from fedow_core.services import WalletService
 
 logger = logging.getLogger(__name__)
 
@@ -380,23 +380,11 @@ class AssetAdmin(ModelAdmin):
             tenant_actuel = connection.tenant
             obj.tenant_origin = tenant_actuel
 
-            # Obtenir le wallet principal du tenant (le premier cree).
-            # Un tenant peut avoir plusieurs wallets (utilisateur, lieu, etc.).
-            # Get the tenant's primary wallet (first created).
-            # A tenant can have multiple wallets (user, venue, etc.).
-            wallet_du_tenant = Wallet.objects.filter(
-                origin=tenant_actuel,
-            ).first()
-
-            if wallet_du_tenant is None:
-                # Creer un wallet si le tenant n'en a pas encore.
-                # Create a wallet if the tenant doesn't have one yet.
-                wallet_du_tenant = Wallet.objects.create(
-                    origin=tenant_actuel,
-                    name=tenant_actuel.name,
-                )
-
-            obj.wallet_origin = wallet_du_tenant
+            # Les ventes cashless creditent wallet_origin : ce doit etre le wallet du lieu.
+            # Ne jamais filtrer sur origin seul : les wallets des clients ont le meme origin.
+            # / Cashless sales credit wallet_origin: it must be the venue wallet.
+            # Never filter on origin alone: customer wallets share the same origin.
+            obj.wallet_origin = WalletService.get_or_create_wallet_tenant(tenant_actuel)
 
         super().save_model(request, obj, form, change)
 

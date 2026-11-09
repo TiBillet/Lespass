@@ -150,6 +150,7 @@ from fabriques_panier import (  # noqa: E402
     taches_celery_enregistrees,
 )
 from fabriques_vente import (  # noqa: E402
+    abonner_aux_envois_des_rapports,
     creer_tarif_vendu,
     fabriquer_vente_encaissee,
     verifier_egalites,
@@ -260,8 +261,6 @@ class TestRepriseClotures(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.fuseau_horaire = "Europe/Paris"
         configuration.heure_de_fermeture = time(2, 0)
-        configuration.rapport_emails = ""
-        configuration.rapport_periodicite = Configuration.PERIODICITE_NONE
         configuration.save()
 
         # Une entrée (type « billet ») : le plan comptable par défaut lui donne son
@@ -286,16 +285,19 @@ class TestRepriseClotures(FastTenantTestCase):
         """
         return patch("django.utils.timezone.now", return_value=moment)
 
-    def _configurer_les_mails(self, periodicite):
+    def _configurer_les_mails(self, niveau):
         """
-        Donne au lieu un destinataire de rapport et une périodicité : une clôture de ce
-        niveau demande alors son mail.
-        / Gives the venue a report recipient and a periodicity.
+        Donne au lieu un destinataire de rapport et coche le seul rapport de ce niveau
+        (H, M ou A) : une clôture de ce niveau demande alors son mail, les autres non.
+        / Gives the venue a report recipient and ticks this level's report only.
         """
-        configuration = Configuration.get_solo()
-        configuration.rapport_emails = "compta-reprise@mock.test"
-        configuration.rapport_periodicite = periodicite
-        configuration.save()
+        abonner_aux_envois_des_rapports(
+            "compta-reprise@mock.test",
+            recap_quotidien=False,
+            hebdomadaire=niveau == ClotureCaisse.NIVEAU_HEBDOMADAIRE,
+            mensuel=niveau == ClotureCaisse.NIVEAU_MENSUEL,
+            annuel=niveau == ClotureCaisse.NIVEAU_ANNUEL,
+        )
 
     def _vendre_des_entrees_a(self, moment, quantite=1):
         """
@@ -527,7 +529,7 @@ class TestRepriseClotures(FastTenantTestCase):
         / Weekly e-mails. The "reprise" J requests none; the next Monday's 4:10 hourly
         run closes the week of March 9 (ended after the go-live) and requests its mail.
         """
-        self._configurer_les_mails(Configuration.PERIODICITE_HEBDOMADAIRE)
+        self._configurer_les_mails(ClotureCaisse.NIVEAU_HEBDOMADAIRE)
         self._vendre_des_entrees_a(heure_de_paris(2026, 1, 14, 12, 0))
 
         with (
@@ -655,7 +657,7 @@ class TestRepriseClotures(FastTenantTestCase):
         / Monthly e-mails: January (ended before the go-live) and February (ended exactly
         at it) send none; March, ended after, sends its own.
         """
-        self._configurer_les_mails(Configuration.PERIODICITE_MENSUEL)
+        self._configurer_les_mails(ClotureCaisse.NIVEAU_MENSUEL)
         self._vendre_des_entrees_a(heure_de_paris(2026, 1, 14, 12, 0))
         self._vendre_des_entrees_a(heure_de_paris(2026, 2, 11, 12, 0))
         self._creer_la_j_de_reprise_a(heure_de_paris(2026, 3, 1, 0, 0))

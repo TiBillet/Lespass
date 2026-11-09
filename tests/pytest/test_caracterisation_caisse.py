@@ -535,7 +535,6 @@ class TestClotureDeCaisseT11(FastTenantTestCase):
         configuration = Configuration.get_solo()
         configuration.module_caisse = True
         configuration.module_monnaie_locale = True
-        configuration.rapport_emails = ""
         configuration.save()
 
         # Les tâches demandées, pendant tout le test : une paire (nom court,

@@ -16,13 +16,14 @@ import datetime
 from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Configuration, Membership
+from BaseBillet.models import Configuration, Event, Membership
 from booking.models import (
     BesoinBenevole,
     InscriptionBenevole,
@@ -176,6 +177,53 @@ def titre_de_la_semaine(lundi):
     return f"{date_format(lundi, 'j F Y')} – {date_format(dimanche, 'j F Y')}"
 
 
+def jours_ou_afficher_un_evenement(debut, fin):
+    """
+    Les jours où un événement apparaît dans le planning, au fuseau de `debut` et `fin`.
+    / The days an event appears on, in the timezone of `debut` and `fin`.
+
+    Moins de 24 h : son jour de début seulement. Un concert 21h–2h appartient à sa
+    soirée, pas au lendemain.
+    24 h ou plus : chaque jour couvert. Une fin à minuit pile ne compte pas le jour
+    qui commence.
+    / Under 24 hours: its start day only. Otherwise every covered day.
+
+    :param fin: None pour un événement sans date de fin.
+    """
+    dure_moins_de_24_heures = fin is None or fin - debut < datetime.timedelta(hours=24)
+    if dure_moins_de_24_heures:
+        return [debut.date()]
+
+    dernier_jour = (fin - datetime.timedelta(seconds=1)).date()
+    jours = []
+    un_jour = debut.date()
+    while un_jour <= dernier_jour:
+        jours.append(un_jour)
+        un_jour += datetime.timedelta(days=1)
+    return jours
+
+
+def horaires_d_un_evenement(debut, fin, afficher_l_heure):
+    """
+    « 19h–23h », « 19h », ou « 24/10 18h → 26/10 23h » pour 24 h ou plus.
+    Texte vide si l'événement n'affiche pas son heure (Event.show_time).
+    / "19h–23h", "19h", or both dates from 24 hours; empty when the event hides its time.
+
+    :param fin: None pour un événement sans date de fin.
+    """
+    if not afficher_l_heure:
+        return ""
+    if fin is None:
+        return _heure(debut)
+    dure_moins_de_24_heures = fin - debut < datetime.timedelta(hours=24)
+    if dure_moins_de_24_heures:
+        return f"{_heure(debut)}–{_heure(fin)}"
+    return (
+        f"{date_format(debut, 'j/n')} {_heure(debut)}"
+        f" → {date_format(fin, 'j/n')} {_heure(fin)}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Droits / Rights
 # ---------------------------------------------------------------------------
@@ -245,6 +293,49 @@ def besoins_a_venir(planning, fuseau_du_lieu=None):
         if not besoin.est_passe(fuseau_du_lieu):
             besoins_pas_encore_passes.append(besoin)
     return besoins_pas_encore_passes
+
+
+def evenements_par_jour_de_la_semaine(lundi, fuseau_du_lieu):
+    """
+    Les événements de la semaine, rangés par jour : { date: [{titre, horaires}, ...] }.
+    / The week's events, by day.
+
+    Une seule requête pour la semaine. Mêmes filtres que l'agenda du lieu
+    (BaseBillet/views.py) : publiés, non archivés, sans les actions (Event.ACTION).
+    Event.private n'est pas filtré : il ne concerne que les agendas partagés.
+    / One query per week. Same filters as the venue agenda.
+    """
+    debut_de_la_semaine = datetime.datetime.combine(lundi, datetime.time.min, tzinfo=fuseau_du_lieu)
+    lundi_suivant = lundi + datetime.timedelta(days=7)
+    fin_de_la_semaine = datetime.datetime.combine(lundi_suivant, datetime.time.min, tzinfo=fuseau_du_lieu)
+
+    evenements_de_la_semaine = (
+        Event.objects.filter(
+            Q(end_datetime__gt=debut_de_la_semaine)
+            | Q(end_datetime__isnull=True, datetime__gte=debut_de_la_semaine),
+            datetime__lt=fin_de_la_semaine,
+            published=True,
+            archived=False,
+        )
+        .exclude(categorie=Event.ACTION)
+        .only("name", "datetime", "end_datetime", "show_time")
+        .order_by("datetime")
+    )
+
+    evenements_par_jour = {}
+    for evenement in evenements_de_la_semaine:
+        debut = evenement.datetime.astimezone(fuseau_du_lieu)
+        fin = None
+        if evenement.end_datetime:
+            fin = evenement.end_datetime.astimezone(fuseau_du_lieu)
+
+        evenement_a_afficher = {
+            "titre": evenement.name,
+            "horaires": horaires_d_un_evenement(debut, fin, evenement.show_time),
+        }
+        for un_jour in jours_ou_afficher_un_evenement(debut, fin):
+            evenements_par_jour.setdefault(un_jour, []).append(evenement_a_afficher)
+    return evenements_par_jour
 
 
 def case_du_besoin(besoin, user, user_peut_s_inscrire, maintenant, user_est_admin=False, fuseau_du_lieu=None):
@@ -336,8 +427,9 @@ def construire_le_planning(planning, user, user_est_admin=False, semaine=None):
     2. Choisit la semaine à afficher (choisir_la_semaine) et garde ses besoins.
     3. Calcule une « case » par besoin de la semaine pour cette personne (case_du_besoin).
     4. Range les cases par jour (colonnes) et par tâche (lignes).
+    5. Ajoute à chaque jour les événements du lieu (une requête pour la semaine).
     / 1. Load all upcoming needs (global counter). 2. Pick the week. 3. One cell per need
-      of the week. 4. Arrange by day and task.
+      of the week. 4. Arrange by day and task. 5. Add the venue's events to each day.
 
     :param user_est_admin: la personne administre ce lieu (lien « Inscrire quelqu'un ») ;
         calculé par la vue avec TenantAdminPermissionWithRequest, la règle de l'admin.
@@ -389,11 +481,18 @@ def construire_le_planning(planning, user, user_est_admin=False, semaine=None):
     for besoin in besoins_de_la_semaine:
         besoins_par_jour.setdefault(besoin.date, []).append(besoin)
 
+    evenements_par_jour = evenements_par_jour_de_la_semaine(lundi_affiche, fuseau_du_lieu)
+
     jours = []
+    il_y_a_des_evenements_sur_les_jours_affiches = False
     for une_date, besoins_du_jour in besoins_par_jour.items():
         etat = etat_du_jour(besoins_du_jour)
+        evenements_du_jour = evenements_par_jour.get(une_date, [])
+        if evenements_du_jour:
+            il_y_a_des_evenements_sur_les_jours_affiches = True
         jours.append({
             "date": une_date,
+            "evenements": evenements_du_jour,
             "remplissage": taux_de_remplissage(besoins_du_jour),
             "etat": etat["texte"],
             "places_libres": etat["places_libres"],
@@ -442,6 +541,7 @@ def construire_le_planning(planning, user, user_est_admin=False, semaine=None):
         "planning": planning,
         "jours": jours,
         "lignes": lignes,
+        "il_y_a_des_evenements_sur_les_jours_affiches": il_y_a_des_evenements_sur_les_jours_affiches,
         "il_y_a_des_besoins_a_venir": bool(besoins),
         "semaine": {
             "lundi": lundi_affiche,
@@ -457,6 +557,39 @@ def construire_le_planning(planning, user, user_est_admin=False, semaine=None):
             "remplissage": remplissage_global,
         },
     }
+
+
+def plannings_publies_avec_des_besoins_a_venir():
+    """
+    Les plannings publiés qui ont au moins un besoin pas encore passé : ceux que la
+    page liste (/booking/benevolat/) affiche en cartes. Même règle que
+    resumes_des_plannings_a_venir sans horizon, sans calculer les cartes.
+    / Published plannings with at least one upcoming need: the list page's cards.
+
+    LOCALISATION : booking/benevolat.py
+    Appelée par :
+    - booking/sitemap.py (PlanningSitemap) : un planning sans besoin à venir est une
+      page quasi vide, il n'est pas déclaré ;
+    - BaseBillet/sitemap.py (StaticViewSitemap) et BenevolatViewSet.retrieve : la page
+      liste n'existe qu'à partir de deux plannings (avec un seul, elle redirige).
+
+    :return: liste de PlanningBenevole
+    """
+    fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+    aujourd_hui_au_lieu = timezone.now().astimezone(fuseau_du_lieu).date()
+    hier_au_lieu = aujourd_hui_au_lieu - datetime.timedelta(days=1)
+
+    # Pré-filtre en base (un besoin depuis hier), puis la vraie règle de fin en Python.
+    # / Database pre-filter (a need since yesterday), then the real end rule in Python.
+    plannings_avec_des_besoins_recents = PlanningBenevole.objects.filter(
+        published=True, besoins__date__gte=hier_au_lieu,
+    ).distinct().order_by("name")
+
+    plannings_retenus = []
+    for planning in plannings_avec_des_besoins_recents:
+        if besoins_a_venir(planning, fuseau_du_lieu):
+            plannings_retenus.append(planning)
+    return plannings_retenus
 
 
 def resumes_des_plannings_a_venir(nombre_max, horizon_en_jours=None):
@@ -980,7 +1113,8 @@ def retirer_une_inscription(inscription, nom_pour_l_equipe):
       renfort de dernière minute, et ça empêche une boucle de mails.
     / The team is warned only after the deadline AND if the sign-up predates it.
 
-    :param nom_pour_l_equipe: « Prénom Nom » (ou l'email) de la personne
+    :param nom_pour_l_equipe: « Prénom Nom » (ou l'email) de la personne, pour l'équipe.
+        Les autres bénévoles ne reçoivent que son prénom public (prenom_public).
     :return: True si l'équipe est prévenue
     """
     # Import local : booking/tasks.py importe ce module dans ses fonctions.
@@ -1001,8 +1135,11 @@ def retirer_une_inscription(inscription, nom_pour_l_equipe):
 
     if prevenir_l_equipe:
         uuid_du_besoin = str(besoin.pk)
+        prenom_pour_les_benevoles = prenom_public(inscription.user)
         transaction.on_commit(
-            lambda: prevenir_l_equipe_d_un_desistement.delay(uuid_du_besoin, nom_pour_l_equipe)
+            lambda: prevenir_l_equipe_d_un_desistement.delay(
+                uuid_du_besoin, nom_pour_l_equipe, prenom_pour_les_benevoles,
+            )
         )
     return prevenir_l_equipe
 

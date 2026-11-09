@@ -24,7 +24,7 @@ each tenant schema, each schema keeping its own pages (no cross-tenant leak).
 
 import uuid
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
@@ -624,12 +624,12 @@ class Bloc(models.Model):
 
     # --- Types de blocs (catalogue ferme) / Block types (closed catalogue) ---
     #
-    # SEPT types, organises par INTENTION de la personne qui construit la page
+    # HUIT types, organises par INTENTION de la personne qui construit la page
     # (« j'ecris du texte », « je mets en avant », « je montre des images »...),
     # et non par rendu. La variation VISUELLE a l'interieur d'un type est portee
     # par le champ `affichage` (voir AFFICHAGES_PAR_TYPE dans blocs_catalogue).
     # Regle : JAMAIS un nouveau TYPE pour une variation purement visuelle.
-    # / SEVEN types, organised by the page builder's INTENT, not by rendering.
+    # / EIGHT types, organised by the page builder's INTENT, not by rendering.
     # The VISUAL variation inside a type is carried by the `affichage` field.
     # Rule: NEVER a new TYPE for a purely visual variation.
     TEXTE = "TEXTE"
@@ -639,6 +639,7 @@ class Bloc(models.Model):
     LIEU = "LIEU"
     FAQ = "FAQ"
     LISTE = "LISTE"
+    CARTE_FIGEE = "CARTE_FIGEE"
 
     TYPE_BLOC_CHOICES = [
         (TEXTE, _("Texte (article, paragraphe — écrit en Markdown)")),
@@ -648,6 +649,7 @@ class Bloc(models.Model):
         (LIEU, _("Lieu (carte des points GPS + infos pratiques)")),
         (FAQ, _("Question / réponse")),
         (LISTE, _("Liste automatique (sous-pages, prochains évènements ou coups de main)")),
+        (CARTE_FIGEE, _("Carte figée (lieux et événements importés en JSON)")),
     ]
 
     # --- Affichages : la variation VISUELLE a l'interieur d'un type ---
@@ -914,12 +916,31 @@ class Bloc(models.Model):
         help_text=_('Liste de marqueurs : [{"lat": 43.55, "lng": 1.48, "label": "La Cité"}].'),
     )
 
+    # Bloc CARTE_FIGEE : la liste des lieux importee depuis un fichier JSON,
+    # deja verifiee par pages/carte_figee.py:nettoyer_carte_figee.
+    # Forme : [{"nom", "latitude", "longitude", "adresse", "url",
+    #           "evenements": [{"nom", "date", "url", "tags": [...]}]}, ...]
+    # On stocke le format du FICHIER, pas celui de l'explorer : la conversion
+    # vers {points, tenants} se fait au rendu
+    # (pages/carte_figee.py:donnees_explorer_depuis_carte_figee).
+    # Ce champ ne se saisit pas a la main : l'admin importe un fichier
+    # (champ de formulaire fichier_carte_figee, pages/admin.py).
+    # / CARTE_FIGEE block: the venue list imported from a JSON file, already
+    # checked. Stored in the FILE format; converted to the explorer format at
+    # render time. Never typed by hand: the admin uploads a file.
+    donnees_carte_figee = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Données de la carte figée"),
+    )
+
     # Contenu structure d'un bloc, en liste d'items TYPES (donnees TEXTE,
     # jamais de HTML — le HTML et les classes vivent dans le gabarit) :
     #   - LIEU : les infos pratiques posees a cote de la carte ;
     #   - SECTION en affichage MEDIA_ET_CARTES : les sous-cartes de la section.
-    #   - SECTION en affichage EQUIPE / FRISE / RESSOURCES : les personnes, les
-    #     étapes ou les ressources ({"titre", "texte", "badge", "url"}).
+    #   - SECTION en affichage FRISE : les étapes ({"titre", "texte"}).
+    #     Les affichages EQUIPE et RESSOURCES, eux, lisent leurs éléments dans
+    #     ImageGalerie (une image facultative par élément).
     # Types d'item : "badge" (texte), "para" (texte), "horaire" (texte),
     # "adresse" (texte multi-lignes), "accessibilite" (texte),
     # "transport" (titre + lignes[]). / Structured content for the left column of the
@@ -1108,6 +1129,7 @@ class Bloc(models.Model):
         from pages.blocs_catalogue import AFFICHAGES_PAR_TYPE
 
         self.poser_affichage_par_defaut()
+        self._verifier_la_carte_figee()
         affichages_permis = AFFICHAGES_PAR_TYPE.get(self.type_bloc, ())
 
         # Un type a rendu unique (TEXTE, LIEU, FAQ, LISTE) n'accepte aucun
@@ -1136,17 +1158,97 @@ class Bloc(models.Model):
                 },
             })
 
+    def _verifier_la_carte_figee(self):
+        """
+        Regles propres au bloc CARTE_FIGEE.
+        / Rules specific to the CARTE_FIGEE block.
+
+        LOCALISATION : pages/models.py — appelee par Bloc.clean()
+
+        1. Le bloc doit porter des donnees : une carte vide n'a rien a montrer.
+        2. Les donnees sont re-verifiees par nettoyer_carte_figee. L'admin les
+           verifie deja a l'import, mais ce champ peut aussi arriver par un
+           autre chemin (API, script). Une URL javascript: posee dans un href
+           s'executerait au clic : on ne compte donc pas sur un seul chemin.
+        3. Une seule carte figee par page : explorer.js utilise des id fixes
+           (#explorer-root, #explorer-data, #explorer-map). Deux cartes sur la
+           meme page se marcheraient dessus.
+        Un bloc d'un AUTRE type ne garde aucune donnee de carte : l'API v2 peut
+        poser `donnees_carte_figee` sur n'importe quel bloc (additionalProperty),
+        sans passer par la verification. Ce contenu non verifie deviendrait
+        visible si le bloc passait plus tard en CARTE_FIGEE.
+        / 1. Data required. 2. Data re-checked here too (any write path).
+        3. One frozen map per page: explorer.js relies on fixed ids.
+        A block of ANOTHER type keeps no map data (unchecked API content).
+        """
+        if self.type_bloc != self.CARTE_FIGEE:
+            self.donnees_carte_figee = []
+            return
+
+        # L'admin a deja refuse le fichier importe (BlocAdminForm pose ce
+        # drapeau) : l'erreur du fichier est affichee sous son champ. Ajouter
+        # « Importez un fichier JSON » serait faux (un fichier a ete envoye) et
+        # noierait le vrai message.
+        # / The admin already refused the uploaded file: its error is shown under
+        # the field. "Import a JSON file" would be wrong and hide the real one.
+        if getattr(self, "_fichier_importe_refuse", False):
+            return
+
+        # Les erreurs sont rattachees au formulaire ENTIER (NON_FIELD_ERRORS),
+        # jamais a un champ : dans l'admin, `donnees_carte_figee` n'est pas un
+        # champ du formulaire (on importe un fichier a la place). Une erreur
+        # rattachee a un champ absent du formulaire fait lever une ValueError
+        # a Django, donc une page 500.
+        # / Errors go to NON_FIELD_ERRORS: an error keyed on a field missing
+        # from the ModelForm makes Django raise ValueError (a 500).
+        if not self.donnees_carte_figee:
+            raise ValidationError({
+                NON_FIELD_ERRORS: _(
+                    "Importez un fichier JSON : la carte n'a encore aucun lieu."
+                ),
+            })
+
+        # Import local : meme reflexe que les autres imports de ce fichier.
+        # / Local import, same habit as the other imports of this file.
+        from pages.carte_figee import nettoyer_carte_figee
+
+        lieux_propres, erreurs = nettoyer_carte_figee(self.donnees_carte_figee)
+        if erreurs:
+            raise ValidationError({NON_FIELD_ERRORS: erreurs})
+        # On range la version nettoyee : nombres convertis, cles inconnues
+        # retirees. Le rendu lit ainsi toujours la meme forme.
+        # / Store the cleaned version: the rendering always reads the same shape.
+        self.donnees_carte_figee = lieux_propres
+
+        if self.page_id:
+            autre_carte_figee_sur_la_page = (
+                Bloc.objects.filter(page_id=self.page_id, type_bloc=self.CARTE_FIGEE)
+                .exclude(pk=self.pk)
+                .exists()
+            )
+            if autre_carte_figee_sur_la_page:
+                raise ValidationError({
+                    NON_FIELD_ERRORS: _(
+                        "Cette page a déjà une carte figée. Une page ne peut "
+                        "en porter qu'une seule."
+                    ),
+                })
+
 
 class ImageGalerie(models.Model):
     """
     Une image rattachee a un bloc. Relation plusieurs-images-vers-un-bloc :
     c'est le seul cas du moteur ou un bloc porte plusieurs fichiers (les autres
     blocs ont un champ image plat). Editee en inline (TabularInline) dans
-    l'admin du Bloc. Sert aux blocs IMAGES en galerie ou en bande de logos, et
-    aux images referencees depuis un bloc TEXTE (![legende](galerie:N)).
+    l'admin du Bloc. Sert aux blocs IMAGES en galerie ou en bande de logos,
+    aux images referencees depuis un bloc TEXTE (![legende](galerie:N)), et
+    aux personnes d'une SECTION en affichage EQUIPE et aux ressources d'une
+    SECTION en affichage RESSOURCES (une image = un element, image facultative).
     / An image attached to a block. Many-images-to-one-block relation: the only
     case in the engine where a block carries several files. Used by IMAGES
-    blocks (grid or logo strip) and by images referenced from a TEXTE block.
+    blocks (grid or logo strip), by images referenced from a TEXTE block, and
+    by the items of a SECTION in EQUIPE or RESSOURCES display (one image = one
+    item, image optional).
 
     LOCALISATION : pages/models.py
     """
@@ -1179,7 +1281,7 @@ class ImageGalerie(models.Model):
     # Légende optionnelle (texte d'alternative + sous-titre affiché).
     # / Optional caption (alt text + displayed subtitle).
     legende = models.CharField(
-        max_length=200,
+        max_length=500,
         blank=True,
         verbose_name=_("Légende"),
         help_text=_("Texte alternatif et légende de l'image (optionnel)."),
@@ -1201,6 +1303,20 @@ class ImageGalerie(models.Model):
         help_text=_("Lien optionnel : rend l'image cliquable (nouvel onglet). Ex. site d'un partenaire."),
     )
 
+    # Tags de l'image, separes par des virgules. Seuls les affichages EQUIPE
+    # et RESSOURCES d'une SECTION les rendent : une image = un element, la
+    # legende = son nom ou son titre, et chaque tag devient un badge dessous.
+    # Texte libre et non une relation : ces tags ne servent pas a filtrer.
+    # / The image's comma-separated tags. Only a SECTION's EQUIPE and
+    # RESSOURCES displays render them: one image = one item, caption = name or
+    # title, each tag a badge. Free text, not a relation: no filtering.
+    tags = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Tags"),
+        help_text=_("Blocs Équipe et Ressources : badges affichés sous le nom, séparés par des virgules. Ex. : Coordination, Salariée."),
+    )
+
     # Ordre de l'image dans la galerie (croissant).
     # / Image order in the gallery (ascending).
     position = models.PositiveIntegerField(
@@ -1216,3 +1332,20 @@ class ImageGalerie(models.Model):
 
     def __str__(self):
         return self.legende or f"Image #{self.position}"
+
+    def liste_des_tags(self):
+        """
+        Decoupe le champ `tags` en liste, sans espaces autour ni tag vide.
+        « Coordination, , Salariée » donne ["Coordination", "Salariée"].
+        / Splits `tags` into a list, stripped, without empty tags.
+
+        LOCALISATION : pages/models.py
+        Lu par les gabarits bloc_section_equipe.html et
+        bloc_section_ressources.html (skins classic et V2).
+        """
+        tags_propres = []
+        for morceau in self.tags.split(","):
+            tag = morceau.strip()
+            if tag:
+                tags_propres.append(tag)
+        return tags_propres

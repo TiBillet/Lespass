@@ -56,7 +56,14 @@ site web existant. Ils peuvent :
 5. Confirmer et payer.
 6. Annuler leur réservation en autonomie, dans le délai que vous avez fixé.
 
-La réservation est **directe** - pas de validation manuelle de votre part.
+Par défaut, la réservation est **directe** - pas de validation manuelle de votre part.
+
+Vous pouvez aussi demander une **validation manuelle**, tarif par tarif. Le clic sur
+un créneau devient alors une demande, et le créneau reste retenu. Vous recevez un mail.
+Depuis l'administration, vous validez la demande ou vous la refusez, avec un motif
+envoyé à la personne. Si la demande est payante, la personne reçoit un lien pour
+payer. Si elle est gratuite, elle est confirmée tout de suite. Tant qu'elle n'a pas
+payé, la personne peut retirer sa demande : rien n'est débité.
 
 
 ## Ce que vous gardez sous contrôle

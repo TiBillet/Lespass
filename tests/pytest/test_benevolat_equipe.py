@@ -169,7 +169,7 @@ def test_une_personne_deja_inscrite_n_a_pas_de_bouton(lieu):
 # ---------------------------------------------------------------------------
 
 def test_inscrire_une_personne_trouvee(lieu, django_capture_on_commit_callbacks):
-    """inscrit_par = l'admin ; mail « L'équipe t'a inscrit·e » ; zone rendue, fenêtre fermée."""
+    """inscrit_par = l'admin ; mail « L'équipe vous a inscrit·e » ; zone rendue, fenêtre fermée."""
     from booking.models import InscriptionBenevole
 
     camille = personne_du_lieu(lieu.tenant)
@@ -308,7 +308,7 @@ def test_email_marque_en_erreur_rend_422(lieu):
     assert not InscriptionBenevole.objects.filter(besoin=lieu.besoin).exists()
 
 
-def test_le_mail_de_l_equipe_dit_l_equipe_t_a_inscrit_et_porte_le_lien(lieu):
+def test_le_mail_de_l_equipe_dit_l_equipe_vous_a_inscrit_et_porte_le_lien(lieu):
     from django.template.loader import render_to_string
 
     html = render_to_string("booking/benevolat/emails/confirmation.html", {
@@ -317,7 +317,7 @@ def test_le_mail_de_l_equipe_dit_l_equipe_t_a_inscrit_et_porte_le_lien(lieu):
         "url_de_desistement": "https://x/booking/benevolat/desistement/JETON/",
     })
 
-    assert "Lespass t'a inscrit·e" in html
+    assert "Lespass vous a inscrit·e" in html
     assert "/booking/benevolat/desistement/JETON/" in html
 
 

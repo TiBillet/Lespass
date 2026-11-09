@@ -480,6 +480,37 @@ def compte_pour_reglement(moyen, asset_uuid):
     return correspondance_du_moyen.compte_de_tresorerie
 
 
+def numeros_des_comptes_de_tresorerie():
+    """
+    Les numéros des comptes où l'argent d'une vente peut arriver : ceux des moyens de
+    paiement et des monnaies (la règle de `compte_pour_reglement`), et le compte des
+    avances des clients (419100), où vont les recharges (`compte_pour_produit`,
+    règle 0). Un logiciel de facturation relie chacun d'eux à une banque.
+    / The accounts where a sale's money can land: payment methods, currencies, and
+    the customer advances account of top-ups.
+
+    LOCALISATION : laboutik/plan_comptable.py
+
+    LU PAR : api_v2/views.py (`AccountViewSet`, champ `treasury`).
+
+    :return: set des numéros de compte
+    """
+    numeros = set(
+        MappingMoyenDePaiement.objects.filter(
+            compte_de_tresorerie__isnull=False
+        ).values_list("compte_de_tresorerie__numero_de_compte", flat=True)
+    )
+    numeros.update(
+        MappingMonnaie.objects.values_list(
+            "compte_de_tresorerie__numero_de_compte", flat=True
+        )
+    )
+    numero_des_avances = COMPTE_PAR_DEFAUT["avances_clients"]
+    if CompteComptable.objects.filter(numero_de_compte=numero_des_avances).exists():
+        numeros.add(numero_des_avances)
+    return numeros
+
+
 # Le journal d'une vente sans point de vente, selon son origine (fiche E §3.2).
 # Une origine absente de cette table lève une erreur : une origine ajoutée plus tard
 # doit y recevoir son journal.
