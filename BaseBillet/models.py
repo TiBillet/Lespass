@@ -5303,6 +5303,25 @@ class Membership(models.Model):
             and timezone.localtime() <= self.deadline
         )
 
+    @property
+    def est_annulee_par_un_admin(self):
+        """
+        Un gestionnaire a annule cette adhesion depuis l'admin ?
+        / Did a manager cancel this membership from the admin?
+
+        L'annulation admin coupe l'acces tout de suite mais garde la deadline
+        de la periode payee ; la date d'annulation est dans `annulee_le`.
+        Les gabarits s'en servent pour afficher « Annulée le ... » au lieu de
+        « A expiré dans 11 mois » (issue #450).
+        Simple lecture de champ : aucune requete, aucun save, donc sans
+        danger hors d'un `tenant_context` (cf. tests/PIEGES.md 9.114).
+        / Admin cancellation cuts access at once but keeps the paid deadline;
+        the cancellation date is in `annulee_le`. Templates use this to show
+        "Cancelled on ..." instead of "Expired in 11 months" (issue #450).
+        Plain field read: no query, no save.
+        """
+        return self.status == Membership.ADMIN_CANCELED
+
     def is_valid(self):
         # Annulation administrative : effet IMMEDIAT. L'action admin archive
         # l'adhesion et peut emettre un avoir (remboursement) : laisser l'acces
