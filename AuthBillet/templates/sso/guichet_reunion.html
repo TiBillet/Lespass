@@ -1,0 +1,76 @@
+{% extends "sso/guichet.html" %}
+{% load i18n static %}
+{% comment %}
+  GUICHET DE CONNEXION — habillage du skin « reunion » (ancien thème)
+  / Login desk — "reunion" skin look (former theme)
+
+  LOCALISATION : AuthBillet/templates/sso/guichet_reunion.html
+  Choisi par : AuthBillet/views_sso.py (GABARIT_DU_GUICHET_PAR_SKIN), pour un
+  lieu en skin « reunion ». Ses pages viennent de pages/templates/pages/classic/.
+
+  Reprend le shell classic (pages/classic/shell.html) : Bootstrap, marque.css
+  (la couleur d'identité du site) et tibillet.css. En-tête comme la navbar
+  classic : le logo du lieu, sinon son nom.
+
+  Contexte : habillage (nom_du_lieu, url_du_lieu, url_du_logo), partiel, et
+  les variables du partiel.
+  / Classic shell look: Bootstrap, marque.css, tibillet.css, classic navbar brand.
+{% endcomment %}
+
+{% block feuilles_de_style %}
+    {# marque.css APRES vars.css et bootstrap : elle rebranche la couleur primaire. #}
+    {# / marque.css after vars.css and bootstrap: it rewires the primary colour. #}
+    <link rel="stylesheet" href="{% static 'commun/css/marque.css' %}">
+    <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
+{% endblock feuilles_de_style %}
+
+{% block classes_du_body %}min-vh-100 d-flex flex-column bg-body-tertiary{% endblock classes_du_body %}
+
+{% block page %}
+{% if habillage.nom_du_lieu %}
+    {# En-tête du lieu, comme la marque de pages/classic/partials/navbar.html. #}
+    {# / Venue header, like the classic navbar brand. #}
+    <header class="navbar bg-body border-bottom" data-testid="sso-lieu">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{{ habillage.url_du_lieu }}">
+                {% if habillage.url_du_logo %}
+                    <img src="{{ habillage.url_du_logo }}" alt="" style="max-width: 3.5rem; max-height: 3.5rem; object-fit: contain;">
+                {% endif %}
+                <span>{{ habillage.nom_du_lieu }}</span>
+            </a>
+        </div>
+    </header>
+{% endif %}
+
+<main class="container my-5 flex-fill"
+      data-testid="sso-guichet"
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h1 class="h3 mb-3" data-testid="sso-titre">{% translate "Vérification" %}</h1>
+
+                    {# Zone remplacée par htmx à chaque étape. aria-live : le lecteur #}
+                    {# d'écran annonce la nouvelle étape. #}
+                    {# / Area swapped by htmx at each step, announced by screen readers. #}
+                    <section id="sso-contenu" aria-live="polite" data-testid="sso-contenu">
+                        {% include partiel %}
+                    </section>
+                </div>
+            </div>
+
+            <p class="small text-body-secondary mt-3">
+                {% translate "Une seule connexion pour tous les lieux TiBillet." %}
+                {% if habillage.url_du_lieu %}
+                    <br>
+                    <a href="{{ habillage.url_du_lieu }}" data-testid="sso-retour-au-lieu">
+                        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+                        {% blocktranslate trimmed with nom_du_lieu=habillage.nom_du_lieu %}Retour sur {{ nom_du_lieu }}{% endblocktranslate %}
+                    </a>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</main>
+{% endblock page %}

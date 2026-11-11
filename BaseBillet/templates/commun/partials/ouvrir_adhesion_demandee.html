@@ -1,0 +1,34 @@
+{% comment %}
+OUVRIR L'ADHÉSION DEMANDÉE DANS L'ADRESSE (?open=<uuid>)
+/ Open the membership requested in the URL (?open=<uuid>)
+
+LOCALISATION : BaseBillet/templates/commun/partials/ouvrir_adhesion_demandee.html
+Inclus par les pages adhésions des 3 skins :
+  pages/V2/vues/adhesions.html, pages/classic/vues/adhesions.html,
+  pages/faire_festival/vues/adhesions.html
+
+`open_membership` est posé par MembershipMVT.list (BaseBillet/views.py) quand
+l'adresse porte ?open=<uuid> d'une adhésion du lieu.
+
+Qui envoie ?open= :
+  - le retour du guichet de connexion : le bouton anonyme « Adhérer » d'une
+    carte mène à /connexion/?next=/memberships/?open=<uuid> ;
+  - une page intégrée (embed), qui ouvre la page des adhésions dans un onglet ;
+  - les liens « adhésion obligatoire » des formulaires de réservation.
+
+Au chargement complet de la page, le script clique sur le bouton de la carte
+(il ouvre #subscribePanel et charge le formulaire par htmx). Si le bouton
+n'existe pas (personne non connectée : la carte porte un lien vers le guichet,
+pas ce bouton), il ne fait rien.
+/ On full page load, clicks the card's button. Does nothing when the button is absent.
+{% endcomment %}
+{% if open_membership %}
+    <script>
+        window.addEventListener('load', function () {
+            const bouton_de_la_carte = document.querySelector("button[hx-get='/memberships/{{ open_membership }}/']");
+            if (bouton_de_la_carte) {
+                bouton_de_la_carte.click();
+            }
+        });
+    </script>
+{% endif %}

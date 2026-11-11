@@ -1,0 +1,47 @@
+{% load i18n %}
+{% comment %}
+  Guichet : première visite d'une personne déjà connectée sur un lieu.
+  / Desk: first visit of an already logged-in person on a venue.
+
+  LOCALISATION : AuthBillet/templates/sso/partials/etape_consentement.html
+  Rendu par : AuthBillet/views_sso.py::guichet, quand le lieu n'est pas encore
+  dans user.client_achat.
+  Envoie vers : POST /sso/continuer/ (continuer_vers_le_lieu), qui renvoie au
+  lieu avec un ticket. Les visites suivantes de ce lieu passent sans cet écran.
+
+  Pourquoi cet écran : le lieu va connaître l'email et le nom de la personne.
+  On lui demande son accord une fois, au premier passage.
+  / The venue will learn the person's email and name: ask once, on first visit.
+
+  Contexte : habillage (nom_du_lieu, url_du_lieu), lieu, state, email.
+  {% csrf_token %} : le formulaire marche aussi sans JavaScript.
+{% endcomment %}
+<div data-testid="sso-consentement">
+    <p class="mb-2">
+        {% blocktranslate trimmed %}Vous êtes connecté·e avec <strong>{{ email }}</strong>.{% endblocktranslate %}
+    </p>
+    <p class="text-body-secondary mb-3">
+        {% blocktranslate trimmed with nom_du_lieu=habillage.nom_du_lieu %}
+            C'est votre première visite sur {{ nom_du_lieu }}. En continuant, ce lieu
+            connaîtra votre adresse email et votre nom.
+        {% endblocktranslate %}
+    </p>
+
+    <form id="ssoConsentementForm"
+          method="post"
+          action="{% url 'sso-continuer' %}"
+          hx-post="{% url 'sso-continuer' %}"
+          hx-target="#sso-contenu"
+          hx-swap="innerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="lieu" value="{{ lieu }}">
+        <input type="hidden" name="state" value="{{ state }}">
+        <button type="submit" class="btn btn-primary btn-lg w-100 mb-3" autofocus data-testid="sso-continuer">
+            {% blocktranslate trimmed with nom_du_lieu=habillage.nom_du_lieu %}Continuer sur {{ nom_du_lieu }}{% endblocktranslate %}
+        </button>
+    </form>
+
+    {% if habillage.url_du_lieu %}
+        <a href="{{ habillage.url_du_lieu }}" data-testid="sso-consentement-annuler">{% translate "Annuler" %}</a>
+    {% endif %}
+</div>

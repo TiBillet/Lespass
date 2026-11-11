@@ -1,0 +1,115 @@
+{% extends "sso/guichet.html" %}
+{% load i18n static %}
+{% comment %}
+  GUICHET DE CONNEXION — habillage du skin « faire_festival » (brutaliste jaune / bleu)
+  / Login desk — "faire_festival" skin look (brutalist yellow / blue)
+
+  LOCALISATION : AuthBillet/templates/sso/guichet_faire_festival.html
+  Choisi par : AuthBillet/views_sso.py (GABARIT_DU_GUICHET_PAR_SKIN), pour un
+  lieu en skin « faire_festival ».
+
+  Reprend pages/faire_festival/shell.html et sa navbar : bandeau jaune, logo du
+  lieu (sinon son nom en police titre), bordures épaisses bleues, ombre dure.
+  Toutes les règles de faire_festival.css sont préfixées par
+  `.skin-faire-festival` : le contenu DOIT rester dans ce conteneur.
+
+  Les partiels des étapes sont en Bootstrap simple. faire_festival.css n'habille
+  pas .btn-primary, .form-control ni .alert : le <style> ci-dessous les
+  rapproche de .bouton-action et des bordures du skin.
+
+  Contexte : habillage (nom_du_lieu, url_du_lieu, url_du_logo), partiel, et
+  les variables du partiel.
+  / Brutalist look; everything stays inside .skin-faire-festival. The <style>
+  below brings the Bootstrap step partials closer to the skin.
+{% endcomment %}
+
+{% block feuilles_de_style %}
+    <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
+    <link rel="stylesheet" href="{% static 'faire_festival/css/faire_festival.css' %}">
+    <style>
+        .skin-faire-festival { min-height: 100vh; }
+        .skin-faire-festival .guichet { max-width: 34rem; }
+        .skin-faire-festival .guichet h1 { font-family: var(--police-titre); text-transform: uppercase; }
+
+        /* Bouton principal des étapes : même allure que .bouton-action. */
+        /* / Steps' main button: same look as .bouton-action. */
+        .skin-faire-festival .guichet .btn-primary {
+            background-color: var(--couleur-jaune-principal);
+            color: var(--couleur-bleu-vif);
+            border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+            border-radius: 0 0 12px 0;
+            font-family: var(--police-mono);
+            font-weight: 700;
+            text-transform: uppercase;
+            box-shadow: 3px 3px 0 var(--couleur-bleu-vif);
+        }
+        .skin-faire-festival .guichet .btn-primary:hover,
+        .skin-faire-festival .guichet .btn-primary:focus-visible {
+            background-color: var(--couleur-bleu-vif);
+            color: var(--couleur-blanc);
+        }
+        .skin-faire-festival .guichet .btn-outline-secondary {
+            color: var(--couleur-bleu-vif);
+            border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+            border-radius: 7px;
+        }
+        .skin-faire-festival .guichet .form-control {
+            border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+            border-radius: 7px;
+        }
+        .skin-faire-festival .guichet .alert {
+            border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+            border-radius: 7px;
+        }
+        .skin-faire-festival .guichet a { color: var(--couleur-bleu-vif); }
+    </style>
+{% endblock feuilles_de_style %}
+
+{% block classes_du_body %}bg-white{% endblock classes_du_body %}
+
+{% block page %}
+<div class="skin-faire-festival">
+    {% if habillage.nom_du_lieu %}
+        {# En-tête du lieu, comme pages/faire_festival/partials/navbar.html. #}
+        {# / Venue header, like the faire_festival navbar. #}
+        <header class="container-fluid py-3 bordure-bas-epaisse fond-jaune" data-testid="sso-lieu">
+            <a class="navbar-brand" href="{{ habillage.url_du_lieu }}">
+                {% if habillage.url_du_logo %}
+                    <img src="{{ habillage.url_du_logo }}"
+                         alt="{% blocktranslate trimmed with nom_du_lieu=habillage.nom_du_lieu %}Logo {{ nom_du_lieu }}{% endblocktranslate %}"
+                         class="img-fluid"
+                         style="height: 50px; object-fit: contain;">
+                {% else %}
+                    <span class="texte-bleu police-titre fw-bold">{{ habillage.nom_du_lieu }}</span>
+                {% endif %}
+            </a>
+        </header>
+    {% endif %}
+
+    <main class="guichet container my-5"
+          data-testid="sso-guichet"
+          hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+        <div class="bordure-epaisse ombre-dure fond-blanc p-4">
+            <h1 class="h3 mb-3 texte-bleu" data-testid="sso-titre">{% translate "Vérification" %}</h1>
+
+            {# Zone remplacée par htmx à chaque étape. aria-live : le lecteur #}
+            {# d'écran annonce la nouvelle étape. #}
+            {# / Area swapped by htmx at each step, announced by screen readers. #}
+            <section id="sso-contenu" aria-live="polite" data-testid="sso-contenu">
+                {% include partiel %}
+            </section>
+        </div>
+
+        <p class="small mt-4">
+            {% translate "Une seule connexion pour tous les lieux TiBillet." %}
+            {% if habillage.url_du_lieu %}
+                <br>
+                <a href="{{ habillage.url_du_lieu }}" data-testid="sso-retour-au-lieu">
+                    <span aria-hidden="true">←</span>
+                    {% blocktranslate trimmed with nom_du_lieu=habillage.nom_du_lieu %}Retour sur {{ nom_du_lieu }}{% endblocktranslate %}
+                </a>
+            {% endif %}
+        </p>
+    </main>
+</div>
+{% endblock page %}

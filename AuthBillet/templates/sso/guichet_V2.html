@@ -1,0 +1,98 @@
+{% extends "sso/guichet.html" %}
+{% load i18n static %}
+{% comment %}
+  GUICHET DE CONNEXION — habillage du skin V2
+  / Login desk — V2 skin look
+
+  LOCALISATION : AuthBillet/templates/sso/guichet_V2.html
+  Choisi par : AuthBillet/views_sso.py (GABARIT_DU_GUICHET_PAR_SKIN), pour un
+  lieu en skin « V2 ». C'est aussi l'habillage par défaut, quand le lieu est
+  inconnu (lien invalide).
+
+  Reprend la DA v1 (pages/static/V2/css/V2.css) : fond sable, en-tête du lieu
+  (.place-header, comme pages/V2/tenant_header.html), carte papier, titres en
+  Unbounded, texte en Luciole. Le bouton principal des étapes (.btn-primary)
+  est déjà habillé par le pont Bootstrap de V2.css.
+
+  Contexte : habillage (nom_du_lieu, url_du_lieu, url_du_logo), partiel, et
+  les variables du partiel (lieu, state, email, erreur_email…).
+  / V2 look: sand background, venue header, paper card. Also the default look.
+{% endcomment %}
+
+{% block feuilles_de_style %}
+    <link rel="stylesheet" href="{% static 'commun/css/tibillet.css' %}">
+    <link rel="stylesheet" href="{% static 'V2/css/V2.css' %}?v=1">
+    <style>
+        /* Largeur de lecture : la carte du guichet reste étroite et centrée. */
+        /* / Reading width: the desk card stays narrow and centred. */
+        .guichet { max-width: 34rem; margin: 0 auto; padding: 0 var(--space-4); }
+        .guichet .place-header { margin: var(--space-6) 0 var(--space-4); }
+        .guichet__carte { padding: var(--space-6); }
+        .guichet__carte h1 { font-size: var(--text-2xl); margin-bottom: var(--space-4); }
+        .guichet__pied { margin: var(--space-4) 0 var(--space-6); font-size: var(--text-sm); color: var(--color-text-muted); }
+
+        /* Messages des étapes (.alert Bootstrap) : en encre et papier, comme .callout. */
+        /* La DA v1 réserve la couleur aux gestes TiBillet, pas aux messages. */
+        /* La bordure d'erreur reprend .callout--erreur. */
+        /* / Step messages in ink and paper, like .callout. Error border like .callout--erreur. */
+        .guichet .alert {
+            background: var(--color-surface-tint);
+            color: var(--color-text);
+            border: 1.5px dashed var(--color-border-strong);
+            border-radius: var(--radius-l);
+        }
+        .guichet .alert-danger { border-color: var(--letchi-text); }
+    </style>
+{% endblock feuilles_de_style %}
+
+{% block classes_du_body %}d-flex flex-column{% endblock classes_du_body %}
+
+{% block page %}
+<main class="guichet"
+      data-testid="sso-guichet"
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+    {% if habillage.nom_du_lieu %}
+        {# En-tête du lieu : même marque que pages/V2/tenant_header.html. #}
+        {# / Venue header: same mark as the V2 tenant header. #}
+        <header class="place-header" data-testid="sso-lieu">
+            <div class="place-header__card">
+                <div class="place-id">
+                    {% if habillage.url_du_logo %}
+                        <span class="place-id__mark place-id__mark--logo">
+                            <img src="{{ habillage.url_du_logo }}" alt="" class="w-100 h-100">
+                        </span>
+                    {% else %}
+                        <span class="place-id__mark" aria-hidden="true"><span class="ink-center-fix">{{ habillage.nom_du_lieu|slice:":1"|upper }}</span></span>
+                    {% endif %}
+                    <a class="place-id__name place-id__name--lien" href="{{ habillage.url_du_lieu }}">{{ habillage.nom_du_lieu }}</a>
+                </div>
+            </div>
+        </header>
+    {% else %}
+        <div class="mt-5"></div>
+    {% endif %}
+
+    <div class="card guichet__carte">
+        <h1 data-testid="sso-titre">{% translate "Vérification" %}</h1>
+
+        {# Zone remplacée par htmx à chaque étape. aria-live : le lecteur #}
+        {# d'écran annonce la nouvelle étape. #}
+        {# / Area swapped by htmx at each step, announced by screen readers. #}
+        <section id="sso-contenu" aria-live="polite" data-testid="sso-contenu">
+            {% include partiel %}
+        </section>
+    </div>
+
+    <p class="guichet__pied">
+        {% translate "Une seule connexion pour tous les lieux TiBillet." %}
+        {% if habillage.url_du_lieu %}
+            <br>
+            <a class="link" href="{{ habillage.url_du_lieu }}" data-testid="sso-retour-au-lieu">
+                <span aria-hidden="true">←</span>
+                {% blocktranslate trimmed with nom_du_lieu=habillage.nom_du_lieu %}Retour sur {{ nom_du_lieu }}{% endblocktranslate %}
+            </a>
+        {% endif %}
+    </p>
+</main>
+{% endblock page %}
