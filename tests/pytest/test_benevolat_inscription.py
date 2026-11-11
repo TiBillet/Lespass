@@ -193,6 +193,9 @@ def test_anonyme_sur_un_besoin_couvert_voit_couvert_et_me_connecter(lieu):
 
     assert "Couvert" in html
     assert f'data-testid="benevolat-connexion-{lieu.besoin.pk}"' in html
+    # Le lien mène au guichet, avec le retour sur ce planning, à la semaine de la case.
+    # / The link goes to the desk, back on this planning at the slot's week.
+    assert f'href="/connexion/?next=%2Fbooking%2Fbenevolat%2F{lieu.planning.slug}%2F%3Fsemaine%3D' in html
     assert f'data-testid="benevolat-je-viens-{lieu.besoin.pk}"' not in html
 
 

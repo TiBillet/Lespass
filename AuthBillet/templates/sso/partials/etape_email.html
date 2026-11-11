@@ -24,7 +24,13 @@
     <input type="hidden" name="lieu" value="{{ lieu }}">
     <input type="hidden" name="state" value="{{ state }}">
 
-    <p class="text-body-secondary">
+    {# Ton rassurant : on parle de vérification, pas de « compte » ni de « connexion ». #}
+    {# La personne arrive ici en cliquant « Réserver » ou « Adhérer » sur le site du lieu. #}
+    {# / Reassuring tone: a check, not an "account" or a "login". #}
+    <p class="mb-2" data-testid="sso-verification-humain">
+        {% translate "Pour continuer, nous avons besoin de vérifier que vous êtes un vrai humain." %}
+    </p>
+    <p class="text-body-secondary mb-3">
         {% translate "Tapez votre adresse email. Nous vous envoyons un code à 6 chiffres." %}
     </p>
 
@@ -32,6 +38,7 @@
         <label for="loginEmail" class="form-label">{% translate "Adresse email" %}</label>
         <input type="email"
                id="loginEmail"
+               {% if erreur_email %}autofocus{% endif %}
                name="email"
                value="{{ email }}"
                class="form-control form-control-lg{% if erreur_email %} is-invalid{% endif %}"

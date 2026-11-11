@@ -630,25 +630,12 @@
             });
 
             // --- Vote (detail page): only login helper, swap handled by HTMX returning HTML ---
+            // Personne non connectée (voter, contribuer, proposer) : direction le guichet
+            // de connexion, avec le retour sur cette page (vue BaseBillet/views.py, connexion).
+            // / Anonymous visitor: off to the login desk, back to this page.
             window.crowdsVoteRequireLogin = window.crowdsVoteRequireLogin || function () {
-                Swal.fire({
-                    icon: 'info',
-                    title: '{% translate "Connexion requise" %}',
-                    text: '{% translate "Veuillez vous connecter pour continuer." %}',
-                    showCancelButton: true,
-                    confirmButtonText: '{% translate "Se connecter" %}',
-                    cancelButtonText: '{% translate "Annuler" %}'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        const panel = document.getElementById('loginPanel');
-                        if (panel) {
-                            const offcanvas = new bootstrap.Offcanvas(panel);
-                            offcanvas.show();
-                        } else {
-                            window.location.href = '/accounts/login/';
-                        }
-                    }
-                });
+                const page_courante = window.location.pathname + window.location.search;
+                window.location.href = '/connexion/?next=' + encodeURIComponent(page_courante);
             };
 
             // Feedback visuel après vote via HX-Trigger

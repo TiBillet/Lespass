@@ -38,6 +38,7 @@ from fabriques_panier import (
     catalogue_stripe_simule,
     client_connecte,
     creer_adhesion,
+    creer_ressource_avec_tarif,
     creer_evenement_avec_tarif,
     creer_une_adhesion_active,
     creer_utilisateur,
@@ -286,23 +287,26 @@ def test_un_connecte_non_adherent_n_obtient_pas_le_tarif_adherent_avec_l_email_d
 
 
 def test_un_anonyme_voit_seulement_se_connecter_pour_reserver(lieu):
-    """Page d'un événement : un seul bouton « Réserver » (anonyme), qui ouvre
-    #loginPanel et demande le retour avec le panneau de réservation ouvert. Ni champ
-    email, ni bouton « Payer maintenant ». Le panneau de connexion mène au guichet.
-    / Event page: a single "log in to book" button, no email field, no submit button."""
+    """Page d'un événement, anonyme : le bouton de la page et le lien de secours du
+    formulaire mènent tous les deux au guichet, avec le retour sur l'événement et le
+    panneau de réservation ouvert. Ni champ email, ni bouton « Payer maintenant ».
+    / Event page, anonymous: both links go to the login desk, back with the panel open."""
     concert = creer_evenement_avec_tarif()
 
     reponse = client_connecte().get(f"/event/{concert.evenement.slug}/")
 
     contenu = reponse.content.decode()
-    assert reponse.status_code == 200
-    assert 'data-testid="booking-login"' in contenu
-    assert (
-        f'data-next="/event/{concert.evenement.slug}/?openbookingPanel=true"' in contenu
+    lien_vers_le_guichet = (
+        f'href="/connexion/?next=%2Fevent%2F{concert.evenement.slug}%2F'
+        f'%3FopenbookingPanel%3Dtrue"'
     )
+    assert reponse.status_code == 200
+    assert 'data-testid="booking-open-login"' in contenu
+    assert 'data-testid="booking-open-panel"' not in contenu
+    assert 'data-testid="booking-login"' in contenu
+    assert contenu.count(lien_vers_le_guichet) == 2
     assert 'data-testid="booking-submit"' not in contenu
     assert 'data-testid="booking-email"' not in contenu
-    assert 'data-testid="login-guichet"' in contenu
     assert 'id="loginForm"' not in contenu
 
 
@@ -335,5 +339,169 @@ def test_un_anonyme_voit_seulement_se_connecter_pour_adherer(lieu):
     contenu = reponse.content.decode()
     assert reponse.status_code == 200
     assert 'data-testid="membership-login"' in contenu
+    assert (
+        f'href="/connexion/?next=%2Fmemberships%2F%3Fopen%3D{adhesion.produit.uuid}"'
+        in contenu
+    )
     assert 'data-testid="membership-submit"' not in contenu
     assert 'data-testid="membership-email"' not in contenu
+
+
+# --------------------------------------------------------------------------
+# Les boutons des pages, dans chaque skin : un anonyme part au guichet AVANT
+# d'ouvrir un formulaire (rien n'est saisi, donc rien n'est perdu).
+# / Page buttons, in every skin: an anonymous visitor goes to the login desk
+# BEFORE a form opens.
+# --------------------------------------------------------------------------
+
+SKINS_DU_SITE = ["V2", "reunion", "faire_festival"]
+
+
+def poser_le_skin_du_lieu(tenant, skin):
+    """
+    Pose le skin du site et renvoie l'ancien, à remettre en fin de test.
+    get_solo() passe par un cache : on remet donc le skin à la main, sans compter
+    sur l'annulation de la transaction.
+    / Sets the site skin and returns the previous one (get_solo is cached).
+    """
+    from pages.models import ConfigurationSite
+
+    with tenant_context(tenant):
+        configuration_du_site = ConfigurationSite.get_solo()
+        skin_d_origine = configuration_du_site.skin
+        configuration_du_site.skin = skin
+        configuration_du_site.save()
+    return skin_d_origine
+
+
+@pytest.mark.parametrize("skin", SKINS_DU_SITE)
+def test_le_bouton_reserver_de_l_evenement_mene_un_anonyme_au_guichet(lieu, tenant, skin):
+    """Anonyme : le bouton de la page de l'événement est un lien vers le guichet, pas
+    le bouton qui ouvre le formulaire. Connecté : le bouton qui ouvre le formulaire.
+    / Anonymous: the event page button links to the desk. Logged-in: opens the form."""
+    concert = creer_evenement_avec_tarif()
+    adresse_de_l_evenement = f"/event/{concert.evenement.slug}/"
+    skin_d_origine = poser_le_skin_du_lieu(tenant, skin)
+    try:
+        page_anonyme = client_connecte().get(adresse_de_l_evenement).content.decode()
+        page_connectee = (
+            client_connecte(creer_utilisateur()).get(adresse_de_l_evenement).content.decode()
+        )
+    finally:
+        poser_le_skin_du_lieu(tenant, skin_d_origine)
+
+    assert 'data-testid="booking-open-login"' in page_anonyme
+    assert 'data-testid="booking-open-panel"' not in page_anonyme
+    assert 'data-testid="booking-open-panel"' in page_connectee
+    assert 'data-testid="booking-open-login"' not in page_connectee
+
+
+@pytest.mark.parametrize("skin", SKINS_DU_SITE)
+def test_le_bouton_d_une_carte_d_adhesion_mene_un_anonyme_au_guichet(lieu, tenant, skin):
+    """Anonyme : le bouton de la carte mène au guichet, avec le retour sur
+    /memberships/?open=<uuid>. Connecté : le bouton qui ouvre le formulaire.
+    / Anonymous: the card button links to the desk, back on ?open=<uuid>."""
+    adhesion = creer_adhesion(prix="15.00")
+    uuid_de_l_adhesion = adhesion.produit.uuid
+    skin_d_origine = poser_le_skin_du_lieu(tenant, skin)
+    try:
+        page_anonyme = client_connecte().get("/memberships/").content.decode()
+        page_connectee = (
+            client_connecte(creer_utilisateur()).get("/memberships/").content.decode()
+        )
+    finally:
+        poser_le_skin_du_lieu(tenant, skin_d_origine)
+
+    assert f'data-testid="membership-open-login-{uuid_de_l_adhesion}"' in page_anonyme
+    assert (
+        f'href="/connexion/?next=%2Fmemberships%2F%3Fopen%3D{uuid_de_l_adhesion}"'
+        in page_anonyme
+    )
+    assert f"hx-get=\"/memberships/{uuid_de_l_adhesion}/\"" not in page_anonyme
+    assert f"hx-get=\"/memberships/{uuid_de_l_adhesion}/\"" in page_connectee
+
+
+@pytest.mark.parametrize("skin", SKINS_DU_SITE)
+def test_l_adresse_open_ouvre_l_adhesion_demandee_dans_chaque_skin(lieu, tenant, skin):
+    """/memberships/?open=<uuid> pose le script qui clique sur le bouton de la carte :
+    c'est l'adresse de retour du guichet.
+    / ?open=<uuid> adds the script that clicks the card button (desk return URL)."""
+    adhesion = creer_adhesion(prix="15.00")
+    uuid_de_l_adhesion = adhesion.produit.uuid
+    skin_d_origine = poser_le_skin_du_lieu(tenant, skin)
+    try:
+        page = (
+            client_connecte(creer_utilisateur())
+            .get(f"/memberships/?open={uuid_de_l_adhesion}")
+            .content.decode()
+        )
+    finally:
+        poser_le_skin_du_lieu(tenant, skin_d_origine)
+
+    assert f"button[hx-get='/memberships/{uuid_de_l_adhesion}/']" in page
+
+
+@pytest.mark.parametrize("skin", SKINS_DU_SITE)
+def test_le_lien_connexion_de_la_navbar_mene_au_guichet(lieu, tenant, skin):
+    """Anonyme : le lien « Connexion » de la barre mène au guichet, avec le retour sur
+    la page courante. Il n'ouvre plus le panneau #loginPanel.
+    / Anonymous: the navbar "Log in" link goes to the desk, back to the current page."""
+    skin_d_origine = poser_le_skin_du_lieu(tenant, skin)
+    try:
+        page_anonyme = client_connecte().get("/memberships/").content.decode()
+    finally:
+        poser_le_skin_du_lieu(tenant, skin_d_origine)
+
+    assert 'href="/connexion/?next=%2Fmemberships%2F"' in page_anonyme
+    assert 'data-bs-target="#loginPanel"' not in page_anonyme
+
+
+def test_un_anonyme_qui_choisit_un_creneau_de_ressource_part_au_guichet(lieu):
+    """Ressource : un anonyme qui clique sur un créneau (GET htmx du formulaire) est
+    envoyé au guichet, avec le retour sur la page de la ressource.
+    / Resource: an anonymous slot click is sent to the desk, back to the resource page."""
+    location = creer_ressource_avec_tarif()
+
+    reponse = client_connecte().get(
+        f"/booking/{location.ressource.pk}/book/", **EN_TETE_HTMX
+    )
+
+    assert reponse["HX-Redirect"] == (
+        f"/connexion/?next=%2Fbooking%2F{location.ressource.pk}%2Fresource%2F"
+    )
+
+
+def test_un_anonyme_ne_peut_pas_reserver_une_ressource(lieu):
+    """Ressource : un POST anonyme du formulaire ne crée aucune réservation, quel que
+    soit l'email posté. Il est renvoyé au guichet.
+    / Resource: an anonymous POST creates no booking and is sent to the desk."""
+    from booking.models import Booking
+
+    location = creer_ressource_avec_tarif()
+    nombre_avant = Booking.objects.filter(resource=location.ressource).count()
+
+    reponse = client_connecte().post(
+        f"/booking/{location.ressource.pk}/book/",
+        {
+            "email": "quelquun@example.org",
+            "start_datetime": location.debut_du_creneau.isoformat(),
+            "price": str(location.tarif.uuid),
+        },
+        **EN_TETE_HTMX,
+    )
+
+    assert reponse.status_code in (200, 403)
+    assert Booking.objects.filter(resource=location.ressource).count() == nombre_avant
+
+
+def test_un_anonyme_sur_son_compte_part_au_guichet(lieu):
+    """/my_account/ en anonyme (lien « voir mes billets » d'un mail) : direction le
+    guichet, avec le retour sur la page du compte demandée. En htmx (session expirée
+    dans un onglet du compte) : HX-Redirect, retour sur /my_account/.
+    / Anonymous on /my_account/: off to the desk, back to the account page."""
+    reponse_page = client_connecte().get("/my_account/my_reservations/")
+    reponse_htmx = client_connecte().get("/my_account/my_reservations/", **EN_TETE_HTMX)
+
+    assert reponse_page.status_code == 302
+    assert reponse_page.url == "/connexion/?next=%2Fmy_account%2Fmy_reservations%2F"
+    assert reponse_htmx["HX-Redirect"] == "/connexion/?next=%2Fmy_account%2F"

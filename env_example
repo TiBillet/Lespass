@@ -80,6 +80,10 @@ DEFAULT_FROM_EMAIL="noreply@tibillet.localhost"   # adresse d'expedition
 # 10 minutes (defaut 500). A augmenter avant un tres gros festival (wifi partage).
 # / Login code requests allowed per IP per 10 minutes (default 500).
 # CONNEXION_CODE_PLAFOND_IP_10_MIN=500
+# Codes FAUX permis par adresse IP, par tranche de 10 minutes (defaut 100).
+# Protection contre la force brute du code a 6 chiffres.
+# / Wrong codes allowed per IP per 10 minutes (default 100). Brute-force protection.
+# CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN=100
 
 # Usefull for dev/test
 # Auto login for admin, no https cert' verification, demonstration data, auto database flush, etc ...

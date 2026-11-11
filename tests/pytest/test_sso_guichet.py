@@ -367,6 +367,70 @@ def test_guichet_affiche_l_etape_email_avec_le_nom_du_lieu(menage):
     assert 'data-testid="sso-titre"' in contenu
 
 
+def noms_des_gabarits_rendus(reponse):
+    """Les gabarits rendus pendant la requête. / Templates rendered during the request."""
+    noms = []
+    for gabarit in reponse.templates:
+        noms.append(gabarit.name)
+    return noms
+
+
+@pytest.mark.parametrize(
+    "skin_du_lieu, gabarit_attendu",
+    [
+        ("V2", "sso/guichet_V2.html"),
+        ("reunion", "sso/guichet_reunion.html"),
+        ("faire_festival", "sso/guichet_faire_festival.html"),
+    ],
+)
+def test_guichet_prend_l_habillage_du_skin_du_lieu(
+    menage, tenant, skin_du_lieu, gabarit_attendu
+):
+    """
+    La page du guichet prend le gabarit du skin du lieu qui envoie la personne,
+    avec le nom du lieu et un lien ABSOLU vers lui (le guichet est sur un autre
+    domaine). Le skin du lieu est remis à sa valeur d'origine en fin de test.
+    / The desk page takes the sending venue's skin template, with an absolute link.
+    """
+    from pages.models import ConfigurationSite
+
+    with tenant_context(tenant):
+        configuration_du_site = ConfigurationSite.get_solo()
+        skin_d_origine = configuration_du_site.skin
+        configuration_du_site.skin = skin_du_lieu
+        configuration_du_site.save()
+
+    try:
+        reponse = menage.client_du_guichet().get(
+            "/sso/", {"lieu": DOMAINE_DU_LIEU, "state": STATE_DE_TEST}
+        )
+    finally:
+        with tenant_context(tenant):
+            configuration_du_site = ConfigurationSite.get_solo()
+            configuration_du_site.skin = skin_d_origine
+            configuration_du_site.save()
+
+    assert reponse.status_code == 200
+    assert gabarit_attendu in noms_des_gabarits_rendus(reponse)
+    contenu = reponse.content.decode()
+    assert 'data-testid="sso-lieu"' in contenu
+    assert f'href="https://{DOMAINE_DU_LIEU}/"' in contenu
+    assert 'id="loginForm"' in contenu
+
+
+def test_guichet_avec_un_lieu_inconnu_prend_l_habillage_par_defaut(menage):
+    """
+    Lieu inconnu : pas de lieu à habiller, la page d'erreur prend le skin V2.
+    / Unknown venue: the error page uses the default V2 look.
+    """
+    reponse = menage.client_du_guichet().get(
+        "/sso/", {"lieu": "inconnu-sso.tibillet.localhost", "state": STATE_DE_TEST}
+    )
+
+    assert "sso/guichet_V2.html" in noms_des_gabarits_rendus(reponse)
+    assert 'data-testid="sso-lieu"' not in reponse.content.decode()
+
+
 def test_demander_un_code_ne_cree_ni_compte_ni_portefeuille(menage, taches_patchees):
     client_du_guichet = menage.client_du_guichet()
     email = menage.nouvel_email()
@@ -530,10 +594,15 @@ def test_l_email_d_un_terminal_est_refuse_sans_erreur_500(
     assert compte_connecte(client_du_guichet) is None
 
 
-def test_deja_connecte_sur_le_guichet_le_ticket_part_tout_de_suite(tenant, menage):
+def test_deja_connecte_sur_le_guichet_et_lieu_connu_le_ticket_part_tout_de_suite(
+    tenant, menage
+):
+    """Le lieu est déjà dans client_achat : ticket immédiat, sans écran.
+    / The venue is already in client_achat: ticket at once, no screen."""
     client_du_guichet = menage.client_du_guichet()
     email = menage.nouvel_email()
     compte = creer_un_compte(tenant, email)
+    compte.client_achat.add(tenant)
     client_du_guichet.force_login(compte)
 
     reponse = client_du_guichet.get(
@@ -545,6 +614,80 @@ def test_deja_connecte_sur_le_guichet_le_ticket_part_tout_de_suite(tenant, menag
     ticket, state = lire_le_ticket_de_l_url(reponse.url)
     assert state == STATE_DE_TEST
     assert lire_un_ticket(ticket, DOMAINE_DU_LIEU)["compte"] == str(compte.pk)
+
+
+def test_deja_connecte_sur_le_guichet_et_lieu_inconnu_demande_l_accord(tenant, menage):
+    """Première visite d'un lieu : pas de ticket, l'écran « Continuer sur … ». Puis
+    POST /sso/continuer/ donne le ticket (HX-Redirect vers le retour du lieu).
+    / First visit: no ticket, the consent screen. Then /sso/continuer/ gives it."""
+    client_du_guichet = menage.client_du_guichet()
+    compte = creer_un_compte(tenant, menage.nouvel_email())
+    compte.client_achat.clear()
+    client_du_guichet.force_login(compte)
+
+    reponse_du_guichet = client_du_guichet.get(
+        "/sso/", {"lieu": DOMAINE_DU_LIEU, "state": STATE_DE_TEST}
+    )
+
+    assert reponse_du_guichet.status_code == 200
+    contenu = reponse_du_guichet.content.decode()
+    assert 'data-testid="sso-consentement"' in contenu
+    assert compte.email in contenu
+
+    reponse_de_l_accord = client_du_guichet.post(
+        "/sso/continuer/",
+        {"lieu": DOMAINE_DU_LIEU, "state": STATE_DE_TEST},
+        HTTP_HX_REQUEST="true",
+    )
+
+    url_de_retour = reponse_de_l_accord["HX-Redirect"]
+    assert url_de_retour.startswith(f"https://{DOMAINE_DU_LIEU}/connexion/retour/?")
+    ticket, state = lire_le_ticket_de_l_url(url_de_retour)
+    assert state == STATE_DE_TEST
+    assert lire_un_ticket(ticket, DOMAINE_DU_LIEU)["compte"] == str(compte.pk)
+
+
+def test_continuer_sans_etre_connecte_ne_donne_pas_de_ticket(menage):
+    reponse = menage.client_du_guichet().post(
+        "/sso/continuer/",
+        {"lieu": DOMAINE_DU_LIEU, "state": STATE_DE_TEST},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert "HX-Redirect" not in reponse
+    assert 'data-testid="sso-erreur"' in reponse.content.decode()
+
+
+def test_continuer_vers_un_lieu_inconnu_ne_donne_pas_de_ticket(tenant, menage):
+    client_du_guichet = menage.client_du_guichet()
+    client_du_guichet.force_login(creer_un_compte(tenant, menage.nouvel_email()))
+
+    reponse = client_du_guichet.post(
+        "/sso/continuer/",
+        {"lieu": "inconnu-sso.tibillet.localhost", "state": STATE_DE_TEST},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert "HX-Redirect" not in reponse
+    assert 'data-testid="sso-erreur"' in reponse.content.decode()
+
+
+def test_continuer_avec_un_compte_non_humain_ne_donne_pas_de_ticket(tenant, menage):
+    """Un terminal (TermUser) n'obtient jamais de ticket. Le garde des terminaux
+    (TerminalSessionGuardMiddleware) l'envoie ailleurs avant même la vue.
+    / A terminal never gets a ticket; the terminal guard redirects it first."""
+    client_du_guichet = menage.client_du_guichet()
+    terminal = creer_un_compte(tenant, menage.nouvel_email(), espece=TibilletUser.TYPE_TERM)
+    client_du_guichet.force_login(terminal)
+
+    reponse = client_du_guichet.post(
+        "/sso/continuer/",
+        {"lieu": DOMAINE_DU_LIEU, "state": STATE_DE_TEST},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert "/connexion/retour/" not in reponse.get("HX-Redirect", "")
+    assert "ticket=" not in reponse.get("Location", "")
 
 
 # =============================================================================
@@ -629,8 +772,10 @@ def test_retour_avec_un_mauvais_state_ne_connecte_pas(tenant, menage, taches_pat
         "/connexion/retour/", {"ticket": ticket, "state": "un-autre-state"}
     )
 
+    # Pas connecté, mais renvoyé sur la page de départ, pas à l'accueil.
+    # / Not logged in, but sent back to the starting page, not the home page.
     assert reponse.status_code == 302
-    assert reponse.url == "/"
+    assert reponse.url == "/event/x/"
     assert compte_connecte(client_du_lieu) is None
 
 
@@ -778,9 +923,11 @@ def test_parcours_complet_puis_deuxieme_lieu_sans_code(tenant, menage, taches_pa
     assert reponse_du_lieu.url == "/event/x/"
     assert compte_connecte(client_du_premier_lieu) == str(compte.pk)
 
-    # 2e lieu : le guichet donne le ticket tout de suite, sans code.
-    # / 2nd venue: the desk gives the ticket at once, no code.
+    # 2e lieu, première visite : pas de code, mais l'écran d'accord, puis le ticket.
+    # / 2nd venue, first visit: no code, but the consent screen, then the ticket.
     nombre_de_codes_envoyes = taches_patchees["mail"].delay.call_count
+    deuxieme_lieu = Client.objects.get(schema_name="festival")
+    compte.client_achat.remove(deuxieme_lieu)
     client_du_deuxieme_lieu = ClientDeTest(HTTP_HOST=DOMAINE_DU_DEUXIEME_LIEU)
     reponse_du_deuxieme_lieu, deuxieme_state = partir_vers_le_guichet(
         client_du_deuxieme_lieu, "/"
@@ -789,12 +936,61 @@ def test_parcours_complet_puis_deuxieme_lieu_sans_code(tenant, menage, taches_pa
     reponse_du_guichet = client_du_guichet.get(
         f"{url_du_guichet.path}?{url_du_guichet.query}"
     )
-    assert reponse_du_guichet.status_code == 302
-    url_de_retour = urlparse(reponse_du_guichet.url)
+    assert reponse_du_guichet.status_code == 200
+    assert 'data-testid="sso-consentement"' in reponse_du_guichet.content.decode()
+
+    reponse_de_l_accord = client_du_guichet.post(
+        "/sso/continuer/",
+        {"lieu": DOMAINE_DU_DEUXIEME_LIEU, "state": deuxieme_state},
+        HTTP_HX_REQUEST="true",
+    )
+    url_de_retour = urlparse(reponse_de_l_accord["HX-Redirect"])
     assert url_de_retour.netloc == DOMAINE_DU_DEUXIEME_LIEU
     client_du_deuxieme_lieu.get(f"{url_de_retour.path}?{url_de_retour.query}")
 
     assert compte_connecte(client_du_deuxieme_lieu) == str(compte.pk)
     assert taches_patchees["mail"].delay.call_count == nombre_de_codes_envoyes
-    deuxieme_lieu = Client.objects.get(schema_name="festival")
     assert compte.client_achat.filter(pk=deuxieme_lieu.pk).exists()
+
+    # 2e lieu, visite suivante (autre navigateur) : le lieu connaît le compte,
+    # le guichet donne le ticket tout de suite, sans écran.
+    # / 2nd venue, next visit: known venue, ticket at once, no screen.
+    autre_navigateur_du_deuxieme_lieu = ClientDeTest(HTTP_HOST=DOMAINE_DU_DEUXIEME_LIEU)
+    reponse_suivante, _state_suivant = partir_vers_le_guichet(
+        autre_navigateur_du_deuxieme_lieu, "/"
+    )
+    url_du_guichet = urlparse(reponse_suivante.url)
+    reponse_du_guichet = client_du_guichet.get(
+        f"{url_du_guichet.path}?{url_du_guichet.query}"
+    )
+    assert reponse_du_guichet.status_code == 302
+    assert urlparse(reponse_du_guichet.url).netloc == DOMAINE_DU_DEUXIEME_LIEU
+
+
+@pytest.mark.parametrize("vient_de_l_etape_code", [True, False])
+def test_trop_de_demandes_au_renvoi_garde_l_etape_du_code(menage, vient_de_l_etape_code):
+    """
+    « Recevoir un nouveau code » refusé (trop de demandes) : on reste à l'étape du
+    code, car le dernier code reçu reste valable. Depuis l'étape email, le refus
+    reste sur l'étape email.
+    / Resend refused: stay on the code step. From the email step: stay on email.
+    """
+    donnees = {
+        "email": menage.nouvel_email(),
+        "lieu": DOMAINE_DU_LIEU,
+        "state": STATE_DE_TEST,
+    }
+    if vient_de_l_etape_code:
+        donnees["renvoi"] = "1"
+
+    with patch(
+        "AuthBillet.views_sso.envoyer_un_code_de_connexion",
+        return_value="trop_de_demandes",
+    ):
+        reponse = menage.client_du_guichet().post(
+            "/sso/code/", donnees, HTTP_HX_REQUEST="true"
+        )
+
+    contenu = reponse.content.decode()
+    assert ('id="loginCode"' in contenu) is vient_de_l_etape_code
+    assert ('id="loginEmail"' in contenu) is (not vient_de_l_etape_code)

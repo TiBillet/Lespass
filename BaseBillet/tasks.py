@@ -147,6 +147,11 @@ class CeleryMailerClass():
                  ):
 
         self.title = title
+        # Nom du gabarit, pour le journal. Le titre n'y est JAMAIS écrit : celui du
+        # mail de connexion commence par le code à 6 chiffres (otp_service).
+        # / Template name, for the log. The title is never logged: the login-code
+        # email title starts with the 6-digit code.
+        self.nom_du_gabarit = template or "texte brut"
         # Adresse de réponse imposée par l'appelant (ex. : le visiteur du formulaire
         # de contact). Vide : c'est l'adresse du lieu (voir adresse_de_reponse).
         # / Reply-To forced by the caller; empty means the venue address.
@@ -231,7 +236,7 @@ class CeleryMailerClass():
         if self.html and self.config_valid():
             to = self.email if type(self.email) is list else [self.email, ]
 
-            logger.info(f'  WORKDER CELERY : send_mail - {self.title}')
+            logger.info(f'  WORKDER CELERY : send_mail - {self.nom_du_gabarit}')
             mail = EmailMultiAlternatives(
                 self.title,
                 self.text,

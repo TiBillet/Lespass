@@ -591,15 +591,16 @@
         {% comment %}
         BOUTONS D'ACTION / ACTION BUTTONS
 
-        Meme pattern que le booking_form des events (Session 09) :
-        - Connecte : deux boutons distincts "Payer maintenant" et
-          "Ajouter au panier", avec icones. Si panier deja non vide,
-          "Ajouter au panier" passe en primary (favoriser le cumul).
-        - Anonyme : un seul bouton « Se connecter pour adherer », qui ouvre
-          l'offcanvas login. Adherer exige d'etre connecte.
-        / Same pattern as booking_form (Session 09):
-        Auth: two buttons "Pay now" + "Add to cart". Anon: one
-        "log in to join" button that opens the login offcanvas.
+        Meme pattern que le formulaire de reservation des events
+        (commun/formulaires/reservation.html) :
+        - Connecte : deux boutons distincts, "Payer maintenant" (principal) et
+          "Ajouter au panier" (secondaire), avec icones.
+        - Anonyme : un seul lien « Adhérer », vers le guichet de connexion.
+          Adherer exige d'etre connecte. Filet de securite seulement : le
+          bouton de la carte d'adhesion envoie deja un anonyme au guichet
+          AVANT d'ouvrir ce formulaire.
+        / Same pattern as the event booking form. Logged-in: "Pay now" + "Add to
+        cart". Anonymous: one "Join" link to the login desk.
         {% endcomment %}
         {% if user.is_authenticated %}
             <button id="membership-submit" type="submit"
@@ -623,25 +624,18 @@
                     {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
                 {% else %}
                     {% translate "Add to cart" %}
-                {% endif %}            </button>
+                {% endif %}
+            </button>
         {% else %}
-            <button id="membership-submit" type="submit"
-                    class="btn btn-primary w-100 mb-2"
-                    data-loading-disable
-                    data-testid="membership-submit">
-                <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
-                {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
-                    {% translate 'Send my subscription request' %}{% endif %}
-            </button>
-            <button type="button"
-                    class="btn btn-outline-primary w-100"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#loginPanel"
-                    data-testid="membership-add-to-cart-login"
-                    aria-label="{% translate 'Log in to add this membership to your cart' %}">
-                <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                {% translate "Log in to add to cart" %}
-            </button>
+            {# Apres la connexion, /memberships/?open=<uuid> rouvre ce formulaire #}
+            {# (commun/partials/ouvrir_adhesion_demandee.html). #}
+            {# / After login, ?open=<uuid> reopens this form. #}
+            <a class="btn btn-primary w-100 mb-2"
+               href="/connexion/?next=%2Fmemberships%2F%3Fopen%3D{{ product.uuid }}"
+               data-testid="membership-login">
+                <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                {% translate "Adhérer" %}
+            </a>
         {% endif %}
         <button type="button" class="btn btn-link text-muted d-block mt-2 w-100 test-membership-bt-cancel" data-bs-dismiss="offcanvas" aria-label="Annuler" data-testid="membership-cancel">
             {% translate "Cancel" %}

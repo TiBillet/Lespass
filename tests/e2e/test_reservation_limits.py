@@ -355,9 +355,13 @@ class TestReservationLimits:
         # La fixture `page` démarre sans cookie de session : anonyme.
         # / Step 3: Anonymous sees out of stock. The `page` fixture starts
         # without a session cookie: anonymous.
-        page.goto(f"/event/{event_slug}/")
+        # Le bouton de la page envoie un anonyme au guichet : on ouvre donc le panneau
+        # par ?openbookingPanel=true, l'adresse de retour du guichet.
+        # / The page button sends an anonymous visitor to the desk: open the panel
+        # through ?openbookingPanel=true, the desk return URL.
+        page.goto(f"/event/{event_slug}/?openbookingPanel=true")
         page.wait_for_load_state("domcontentloaded")
-        _open_booking_panel(page)
+        page.wait_for_selector("#bookingPanel.show", state="visible")
         _expect_price_block_text(
             _price_block(page, price_name),
             "no longer available",
@@ -428,9 +432,11 @@ class TestReservationLimits:
         )
         try:
             anon_page = anon_context.new_page()
-            anon_page.goto(f"/event/{restricted_event_slug}/")
+            # Anonyme : panneau ouvert par ?openbookingPanel=true (voir étape 3).
+            # / Anonymous: panel opened through ?openbookingPanel=true (see step 3).
+            anon_page.goto(f"/event/{restricted_event_slug}/?openbookingPanel=true")
             anon_page.wait_for_load_state("domcontentloaded")
-            _open_booking_panel(anon_page)
+            anon_page.wait_for_selector("#bookingPanel.show", state="visible")
             _expect_price_block_text(
                 _price_block(anon_page, restricted_price_name),
                 "Log in to access this rate",

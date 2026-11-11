@@ -9,8 +9,8 @@ Inclus par : pages/V2/vues/evenement.html, dans le conteneur #infoAccordion.
 Les « actions » sont les événements enfants (Event.children) : chaque action
 est une mission bénévole avec sa propre jauge.
 FLUX : on choisit une mission (radio) -> « Postuler » envoie
-hx-post /event/<uuid>/action_reservation/. Anonyme : le bouton ouvre le
-panneau de connexion #loginPanel.
+hx-post /event/<uuid>/action_reservation/. Anonyme : un lien mène directement
+au guichet de connexion, retour sur l'événement.
 
 A CONSERVER : #book-now, #get-involved (visé par #volunteerButton),
 les id des radios = uuid de l'action, le hx-post.
@@ -56,12 +56,13 @@ les id des radios = uuid de l'action, le hx-post.
                         {% translate "Apply" %}
                     </button>
                 {% else %}
-                    <button type="button" class="btn btn--secondary"
-                            data-bs-toggle="offcanvas"
-                            data-bs-target="#loginPanel"
-                            aria-controls="loginPanel">
-                        {% translate "Login (and confirm your email address) to apply" %}
-                    </button>
+                    {# Lien direct vers le guichet de connexion, retour sur l'événement. #}
+                    {# / Direct link to the login desk, back to the event. #}
+                    <a class="btn btn--secondary"
+                       href="/connexion/?next={{ request.path|urlencode:'' }}"
+                       data-testid="benevoles-connexion">
+                        {% translate "Postuler" %}
+                    </a>
                 {% endif %}
             </form>
 

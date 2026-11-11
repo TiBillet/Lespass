@@ -785,12 +785,14 @@ class BookingViewSet(viewsets.ViewSet):
         Accès : authentifié uniquement.
         / Access: authenticated users only.
         """
-        # Redirige les visiteurs non connectés vers la page de connexion.
-        # / Redirect unauthenticated visitors to the login page.
+        # Visiteur non connecté : direction le guichet de connexion, avec le retour
+        # sur la page de la ressource. Il clique sur un créneau AVANT de remplir le
+        # formulaire : rien n'est encore saisi, donc rien n'est perdu.
+        # / Anonymous visitor: off to the login desk, back to the resource page.
         if not request.user.is_authenticated:
-            messages.add_message(request, messages.WARNING,
-                                 _("Please login to access this page."))
-            return HttpResponseClientRedirect('/')
+            page_de_la_ressource = reverse("booking-resource", kwargs={"pk": pk})
+            adresse_de_connexion = "/connexion/?" + urlencode({"next": page_de_la_ressource})
+            return HttpResponseClientRedirect(adresse_de_connexion)
 
         resource = get_object_or_404(
             Resource.objects.select_related('calendar', 'weekly_opening'),
@@ -1234,7 +1236,7 @@ class BookingViewSet(viewsets.ViewSet):
         """
         if not request.user.is_authenticated:
             login_url = reverse('connexion')
-            return redirect(f'{login_url}?next={request.get_full_path()}')
+            return redirect(f"{login_url}?{urlencode({'next': request.get_full_path()})}")
 
         booking = get_object_or_404(
             Booking.objects.select_related('resource'),
@@ -1442,7 +1444,7 @@ class BookingViewSet(viewsets.ViewSet):
         """
         if not request.user.is_authenticated:
             login_url   = reverse('connexion')
-            redirect_url = f'{login_url}?next={request.get_full_path()}'
+            redirect_url = f"{login_url}?{urlencode({'next': request.get_full_path()})}"
             return redirect(redirect_url)
 
         booking = get_object_or_404(

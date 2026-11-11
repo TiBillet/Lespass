@@ -103,26 +103,12 @@
 
 {% block scripts %}
 <script>
+  // Personne non connectée qui veut voter : direction le guichet de connexion,
+  // avec le retour sur cette page (vue BaseBillet/views.py, connexion).
+  // / Anonymous visitor who wants to vote: off to the login desk, back to this page.
   window.crowdsVoteRequireLogin = function() {
-    Swal.fire({
-      icon: 'info',
-      title: '{% translate "Connexion requise" %}',
-      text: '{% translate "Veuillez vous connecter pour voter." %}',
-      showCancelButton: true,
-      confirmButtonText: '{% translate "Se connecter" %}',
-      cancelButtonText: '{% translate "Annuler" %}'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        const panel = document.getElementById('loginPanel');
-        if (panel) {
-          const offcanvas = new bootstrap.Offcanvas(panel);
-          offcanvas.show();
-        } else {
-          // Fallback vers page de connexion si panel indisponible
-          window.location.href = '/accounts/login/';
-        }
-      }
-    });
+    const page_courante = window.location.pathname + window.location.search;
+    window.location.href = '/connexion/?next=' + encodeURIComponent(page_courante);
   }
   // Feedback visuel après vote via HX-Trigger (liste)
   document.body.addEventListener('crowds:vote', function (e) {

@@ -696,7 +696,7 @@ def connexion_retour(request):
     7. login() sur le lieu.
     8. Message d'avertissement du ticket (ancienne réservation annulée), puis
        message de succès.
-    9. Redirection vers `sso_next`, ou `/`.
+    9. Redirection vers `sso_next`, ou `/`. Aussi en cas d'échec (étapes 2 à 4).
     / Pop session keys first, check state, ticket and account, attach venue,
     create wallet (non-blocking), log in, show messages, redirect.
     """
@@ -706,19 +706,24 @@ def connexion_retour(request):
 
     message_lien_expire = _("Le lien de connexion a expiré. Reconnectez-vous.")
 
+    # En cas d'échec, on renvoie quand même sur la page de départ (déjà contrôlée
+    # par connexion() : même hôte), pas à l'accueil : la personne retrouve
+    # l'événement ou l'adhésion qu'elle voulait, et un clic la reconnecte.
+    # / On failure, back to the starting page (already checked), not the home page.
+
     # 2. Le state doit être celui posé par connexion() dans CETTE session.
     # / 2. The state must be the one set by connexion() in THIS session.
     state_recu = request.GET.get("state", "")
     if state_attendu is None or not constant_time_compare(state_recu, state_attendu):
         logger.warning("connexion_retour : state absent ou différent de celui de la session.")
         messages.add_message(request, messages.ERROR, message_lien_expire)
-        return redirect("/")
+        return redirect(adresse_de_retour)
 
     # 3. Le ticket. / 3. The ticket.
     contenu_du_ticket = lire_un_ticket(request.GET.get("ticket", ""), request.tenant.domain_url)
     if contenu_du_ticket is None:
         messages.add_message(request, messages.ERROR, message_lien_expire)
-        return redirect("/")
+        return redirect(adresse_de_retour)
 
     # 4. Le compte. / 4. The account.
     user = TibilletUser.objects.filter(pk=contenu_du_ticket["compte"]).first()
@@ -731,7 +736,7 @@ def connexion_retour(request):
     if not compte_utilisable:
         logger.warning(f"connexion_retour : compte {contenu_du_ticket['compte']} absent, non activé ou non humain.")
         messages.add_message(request, messages.ERROR, message_lien_expire)
-        return redirect("/")
+        return redirect(adresse_de_retour)
 
     # 5. Rattachement au lieu. / 5. Attach the venue.
     user.client_achat.add(connection.tenant)
@@ -749,11 +754,12 @@ def connexion_retour(request):
     # 7. Connexion sur le lieu. / 7. Log in on the venue.
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
-    # 8. Messages. / 8. Messages.
+    # 8. Avertissement éventuel du guichet. Pas de toast de succès : la personne
+    # revient sur la page qu'elle voulait, avec le formulaire déjà ouvert.
+    # / 8. Optional desk warning. No success toast: the person is back where she wanted.
     avertissement = contenu_du_ticket.get("avertissement")
     if avertissement:
         messages.add_message(request, messages.WARNING, avertissement)
-    messages.add_message(request, messages.SUCCESS, _("Connexion réussie. Bienvenue !"))
 
     # 9. Retour à la page de départ, contrôlée par connexion().
     # / 9. Back to the starting page, already checked by connexion().
@@ -1453,26 +1459,30 @@ class MyAccount(viewsets.ViewSet):
     def dispatch(self, request, *args, **kwargs):
         """
         Vérifie si l'utilisateur est authentifié avant d'accéder à la page "My Account".
-        Si l'utilisateur n'est pas authentifié, il est redirigé vers la page d'accueil (/).
+        Si l'utilisateur n'est pas authentifié, il est envoyé au guichet de connexion,
+        avec le retour sur la page du compte demandée.
         Cela évite l'erreur 403 Forbidden pour les utilisateurs anonymes.
 
         Cette méthode est appelée pour chaque requête avant d'exécuter la méthode spécifique (list, wallet, etc.).
         Elle sert de point de contrôle d'authentification centralisé pour toutes les actions de cette vue.
         """
         if not request.user.is_authenticated:
-            messages.add_message(request, messages.WARNING,
-                                 _("Please login to access this page."))
+            # Direction le guichet de connexion, avec le retour sur la page du compte
+            # demandée (lien « voir mes billets » d'un mail, session expirée...).
+            # / Off to the login desk, back to the requested account page.
+            #
             # Session expirée pendant une navigation HTMX (onglets du compte en
             # hx-get) : un redirect() classique serait suivi EN SILENCE par le
-            # XHR et la home serait swappée DANS l'onglet, URL inchangée.
-            # HX-Redirect fait faire au navigateur une vraie navigation vers /.
-            # / Session expired during an HTMX navigation (account tabs use
-            # hx-get): a classic redirect() would be silently followed by the
-            # XHR and the home page swapped INSIDE the tab, URL unchanged.
-            # HX-Redirect makes the browser do a real navigation to /.
+            # XHR et le guichet serait swappé DANS l'onglet. HX-Redirect fait
+            # faire au navigateur une vraie navigation. On revient alors sur
+            # /my_account/, pas sur l'adresse htmx de l'onglet.
+            # / During an HTMX navigation, HX-Redirect forces a real navigation;
+            # return to /my_account/, not the tab's htmx URL.
             if request.htmx:
-                return HttpResponseClientRedirect('/?login=1')
-            return redirect('/')
+                adresse_de_connexion = "/connexion/?" + urlencode({"next": "/my_account/"})
+                return HttpResponseClientRedirect(adresse_de_connexion)
+            adresse_de_connexion = "/connexion/?" + urlencode({"next": request.get_full_path()})
+            return redirect(adresse_de_connexion)
 
         # Note : les terminaux (espece=TE) sont deja bloques en amont par
         # AuthBillet.middleware.TerminalSessionGuardMiddleware (garde central),
@@ -4279,21 +4289,11 @@ class EventMVT(viewsets.ViewSet):
             logger.debug("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
-        # On passe l'user resolu par le validator (via l'email saisi),
-        # pas request.user qui peut etre AnonymousUser si le visiteur n'est pas connecte.
-        # Le template choisit son message selon user.is_active : il doit refleter
-        # l'etat reel utilise par TicketCreator pour decider d'envoyer
-        # les billets immediatement (user actif) ou un mail de validation (user inactif).
-
-        if validator.reservation.user_commande.is_active:
-            messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
-            return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
-
-        from BaseBillet.models import DUREE_D_UN_PAIEMENT_EN_COURS
-        return render(request, "fonctionnel/event/reservation_ok.html", context={
-            "user": validator.reservation.user_commande,
-            "minutes_de_reservation": int(DUREE_D_UN_PAIEMENT_EN_COURS.total_seconds() // 60),
-        })
+        # Réservation sans paiement : elle est validée tout de suite.
+        # La personne est connectée, son compte est donc activé.
+        # / No payment needed: the booking is validated right away.
+        messages.success(request, _("Réservation validée ! Vous pouvez accéder à vos billets depuis cette page."))
+        return HttpResponseClientRedirect(reverse("my_account-my-reservations"))
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
@@ -4957,11 +4957,19 @@ class MembershipMVT(viewsets.ViewSet):
 
         # Le paramètre GET "open" (optionnel) contient l'uuid d'un produit d'adhésion à ouvrir directement au chargement de la page
         # On vérifie que le produit adhésion exist, puis c'est le JS qui gère l'ouverture
-        open_membership = request.GET.get('open',None)
+        # On renvoie l'uuid LU EN BASE, jamais la valeur reçue : elle est écrite dans
+        # un sélecteur JavaScript (commun/partials/ouvrir_adhesion_demandee.html).
+        # / Return the uuid read from the database, never the received value.
+        open_membership = None
+        uuid_demande = request.GET.get('open', '')
         try:
-            MembershipProduct.objects.get(pk=open_membership)
-        except:
-            open_membership = None
+            uuid_valide = uuid.UUID(uuid_demande)
+        except ValueError:
+            uuid_valide = None
+        if uuid_valide is not None:
+            produit_demande = MembershipProduct.objects.filter(pk=uuid_valide).first()
+            if produit_demande is not None:
+                open_membership = str(produit_demande.uuid)
 
         template_context["open_membership"] = open_membership
 

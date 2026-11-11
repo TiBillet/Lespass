@@ -119,8 +119,9 @@ replace themselves with the updated cart in a single request.
                     {% else %}
                         <div class="alert alert-warning mb-0" role="alert">
                             {% trans "Please log in to proceed to payment." %}
-                            <a href="#" data-bs-toggle="offcanvas" data-bs-target="#loginPanel"
-                               class="alert-link">{% trans "Log in" %}</a>
+                            {# Lien direct vers le guichet, retour sur la page du panier. #}
+                            {# / Direct link to the login desk, back to the cart page. #}
+                            <a href="/connexion/?next=%2Fpanier%2F" class="alert-link">{% trans "Log in" %}</a>
                         </div>
                     {% endif %}
                 </form>

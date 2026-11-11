@@ -47,6 +47,17 @@ A CONSERVER : data-testid="membership-open-<uuid>" (tests E2E adhésions).
                    href="/memberships/?open={{ product.uuid }}" target="_blank" rel="noopener">
                     {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
                 </a>
+            {% elif not user.is_authenticated %}
+                {# Anonyme : adhérer exige d'être connecté. Le bouton mène DIRECTEMENT au guichet #}
+                {# de connexion, AVANT l'ouverture du formulaire : rien n'est encore saisi. Au retour, #}
+                {# /memberships/?open=<uuid> rouvre le formulaire (script open_membership de la page). #}
+                {# Pas de .js-membership-form-btn : ce lien n'ouvre pas le panneau. #}
+                {# / Anonymous: straight to the login desk; ?open=<uuid> reopens the form on return. #}
+                <a class="btn btn-primaire btn--sm"
+                   href="/connexion/?next=%2Fmemberships%2F%3Fopen%3D{{ product.uuid }}"
+                   data-testid="membership-open-login-{{ product.uuid }}">
+                    {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
+                </a>
             {% else %}
                 <button class="btn btn-primaire btn--sm js-membership-form-btn"
                         type="button"

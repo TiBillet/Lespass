@@ -71,18 +71,16 @@ account pages (home and sub-pages) are the only ones without the venue's
                 {% endif %}
             </div>
         {% else %}
-            {# Un <button> : il ouvre un panneau, il ne mène nulle part. #}
-            {# / A <button>: it opens a panel, it navigates nowhere. #}
-            <button type="button" class="me-anchor me-anchor--login"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#loginPanel"
-                    aria-controls="loginPanel"
-                    data-testid="user-bar-connexion">
+            {# Lien direct vers le guichet de connexion, retour sur la page courante. #}
+            {# / Direct link to the login desk, back to the current page. #}
+            <a class="me-anchor me-anchor--login"
+               href="/connexion/?next={{ request.path|urlencode:'' }}"
+               data-testid="user-bar-connexion">
                 <span class="me-anchor__avatar" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
                 </span>
                 <span>{% translate 'Log in' %}</span>
-            </button>
+            </a>
         {% endif %}
 
         <div class="icon-group">

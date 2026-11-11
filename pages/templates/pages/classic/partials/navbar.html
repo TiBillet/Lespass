@@ -111,13 +111,10 @@
             </div>
           <div class="nav-item">
             {% if user.is_authenticated == False %}
-            <button
-                class="nav-link"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#loginPanel"
-                aria-controls="loginPanel">
+            {# Lien direct vers le guichet de connexion. / Direct link to the login desk. #}
+            <a class="nav-link" href="/connexion/?next={{ request.path|urlencode:'' }}" data-testid="navbar-connexion">
                 {% translate 'Log in' %}
-            </button>
+            </a>
             {% else %}
               <a class="nav-link" href="/my_account/" hx-get="/my_account/" hx-target="body" hx-push-url="true">
                 <i class="bi bi-person-circle"></i>

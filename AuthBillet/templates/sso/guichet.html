@@ -1,54 +1,60 @@
-{% extends "seo/base.html" %}
-{% load i18n static %}
-
+{% load i18n static %}{% get_current_language as LANGUAGE_CODE %}<!doctype html>
 {% comment %}
-  Page du guichet de connexion commun à tous les lieux (SSO).
-  / Page of the login desk shared by all venues (SSO).
+  SOCLE DU GUICHET DE CONNEXION commun à tous les lieux (SSO).
+  / Base of the login desk shared by all venues (SSO).
 
   LOCALISATION : AuthBillet/templates/sso/guichet.html
   Vue : AuthBillet/views_sso.py::guichet (GET /sso/).
 
-  Contexte :
-    - partiel : le gabarit à inclure dans #sso-contenu (étape 1 ou erreur) ;
-    - nom_du_lieu, lieu, state, email, erreur_email : pour l'étape 1.
+  Ce gabarit n'est jamais rendu seul. Chaque skin de lieu a son enfant, qui
+  l'habille aux couleurs du lieu qui envoie la personne :
+    - sso/guichet_V2.html             (skin « V2 », celui des nouveaux lieux) ;
+    - sso/guichet_reunion.html        (skin « reunion », l'ancien thème) ;
+    - sso/guichet_faire_festival.html (skin « faire_festival »).
+  La vue choisit l'enfant (GABARIT_DU_GUICHET_PAR_SKIN).
 
-  `seo/base.html` ne charge que Bootstrap : cette page charge htmx elle-même
-  (script bloquant, sinon les hx-* du HTML de départ ne sont pas lus), et pose
-  le jeton CSRF sur <main> par hx-headers. Les formulaires des étapes héritent
-  de cet en-tête.
-  / seo/base.html only loads Bootstrap: htmx is loaded here (blocking), and
-  the CSRF token is set on <main> through hx-headers, inherited by the forms.
+  Le guichet vit sur le domaine du schéma `public`. Il ne connaît pas la
+  Configuration du lieu : la vue la lit dans tenant_context et passe
+  `habillage` (nom_du_lieu, url_du_lieu, url_du_logo). Les liens vers le lieu
+  sont donc ABSOLUS (https://<domaine du lieu>/…) : un lien relatif mènerait
+  au guichet, pas au lieu.
+
+  Les étapes (email, code, erreur) sont des partiels communs à tous les skins,
+  en Bootstrap simple : chaque feuille de style de skin les habille.
+
+  htmx est chargé ici en script bloquant (sinon les hx-* du HTML de départ ne
+  sont pas lus). Le jeton CSRF est posé sur <main> par hx-headers : les
+  formulaires des étapes en héritent.
+
+  BLOCS À SURCHARGER :
+    - feuilles_de_style : le CSS du skin ;
+    - classes_du_body   : les classes du <body> ;
+    - page              : tout le contenu visible (en-tête du lieu + carte).
+  / Never rendered alone: each venue skin has a child template. Links to the
+  venue are absolute. Steps are shared Bootstrap partials styled by each skin.
 {% endcomment %}
+{# Thème clair fixé : le guichet est sur un autre domaine que le lieu, il ne #}
+{# peut pas relire le choix clair / sombre fait sur le site du lieu. #}
+{# / Light theme locked: the desk cannot read the venue site's theme choice. #}
+<html lang="{{ LANGUAGE_CODE }}" data-bs-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {# Une page de connexion n'a rien à faire dans un moteur de recherche. #}
+    {# / A login page has nothing to do in a search engine. #}
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% if habillage.nom_du_lieu %}{% blocktranslate trimmed with nom_du_lieu=habillage.nom_du_lieu %}Vérification — {{ nom_du_lieu }}{% endblocktranslate %}{% else %}{% translate "Vérification" %}{% endif %}</title>
 
-{# Une page de connexion n'a rien à faire dans un moteur de recherche. #}
-{# / A login page has nothing to do in a search engine. #}
-{% block meta_robots %}noindex, nofollow{% endblock %}
+    <link rel="icon" type="image/svg+xml" href="{% static 'commun/img/favicon.svg' %}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'commun/img/favicon.png' %}">
+    <link data-bs-stylesheet="bootstrap" href="{% static 'commun/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
+    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet" href="{% static 'commun/css/bootstrap-icons.min.css' %}">
+    <link rel="stylesheet" href="{% static 'commun/css/vars.css' %}">
+    {% block feuilles_de_style %}{% endblock feuilles_de_style %}
 
-{% block page_title %}{% if nom_du_lieu %}{% blocktranslate trimmed %}Connexion à {{ nom_du_lieu }}{% endblocktranslate %}{% else %}{% translate "Connexion" %}{% endif %}{% endblock %}
-
-{% block extra_head %}
-<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
-{% endblock %}
-
-{% block main_wrapper %}
-<main class="container-lg my-5"
-      data-testid="sso-guichet"
-      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-    <div class="row justify-content-center">
-        <div class="col-12 col-md-8 col-lg-6">
-            {% if nom_du_lieu %}
-            <h1 class="h2 mb-4" data-testid="sso-titre">
-                {% blocktranslate trimmed %}Connexion à {{ nom_du_lieu }}{% endblocktranslate %}
-            </h1>
-            {% endif %}
-
-            {# Zone remplacée par htmx à chaque étape. aria-live : le lecteur #}
-            {# d'écran annonce la nouvelle étape. #}
-            {# / Area swapped by htmx at each step, announced by screen readers. #}
-            <section id="sso-contenu" aria-live="polite" data-testid="sso-contenu">
-                {% include partiel %}
-            </section>
-        </div>
-    </div>
-</main>
-{% endblock main_wrapper %}
+    <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+</head>
+<body class="{% block classes_du_body %}{% endblock classes_du_body %}">
+{% block page %}{% endblock page %}
+</body>
+</html>

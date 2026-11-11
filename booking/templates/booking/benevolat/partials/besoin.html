@@ -53,13 +53,17 @@ est géré côté serveur (get_or_create, retrait déjà fait = rien à faire).
     <div class="bv-besoin__action">
         {% if case.action == "connexion" %}
             {% if case.est_couvert %}<span class="bv-badge bv-badge--couvert">{% translate "Couvert" %}</span>{% endif %}
-            <button type="button" class="bv-btn bv-btn--secondaire bv-btn--plein"
-                    id="benevolat-action-{{ suffixe }}{{ case.besoin.pk }}"
-                    data-bs-toggle="offcanvas" data-bs-target="#loginPanel" aria-controls="loginPanel"
-                    aria-label="{% blocktranslate with tache=case.tache.name jour=case.jour|date:'l j F' plage=case.plage %}Me connecter pour venir : {{ tache }}, {{ jour }}, {{ plage }}{% endblocktranslate %}"
-                    data-testid="benevolat-connexion-{{ suffixe }}{{ case.besoin.pk }}">
+            {# Lien direct vers le guichet de connexion. Retour sur ce planning, à la semaine #}
+            {# de la case (?semaine=). Ce partiel est aussi rendu par htmx : on construit #}
+            {# l'adresse du planning, jamais request.path (ce serait l'adresse htmx). #}
+            {# / Direct link to the login desk, back on this planning at the slot's week. #}
+            <a class="bv-btn bv-btn--secondaire bv-btn--plein"
+               id="benevolat-action-{{ suffixe }}{{ case.besoin.pk }}"
+               href="/connexion/?next={% filter urlencode:'' %}{% url 'benevolat-planning' slug=planning.slug %}?semaine={{ case.jour|date:'Y-m-d' }}{% endfilter %}"
+               aria-label="{% blocktranslate with tache=case.tache.name jour=case.jour|date:'l j F' plage=case.plage %}Me connecter pour venir : {{ tache }}, {{ jour }}, {{ plage }}{% endblocktranslate %}"
+               data-testid="benevolat-connexion-{{ suffixe }}{{ case.besoin.pk }}">
                 {% translate "Me connecter pour venir" %}
-            </button>
+            </a>
 
         {% elif case.action == "reserve" %}
             <span class="bv-badge bv-badge--reserve" data-testid="benevolat-reserve-{{ suffixe }}{{ case.besoin.pk }}">{% translate "Réservé aux adhérent·es" %}</span>

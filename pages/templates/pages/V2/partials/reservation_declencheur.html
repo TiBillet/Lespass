@@ -16,15 +16,29 @@ et l'id #bookingPanel (aussi ouvert par ?openbookingPanel, voir evenement.html).
 / Keep the booking-open-panel testid and the #bookingPanel id.
 {% endcomment %}
 <div class="reservation-declencheur" data-testid="reservation-declencheur">
-    <button
-            class="btn btn-primaire reservation-declencheur__bouton"
-            type="button"
-            data-bs-toggle="offcanvas"
-            data-bs-target="#bookingPanel"
-            aria-controls="bookingPanel"
-            data-testid="booking-open-panel">
-        {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
-    </button>
+    {% if user.is_authenticated %}
+        <button
+                class="btn btn-primaire reservation-declencheur__bouton"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#bookingPanel"
+                aria-controls="bookingPanel"
+                data-testid="booking-open-panel">
+            {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
+        </button>
+    {% else %}
+        {# Anonyme : réserver exige d'être connecté. Le bouton mène DIRECTEMENT au guichet de #}
+        {# connexion (vue `connexion`), AVANT l'ouverture du formulaire : rien n'est encore saisi, #}
+        {# donc rien n'est perdu. Au retour, ?openbookingPanel=true rouvre le formulaire. #}
+        {# Dans une iframe (embed), le cookie de session ne passe pas : nouvel onglet. #}
+        {# / Anonymous: straight to the login desk BEFORE the form opens; it reopens on return. #}
+        <a class="btn btn-primaire reservation-declencheur__bouton"
+           href="/connexion/?next={{ request.path|urlencode:'' }}%3FopenbookingPanel%3Dtrue"
+           {% if embed %}target="_blank" rel="noopener"{% endif %}
+           data-testid="booking-open-login">
+            {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
+        </a>
+    {% endif %}
 </div>
 
 <!-- Tunnel de réservation (chrome partagé, extrait vers commun/ au CHANTIER-02).

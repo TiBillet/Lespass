@@ -25,6 +25,8 @@ Flow :
 
 import os
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
@@ -79,5 +81,9 @@ def test_navigation_htmx_skin_faire_festival_et_panneaux(page):
     page.locator('#contactPanel [data-bs-dismiss="offcanvas"]').first.click()
     expect(page.locator("#contactPanel")).not_to_be_visible()
 
-    page.locator('[data-bs-target="#loginPanel"]').first.click()
-    expect(page.locator("#loginPanel")).to_be_visible()
+    # #loginPanel n'a plus de bouton (le lien « Connexion » mène au guichet), mais il
+    # doit rester dans le fragment : ?login=1 et la réponse 403 htmx l'ouvrent.
+    # / #loginPanel has no button anymore, but must stay in the fragment.
+    expect(page.locator("#loginPanel")).to_have_count(1)
+    lien_de_connexion = page.locator('[data-testid="navbar-connexion"]').first
+    expect(lien_de_connexion).to_have_attribute("href", re.compile(r"^/connexion/\?next="))

@@ -203,21 +203,22 @@ def test_e1_billet_gratuit_ajoute_au_panier_puis_confirme(
 
 
 @pytest.mark.billetterie
-def test_e2_un_anonyme_qui_veut_ajouter_au_panier_voit_le_panneau_de_connexion(
+def test_e2_un_anonyme_qui_veut_reserver_part_au_guichet_avant_le_formulaire(
     page, e2e_slugs
 ):
     """
-    Visiteur anonyme : le bouton « Connectez-vous pour ajouter au panier » ouvre le panneau
-    de connexion (le panier exige d'être connecté).
-    / Anonymous visitor: "Log in to add to cart" opens the login panel.
+    Visiteur anonyme : le bouton de réservation de la page mène directement au guichet
+    de connexion, avant d'ouvrir le formulaire (réserver et le panier exigent d'être
+    connecté ; rien n'est saisi, donc rien n'est perdu).
+    / Anonymous visitor: the page's booking button goes straight to the login desk.
     """
-    ouvrir_le_panneau_de_reservation(page, e2e_slugs["event_payant_slug"])
+    page.goto(f"/event/{e2e_slugs['event_payant_slug']}/")
+    page.wait_for_load_state("domcontentloaded")
 
-    page.locator('[data-testid="booking-add-to-cart-login"]').click()
+    page.locator('[data-testid="booking-open-login"]').click()
 
-    expect(page.locator("#loginPanel")).to_have_class(
-        re.compile(r"\bshow\b"), timeout=5_000
-    )
+    page.wait_for_url(lambda adresse: "/sso/" in adresse, timeout=10_000)
+    expect(page.locator('[data-testid="login-email"]')).to_be_visible()
 
 
 @pytest.mark.adhesion

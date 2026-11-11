@@ -42,11 +42,12 @@
                         {% translate "Apply" %}
                     </button>
                 {% else %}
+                    {# Lien direct vers le guichet de connexion, retour sur l'événement. #}
+                    {# / Direct link to the login desk, back to the event. #}
                     <a class="btn btn-secondary w-100 mb-5"
-                            data-bs-toggle="offcanvas"
-                            data-bs-target="#loginPanel"
-                            aria-controls="loginPanel">
-                        {% translate "Login (and confirm your email address) to apply" %}
+                       href="/connexion/?next={{ request.path|urlencode:'' }}"
+                       data-testid="benevoles-connexion">
+                        {% translate "Postuler" %}
                     </a>
                 {% endif %}
             </form>

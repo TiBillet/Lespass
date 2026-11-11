@@ -159,11 +159,14 @@ class TestNumericOverflowValidation:
         assert product_result["ok"], f"Création produit échouée: {product_result}"
 
         # --- Etape 2 : Page evenement, ouvrir le panneau reservation ---
-        # / Step 2: event page, open booking panel
-        page.goto(f"/event/{event_slug}/")
+        # Visiteur anonyme : le bouton de la page mène au guichet de connexion.
+        # On ouvre donc le panneau par ?openbookingPanel=true (adresse de retour du
+        # guichet). Ce test ne vérifie que la validation HTML, sans envoi.
+        # / Step 2: anonymous visitor, the page button goes to the login desk: open
+        # the panel through ?openbookingPanel=true. HTML validation only, no submit.
+        page.goto(f"/event/{event_slug}/?openbookingPanel=true")
         page.wait_for_load_state("domcontentloaded")
-        page.get_by_test_id("booking-open-panel").click()
-        page.wait_for_timeout(500)
+        page.wait_for_selector("#bookingPanel.show", state="visible")
 
         # --- Etape 3 : Incrementer la quantite pour afficher le prix libre ---
         # Le bouton "+" est le dernier bouton du web component bs-counter.

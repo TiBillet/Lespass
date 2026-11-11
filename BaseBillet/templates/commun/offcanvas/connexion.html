@@ -5,8 +5,12 @@ OFFCANVAS CONNEXION — panneau de login (#loginPanel)
 LOCALISATION : BaseBillet/templates/commun/offcanvas/connexion.html
 
 Chrome partagé, NON skinnable : inclus par les shells (bloc offcanvas_globaux).
-Déclencheurs : boutons navbar + footer + partial volunteers + boutons
-« Réserver » / « Adhérer » des formulaires, pour une personne non connectée.
+Déclencheurs : uniquement des ouvertures AUTOMATIQUES (?login=1 lu par la
+navbar, réponse 403 à une requête htmx dans panier_scripts.html, session
+expirée sur le planning des bénévoles). Tous les boutons et liens « Se
+connecter », « Réserver », « Adhérer », « Me connecter pour venir »… d'une
+personne non connectée mènent DIRECTEMENT au guichet (/connexion/?next=…),
+sans passer par ce panneau.
 Un JS d'auto-ouverture (paramètre ?login=1) vit dans la navbar et
 cible #loginPanel par id. L'id fait partie du contrat de skin : ne JAMAIS
 le renommer.
@@ -42,7 +46,7 @@ FLUX :
         {# / Without JavaScript, the link returns to the current page. #}
         <a id="loginGuichetLink"
            class="btn btn-primary d-block w-100"
-           href="/connexion/?next={{ request.get_full_path|urlencode }}"
+           href="/connexion/?next={{ request.path|urlencode }}"
            data-testid="login-guichet">
             {% translate "Continuer" %}
             <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i>

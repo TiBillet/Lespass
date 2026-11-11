@@ -91,17 +91,14 @@ def taper_l_email_puis_le_code(page, django_shell, email):
 
 def se_connecter_sur_lespass_par_le_guichet(page, django_shell, email):
     """
-    Depuis l'accueil de `lespass` (skin V2) : bouton « Connexion » de la barre,
-    lien « Se connecter » du panneau, puis email et code sur le guichet.
+    Depuis l'accueil de `lespass` (skin V2) : lien « Connexion » de la barre, qui
+    mène directement au guichet, puis email et code.
     Rend la main une fois revenu sur `lespass`, connecté.
     / From lespass home: login panel, desk link, email and code. Returns once back.
     """
     page.goto(f"{ADRESSE_DE_LESPASS}/")
     page.wait_for_load_state("networkidle")
     page.locator('[data-testid="user-bar-connexion"]').click()
-    lien_vers_le_guichet = page.locator('[data-testid="login-guichet"]')
-    expect(lien_vers_le_guichet).to_be_visible()
-    lien_vers_le_guichet.click()
 
     taper_l_email_puis_le_code(page, django_shell, email)
 
@@ -154,10 +151,11 @@ def test_connecte_sur_lespass_on_entre_sur_festival_sans_code_puis_on_sort_de_pa
 ):
     """
     Connectée sur `lespass` (donc sur le guichet), la personne clique « Se connecter »
-    sur `festival` : elle revient connectée, sans rien taper. Puis « Me déconnecter » sur
-    `festival` la déconnecte aussi de `lespass`.
-    / Logged in on lespass, one click logs in on festival without a code; logging out
-    on festival also logs out of lespass.
+    sur `festival`. Première visite de ce lieu : le guichet demande son accord
+    (« Continuer sur … »), sans code. Elle revient connectée. Puis « Me déconnecter »
+    sur `festival` la déconnecte aussi de `lespass` ET du guichet.
+    / Logged in on lespass: on festival, first visit, one consent click and no code.
+    Logging out on festival also logs out of lespass and of the desk.
     """
     email = un_email_neuf()
     se_connecter_sur_lespass_par_le_guichet(page, django_shell, email)
@@ -177,10 +175,13 @@ def test_connecte_sur_lespass_on_entre_sur_festival_sans_code_puis_on_sort_de_pa
     )
     page.goto(f"{ADRESSE_DE_FESTIVAL}/")
     page.wait_for_load_state("networkidle")
-    page.locator('button[data-bs-target="#loginPanel"]:visible').first.click()
-    lien_vers_le_guichet = page.locator('[data-testid="login-guichet"]')
-    expect(lien_vers_le_guichet).to_be_visible()
-    lien_vers_le_guichet.click()
+    page.locator('[data-testid="navbar-connexion"]:visible').first.click()
+
+    # Première visite de festival : l'écran d'accord, avec l'email du compte.
+    # / First visit of festival: the consent screen, with the account email.
+    page.wait_for_url(lambda adresse: "/sso/" in adresse, timeout=10_000)
+    expect(page.locator('[data-testid="sso-consentement"]')).to_contain_text(email)
+    page.locator('[data-testid="sso-continuer"]').click()
 
     page.wait_for_url(
         lambda adresse: (
@@ -213,6 +214,14 @@ def test_connecte_sur_lespass_on_entre_sur_festival_sans_code_puis_on_sort_de_pa
     expect(page.locator('[data-testid="user-bar-connexion"]')).to_be_visible()
     expect(page.locator('[data-testid="user-bar-mon-espace"]')).to_have_count(0)
 
+    # Le guichet est fermé lui aussi : « Connexion » redemande l'email, sans
+    # écran d'accord ni ticket.
+    # / The desk is closed too: "Log in" asks for the email again.
+    page.locator('[data-testid="user-bar-connexion"]').click()
+    page.wait_for_url(lambda adresse: "/sso/" in adresse, timeout=10_000)
+    expect(page.locator('[data-testid="login-email"]')).to_be_visible()
+    expect(page.locator('[data-testid="sso-consentement"]')).to_have_count(0)
+
 
 # --------------------------------------------------------------------------
 # 3. « Réserver » (anonyme) rouvre le panneau de réservation
@@ -225,25 +234,19 @@ def test_se_connecter_pour_reserver_rouvre_le_panneau_de_reservation(
     page, django_shell, e2e_slugs
 ):
     """
-    Anonyme sur la page d'un événement : « Réserver » (anonyme) ouvre le panneau
-    de connexion. Après le code, la page de l'événement revient avec le panneau de
-    réservation ouvert, et le bouton « Payer maintenant » à la place du bouton de connexion.
-    / Anonymous on an event page: after login, the event page comes back with the
-    booking panel open and the submit button.
+    Anonyme sur la page d'un événement : le bouton de réservation de la page mène
+    directement au guichet, avant d'ouvrir le formulaire. Après le code, la page de
+    l'événement revient avec le panneau de réservation ouvert, et le bouton
+    « Payer maintenant » à la place du lien de connexion.
+    / Anonymous on an event page: the page button goes straight to the desk. After
+    login, the event page comes back with the booking panel open and the submit button.
     """
     email = un_email_neuf()
     slug_de_l_evenement = e2e_slugs["event_payant_slug"]
 
     page.goto(f"{ADRESSE_DE_LESPASS}/event/{slug_de_l_evenement}/")
     page.wait_for_load_state("networkidle")
-    page.locator('[data-testid="booking-open-panel"]').click()
-    expect(page.locator("#reservation_form")).to_be_visible(timeout=5_000)
-
-    page.locator('[data-testid="booking-login"]').click()
-    expect(page.locator("#loginPanel")).to_have_class(
-        re.compile(r"\bshow\b"), timeout=5_000
-    )
-    page.locator('[data-testid="login-guichet"]').click()
+    page.locator('[data-testid="booking-open-login"]').click()
 
     taper_l_email_puis_le_code(page, django_shell, email)
 

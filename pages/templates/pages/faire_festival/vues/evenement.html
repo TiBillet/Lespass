@@ -212,13 +212,27 @@
                 </button>
             {% elif event.products.exists %}
                 <!-- Cas 3 : Des produits de billetterie existent, on affiche le bouton de réservation -->
-                <button class="bouton-inscription fw-bold"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#bookingPanel"
-                        aria-controls="bookingPanel"
-                        data-testid="booking-open-panel">
-                    {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
-                </button>
+                {% if user.is_authenticated %}
+                    <button class="bouton-inscription fw-bold"
+                            data-bs-toggle="offcanvas"
+                            data-bs-target="#bookingPanel"
+                            aria-controls="bookingPanel"
+                            data-testid="booking-open-panel">
+                        {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
+                    </button>
+                {% else %}
+                    {# Anonyme : réserver exige d'être connecté. Le bouton mène DIRECTEMENT au guichet de #}
+                    {# connexion (vue `connexion`), AVANT l'ouverture du formulaire : rien n'est encore saisi, #}
+                    {# donc rien n'est perdu. Au retour, ?openbookingPanel=true rouvre le formulaire. #}
+                    {# Dans une iframe (embed), le cookie de session ne passe pas : nouvel onglet. #}
+                    {# / Anonymous: straight to the login desk BEFORE the form opens; it reopens on return. #}
+                    <a class="bouton-inscription fw-bold d-block text-center text-decoration-none"
+                       href="/connexion/?next={{ request.path|urlencode:'' }}%3FopenbookingPanel%3Dtrue"
+                       {% if embed %}target="_blank" rel="noopener"{% endif %}
+                       data-testid="booking-open-login">
+                        {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
+                    </a>
+                {% endif %}
             {% endif %}
             <!-- Cas 4 : Aucun produit présent -> On n'affiche rien du tout ici -->
 

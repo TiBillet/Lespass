@@ -112,8 +112,32 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 # Sentry
 if not DEBUG and os.environ.get('SENTRY_DNS'):
     import sentry_sdk
+    from sentry_sdk.scrubber import DEFAULT_DENYLIST, EventScrubber
+
+    def retirer_le_code_de_connexion_des_evenements(event, hint):
+        """
+        Le code de connexion à 6 chiffres ne doit jamais partir chez Sentry.
+        / The 6-digit login code must never reach Sentry.
+
+        L'intégration Celery joint les arguments de la tâche à tout événement
+        d'erreur : pour code_de_connexion_celery_mailer, ce sont (email, code,
+        langue). On les remplace. Les variables et champs nommés « code » sont
+        déjà masqués par l'EventScrubber ci-dessous.
+        / The Celery integration attaches task args to error events: replace them
+        for the login-code task. Variables and fields named "code" are masked below.
+        """
+        tache_celery = event.get("extra", {}).get("celery-job")
+        if tache_celery and "code_de_connexion_celery_mailer" in str(tache_celery.get("task_name", "")):
+            tache_celery["args"] = "[retiré : contient le code de connexion]"
+            tache_celery["kwargs"] = "[retiré : contient le code de connexion]"
+        return event
 
     sentry_sdk.init(
+        before_send=retirer_le_code_de_connexion_des_evenements,
+        # Masque aussi les variables locales et les champs POST nommés « code »
+        # (tâche mail, vue /sso/code/verifier/), en plus de la liste par défaut.
+        # / Also masks local variables and POST fields named "code".
+        event_scrubber=EventScrubber(denylist=DEFAULT_DENYLIST + ["code", "code_saisi"]),
         dsn=os.environ.get('SENTRY_DNS'),
         # Tracing DESACTIVE (0.0) : le volume festival (4000 users + taches Celery)
         # saturait le budget de spans Sentry. Les events d'erreur (issues) restent
@@ -387,6 +411,14 @@ TENANT_LIMIT_SET_CALLS = True
 # / Login code requests per IP per 10-minute window, all venues together.
 #   High on purpose (festival wifi = one IP). Empty value = 500.
 CONNEXION_CODE_PLAFOND_IP_10_MIN = int(os.environ.get('CONNEXION_CODE_PLAFOND_IP_10_MIN') or 500)
+
+# Connexion par code : nombre maximum de codes FAUX tapés depuis une adresse IP,
+# par tranche de 10 minutes, tous lieux confondus. Au-delà, plus aucun code n'est
+# vérifié depuis cette adresse jusqu'à la fin de la tranche. C'est la protection
+# contre la force brute du code à 6 chiffres (5 essais par code ne suffisent pas :
+# on peut demander des codes pour beaucoup d'adresses email). Une valeur vide = 100.
+# / Wrong codes per IP per 10-minute window. Brute-force protection. Empty = 100.
+CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN = int(os.environ.get('CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN') or 100)
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',

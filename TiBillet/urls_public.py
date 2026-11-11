@@ -27,6 +27,7 @@ urlpatterns = [
     path('sso/', views_sso.guichet, name='sso-guichet'),
     path('sso/code/', views_sso.envoyer_le_code, name='sso-code'),
     path('sso/code/verifier/', views_sso.verifier_le_code, name='sso-code-verifier'),
+    path('sso/continuer/', views_sso.continuer_vers_le_lieu, name='sso-continuer'),
 
     # Wizard d'onboarding nouveau tenant (SHARED : accessible aussi sur tenants).
     # / Onboarding wizard for new tenants (SHARED: also reachable on tenants).

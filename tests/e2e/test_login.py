@@ -82,23 +82,21 @@ class TestLoginFlow:
         """Le formulaire de connexion du guichet rejette un email mal formé.
         / The login desk form rejects a malformed email.
 
-        Le panneau de connexion du lieu ne contient plus de formulaire : un lien
-        « Se connecter » mène au guichet commun (/connexion/ puis /sso/ sur le
-        domaine du schéma public). Le formulaire garde les id loginForm / loginEmail.
-        / The venue login panel has no form: a link leads to the shared login desk.
+        Le lien « Connexion » du lieu mène directement au guichet commun
+        (/connexion/ puis /sso/ sur le domaine du schéma public). Le formulaire
+        garde les id loginForm / loginEmail.
+        / The venue "Log in" link leads straight to the shared login desk.
         """
         # --- Étape 1 : Aller à l'accueil / Go home ---
         page.goto("/")
         page.wait_for_load_state("networkidle")
 
-        # --- Étape 2 : Ouvrir le panneau de connexion, puis aller au guichet ---
-        # Bouton « Connexion » de la barre utilisateur du skin V2 (data-testid,
-        # indépendant de la langue et de la mise en page).
-        # / Step 2: open the login panel, then go to the login desk.
+        # --- Étape 2 : Aller au guichet ---
+        # Lien « Connexion » de la barre utilisateur du skin V2 (data-testid,
+        # indépendant de la langue et de la mise en page) : il mène directement
+        # au guichet de connexion.
+        # / Step 2: the V2 user bar "Log in" link goes straight to the login desk.
         page.locator('[data-testid="user-bar-connexion"]').click()
-        lien_vers_le_guichet = page.locator('[data-testid="login-guichet"]')
-        expect(lien_vers_le_guichet).to_be_visible()
-        lien_vers_le_guichet.click()
         page.wait_for_url(lambda adresse: "/sso/" in adresse, timeout=10_000)
 
         # --- Étape 3 : Remplir un email incorrect / Fill an incorrect email ---

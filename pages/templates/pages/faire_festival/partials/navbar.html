@@ -194,14 +194,13 @@
                         </div>
 
                     {% else %}
-                        <!-- Utilisateur non connecté : bouton "Connexion" (déclenche l'offcanvas de réunion) -->
-                        <button class="btn bouton-pilule fond-bleu text-white text-center"
-                                data-bs-toggle="offcanvas"
-                                data-bs-target="#loginPanel"
-                                aria-controls="loginPanel">
-                            <i class="bi bi-person-circle me-1"></i>
+                        <!-- Utilisateur non connecté : lien direct vers le guichet de connexion -->
+                        <a class="btn bouton-pilule fond-bleu text-white text-center"
+                           href="/connexion/?next={{ request.path|urlencode:'' }}"
+                           data-testid="navbar-connexion">
+                            <i class="bi bi-person-circle me-1" aria-hidden="true"></i>
                             {% translate 'Login' %}
-                        </button>
+                        </a>
                     {% endif %}
 
                 </div>

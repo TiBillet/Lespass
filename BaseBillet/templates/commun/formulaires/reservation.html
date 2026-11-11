@@ -523,28 +523,42 @@
         {% comment %}
         BOUTONS D'ACTION / ACTION BUTTONS
 
-        Personne connectee : deux intentions bien distinctes, toujours affichees
-        comme deux vrais boutons avec icones :
-        - "Payer maintenant" : paiement direct pour cet event uniquement.
-        - "Ajouter au panier" : cumule avec d'autres events et adhesions.
-        Personne non connectee : un seul bouton « Se connecter pour reserver »,
-        qui ouvre l'offcanvas login. Reserver exige d'etre connecte.
+        Trois cas, dans cet ordre :
+        1. Personne non connectee : un seul lien « Réserver », vers le guichet
+           de connexion. Reserver exige d'etre connecte : un POST anonyme recoit
+           une 403. Filet de securite seulement : le bouton de la page de
+           l'evenement envoie deja un anonyme au guichet AVANT d'ouvrir ce
+           formulaire (partials/reservation_declencheur.html des skins).
+        2. Connectee, event.panier_desactive : un seul bouton, la reservation
+           directe. Aucun bouton panier, meme avec un panier non vide (sinon il
+           ne resterait aucun moyen de reserver).
+        3. Connectee : deux intentions bien distinctes, deux vrais boutons :
+           - "Payer maintenant" / "Réserver maintenant" : cet event uniquement ;
+           - "Ajouter au panier" : cumule avec d'autres events et adhesions.
+        Le cas 1 passe AVANT le cas 2 : un anonyme ne doit jamais voir un
+        bouton d'envoi direct, meme quand le panier est desactive.
         `data-loading-disable` sur les submit : anti double-clic via extension
-        HTMX loading-states (fix spinner merge main).
-        Si event.panier_desactive : un seul bouton, la reservation directe.
-        Aucun bouton panier, meme connecte avec un panier non vide (sinon il ne
-        resterait aucun moyen de reserver).
-        / Logged-in: two separate intents, both shown as real buttons with icons.
-        Anonymous: one "log in to book" button that opens the login offcanvas.
-        `data-loading-disable` on submits: prevent double-click via HTMX
-        loading-states extension. Cart disabled: direct booking button only.
+        HTMX loading-states.
+        / Anonymous: one "Book" link to the login desk. Logged-in with cart
+        disabled: direct booking only. Logged-in: book now + add to cart.
+        `data-loading-disable` on submits: prevent double-click.
         {% endcomment %}
-        {% if event.panier_desactive %}
+        {% if not user.is_authenticated %}
+            {# Apres la connexion, le guichet renvoie sur `next` : la page de l'evenement, #}
+            {# avec le panneau de reservation ouvert (?openbookingPanel=true). #}
+            {# / After login, the desk sends back to `next`, with the booking panel open. #}
+            <a class="btn btn-primary w-100 mb-2"
+               href="/connexion/?next={{ request.path|urlencode:'' }}%3FopenbookingPanel%3Dtrue"
+               {% if embed %}target="_blank" rel="noopener"{% endif %}
+               data-testid="booking-login">
+                <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                {% translate "Réserver" %}
+            </a>
+        {% elif event.panier_desactive %}
             <button type="submit"
-                class="btn btn-primary w-100 mb-2"
-                data-loading-disable
-                data-testid="booking-submit">
-
+                    class="btn btn-primary w-100 mb-2"
+                    data-loading-disable
+                    data-testid="booking-submit">
                 <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
                 {% if event_payant %}
                     {% translate "Payer maintenant" %}
@@ -552,7 +566,7 @@
                     {% translate "Réserver maintenant" %}
                 {% endif %}
             </button>
-        {% elif user.is_authenticated %}
+        {% else %}
             <button type="submit"
                     class="btn btn-primary w-100 mb-2"
                     data-loading-disable
@@ -578,38 +592,7 @@
                     {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
                 {% else %}
                     {% translate "Add to cart" %}
-                {% endif %}            </button>
-        {% else %}
-            {# Anonyme : "Réserver" en primary (flow direct) #}
-            <button type="submit"
-                    class="btn btn-primary w-100 mb-2"
-                    data-loading-disable
-                    data-testid="booking-submit">
-                <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                {% if event_payant %}
-                    {% translate "Payer maintenant" %}
-                </button>
-
-            {% endif %}
-        {% else %}
-            {# Anonyme : "Envoyer la demande" en primary (flow direct), bouton "Connexion" en vrai bouton secondaire. #}
-            {# Le panier exige l'auth → on ouvre l'offcanvas login au clic. #}
-            {# / Anonymous: direct booking primary + real secondary button that opens login offcanvas. #}
-            <button type="submit"
-                    class="btn btn-primary w-100 mb-2"
-                    data-loading-disable
-                    data-testid="booking-submit">
-                <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
-                {% trans 'Send booking request' %}
-            </button>
-            <button type="button"
-                    class="btn btn-outline-primary w-100"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#loginPanel"
-                    data-testid="booking-add-to-cart-login"
-                    aria-label="{% trans 'Log in to add these tickets to your cart' %}">
-                <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
-                {% trans "Log in to add to cart" %}
+                {% endif %}
             </button>
         {% endif %}
         <button type="button" class="btn btn-link text-muted d-block mt-2 w-100" data-bs-dismiss="offcanvas" aria-label="Annuler" data-testid="booking-cancel">

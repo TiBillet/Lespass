@@ -61,10 +61,20 @@ logger = logging.getLogger(__name__)
 # / Explicit backend: login() would fail if a second backend were added.
 BACKEND_DE_CONNEXION = "django.contrib.auth.backends.ModelBackend"
 
-GABARIT_DE_LA_PAGE = "sso/guichet.html"
+# La page du guichet prend l'habillage du lieu qui envoie la personne : un
+# gabarit par skin (pages.ConfigurationSite.skin). Un skin absent de ce
+# dictionnaire, ou un lieu inconnu, prend l'habillage V2 (le skin par défaut).
+# / The desk page takes the look of the sending venue: one template per skin.
+GABARIT_DU_GUICHET_PAR_SKIN = {
+    "V2": "sso/guichet_V2.html",
+    "reunion": "sso/guichet_reunion.html",
+    "faire_festival": "sso/guichet_faire_festival.html",
+}
+GABARIT_DU_GUICHET_PAR_DEFAUT = "sso/guichet_V2.html"
 PARTIEL_ETAPE_EMAIL = "sso/partials/etape_email.html"
 PARTIEL_ETAPE_CODE = "sso/partials/etape_code.html"
 PARTIEL_ERREUR = "sso/partials/erreur.html"
+PARTIEL_CONSENTEMENT = "sso/partials/etape_consentement.html"
 
 # Message de l'étape 2 pour chaque réponse de verifier_le_code_de_connexion.
 # / Step 2 message for each answer of verifier_le_code_de_connexion.
@@ -73,6 +83,7 @@ MESSAGES_D_ERREUR_DU_CODE = {
     "faux": MESSAGE_CODE_INCORRECT,
     "bloque": _("Trop d'essais. Demandez un nouveau code."),
     "expire": _("Ce code a expiré. Demandez un nouveau code."),
+    "trop_d_essais_ip": _("Trop de codes faux depuis cette connexion. Réessayez dans 10 minutes."),
 }
 
 
@@ -110,14 +121,76 @@ class CodeSaisiSerializer(serializers.Serializer):
 # --- Petites fonctions de la vue / Small view helpers ---
 
 
-def lire_le_nom_du_lieu(lieu) -> str:
+def lire_l_habillage_du_lieu(lieu, domaine_du_lieu: str) -> dict:
     """
-    Nom du lieu, lu dans SA Configuration (tenant_context du lieu).
-    / Venue name, read from its own Configuration.
+    Ce qu'il faut pour habiller le guichet aux couleurs du lieu.
+    / What the desk needs to wear the venue's look.
+
+    Lu dans le tenant_context du lieu : le guichet tourne sur le schéma
+    `public`, où Configuration et ConfigurationSite n'existent pas.
+
+    Les adresses sont ABSOLUES, sur le domaine du lieu : le guichet est sur un
+    autre domaine, un lien relatif mènerait au guichet. Le logo est servi par
+    le lieu, comme sur ses propres pages.
+    / Read in the venue's tenant_context. URLs are absolute, on the venue domain.
+
+    :return: dict avec skin, nom_du_lieu, url_du_lieu, url_du_logo ("" sans logo)
     """
+    from pages.models import ConfigurationSite
+
     with tenant_context(lieu):
         configuration_du_lieu = Configuration.get_solo()
-        return configuration_du_lieu.organisation
+        configuration_du_site = ConfigurationSite.get_solo()
+
+        url_du_logo = ""
+        if configuration_du_lieu.logo:
+            url_du_logo = f"https://{domaine_du_lieu}{configuration_du_lieu.logo.med.url}"
+
+        return {
+            "skin": configuration_du_site.skin,
+            "nom_du_lieu": configuration_du_lieu.organisation,
+            "url_du_lieu": f"https://{domaine_du_lieu}/",
+            "url_du_logo": url_du_logo,
+        }
+
+
+def le_compte_connait_deja_le_lieu(user, lieu) -> bool:
+    """
+    Le lieu connaît-il déjà ce compte ?
+    / Does the venue already know this account?
+
+    `client_achat` liste les lieux qui ont déjà le compte : connexion acceptée sur
+    ce lieu (connexion_retour l'ajoute), achat, adhésion, caisse, admin...
+    La table est sur le schéma `public` (AuthBillet est une app partagée) : le
+    guichet la lit sans tenant_context.
+    / client_achat lists the venues that already have the account. Shared table.
+    """
+    return user.client_achat.filter(pk=lieu.pk).exists()
+
+
+def choisir_le_gabarit_du_guichet(habillage) -> str:
+    """
+    Le gabarit de page du guichet pour cet habillage (un par skin).
+    / The desk page template for this look (one per skin).
+
+    :param habillage: dict de lire_l_habillage_du_lieu, ou None (lieu inconnu)
+    """
+    if habillage is None:
+        return GABARIT_DU_GUICHET_PAR_DEFAUT
+
+    skin_du_lieu = habillage["skin"]
+    if skin_du_lieu in GABARIT_DU_GUICHET_PAR_SKIN:
+        return GABARIT_DU_GUICHET_PAR_SKIN[skin_du_lieu]
+    return GABARIT_DU_GUICHET_PAR_DEFAUT
+
+
+def rendre_la_page_d_erreur(request, habillage=None):
+    """
+    Page « Lien de connexion invalide », habillée si le lieu est connu.
+    / "Invalid login link" page, with the venue look when the venue is known.
+    """
+    contexte = {"partiel": PARTIEL_ERREUR, "habillage": habillage}
+    return render(request, choisir_le_gabarit_du_guichet(habillage), context=contexte)
 
 
 def fabriquer_l_url_de_retour_vers_le_lieu(
@@ -289,38 +362,58 @@ def guichet(request):
     """
     parametres = ParametresDuLieuSerializer(data=request.GET)
     if not parametres.is_valid():
-        return render(request, GABARIT_DE_LA_PAGE, context={"partiel": PARTIEL_ERREUR})
+        return rendre_la_page_d_erreur(request)
 
     domaine_du_lieu = parametres.validated_data["lieu"]
     state = parametres.validated_data["state"]
     lieu = trouver_le_lieu_du_domaine(domaine_du_lieu)
     if lieu is None:
         logger.warning(f"SSO : guichet appelé avec un lieu inconnu : {domaine_du_lieu}")
-        return render(request, GABARIT_DE_LA_PAGE, context={"partiel": PARTIEL_ERREUR})
+        return rendre_la_page_d_erreur(request)
 
     if request.user.is_authenticated:
         # Une session de terminal ou de compte technique ne donne jamais de ticket.
         # / A terminal or technical session never gets a ticket.
         if request.user.espece != TibilletUser.TYPE_HUM:
-            return render(
-                request, GABARIT_DE_LA_PAGE, context={"partiel": PARTIEL_ERREUR}
+            return rendre_la_page_d_erreur(
+                request, lire_l_habillage_du_lieu(lieu, domaine_du_lieu)
             )
 
-        ticket = fabriquer_un_ticket(request.user, domaine_du_lieu)
-        url_de_retour = fabriquer_l_url_de_retour_vers_le_lieu(
-            domaine_du_lieu, ticket, state
-        )
-        return HttpResponseRedirect(url_de_retour)
+        # Lieu déjà connu du compte : ticket tout de suite, sans rien demander.
+        # / Venue already knows the account: ticket at once.
+        if le_compte_connait_deja_le_lieu(request.user, lieu):
+            ticket = fabriquer_un_ticket(request.user, domaine_du_lieu)
+            url_de_retour = fabriquer_l_url_de_retour_vers_le_lieu(
+                domaine_du_lieu, ticket, state
+            )
+            return HttpResponseRedirect(url_de_retour)
 
+        # Première visite sur ce lieu : on demande l'accord avant de lui donner
+        # l'identité de la personne. Sans cet écran, n'importe quel lieu (l'ouverture
+        # d'un lieu est libre) pourrait récupérer l'email et le nom de toute personne
+        # déjà connectée au guichet, juste en lui faisant suivre un lien.
+        # / First visit on this venue: ask before sharing the identity. Without
+        # this step, any venue could harvest the identity of logged-in people.
+        habillage = lire_l_habillage_du_lieu(lieu, domaine_du_lieu)
+        contexte = {
+            "partiel": PARTIEL_CONSENTEMENT,
+            "habillage": habillage,
+            "lieu": domaine_du_lieu,
+            "state": state,
+            "email": request.user.email,
+        }
+        return render(request, choisir_le_gabarit_du_guichet(habillage), context=contexte)
+
+    habillage = lire_l_habillage_du_lieu(lieu, domaine_du_lieu)
     contexte = {
         "partiel": PARTIEL_ETAPE_EMAIL,
-        "nom_du_lieu": lire_le_nom_du_lieu(lieu),
+        "habillage": habillage,
         "lieu": domaine_du_lieu,
         "state": state,
         "email": "",
         "erreur_email": "",
     }
-    return render(request, GABARIT_DE_LA_PAGE, context=contexte)
+    return render(request, choisir_le_gabarit_du_guichet(habillage), context=contexte)
 
 
 @require_POST
@@ -367,6 +460,20 @@ def envoyer_le_code(request):
         get_language(),
         lieu,
     )
+
+    # Refus pendant un renvoi (« Recevoir un nouveau code », champ caché `renvoi`) :
+    # on reste à l'étape du code. Le dernier code reçu reste valable 10 minutes,
+    # la personne doit encore pouvoir le taper.
+    # / Refused during a resend: stay on the code step, the last code still works.
+    demande_venue_de_l_etape_code = request.POST.get("renvoi") == "1"
+    if resultat_de_l_envoi == "trop_de_demandes" and demande_venue_de_l_etape_code:
+        return rendre_l_etape_code(
+            request,
+            domaine_du_lieu,
+            state,
+            email,
+            erreur_code=_("Trop de demandes. Le dernier code reçu reste valable 10 minutes."),
+        )
 
     if resultat_de_l_envoi == "trop_de_demandes":
         return rendre_l_etape_email(
@@ -430,7 +537,9 @@ def verifier_le_code(request):
 
     # 2. Vérification du code, sur le guichet (sans tenant_context).
     # / 2. Code check, on the desk.
-    resultat_de_la_verification = verifier_le_code_de_connexion(email, code_saisi)
+    resultat_de_la_verification = verifier_le_code_de_connexion(
+        email, code_saisi, get_client_ip(request)
+    )
     if resultat_de_la_verification != "ok":
         return rendre_l_etape_code(
             request,
@@ -466,3 +575,46 @@ def verifier_le_code(request):
         domaine_du_lieu, ticket, state
     )
     return HttpResponseClientRedirect(url_de_retour)
+
+
+@require_POST
+def continuer_vers_le_lieu(request):
+    """
+    POST /sso/continuer/ : la personne, déjà connectée au guichet, accepte d'entrer
+    sur un lieu qu'elle visite pour la première fois.
+    / POST /sso/continuer/: the logged-in person agrees to enter a new venue.
+
+    Affiché par guichet() (partiel etape_consentement.html). Le lieu sera ajouté à
+    `client_achat` par connexion_retour : les visites suivantes passent sans écran.
+    / Shown by guichet(). connexion_retour then adds the venue to client_achat.
+
+    Refus (page d'erreur, pas de ticket) : paramètres invalides, lieu inconnu,
+    personne non connectée, ou compte non humain.
+    / Refused: bad parameters, unknown venue, not logged in, or non-human account.
+    """
+    parametres = ParametresDuLieuSerializer(data=request.POST)
+    if not parametres.is_valid():
+        return render(request, PARTIEL_ERREUR)
+
+    domaine_du_lieu = parametres.validated_data["lieu"]
+    state = parametres.validated_data["state"]
+    lieu = trouver_le_lieu_du_domaine(domaine_du_lieu)
+    if lieu is None:
+        return render(request, PARTIEL_ERREUR)
+
+    personne_connectee_et_humaine = (
+        request.user.is_authenticated
+        and request.user.espece == TibilletUser.TYPE_HUM
+    )
+    if not personne_connectee_et_humaine:
+        return render(request, PARTIEL_ERREUR)
+
+    ticket = fabriquer_un_ticket(request.user, domaine_du_lieu)
+    url_de_retour = fabriquer_l_url_de_retour_vers_le_lieu(
+        domaine_du_lieu, ticket, state
+    )
+    # Bouton htmx : HX-Redirect. Sans JavaScript : redirection classique.
+    # / htmx button: HX-Redirect. Without JavaScript: plain redirect.
+    if request.headers.get("HX-Request") == "true":
+        return HttpResponseClientRedirect(url_de_retour)
+    return HttpResponseRedirect(url_de_retour)

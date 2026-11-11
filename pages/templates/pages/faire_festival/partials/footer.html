@@ -54,13 +54,10 @@
                 <ul class="nav">
                     <li class="nav-item">
                         {% if user.is_authenticated == False %}
-                            <button
-                                    class="nav-link"
-                                    data-bs-toggle="offcanvas"
-                                    data-bs-target="#loginPanel"
-                                    aria-controls="loginPanel">
+                            {# Lien direct vers le guichet de connexion. / Direct link to the login desk. #}
+                            <a class="nav-link" href="/connexion/?next={{ request.path|urlencode:'' }}">
                                 {% translate 'Log in' %}
-                            </button>
+                            </a>
                         {% else %}
                             <a class="nav-link" href="/my_account/">
                                 {% translate 'My account' %}

@@ -44,11 +44,17 @@
     <input type="hidden" name="lieu" value="{{ lieu }}">
     <input type="hidden" name="state" value="{{ state }}">
     <input type="hidden" name="email" value="{{ email }}">
+    {# Lu par envoyer_le_code quand on clique « Recevoir un nouveau code » : en cas #}
+    {# de refus (trop de demandes), on reste sur cette étape, le dernier code reçu #}
+    {# reste valable. Ignoré par verifier_le_code. #}
+    {# / Read by envoyer_le_code on resend: on refusal, stay on this step. #}
+    <input type="hidden" name="renvoi" value="1">
 
     <div class="mb-3">
         <label for="loginCode" class="form-label">{% translate "Code" %}</label>
         <input type="text"
                id="loginCode"
+               autofocus
                name="code"
                class="form-control form-control-lg{% if erreur_code %} is-invalid{% endif %}"
                inputmode="numeric"
