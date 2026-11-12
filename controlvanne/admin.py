@@ -261,6 +261,7 @@ class TireuseBecAdmin(ModelAdmin):
         "enabled",
         "reservoir_illimite",
         "notes",
+        "debimetre",
     )
 
     @display(description=_("Raspberry Pi appairé"), boolean=True)
