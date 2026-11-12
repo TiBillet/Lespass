@@ -92,8 +92,9 @@ def seed_activite_de_la_veille_pour_le_recap():
     ainsi les ventes d'Alice, de Bruno et de David.
     / Call INSIDE tenant_context, AFTER the yesterday sales seed and BEFORE the J.
 
-    RIEN n'est écrit si Alice a déjà une adhésion, ou si le lieu a déjà une clôture
-    J (une vente d'hier encaissée après une J n'entrerait dans aucune clôture).
+    RIEN n'est écrit si Alice a déjà une adhésion, ou si une clôture J finit après hier
+    0 h (une vente d'hier encaissée après elle n'entrerait dans aucune clôture). Les J de
+    l'historique de démo (`seed_ventes_demo`) sont plus anciennes : elles ne bloquent rien.
     Jamais `status=Membership.ADMIN` : un signal écrirait une vente en plus.
     Un objet introuvable (mode --quick, planning absent) : une phrase dans
     "sautees", pas d'erreur.
@@ -117,23 +118,25 @@ def seed_activite_de_la_veille_pour_le_recap():
 
     resultat = {"ecrites": [], "sautees": []}
 
-    alice_a_deja_une_adhesion = Membership.objects.filter(
-        user__email=EMAIL_D_ALICE
-    ).exists()
-    le_lieu_a_deja_une_j = ClotureCaisse.objects.filter(
-        niveau=ClotureCaisse.NIVEAU_JOURNALIER,
-    ).exists()
-    if alice_a_deja_une_adhesion or le_lieu_a_deja_une_j:
-        resultat["sautees"].append(
-            "Activité du récap : Alice a déjà une adhésion ou le lieu a déjà une "
-            "clôture J, rien d'ajouté."
-        )
-        return resultat
-
     # Hier, en heure du lieu. / Yesterday, in the venue's time zone.
     fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
     maintenant_au_lieu = timezone.localtime(timezone.now(), fuseau_du_lieu)
     hier = maintenant_au_lieu - timedelta(days=1)
+    debut_d_hier = hier.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    alice_a_deja_une_adhesion = Membership.objects.filter(
+        user__email=EMAIL_D_ALICE
+    ).exists()
+    une_j_finit_apres_le_debut_d_hier = ClotureCaisse.objects.filter(
+        niveau=ClotureCaisse.NIVEAU_JOURNALIER,
+        datetime_fin__gt=debut_d_hier,
+    ).exists()
+    if alice_a_deja_une_adhesion or une_j_finit_apres_le_debut_d_hier:
+        resultat["sautees"].append(
+            "Activité du récap : Alice a déjà une adhésion ou une clôture J couvre "
+            "déjà hier, rien d'ajouté."
+        )
+        return resultat
 
     def a_l_heure(heure, minute):
         return hier.replace(hour=heure, minute=minute, second=0, microsecond=0)

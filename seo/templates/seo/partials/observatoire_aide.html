@@ -1,0 +1,18 @@
+{% load i18n %}
+{% comment %}
+BULLE D'AIDE « ? » D'UNE TUILE DE L'OBSERVATOIRE
+/ "?" help bubble of an observatory tile
+
+LOCALISATION : seo/templates/seo/partials/observatoire_aide.html
+Inclus par seo/templates/seo/observatoire.html (bloc « Le reseau depuis le debut »).
+Le JS (seo/static/seo/observatoire.js, rendre_tuiles) ecrit le meme HTML pour les
+tuiles de la synthese.
+
+La bulle s'ouvre au survol ET au focus clavier (tabindex), en CSS seul
+(seo/static/seo/observatoire.css, .aide). Le lecteur d'ecran la lit par
+aria-describedby.
+/ Opens on hover and keyboard focus, CSS only; read by screen readers.
+
+Parametres : identifiant (unique dans la page), texte (deja traduit).
+{% endcomment %}
+<span class="aide" tabindex="0" aria-label="{% translate "Méthode de calcul" %}" aria-describedby="{{ identifiant }}" data-testid="observatoire-{{ identifiant }}">?<span class="bulle" role="tooltip" id="{{ identifiant }}">{{ texte }}</span></span>

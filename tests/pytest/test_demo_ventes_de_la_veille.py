@@ -15,7 +15,10 @@ RÈGLES MÉTIER TESTÉES
   (Stripe).
 - La J de ces ventes se ventile en deux écritures (BAR, WEB), aux montants attendus,
   avec les trois comptes de TVA (20 %, 10 %, 5,5 %).
-- Un second passage n'écrit rien (le lieu a déjà des ventes).
+- Un second passage n'écrit rien (les ventes d'hier existent déjà).
+- Après l'historique de démo (`seed_ventes_demo`) et ses clôtures, les ventes d'hier
+  s'écrivent quand même, numérotées après l'historique ; la J suivante ne reprend
+  qu'elles.
 / Business rules: POS categories get 707000 and products their VAT; 5 settled sales
 dated yesterday; the J splits into BAR and WEB entries with the expected amounts; a
 second run writes nothing.
@@ -42,8 +45,12 @@ from django.utils import timezone  # noqa: E402
 from django_tenants.test.cases import FastTenantTestCase  # noqa: E402
 
 import comptabilite.tasks  # noqa: E402
+from django.db.models import Max  # noqa: E402
+
 from Administration.management.commands._demo_data_v2_ventes import (  # noqa: E402
+    seed_clotures_demo,
     seed_ventes_de_la_veille_par_le_moteur,
+    seed_ventes_demo,
 )
 from BaseBillet.models import Configuration, Event, Price, Product, Tva  # noqa: E402
 from BaseBillet.models_vente import Vente  # noqa: E402
@@ -173,3 +180,35 @@ class TestDemoVentesDeLaVeille(FastTenantTestCase):
 
         assert second_resultat["ecrites"] == []
         assert Vente.objects.filter(statut=Vente.Statut.REGLEE).count() == 5
+
+    def test_les_ventes_d_hier_s_ecrivent_apres_l_historique_et_leur_j_les_reprend(self):
+        """
+        Après l'historique de démo (un mois, et ses clôtures), les ventes d'hier
+        s'écrivent quand même : l'historique est plus ancien. Leurs numéros suivent
+        ceux de l'historique, et la J créée ensuite ne reprend qu'elles.
+        / After the demo history and its closures, yesterday's sales are still written,
+        numbered after the history; the next J holds only them.
+        """
+        seed_ventes_demo(nombre_de_mois=1)
+        seed_clotures_demo(self.tenant.schema_name)
+        plus_grand_numero_de_l_historique = Vente.objects.aggregate(
+            plus_grand=Max("numero")
+        )["plus_grand"]
+        nombre_de_j_de_l_historique = ClotureCaisse.objects.filter(
+            niveau=ClotureCaisse.NIVEAU_JOURNALIER
+        ).count()
+
+        resultat = seed_ventes_de_la_veille_par_le_moteur()
+        seed_clotures_demo(self.tenant.schema_name)
+
+        assert resultat["sautees"] == []
+        assert len(resultat["ecrites"]) == 5
+        ventes_d_hier = Vente.objects.filter(numero__gt=plus_grand_numero_de_l_historique)
+        assert ventes_d_hier.count() == 5
+        clotures_j = ClotureCaisse.objects.filter(
+            niveau=ClotureCaisse.NIVEAU_JOURNALIER
+        ).order_by("numero_sequentiel")
+        assert clotures_j.count() == nombre_de_j_de_l_historique + 1
+        j_d_hier = clotures_j.last()
+        assert j_d_hier.nombre_transactions == 5
+        assert j_d_hier.numero_premiere_vente == plus_grand_numero_de_l_historique + 1

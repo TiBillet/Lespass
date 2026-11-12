@@ -35,6 +35,7 @@ ou desindexation.
 | 10 | Accueil V2 : title « lieu — ville », bug meta « None », `noindex` des accueils vides, JSON-LD Organization en Python, prechargement du hero | Implemente — 12 tests verts, a deployer (CHANGELOG/2026-10-12-seo-accueil-et-gzip.md) | Eleve | [AUDIT-ACCUEIL-V2/RECAP.md](./AUDIT-ACCUEIL-V2/RECAP.md) |
 | 11 | Maillage et sitemaps : voisins en HTML, sitemap des evenements filtre (archives, actions, passes > 6 mois), `lastmod` retires, « Autour de nous » seulement avec des voisins, lieux a accueil vide hors du sitemap racine | Implemente — 13 tests verts, a deployer (CHANGELOG/2026-10-12-seo-maillage-sitemaps.md) | Moyen | [AUDIT-ACCUEIL-V2/RECAP.md](./AUDIT-ACCUEIL-V2/RECAP.md) |
 | 12 | Compression gzip et cache HTTP dans nginx (infra, aucun CDN devant : verifie 2026-10-12) | gzip ecrit dans `nginx_prod/lespass_prod.conf` (teste en local : V2.css 140 -> 41 Ko), a deployer ; cache de `/media` reste a faire | Urgent | [AUDIT-ACCUEIL-V2/RECAP.md](./AUDIT-ACCUEIL-V2/RECAP.md) |
+| 13 | Observatoire des instances (code dans `seo/`) : deplace dans son propre hub | En cours | Moyen | [../OBSERVATOIRE/INDEX.md](../OBSERVATOIRE/INDEX.md) |
 
 ## Regles de fond (issues de Google AI Optimization Guide, 15 mai 2026)
 

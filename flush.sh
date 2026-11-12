@@ -56,6 +56,13 @@ if [ "$DEBUG" = "1" ]; then
   # (every 4h).
   poetry run python manage.py refresh_seo_cache
 
+  # Calcule l'observatoire des instances (admin, Root Configuration), APRES toutes
+  # les donnees de demo : il lit leurs clotures comptables. Sans cet appel, la page
+  # affiche « Aucun calcul » jusqu'au beat Celery de 2 h 30.
+  # / Compute the instance observatory AFTER all demo data (it reads their closures).
+  # Without it, the page shows "no computation" until the 2:30 Celery beat.
+  poetry run python manage.py refresh_observatoire
+
   if [ -S "$SUPERVISOR_SOCK" ]; then
     # Relance gunicorn + daphne + celery / Restart gunicorn + daphne + celery
     supervisorctl -c $SUPERVISOR_CONF start all

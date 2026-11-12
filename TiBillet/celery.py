@@ -136,6 +136,21 @@ def setup_periodic_tasks(sender, **kwargs):
         name="cron_besoins_des_semaines_types",
     )
 
+    # Observatoire des instances : chaque nuit a 2 h 30 (heure de CELERY_TIMEZONE).
+    # Creneau libre : a 3 h tournent les besoins de benevolat et la purge
+    # d'onboarding, toutes les 4 h le cache SEO. Les chiffres sont mensuels, un
+    # calcul par nuit suffit. Wrapper @app.task local, pour eviter la course entre
+    # on_after_configure et autodiscover_tasks (meme pattern que
+    # cron_refresh_seo_cache). Cf. TECH_DOC/SESSIONS/OBSERVATOIRE/SPEC.md.
+    # / Instance observatory: every night at 2:30. Local @app.task wrapper, same
+    #   reason as cron_refresh_seo_cache.
+    logger.info("setup_periodic_tasks cron_refresh_observatoire at 2:30")
+    sender.add_periodic_task(
+        crontab(hour=2, minute=30),
+        cron_refresh_observatoire.s(),
+        name="cron_refresh_observatoire",
+    )
+
     logger.info(f'setup_periodic_tasks DONE')
 
 
@@ -167,6 +182,22 @@ def cron_refresh_seo_cache():
     logger.info(f'call_command refresh_seo_cache START')
     call_command('refresh_seo_cache')
     logger.info(f'call_command refresh_seo_cache END')
+
+
+@app.task
+def cron_refresh_observatoire():
+    """
+    Calcule l'observatoire des instances, chaque nuit.
+    / Computes the instance observatory, every night.
+
+    FLUX : celery beat (crontab 2 h 30) -> CETTE TACHE ->
+    seo/management/commands/refresh_observatoire.py -> seo/observatoire.py.
+    C'est, avec manage.py, le seul chemin qui lance ce calcul : aucune vue ne le fait.
+    / With manage.py, the only way to run this computation: no view does it.
+    """
+    logger.info("call_command refresh_observatoire START")
+    call_command("refresh_observatoire", par="cron")
+    logger.info("call_command refresh_observatoire END")
 
 
 @app.task
