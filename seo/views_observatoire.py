@@ -55,8 +55,39 @@ def textes_de_la_page():
         "tuile_instances_detail": _("créées depuis {annee}"),
         "tuile_actives": _("Vraiment actives"),
         "tuile_actives_detail": _("dont {nombre} très actives"),
-        "tuile_vivotent": _("Vivotent"),
-        "tuile_vivotent_detail": _("un usage réel, mais faible"),
+        "tuile_peu_utilisees": _("Peu utilisées"),
+        "tuile_peu_utilisees_detail": _("un usage réel, mais faible"),
+        # Methodes de calcul des tuiles de la synthese (bulle « ? »). Les {marqueurs}
+        # sont les seuils de classement EN COURS : la bulle suit les reglages.
+        # / Methods of the summary tiles ("?" bubble), filled with the CURRENT thresholds.
+        "aide_methode": _("Méthode de calcul"),
+        "aide_usage_reel": _(
+            "Un mois d'« usage réel » : au moins 10 inscriptions, 200 € de CA, 5 adhésions ou 200 € de recharges dans le mois."
+        ),
+        "methode_instances": _(
+            "Lieux lus par le dernier calcul (sans le lieu racine ni les emplacements en attente). « Créées depuis » : la plus ancienne année de création."
+        ),
+        "methode_actives": _(
+            "Très actif + actif. Actif : au moins {actif_ca} € de CA ou {actif_inscriptions} inscriptions sur 12 mois. Très actif : en plus, au moins {tres_actif_mois} mois d'usage réel sur 12. Seuils réglables plus bas."
+        ),
+        "methode_peu_utilisees": _(
+            "Au moins un mois d'usage réel sur 12, sans atteindre le seuil « Actif » ({actif_ca} € de CA ou {actif_inscriptions} inscriptions sur 12 mois). Même valeur que « peu utilisé » dans le niveau d'activité."
+        ),
+        "methode_sommeil": _(
+            "Aucun mois d'usage réel sur 12. Bidouillage : des événements créés ou au moins {bidouillage_connexions} connexions admin quand même. Sommeil : rien. Les abandons comptent aussi en sommeil."
+        ),
+        "methode_abandons": _(
+            "Au plus {abandon_mois} mois d'usage réel en tout, plus rien depuis {abandon_silence} mois, moins de {abandon_ca} € de CA sur toute la période, et pas de retour à la même saison un an plus tard."
+        ),
+        "methode_ca": _(
+            "Chiffre d'affaires TTC des tickets Z (clôtures mensuelles, puis journalières du mois en cours), sur les 12 derniers mois, tous lieux."
+        ),
+        "methode_recharges": _(
+            "Recharges encaissées lues dans les clôtures, sur les 12 derniers mois. En ligne = payées par Stripe. Ce n'est pas le total du bloc « depuis le début », qui lit Fedow legacy."
+        ),
+        "methode_cartes": _(
+            "Meilleur mois des 12 derniers : cartes distinctes ayant servi dans le mois, moteur Fedow V2 seulement (migration en cours)."
+        ),
         "tuile_sommeil": _("En sommeil ou bidouillage"),
         "tuile_sommeil_detail": _("{nombre} avec un admin qui bidouille"),
         "tuile_abandons": _("Testées puis abandonnées"),

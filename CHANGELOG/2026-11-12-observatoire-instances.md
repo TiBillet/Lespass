@@ -33,6 +33,7 @@ serveur ni recalculer le chiffre d'affaires à côté des tickets Z.
 | `Administration/admin/site.py` | Route `/admin/observatoire/` |
 | `Administration/admin/dashboard.py` | Entrée du menu « Root Configuration » |
 | `TiBillet/celery.py` | Beat `cron_refresh_observatoire` à 2 h 30 |
+| `flush.sh` | `refresh_observatoire` après les données de démo : la page est remplie dès la fin du flush |
 | `tests/pytest/test_observatoire.py`, `tests/e2e/test_admin_observatoire.py` | 22 + 2 tests |
 | `TECH_DOC/SESSIONS/OBSERVATOIRE/` | Nouveau hub (spec, chantier 02 à faire plus tard) |
 | `../Fedow` (autre dépôt) | Route `GET /statistiques_reseau/` (clé root, lecture seule, cache 1 h) : recharges par asset et cartes. **À déployer** pour que le bloc réseau affiche recharges et cartes |

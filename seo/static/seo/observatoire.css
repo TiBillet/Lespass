@@ -147,3 +147,14 @@
 .obs .bandeau{border-left:3px solid var(--moy);background:var(--moy-bg);color:var(--moy);border-radius:8px;padding:8px 12px;font-size:13.5px;margin:0}
 .obs .calcul-bilan{font-size:13px;color:var(--encre-2)}
 .obs .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+/* Bulle d'aide « ? » : la methode de calcul d'une tuile, au survol ou au focus clavier.
+   La bulle prend la largeur de la tuile : elle ne deborde jamais de la page.
+   / "?" help bubble: a tile's method, on hover or keyboard focus, tile-wide. */
+.obs .tuile{position:relative}
+.obs .aide{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:4px;
+  border-radius:50%;border:1px solid var(--encre-2);font-size:11px;font-weight:700;line-height:1;cursor:help;vertical-align:1px}
+.obs .aide:focus-visible{outline:2px solid var(--encre);outline-offset:2px}
+.obs .aide .bulle{display:none;position:absolute;z-index:20;left:8px;right:8px;top:calc(100% - 4px);
+  background:var(--encre);color:var(--papier);font:400 12.5px/1.45 var(--f-texte);letter-spacing:0;
+  padding:8px 10px;border-radius:8px;text-align:left;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.obs .aide:hover .bulle,.obs .aide:focus .bulle{display:block}

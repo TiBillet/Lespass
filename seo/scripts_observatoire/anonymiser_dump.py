@@ -76,8 +76,11 @@ DOMAINE_DES_FAUX_EMAILS = "anonyme.invalid"
 #   regle, « ...\nalice@x.fr » donnerait l'adresse « nalice@x.fr », donc un autre faux
 #   e-mail que dans Fedow. Avec elle, la correspondance ne peut pas commencer juste apres
 #   une barre oblique inverse : elle commence a « alice ».
+# - L'etoile est acceptee avant l'arobase : une adresse masquee comme « j***@gmail.com »
+#   ou « ****@exemple.fr » est remplacee aussi. Le controle final la trouve sinon.
 # / Finds an e-mail. The lookbehind skips the letter of a "\n" or "\t" escape.
-EXPRESSION_EMAIL = re.compile(r"(?<!\\)[\w.%+-]+@[\w.-]+\.\w{2,}")
+# / The star is accepted before the @, so masked addresses are replaced too.
+EXPRESSION_EMAIL = re.compile(r"(?<!\\)[\w.%+*-]+@[\w.-]+\.\w{2,}")
 
 # L'expression du CONTROLE FINAL. Elle est volontairement plus large que celle du
 # remplacement : sinon le controle ne prouverait que l'accord du script avec lui-meme.
@@ -197,6 +200,9 @@ REGLES_POSTGRES = {
         "stripe_test_api_key": "vide",
         "laboutik_public_pem": "vide",
         "phone": "vide",
+        # Colonne retiree du modele (migration 0062), encore presente dans de vieux schemas.
+        # / Column removed from the model (migration 0062), still present in old schemas.
+        "mollie_api_key": "vide",
     },
     "BaseBillet_ghostconfig": {"ghost_key": "vide"},
     "BaseBillet_formbricksconfig": {"api_key": "vide"},

@@ -69,6 +69,20 @@ def jeu_de_donnees_connu():
         "calcule_le": "2026-01-15T02:30",
         "calcule_par": "cron",
         "bilan": {"lieux_lus": 2, "erreurs": [], "duree_s": 1.0},
+        "reseau": {
+            "lieux": 2,
+            "comptes": 10,
+            "fedow_legacy_a_repondu": True,
+            "total_des_recharges_en_centimes": 0,
+            "recharges_legacy": [],
+            "recharges_v2": [],
+            "cartes": {"total": 4, "liees_a_un_compte": 2},
+            "billets_valides": 0,
+            "billets_scannes": 0,
+            "heures_de_benevolat": 0,
+            "heures_du_planning": 0,
+            "heures_des_tokens_cadeaux_legacy": 0,
+        },
         "inst": [
             [
                 "lieu-actif",
@@ -156,6 +170,35 @@ class TestAdminObservatoire:
 
         expect(legende).to_contain_text("très actif 0")
         expect(legende).to_contain_text("peu utilisé 2")
+
+    def test_la_bulle_d_aide_s_ouvre_au_survol_et_suit_les_seuils(
+        self, page, login_as_admin, cache_de_l_observatoire_connu
+    ):
+        """
+        Le « ? » d'une tuile montre sa methode de calcul au survol. Celle de « Vraiment
+        actives » cite le seuil « Actif » en cours : elle change quand on le regle.
+        Le « ? » du bloc « depuis le debut » s'ouvre aussi.
+        / The "?" shows the method on hover, and follows the current thresholds.
+        """
+        login_as_admin(page)
+        page.goto(f"{BASE_URL}/admin/observatoire/")
+
+        aide_des_actives = page.get_by_test_id("observatoire-aide-synthese-1")
+        bulle_des_actives = aide_des_actives.locator(".bulle")
+        expect(bulle_des_actives).to_be_hidden()
+        aide_des_actives.hover()
+        expect(bulle_des_actives).to_be_visible()
+        expect(bulle_des_actives).to_contain_text("10 k")
+
+        page.get_by_test_id("observatoire-seuils").locator("summary").click()
+        page.get_by_test_id("observatoire-seuil-actifCA").fill("20000")
+        aide_des_actives = page.get_by_test_id("observatoire-aide-synthese-1")
+        aide_des_actives.hover()
+        expect(aide_des_actives.locator(".bulle")).to_contain_text("20 k")
+
+        aide_des_lieux = page.get_by_test_id("observatoire-aide-reseau-lieux")
+        aide_des_lieux.hover()
+        expect(aide_des_lieux.locator(".bulle")).to_be_visible()
 
     def test_un_nom_de_lieu_malveillant_ne_s_execute_pas(
         self, page, login_as_admin, cache_de_l_observatoire_connu

@@ -375,25 +375,50 @@
         const tres_actives = nombre_d_instances_avec_l_activite("tres_actif");
         const bidouillages = nombre_d_instances_avec_l_activite("bidouillage");
 
+        // Les seuils EN COURS, pour les bulles « ? » : elles suivent les reglages.
+        // / The CURRENT thresholds, for the "?" bubbles: they follow the settings.
+        const seuils_en_cours = {
+            actif_ca: formater_nombre(seuils.actifCA), actif_inscriptions: seuils.actifInscr,
+            tres_actif_mois: seuils.tresActifMois, bidouillage_connexions: seuils.bidouillageCnx,
+            abandon_mois: seuils.abandonMoisMax, abandon_silence: seuils.abandonSilence,
+            abandon_ca: formater_nombre(seuils.abandonCAMax),
+        };
+        const usage_reel = " " + texte("aide_usage_reel");
+
+        // Chaque tuile : [libelle, valeur, detail, methode de calcul].
+        // / Each tile: [label, value, detail, computation method].
         const tuiles = [
             [texte("tuile_instances"), formater_nombre(liste_des_instances.length),
-                texte("tuile_instances_detail", {annee: Math.min.apply(null, annees_de_creation)})],
+                texte("tuile_instances_detail", {annee: Math.min.apply(null, annees_de_creation)}),
+                texte("methode_instances")],
             [texte("tuile_actives"), formater_nombre(tres_actives + nombre_d_instances_avec_l_activite("actif")),
-                texte("tuile_actives_detail", {nombre: tres_actives})],
-            [texte("tuile_vivotent"), formater_nombre(nombre_d_instances_avec_l_activite("peu_utilise")),
-                texte("tuile_vivotent_detail")],
+                texte("tuile_actives_detail", {nombre: tres_actives}),
+                texte("methode_actives", seuils_en_cours) + usage_reel],
+            [texte("tuile_peu_utilisees"), formater_nombre(nombre_d_instances_avec_l_activite("peu_utilise")),
+                texte("tuile_peu_utilisees_detail"),
+                texte("methode_peu_utilisees", seuils_en_cours) + usage_reel],
             [texte("tuile_sommeil"), formater_nombre(nombre_d_instances_avec_l_activite("sommeil") + bidouillages),
-                texte("tuile_sommeil_detail", {nombre: bidouillages})],
+                texte("tuile_sommeil_detail", {nombre: bidouillages}),
+                texte("methode_sommeil", seuils_en_cours) + usage_reel],
             [texte("tuile_abandons"), formater_nombre(nombre_d_abandons),
-                texte("tuile_abandons_detail", {mois: seuils.abandonSilence})],
-            [texte("tuile_ca"), formater_nombre(ca_du_reseau, "€"), texte("tuile_ca_detail")],
+                texte("tuile_abandons_detail", {mois: seuils.abandonSilence}),
+                texte("methode_abandons", seuils_en_cours) + usage_reel],
+            [texte("tuile_ca"), formater_nombre(ca_du_reseau, "€"), texte("tuile_ca_detail"),
+                texte("methode_ca")],
             [texte("tuile_recharges"), formater_nombre(recharges_du_reseau, "€"),
-                texte("tuile_recharges_detail", {pourcentage: Math.round(recharges_en_ligne / (recharges_du_reseau || 1) * 100)})],
+                texte("tuile_recharges_detail", {pourcentage: Math.round(recharges_en_ligne / (recharges_du_reseau || 1) * 100)}),
+                texte("methode_recharges")],
             [texte("tuile_cartes"), formater_nombre(meilleur_mois_des_cartes),
-                texte("tuile_cartes_detail", {mois: libelles_des_mois[N - 12 + cartes_par_mois.indexOf(meilleur_mois_des_cartes)]})],
+                texte("tuile_cartes_detail", {mois: libelles_des_mois[N - 12 + cartes_par_mois.indexOf(meilleur_mois_des_cartes)]}),
+                texte("methode_cartes")],
         ];
-        document.getElementById("tuiles").innerHTML = tuiles.map(function (tuile) {
-            return `<div class="tuile"><span class="lib">${tuile[0]}</span><span class="val">${tuile[1]}</span><span class="det">${tuile[2]}</span></div>`;
+        // Meme HTML que seo/templates/seo/partials/observatoire_aide.html.
+        // / Same HTML as the observatoire_aide.html partial.
+        document.getElementById("tuiles").innerHTML = tuiles.map(function (tuile, position) {
+            const identifiant_de_la_bulle = "aide-synthese-" + position;
+            const bulle = `<span class="aide" tabindex="0" aria-label="${echapper_html(texte("aide_methode"))}" aria-describedby="${identifiant_de_la_bulle}" data-testid="observatoire-${identifiant_de_la_bulle}">?`
+                + `<span class="bulle" role="tooltip" id="${identifiant_de_la_bulle}">${echapper_html(tuile[3])}</span></span>`;
+            return `<div class="tuile"><span class="lib">${tuile[0]}${bulle}</span><span class="val">${tuile[1]}</span><span class="det">${tuile[2]}</span></div>`;
         }).join("");
     }
 

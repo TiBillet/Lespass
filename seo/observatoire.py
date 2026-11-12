@@ -451,6 +451,15 @@ def cartes_actives_par_lieu_et_par_mois(premier_jour):
 # / Euro asset categories: their top-ups add up. Hours and points do not.
 CATEGORIES_D_ASSET_EN_EUROS = ["FED", "TLF"]
 
+# Les tokens cadeaux (TNF) de Fedow legacy servaient souvent a remercier les
+# benevoles : on les compte en heures de benevolat, a raison de 3 tokens pour 1 h
+# (usage courant du reseau). Seulement ceux de Fedow legacy : en V2, les heures
+# viennent du planning benevole seul. Fedow stocke tous les montants en centiemes.
+# / Legacy gift tokens (TNF) were often used to thank volunteers: 3 tokens = 1 hour.
+#   Legacy only; in V2 hours come from the volunteer planning. Amounts are in 1/100.
+CATEGORIE_DES_TOKENS_CADEAUX = "TNF"
+TOKENS_CADEAUX_PAR_HEURE_DE_BENEVOLAT = 3
+
 
 def totaux_du_lieu_depuis_le_debut():
     """
@@ -594,6 +603,18 @@ def reseau_depuis_le_debut(nombre_de_lieux, totaux_cumules_des_lieux):
         if recharge["categorie"] in CATEGORIES_D_ASSET_EN_EUROS:
             total_des_recharges_en_centimes += recharge["total"]
 
+    # Les heures de benevolat : le planning (tous les lieux), plus les tokens
+    # cadeaux distribues dans Fedow legacy (pas ceux du moteur V2).
+    # / Volunteer hours: the planning, plus legacy gift tokens (not V2 ones).
+    tokens_cadeaux_legacy_en_centiemes = 0
+    for recharge in recharges_legacy:
+        if recharge["categorie"] == CATEGORIE_DES_TOKENS_CADEAUX:
+            tokens_cadeaux_legacy_en_centiemes += recharge["total"]
+    heures_du_planning = round(totaux_cumules_des_lieux["minutes_de_benevolat"] / 60)
+    heures_des_tokens_cadeaux_legacy = round(
+        tokens_cadeaux_legacy_en_centiemes / 100 / TOKENS_CADEAUX_PAR_HEURE_DE_BENEVOLAT
+    )
+
     return {
         "lieux": nombre_de_lieux,
         "comptes": nombre_de_comptes_humains,
@@ -604,9 +625,9 @@ def reseau_depuis_le_debut(nombre_de_lieux, totaux_cumules_des_lieux):
         "cartes": cartes_legacy,
         "billets_valides": totaux_cumules_des_lieux["billets_valides"],
         "billets_scannes": totaux_cumules_des_lieux["billets_scannes"],
-        "heures_de_benevolat": round(
-            totaux_cumules_des_lieux["minutes_de_benevolat"] / 60
-        ),
+        "heures_de_benevolat": heures_du_planning + heures_des_tokens_cadeaux_legacy,
+        "heures_du_planning": heures_du_planning,
+        "heures_des_tokens_cadeaux_legacy": heures_des_tokens_cadeaux_legacy,
     }
 
 

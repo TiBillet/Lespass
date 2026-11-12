@@ -95,16 +95,19 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
                 </div>
                 <div class="tuiles">
                     <div class="tuile" data-testid="observatoire-reseau-lieux">
-                        <span class="lib">{% translate "Lieux" %}</span>
+                        {% translate "Lieux du réseau, sans le lieu racine ni les emplacements en attente de configuration." as aide_lieux %}
+                        <span class="lib">{% translate "Lieux" %}{% include "seo/partials/observatoire_aide.html" with identifiant="aide-reseau-lieux" texte=aide_lieux %}</span>
                         <span class="val">{{ reseau.lieux }}</span>
                     </div>
                     <div class="tuile" data-testid="observatoire-reseau-comptes">
-                        <span class="lib">{% translate "Utilisateurs" %}</span>
+                        {% translate "Comptes de personnes (pas les terminaux) dans tout le réseau. Un compte n'appartient à aucun lieu : il est commun au réseau." as aide_comptes %}
+                        <span class="lib">{% translate "Utilisateurs" %}{% include "seo/partials/observatoire_aide.html" with identifiant="aide-reseau-comptes" texte=aide_comptes %}</span>
                         <span class="val">≈ {{ reseau.comptes|floatformat:"0g" }}</span>
                         <span class="det">{% translate "comptes du réseau" %}</span>
                     </div>
                     <div class="tuile" data-testid="observatoire-reseau-recharges">
-                        <span class="lib">{% translate "Transactions (recharges)" %}</span>
+                        {% translate "Somme des recharges cashless en euros depuis le début : FED et monnaies locales de Fedow legacy, plus les monnaies locales du moteur V2. Le FED du moteur V2 n'est pas compté. Les ventes ne sont pas additionnées, pour ne pas compter deux fois le même argent." as aide_recharges %}
+                        <span class="lib">{% translate "Transactions (recharges)" %}{% include "seo/partials/observatoire_aide.html" with identifiant="aide-reseau-recharges" texte=aide_recharges %}</span>
                         {% if reseau.fedow_legacy_a_repondu %}
                             <span class="val">≈ {{ total_des_recharges_en_euros|floatformat:"0g" }} €</span>
                             <span class="det">{% translate "recharges cashless en euros, Fedow legacy et moteur V2" %}</span>
@@ -114,12 +117,14 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
                         {% endif %}
                     </div>
                     <div class="tuile" data-testid="observatoire-reseau-billets">
-                        <span class="lib">{% translate "Billets vendus" %}</span>
+                        {% translate "Billets valides, scannés ou non, de tous les lieux depuis le début : payants, à prix libre et gratuits. Les billets en attente de paiement ou de confirmation, et les billets annulés, ne comptent pas." as aide_billets %}
+                        <span class="lib">{% translate "Billets vendus" %}{% include "seo/partials/observatoire_aide.html" with identifiant="aide-reseau-billets" texte=aide_billets %}</span>
                         <span class="val">≈ {{ reseau.billets_valides|floatformat:"0g" }}</span>
                         <span class="det">{% blocktranslate with nombre=reseau.billets_scannes|floatformat:"0g" %}dont {{ nombre }} scannés à l'entrée{% endblocktranslate %}</span>
                     </div>
                     <div class="tuile" data-testid="observatoire-reseau-cartes">
-                        <span class="lib">{% translate "Cartes cashless" %}</span>
+                        {% translate "Cartes connues de Fedow legacy. « Liées à un compte » : la carte est rattachée à une personne, elle sert de carte d'adhésion. Les cartes du moteur V2 ne s'ajoutent pas : ce sont les mêmes cartes physiques." as aide_cartes %}
+                        <span class="lib">{% translate "Cartes cashless" %}{% include "seo/partials/observatoire_aide.html" with identifiant="aide-reseau-cartes" texte=aide_cartes %}</span>
                         {% if reseau.cartes %}
                             <span class="val">≈ {{ reseau.cartes.total|floatformat:"0g" }}</span>
                             <span class="det">{% blocktranslate with nombre=reseau.cartes.liees_a_un_compte|floatformat:"0g" %}dont {{ nombre }} liées à un compte (Fedow legacy){% endblocktranslate %}</span>
@@ -129,9 +134,10 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
                         {% endif %}
                     </div>
                     <div class="tuile" data-testid="observatoire-reseau-benevolat">
-                        <span class="lib">{% translate "Heures de bénévolat" %}</span>
+                        {% translate "Durée des créneaux à horaires du planning bénévole × personnes inscrites (créneaux à venir compris), plus les tokens cadeaux distribués dans Fedow legacy, à 3 tokens pour 1 h. Les tokens cadeaux du moteur V2 ne comptent pas." as aide_benevolat %}
+                        <span class="lib">{% translate "Heures de bénévolat" %}{% include "seo/partials/observatoire_aide.html" with identifiant="aide-reseau-benevolat" texte=aide_benevolat %}</span>
                         <span class="val">≈ {{ reseau.heures_de_benevolat|floatformat:"0g" }} h</span>
-                        <span class="det">{% translate "créneaux à horaires du planning bénévole, par personne inscrite" %}</span>
+                        <span class="det">{% blocktranslate with planning=reseau.heures_du_planning|floatformat:"0g" cadeaux=reseau.heures_des_tokens_cadeaux_legacy|floatformat:"0g" %}{{ planning }} h inscrites au planning bénévole, {{ cadeaux }} h de tokens cadeaux Fedow legacy (3 tokens = 1 h){% endblocktranslate %}</span>
                     </div>
                 </div>
                 {% if recharges_par_asset %}

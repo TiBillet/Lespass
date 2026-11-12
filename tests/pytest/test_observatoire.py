@@ -606,6 +606,17 @@ class TestObservatoire(FastTenantTestCase):
         tuile_des_cartes = contenu.split('data-testid="observatoire-reseau-cartes"')[1]
         valeur_affichee = tuile_des_cartes.split('class="val">')[1].split("</span>")[0]
         assert re.sub(r"\D", "", valeur_affichee) == "9123"
+        for tuile_du_reseau in [
+            "lieux",
+            "comptes",
+            "recharges",
+            "billets",
+            "cartes",
+            "benevolat",
+        ]:
+            assert (
+                f'data-testid="observatoire-aide-reseau-{tuile_du_reseau}"' in contenu
+            )
 
     def test_un_post_est_refuse_meme_au_superadmin(self):
         """Aucune ecriture : POST repond 405. / No write: POST answers 405."""
@@ -850,6 +861,54 @@ class TestReseauDepuisLeDebut(FastTenantTestCase):
         assert reseau["cartes"] == {"total": 9000, "liees_a_un_compte": 6000}
         assert reseau["fedow_legacy_a_repondu"] is True
         assert reseau["heures_de_benevolat"] == 2
+
+    def test_les_tokens_cadeaux_legacy_comptent_en_heures_mais_pas_ceux_de_la_v2(self):
+        """
+        300 tokens cadeaux legacy (30 000 centiemes) = 100 h, a 3 tokens l'heure.
+        Les tokens cadeaux du moteur V2 ne comptent pas : en V2, seul le planning compte.
+        / 300 legacy gift tokens = 100 h; V2 gift tokens are not counted.
+        """
+        reponse_de_fedow = {
+            "recharges_par_asset": [
+                {
+                    "uuid": "a",
+                    "nom": "Cadeau",
+                    "categorie": "TNF",
+                    "devise": "TNF",
+                    "total": 30000,
+                    "nombre": 40,
+                },
+            ],
+            "cartes": {"total": 0, "liees_a_un_compte": 0},
+        }
+        recharges_v2 = [
+            {
+                "uuid": "b",
+                "nom": "Cadeau V2",
+                "categorie": "TNF",
+                "devise": "TNF",
+                "total": 90000,
+                "nombre": 9,
+            },
+        ]
+        totaux_des_lieux = {
+            "billets_valides": 0,
+            "billets_scannes": 0,
+            "minutes_de_benevolat": 120,
+        }
+
+        with mock.patch.object(
+            observatoire, "statistiques_de_fedow_legacy", return_value=reponse_de_fedow
+        ):
+            with mock.patch.object(
+                observatoire, "recharges_du_moteur_v2", return_value=recharges_v2
+            ):
+                reseau = observatoire.reseau_depuis_le_debut(1, totaux_des_lieux)
+
+        assert reseau["heures_des_tokens_cadeaux_legacy"] == 100
+        assert reseau["heures_du_planning"] == 2
+        assert reseau["heures_de_benevolat"] == 102
+        assert reseau["total_des_recharges_en_centimes"] == 0
 
     def test_si_fedow_ne_repond_pas_le_reste_est_calcule(self):
         """

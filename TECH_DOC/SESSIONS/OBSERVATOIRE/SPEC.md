@@ -236,7 +236,7 @@ billets, cartes, heures de bénévolat). Ordres de grandeur, rendus par le serve
 | Transactions | **recharges seulement**, par asset : Fedow legacy (route `GET /statistiques_reseau/`, clé root) + moteur V2 (`fedow_core.Transaction` REFILL) | total en euros = assets `FED` et `TLF`. **Le FED ne vient que de Fedow legacy** : le FED du moteur V2 est exclu (aujourd'hui `Asset.save()` le refuse ; la garde sautera à la migration). Pas de calcul des ventes, pas de doublon |
 | Billets vendus | `Ticket` valides (scannés ou non), par lieu | dont scannés |
 | Cartes cashless | **Fedow legacy seulement** | dont liées à un compte. Les cartes de Lespass ne s'additionnent pas : ce sont les mêmes cartes physiques |
-| Heures de bénévolat | `BesoinBenevole` à horaires × inscriptions, par lieu | fin avant début = lendemain ; journée entière non comptée |
+| Heures de bénévolat | `BesoinBenevole` à horaires × inscriptions, par lieu, **plus** les tokens cadeaux (`TNF`) de **Fedow legacy seulement** | fin avant début = lendemain ; journée entière non comptée ; 3 tokens cadeaux = 1 h (montants Fedow en centièmes). Les tokens cadeaux du moteur V2 ne comptent pas : en V2, seul le planning compte |
 
 Si Fedow ne répond pas : `logger.exception` (Sentry), le reste est calculé, la page affiche
 « Fedow legacy n'a pas répondu ». Coût ajouté : 2 requêtes sur le public, 1 appel HTTP,

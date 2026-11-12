@@ -249,6 +249,15 @@ def test_un_email_apres_un_retour_a_la_ligne_echappe_ne_garde_pas_la_lettre_n():
     assert texte == "ligne\\n" + anonymiseur.faux_email("alice@exemple.fr")
 
 
+def test_un_email_masque_par_des_etoiles_est_remplace():
+    # Forme trouvee en prod dans un champ de formulaire : « ****@domaine.tld ».
+    # / Shape found in production in a form field.
+    anonymiseur = script.Anonymiseur(sel=b"sel-de-test")
+    texte, nombre = anonymiseur.remplacer_les_emails("ex : ****@exemple.fr ou j***@exemple.fr")
+    assert nombre == 2
+    assert "exemple.fr" not in texte
+
+
 def test_un_email_avec_un_accent_est_remplace():
     anonymiseur = script.Anonymiseur(sel=b"sel-de-test")
     texte, nombre = anonymiseur.remplacer_les_emails("contact : rené@exemple.fr")
@@ -711,6 +720,11 @@ def test_les_regles_lespass_visent_des_tables_et_colonnes_qui_existent():
     from django.apps import apps
 
     prefixes_de_laboutik_v1 = ("APIcashless_", "tibiauth_", "epsonprinter_")
+
+    # Colonnes retirees des modeles mais encore presentes dans de vieux schemas de la prod.
+    # / Columns removed from the models but still present in old production schemas.
+    colonnes_retirees_des_modeles = {"BaseBillet_configuration.mollie_api_key"}
+
     colonnes_par_table = {}
     for modele in apps.get_models(include_auto_created=True):
         noms_des_colonnes = set()
@@ -728,6 +742,8 @@ def test_les_regles_lespass_visent_des_tables_et_colonnes_qui_existent():
             regles_manquantes.append(nom_de_table)
             continue
         for nom_de_colonne in regles_de_la_table:
+            if f"{nom_de_table}.{nom_de_colonne}" in colonnes_retirees_des_modeles:
+                continue
             if nom_de_colonne not in colonnes_par_table[nom_de_table]:
                 regles_manquantes.append(f"{nom_de_table}.{nom_de_colonne}")
 
