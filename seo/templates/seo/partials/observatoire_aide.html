@@ -15,4 +15,4 @@ aria-describedby.
 
 Parametres : identifiant (unique dans la page), texte (deja traduit).
 {% endcomment %}
-<span class="aide" tabindex="0" aria-label="{% translate "Méthode de calcul" %}" aria-describedby="{{ identifiant }}" data-testid="observatoire-{{ identifiant }}">?<span class="bulle" role="tooltip" id="{{ identifiant }}">{{ texte }}</span></span>
+<span class="aide" role="img" tabindex="0" aria-label="{% translate "Méthode de calcul" %}" aria-describedby="{{ identifiant }}" data-testid="observatoire-{{ identifiant }}">?<span class="bulle" role="tooltip" id="{{ identifiant }}">{{ texte }}</span></span>

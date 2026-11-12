@@ -42,7 +42,6 @@ from decimal import Decimal  # noqa: E402
 from io import StringIO  # noqa: E402
 from unittest.mock import patch  # noqa: E402
 
-import requests  # noqa: E402
 from django.core.management import call_command  # noqa: E402
 from django.db import connection  # noqa: E402
 from django.utils import timezone  # noqa: E402
@@ -122,9 +121,9 @@ class TestDemoRecapDeLaVeille(FastTenantTestCase):
         """
         Le lieu (Paris, sans TVA par défaut, aucun mail de rapport), la caisse de démo,
         le concert et l'adhésion du mode complet, les ressources et plannings
-        bénévoles (`create_booking_fixtures`, sans téléchargement d'image), et un admin.
+        bénévoles (`create_booking_fixtures`, images locales), et un admin.
         / The venue, the demo POS, the concert and membership fixtures, the booking
-        fixtures (no image download), and an admin.
+        fixtures (local images), and an admin.
         """
         connection.set_tenant(self.tenant)
 
@@ -169,13 +168,9 @@ class TestDemoRecapDeLaVeille(FastTenantTestCase):
             product=adhesion, name="Plein tarif", prix=Decimal("30.00")
         )
 
-        # Ressources et plannings bénévoles, sans appel réseau.
-        # / Resources and volunteer plannings, without network call.
-        with patch(
-            "booking.management.commands.create_booking_fixtures.requests.get",
-            side_effect=requests.RequestException("hors ligne"),
-        ):
-            call_command("create_booking_fixtures", stdout=StringIO())
+        # Ressources et plannings bénévoles. Les images sont des fichiers locaux.
+        # / Resources and volunteer plannings. Images are local files.
+        call_command("create_booking_fixtures", stdout=StringIO())
 
         administrateur, _cree = TibilletUser.objects.get_or_create(
             email=EMAIL_DE_L_ADMIN_DU_LIEU,

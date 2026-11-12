@@ -23,8 +23,7 @@ Le premier ne suffit pas : un admin de lieu le passe. `is_staff` n'est lu nulle 
 FLUX :
 1. GET seulement, sinon 405.
 2. Pas superadmin : 403.
-3. Lecture de SEOCache(OBSERVATOIRE). Un cache absent ou d'un format inconnu
-   vaut « aucun calcul ».
+3. Lecture de SEOCache(OBSERVATOIRE). Un cache absent vaut « aucun calcul ».
 4. Rendu de seo/observatoire.html, avec les textes traduits pour le JS
    (seo/static/seo/observatoire.js, via json_script).
 """
@@ -74,7 +73,7 @@ def textes_de_la_page():
             "Au moins un mois d'usage réel sur 12, sans atteindre le seuil « Actif » ({actif_ca} € de CA ou {actif_inscriptions} inscriptions sur 12 mois). Même valeur que « peu utilisé » dans le niveau d'activité."
         ),
         "methode_sommeil": _(
-            "Aucun mois d'usage réel sur 12. Bidouillage : des événements créés ou au moins {bidouillage_connexions} connexions admin quand même. Sommeil : rien. Les abandons comptent aussi en sommeil."
+            "Aucun mois d'usage réel sur 12. Bidouillage : au moins un événement daté dans les 12 derniers mois, quand même. Sommeil : rien. Les abandons comptent aussi en sommeil."
         ),
         "methode_abandons": _(
             "Au plus {abandon_mois} mois d'usage réel en tout, plus rien depuis {abandon_silence} mois, moins de {abandon_ca} € de CA sur toute la période, et pas de retour à la même saison un an plus tard."
@@ -116,9 +115,6 @@ def textes_de_la_page():
         "seuil_actifCA": _("Actif : CA 12 mois d'au moins (€)"),
         "seuil_actifInscr": _("… ou au moins N inscriptions sur 12 mois"),
         "seuil_tresActifMois": _("Très actif : au moins N mois d'usage réel sur 12"),
-        "seuil_bidouillageCnx": _(
-            "Bidouillage : au moins N connexions admin sans usage réel"
-        ),
         "seuil_petitMax": _("Petit : CA 12 mois inférieur à (€)"),
         "seuil_moyenMax": _("Moyen : CA 12 mois inférieur à (€)"),
         "seuil_festivalConcentration": _(
@@ -170,7 +166,6 @@ def textes_de_la_page():
         "colonne_ca12": _("CA 12 mois"),
         "colonne_rech": _("Recharges"),
         "colonne_cartes": _("Cartes (pic)"),
-        "colonne_cnx": _("Connexions admin"),
         "colonne_cat": _("Catégorie déclarée"),
         "colonne_mois": _("Mois"),
         "colonne_instances": _("Instances"),
@@ -409,15 +404,6 @@ def indicateurs_de_la_page():
                 "Moteur Fedow V2 interne (fedow_core). En cours de migration : beaucoup de données sont encore dans le Fedow legacy."
             ),
         },
-        "connexions_admin": {
-            "libelle": _("Connexions admin"),
-            "avec_article": _("les connexions admin"),
-            "unite": _("connexions"),
-            "definition": _("Ouvertures de session d'un compte admin du lieu."),
-            "source": _(
-                "Aucune pour l'instant : la donnée n'est pas encore enregistrée."
-            ),
-        },
         "evenements": {
             "libelle": _("Événements"),
             "avec_article": _("les événements"),
@@ -600,7 +586,7 @@ def page_observatoire(request):
         )
 
     # 5. Rendu. `donnees_observatoire` part au JS par json_script.
-    # / 4. Render. `donnees_observatoire` goes to the JS via json_script.
+    # / 5. Render. `donnees_observatoire` goes to the JS via json_script.
     from Administration.admin.site import staff_admin_site
 
     contexte = {

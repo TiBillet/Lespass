@@ -191,7 +191,10 @@
     };
     // L'ordre d'affichage des seuils. Leurs libelles viennent de Python (textes « seuil_* »).
     // / Display order of the thresholds. Labels come from Python.
-    const ORDRE_DES_SEUILS = ["actifCA", "actifInscr", "tresActifMois", "bidouillageCnx", "petitMax",
+    // bidouillageCnx n'est pas affiche : les connexions admin ne sont pas encore
+    // enregistrees (elles valent 0). La regle de classer() le garde, sans effet.
+    // / bidouillageCnx is not shown: admin logins are not recorded yet (always 0).
+    const ORDRE_DES_SEUILS = ["actifCA", "actifInscr", "tresActifMois", "petitMax",
         "moyenMax", "festivalConcentration", "mixtePic", "adhesionsPart", "abandonSilence",
         "abandonMoisMax", "abandonCAMax", "baisse"];
 
@@ -289,7 +292,7 @@
     const AGREGATION_DES_INDICATEURS = {
         ca_total: "somme", ca_billetterie: "somme", ca_adhesions: "somme", ca_caisse: "somme",
         recharges: "somme", recharges_ligne: "somme", recharges_place: "somme",
-        cartes_actives: "max", connexions_admin: "somme", evenements: "somme",
+        cartes_actives: "max", evenements: "somme",
         inscriptions: "somme", billets_scannes: "somme", adhesions: "somme",
         usagers: "max", reel: "somme", pdv: "statique", admins: "statique",
     };
@@ -379,7 +382,7 @@
         // / The CURRENT thresholds, for the "?" bubbles: they follow the settings.
         const seuils_en_cours = {
             actif_ca: formater_nombre(seuils.actifCA), actif_inscriptions: seuils.actifInscr,
-            tres_actif_mois: seuils.tresActifMois, bidouillage_connexions: seuils.bidouillageCnx,
+            tres_actif_mois: seuils.tresActifMois,
             abandon_mois: seuils.abandonMoisMax, abandon_silence: seuils.abandonSilence,
             abandon_ca: formater_nombre(seuils.abandonCAMax),
         };
@@ -416,7 +419,7 @@
         // / Same HTML as the observatoire_aide.html partial.
         document.getElementById("tuiles").innerHTML = tuiles.map(function (tuile, position) {
             const identifiant_de_la_bulle = "aide-synthese-" + position;
-            const bulle = `<span class="aide" tabindex="0" aria-label="${echapper_html(texte("aide_methode"))}" aria-describedby="${identifiant_de_la_bulle}" data-testid="observatoire-${identifiant_de_la_bulle}">?`
+            const bulle = `<span class="aide" role="img" tabindex="0" aria-label="${echapper_html(texte("aide_methode"))}" aria-describedby="${identifiant_de_la_bulle}" data-testid="observatoire-${identifiant_de_la_bulle}">?`
                 + `<span class="bulle" role="tooltip" id="${identifiant_de_la_bulle}">${echapper_html(tuile[3])}</span></span>`;
             return `<div class="tuile"><span class="lib">${tuile[0]}${bulle}</span><span class="val">${tuile[1]}</span><span class="det">${tuile[2]}</span></div>`;
         }).join("");
@@ -627,7 +630,7 @@
 
     let tri_de_la_liste = {cle: "ca12", sens: -1};
     const COLONNES_DE_LA_LISTE = [["nom"], ["nature"], ["taille"], ["activite"], ["tendance"], ["reels12", "r"],
-        ["ca12", "r"], ["rech", "r"], ["cartes", "r"], ["cnx", "r"], ["cat"]];
+        ["ca12", "r"], ["rech", "r"], ["cartes", "r"], ["cat"]];
     const COLONNES_TRIEES_PAR_ORDRE_ALPHABETIQUE = ["nom", "nature", "taille", "activite", "tendance", "cat"];
 
     function rendre_liste() {
@@ -640,7 +643,6 @@
         instances.forEach(function (instance) {
             instance.rech = valeur_agregee(instance, "recharges");
             instance.cartes = valeur_agregee(instance, "cartes_actives");
-            instance.cnx = valeur_agregee(instance, "connexions_admin");
         });
         instances.sort(function (a, b) {
             const cle = tri_de_la_liste.cle;
@@ -672,7 +674,7 @@
                 + `<td><span class="pastille" style="background:var(${VARIABLE_DE_COULEUR_DES_ACTIVITES[instance.activite]})"></span>${libelle_de("activites", instance.activite)}${pastille_abandon}</td>`
                 + `<td>${tendance}</td>`
                 + `<td class="r">${instance.reels12}</td><td class="r">${formater_nombre(instance.ca12, "€")}</td><td class="r">${formater_nombre(instance.rech, "€")}</td>`
-                + `<td class="r">${formater_nombre(instance.cartes)}</td><td class="r">${instance.cnx}</td>`
+                + `<td class="r">${formater_nombre(instance.cartes)}</td>`
                 + `<td>${echapper_html(libelle_de("categories", instance.cat))}${pastille_ecart}</td></tr>`;
         }).join("");
         document.getElementById("liste").innerHTML = `<thead><tr>${en_tete}</tr></thead><tbody>${lignes}</tbody>`;
@@ -720,7 +722,7 @@
         document.getElementById("o-mesure").tabIndex = sur_mesure ? 0 : -1;
         document.getElementById("vue-standard").hidden = sur_mesure;
         document.getElementById("vue-mesure").hidden = !sur_mesure;
-        try { history.replaceState(null, "", "#" + nom_de_l_onglet); } catch (erreur) { /* sans effet / no effect */ }
+        history.replaceState(null, "", "#" + nom_de_l_onglet);
         // Un graphique se dessine quand il est visible.
         // / A chart is drawn when it is visible.
         if (sur_mesure) {
@@ -782,9 +784,7 @@
         if (!DONNEES_DE_LA_PAGE.calcul) {
             return;
         }
-        if (window.Chart) {
-            Chart.defaults.font.family = couleur_css("--f-texte");
-        }
+        Chart.defaults.font.family = couleur_css("--f-texte");
         charger_les_donnees(DONNEES_DE_LA_PAGE.calcul);
         remplir_les_listes_de_choix();
         brancher_les_controles();

@@ -40,9 +40,9 @@ schema_context remplace par un FakeTenant.
 / tenant_context, NOT schema_context: Event.save() reads connection.tenant.
 """
 import datetime
+import os
 
-import requests
-
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
@@ -63,6 +63,13 @@ from booking.models import (
     ResourceGroup,
     TacheBenevole,
     WeeklyOpening,
+)
+
+
+# Images de démo commitées dans le dépôt, partagées avec demo_data_v2.
+# / Demo images committed in the repo, shared with demo_data_v2.
+DOSSIER_DES_IMAGES_DE_DEMO = os.path.join(
+    settings.BASE_DIR, "Administration", "fixtures", "demo_events"
 )
 
 
@@ -241,13 +248,12 @@ class Command(BaseCommand):
 
         LOCALISATION : booking/management/commands/create_booking_fixtures.py
 
-        Les champs nom, descriptions et image sont sur le modèle Product.
+        Les champs nom et descriptions sont sur le modèle Product.
         Chaque ressource est ensuite liée à des tarifs via une ManyToMany.
-        / Name, descriptions and image live on the Product model.
+        L'image n'est pas posée ici : elle est sur la ressource (_create_resources).
+        / Name and descriptions live on the Product model.
         Each resource is then linked to prices through a ManyToMany.
-
-        Les images sont téléchargées depuis picsum.photos.
-        / Images are downloaded from picsum.photos.
+        The image is not set here: it lives on the resource (_create_resources).
         """
         products_data = [
             {
@@ -257,7 +263,6 @@ class Command(BaseCommand):
                     "Espace de travail partagé, 3 postes disponibles simultanément. "
                     "Prises, WiFi haut débit, café."
                 ),
-                "image_url": "https://picsum.photos/seed/coworking/800/400",
                 "price_name": "Créneau 1h",
                 "price": 5.00,
             },
@@ -268,7 +273,6 @@ class Command(BaseCommand):
                     "Imprimante FDM Prusa MK4. Filament PLA fourni. "
                     "Formation obligatoire avant première utilisation."
                 ),
-                "image_url": "https://picsum.photos/seed/imprimante3d/800/400",
                 "price_name": "Créneau 1h",
                 "price": 8.00,
             },
@@ -279,7 +283,6 @@ class Command(BaseCommand):
                     "Salle de répétition insonorisée, 20 m². "
                     "Batterie, amplis et câblage inclus. Capacité : 4 musiciens."
                 ),
-                "image_url": "https://picsum.photos/seed/petitesalle/800/400",
                 "price_name": "Répétition 1h",
                 "price": 12.00,
             },
@@ -290,7 +293,6 @@ class Command(BaseCommand):
                     "Grande salle de répétition, 40 m². Scène surélevée, sono complète. "
                     "Idéale pour les groupes de 6 personnes et plus."
                 ),
-                "image_url": "https://picsum.photos/seed/grandesalle/800/400",
                 "price_name": "Répétition 1h",
                 "price": 18.00,
             },
@@ -303,7 +305,6 @@ class Command(BaseCommand):
                     "elle est réservée aux concerts du lieu : ces créneaux sont bloqués "
                     "automatiquement par la programmation."
                 ),
-                "image_url": "https://picsum.photos/seed/residenceconcert/800/400",
                 "price_name": "Journée ou soirée",
                 "price": 60.00,
             },
@@ -320,22 +321,6 @@ class Command(BaseCommand):
                     "publish": True,
                 },
             )
-
-            if data.get("image_url") and not product.img:
-                try:
-                    response = requests.get(data["image_url"], timeout=10)
-                    response.raise_for_status()
-                    product.img.save(
-                        f"resource_{data['name'].replace(' ', '_').lower()}.jpg",
-                        ContentFile(response.content),
-                        save=True,
-                    )
-                except requests.RequestException as erreur_telechargement:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f"Image non téléchargée pour {data['name']} : {erreur_telechargement}"
-                        )
-                    )
 
             Price.objects.update_or_create(
                 product=product,
@@ -359,9 +344,15 @@ class Command(BaseCommand):
         LOCALISATION : booking/management/commands/create_booking_fixtures.py
 
         Les champs spécifiques (calendrier, planning, capacité, groupe)
-        restent sur le modèle Resource. Le nom et l'image viennent du produit lié.
+        restent sur le modèle Resource. Les tarifs viennent du produit lié.
         / Specific fields (calendar, schedule, capacity, group) stay on Resource.
-        Name and image come from the linked product.
+        Prices come from the linked product.
+
+        L'image est posée sur la ressource : c'est Resource.img que les pages
+        /booking/ affichent. Elle est lue dans Administration/fixtures/demo_events/,
+        des fichiers commités : aucun appel réseau.
+        / The image is set on the resource: /booking/ pages show Resource.img.
+        It is read from committed files in Administration/fixtures/demo_events/.
 
         Le groupe est facultatif : il sert seulement à ranger l'affichage.
         / The group is optional: it only organises the display.
@@ -398,6 +389,7 @@ class Command(BaseCommand):
                 "weekly_opening": coworking_opening,
                 "capacity": 3,
                 "group": groupe_espace,
+                "image_file": "event-01.jpg",
             },
             {
                 "name": "Imprimante Bambu Lab",
@@ -407,6 +399,7 @@ class Command(BaseCommand):
                 "weekly_opening": coworking_opening,
                 "capacity": 1,
                 "group": groupe_ressource,
+                "image_file": "event-02.jpg",
             },
             {
                 "name": "Petite salle #1",
@@ -416,6 +409,7 @@ class Command(BaseCommand):
                 "weekly_opening": repet_opening,
                 "capacity": 1,
                 "group": groupe_repet,
+                "image_file": "event-03.jpg",
             },
             {
                 "name": "Grande salle #1",
@@ -425,6 +419,7 @@ class Command(BaseCommand):
                 "weekly_opening": repet_opening,
                 "capacity": 1,
                 "group": groupe_repet,
+                "image_file": "event-04.jpg",
             },
             {
                 "name": "Salle de résidence et concert",
@@ -435,6 +430,7 @@ class Command(BaseCommand):
                 "capacity": 1,
                 "group": groupe_repet,
                 "booking_horizon_days": 90,
+                "image_file": "event-05.jpg",
             },
         ]
 
@@ -451,10 +447,23 @@ class Command(BaseCommand):
             # / Horizon only when given: otherwise the model default (28 days).
             if "booking_horizon_days" in data:
                 champs_de_la_ressource["booking_horizon_days"] = data["booking_horizon_days"]
-            Resource.objects.update_or_create(
+            ressource, _created = Resource.objects.update_or_create(
                 product=products_by_name[data["product_name"]],
                 defaults=champs_de_la_ressource,
             )
+
+            # On ne remplace pas une image déjà posée (commande idempotente).
+            # / An existing image is kept (idempotent command).
+            if not ressource.img:
+                chemin_de_l_image = os.path.join(
+                    DOSSIER_DES_IMAGES_DE_DEMO, data["image_file"]
+                )
+                with open(chemin_de_l_image, "rb") as fichier_image:
+                    ressource.img.save(
+                        f"resource_{data['product_name'].replace(' ', '_').lower()}.jpg",
+                        ContentFile(fichier_image.read()),
+                        save=True,
+                    )
 
     def _bloquer_la_salle_de_concert_pendant_les_evenements(self, products_by_name):
         """
