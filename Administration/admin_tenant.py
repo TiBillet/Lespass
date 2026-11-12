@@ -5837,11 +5837,37 @@ class TicketCustomFormSection(TemplateSection):
     verbose_name = _("Custom form answers")
 
 
+class TicketFilterPrice(DropdownFilter):
+    # Liste déroulante avec recherche (Unfold)
+    title = _("-> Prix vendu")
+    parameter_name = 'price_sold'
+
+    def lookups(self, request, model_admin):
+        event_future = request.GET.get("event_future",None)
+
+        # Filtre seulement les prix lié à des produit de type billet,
+        # qui sont publié et qui ne sont PAS archivé
+        prices = Price.objects.filter(archived=False, publish=True, product__categorie_article__in=[Product.BILLET,Product.FREERES])
+
+        # Si on filtre aussi les billets sur l'évenement, affiche seulement les prix qui y sont lié
+        if event_future:
+            prices = prices.filter(product__event=event_future)
+
+        return [(str(p.pk), str(p)) for p in prices]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            if queryset.model == Ticket:
+                return queryset.filter(pricesold__price=self.value())
+        return queryset
+
+
 @admin.register(Ticket, site=staff_admin_site)
 class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAdmin):
     ordering = ('-reservation__datetime',)
     list_filter = [
         EventFutureFilter,
+        TicketFilterPrice,
         EventPastFilter,
         TicketValidFilter,
         "reservation__datetime",
