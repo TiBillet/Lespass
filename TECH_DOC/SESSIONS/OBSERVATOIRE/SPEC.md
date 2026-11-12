@@ -384,6 +384,11 @@ Après le travail : `manage.py check`, tests ciblés `seo` et admin.
 
 ## 10. Hors périmètre
 
+- Le CA des caisses des lieux encore sur **LaBoutik V1** : aucune route de LaBoutik ne
+  le donne à Lespass (les rapports V1 demandent une session admin), et il faudrait un
+  appel par serveur de lieu. Décision du mainteneur (2026-11-12) : il arrivera avec
+  l'import des ventes et des clôtures legacy dans Lespass ; l'observatoire le lira alors
+  sans changement. La bulle « ? » du CA le dit.
 - Les connexions admin (`connexions_admin`) : il faudrait d'abord les enregistrer.
 - L'historique des métriques dans le temps : chantier 02.
 - L'export CSV. Un calcul incrémental. Changer les règles de classement.

@@ -80,7 +80,7 @@ def textes_de_la_page():
             "Au plus {abandon_mois} mois d'usage réel en tout, plus rien depuis {abandon_silence} mois, moins de {abandon_ca} € de CA sur toute la période, et pas de retour à la même saison un an plus tard."
         ),
         "methode_ca": _(
-            "Chiffre d'affaires TTC des tickets Z (clôtures mensuelles, puis journalières du mois en cours), sur les 12 derniers mois, tous lieux."
+            "Chiffre d'affaires TTC des tickets Z de Lespass (clôtures mensuelles, puis journalières du mois en cours), sur les 12 derniers mois, tous lieux. Hors ventes de caisse des lieux encore sur LaBoutik V1 : elles arriveront avec l'import."
         ),
         "methode_recharges": _(
             "Recharges encaissées lues dans les clôtures, sur les 12 derniers mois. En ligne = payées par Stripe. Ce n'est pas le total du bloc « depuis le début », qui lit Fedow legacy."

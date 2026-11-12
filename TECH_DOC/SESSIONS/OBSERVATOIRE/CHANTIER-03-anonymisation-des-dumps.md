@@ -184,7 +184,7 @@ table `fedow_core_token` de Fedow contient les soldes des portefeuilles.
 | `mot_de_passe` | `!anonyme` | Un hash de mot de passe Django. Un mot de passe qui commence par `!` est « inutilisable » pour Django. |
 | `jeton_unique` | `anonyme-` + 16 caractères hexadécimaux aléatoires | Un jeton dans une colonne unique (le mode `vide` y créerait des doublons). |
 | `nom` | `Anonyme-` + 8 caractères hexadécimaux (HMAC de la valeur, même sel que les e-mails) | Un nom, un prénom, un pseudo. Le même nom donne le même pseudonyme. Deux noms différents peuvent, rarement, donner le même (32 bits) : jamais sur une colonne unique. Une valeur vide reste vide. |
-| `identifiant` | l'e-mail remplacé s'il y en a un, sinon `Anonyme-` + 16 caractères hexadécimaux | Un `username`. S'il vaut l'e-mail, il reçoit le même faux e-mail que la colonne `email`. Sinon (« jonas », « admin »), c'est un nom de connexion humain : il devient un pseudonyme long (colonne unique). |
+| `identifiant` | le faux e-mail si la valeur est un e-mail seul, sinon `Anonyme-` + 16 caractères hexadécimaux pour la valeur entière | Le `username` et l'`email` d'un compte. Un e-mail seul (des espaces autour au plus) reçoit le même faux e-mail que partout. Tout le reste devient un pseudonyme long (colonne unique) : un nom de connexion humain (« jonas »), ou une adresse mal formée que l'expression des e-mails ne voit pas, ou ne voit qu'en partie (« jean@gmail », « jean=x@gmail.com », « o'brien@… »). Une valeur déjà anonymisée est gardée. |
 
 Une valeur `NULL` reste `NULL`, quel que soit le mode.
 
@@ -205,8 +205,9 @@ schéma.
 | Table | Colonne | Mode |
 |---|---|---|
 | `AuthBillet_tibilletuser` | `password` | `mot_de_passe` |
-| `AuthBillet_tibilletuser` | `username` | `identifiant` |
+| `AuthBillet_tibilletuser` | `email`, `username` | `identifiant` |
 | `MetaBillet_waitingconfiguration` | `otp_hash` (hash d'un code à 6 chiffres : retrouvable en essayant le million de codes) | `vide` |
+| `BaseBillet_configuration` | `mollie_api_key` (retirée du modèle par la migration 0062, encore présente dans de vieux schémas) | `vide` |
 | `root_billet_rootconfiguration` | `stripe_api_key` (Fernet) | `vide` |
 | `root_billet_rootconfiguration` | `stripe_test_api_key` | `vide` |
 | `root_billet_rootconfiguration` | `fedow_create_place_apikey` (Fernet) | `vide` |
@@ -232,7 +233,8 @@ schéma.
 | Table | Colonne | Mode |
 |---|---|---|
 | `tibiauth_tibiuser` | `password` | `mot_de_passe` |
-| `tibiauth_tibiuser` | `username` | `identifiant` |
+| `tibiauth_tibiuser` | `email`, `username` | `identifiant` |
+| `APIcashless_membre` | `email` | `identifiant` |
 | `APIcashless_configuration` | `odoo_login` (identifiant Odoo, souvent un e-mail) | `vide` |
 | `APIcashless_configuration` | `odoo_api_key`, `dokos_key`, `lespass_api_key`, `fedow_place_admin_apikey` (en clair) | `vide` |
 | `APIcashless_configuration` | `string_connect` (base64 qui contient une clé temporaire Fedow), `onboard_url` (lien Stripe avec jeton) | `vide` |
@@ -269,7 +271,7 @@ des trois bases en SQLite.
 | Table | Colonne | Mode |
 |---|---|---|
 | `fedow_core_fedowuser` | `password` | `mot_de_passe` |
-| `fedow_core_fedowuser` | `username` | `identifiant` |
+| `fedow_core_fedowuser` | `email`, `username` | `identifiant` |
 | `fedow_core_configuration` | `stripe_api_key`, `stripe_endpoint_secret_enc` (Fernet ; si `NULL`, le code relit l'environnement) | `null` |
 | `fedow_core_place` | `cashless_admin_apikey` (Fernet) | `vide` |
 | `fedow_core_createplaceapikey`, `fedow_core_organizationapikey`, `rest_framework_api_key_apikey` | `hashed_key` | `hash_inutilisable` |
@@ -576,7 +578,7 @@ On l'anonymise, puis on le charge dans un Postgres jetable avec
 `psql -v ON_ERROR_STOP=1` : il doit se charger sans erreur, contraintes d'unicité
 comprises.
 
-**Liste à jour des tests :** voir `tests/pytest/test_anonymiser_dump.py` (33 tests). Deux
+**Liste à jour des tests :** voir `tests/pytest/test_anonymiser_dump.py` (35 tests). Deux
 séries de mutations volontaires du script (23 au total) ont chacune fait échouer au moins
 un test. L'arrêt par signal est vérifié à la main (`kill -TERM` en cours de traitement :
 fichier de travail supprimé, code 143).
@@ -588,6 +590,16 @@ des fichiers binaires, code 3, mode `identifiant` pour les `username`, `odoo_log
 pseudonymes sur 32 bits, tests manquants. Écartés : apostrophe dans la partie locale
 (`o'brien@…` : l'ajouter casserait les valeurs entre guillemets), colonnes tableau
 (`varchar(N)[]` : aucune dans les modèles).
+
+**Essai sur la prod (2026-11-12)** : dump Lespass `tibillet.re` du 2026-11-02 (540 lieux,
+28 108 comptes) et snapshot Fedow (21 645 comptes), dans la même commande : 35 s, 64 Mo de
+mémoire. La copie Lespass se charge avec `ON_ERROR_STOP` dans un Postgres 17 jetable
+(`--shm-size=1g` : 64 Mo de mémoire partagée ne suffisent pas pour les index). 21 644
+comptes Fedow sur 21 645 ont le même faux e-mail que dans Lespass. L'essai a trouvé trois
+trous, corrigés : l'étoile dans une adresse masquée (`****@…`, vue par le contrôle final),
+`mollie_api_key` (vue par le garde-fou des colonnes suspectes, sans valeur en prod), et
+cinq e-mails de comptes mal formés qui gardaient une partie en clair (vus seulement à la
+main : d'où l'`email` des comptes en mode `identifiant`).
 
 **Relecture de la spec :** builder check par un agent Fable (2026-11-12). Retenus : valeurs trop
 longues (§6), HMAC sur le texte exact (§4.1, §4.4), PIN d'appairage (§5.2), expression

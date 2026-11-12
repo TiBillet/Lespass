@@ -400,6 +400,38 @@ def test_un_username_email_suit_l_email_et_un_username_humain_devient_un_pseudon
     assert re.match(r"^Anonyme-[0-9a-f]{16}$", utilisateurs[2][2])
 
 
+def test_un_email_de_compte_mal_forme_devient_un_pseudonyme_identique_a_son_username():
+    # Trouve en prod : « jean.dupont@gmail », sans point dans le domaine. L'expression des
+    # e-mails ne le voit pas ; la regle « identifiant » de la colonne email le remplace.
+    # / Found in production: a malformed account e-mail, replaced by the column rule.
+    anonymiseur = script.Anonymiseur(sel=b"sel-de-test")
+    for table in ("AuthBillet_tibilletuser", "tibiauth_tibiuser", "APIcashless_membre"):
+        assert script.REGLES_POSTGRES[table]["email"] == "identifiant"
+    assert script.REGLES_SQLITE["fedow_core_fedowuser"]["email"] == "identifiant"
+
+    email_remplace = anonymiseur.valeur_de_remplacement("identifiant", "jean.dupont@gmail")
+    username_remplace = anonymiseur.valeur_de_remplacement("identifiant", "jean.dupont@gmail")
+    assert re.match(r"^Anonyme-[0-9a-f]{16}$", email_remplace)
+    assert email_remplace == username_remplace
+
+    email_valide = anonymiseur.valeur_de_remplacement("identifiant", "jean@exemple.fr")
+    assert email_valide == anonymiseur.faux_email("jean@exemple.fr")
+
+    # « jean=x@exemple.fr » : l'expression ne verrait que « x@exemple.fr ». La valeur
+    # entiere devient un pseudonyme, sans « jean= » en clair.
+    # / The whole value becomes a pseudonym, no "jean=" left in clear.
+    for adresse_avec_un_caractere_rare in ("jean=x@exemple.fr", "o'brien@exemple.fr"):
+        remplacee = anonymiseur.valeur_de_remplacement(
+            "identifiant", adresse_avec_un_caractere_rare
+        )
+        assert re.match(r"^Anonyme-[0-9a-f]{16}$", remplacee)
+
+    # Une relance garde le pseudonyme et le faux e-mail tels quels.
+    # / A new run keeps the pseudonym and the fake e-mail as they are.
+    assert anonymiseur.valeur_de_remplacement("identifiant", email_remplace) == email_remplace
+    assert anonymiseur.valeur_de_remplacement("identifiant", email_valide) == email_valide
+
+
 def test_un_en_tete_copy_avec_guillemets_et_schema_de_lieu_est_reconnu():
     schema, table = script.schema_et_table('"lieu-un"."BaseBillet_lignearticle"')
     assert (schema, table) == ("lieu-un", "BaseBillet_lignearticle")

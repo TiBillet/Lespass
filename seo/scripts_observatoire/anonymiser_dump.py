@@ -126,9 +126,11 @@ def est_un_nom_d_image_retina(adresse_trouvee):
 #                     donne le meme pseudonyme. Une valeur vide reste vide. Deux noms
 #                     differents peuvent, rarement, donner le meme pseudonyme (32 bits) :
 #                     ne pas l'utiliser sur une colonne unique.
-# identifiant       : pour un « username ». S'il contient un e-mail, l'e-mail est remplace
-#                     (meme faux e-mail que la colonne « email »). Sinon, c'est un nom de
-#                     connexion humain : « Anonyme- » + 16 caracteres (colonne unique).
+# identifiant       : pour un « username » ou l'« email » d'un compte. Si c'est un e-mail
+#                     seul, il prend le meme faux e-mail que partout. Sinon (nom de connexion
+#                     humain, adresse mal formee comme « jean@gmail » ou « jean=x@gmail.com »),
+#                     la valeur entiere devient « Anonyme- » + 16 caracteres tires du HMAC
+#                     (colonne unique, meme valeur dans Fedow pour le meme texte).
 # / Modes: empty text, NULL, unusable hash, unusable password, unique token, pseudonym,
 #   login (e-mail replaced, or 16-char pseudonym).
 MODES_CONNUS = (
@@ -143,6 +145,10 @@ MODES_CONNUS = (
 
 VALEUR_HASH_OU_MOT_DE_PASSE_INUTILISABLE = "!anonyme"
 
+# Le pseudonyme que le mode « identifiant » ecrit. Une relance le reconnait et le garde.
+# / The pseudonym written by the "identifiant" mode; a new run keeps it.
+EXPRESSION_PSEUDONYME_D_IDENTIFIANT = re.compile(r"Anonyme-[0-9a-f]{16}")
+
 
 # ---------------------------------------------------------------------------
 # LES REGLES POUR POSTGRESQL (Lespass et LaBoutik V1)
@@ -156,6 +162,7 @@ REGLES_POSTGRES = {
     # --- Lespass, schema public ---
     "AuthBillet_tibilletuser": {
         "password": "mot_de_passe",
+        "email": "identifiant",
         "username": "identifiant",
         "first_name": "nom",
         "last_name": "nom",
@@ -237,6 +244,7 @@ REGLES_POSTGRES = {
     # --- LaBoutik V1 ---
     "tibiauth_tibiuser": {
         "password": "mot_de_passe",
+        "email": "identifiant",
         "username": "identifiant",
         "first_name": "nom",
         "last_name": "nom",
@@ -270,6 +278,7 @@ REGLES_POSTGRES = {
     "APIcashless_terminal": {"registration_code": "vide"},
     "APIcashless_appareil": {"pin_code": "null"},
     "APIcashless_membre": {
+        "email": "identifiant",
         "name": "nom",
         "prenom": "nom",
         "pseudo": "nom",
@@ -300,6 +309,7 @@ TABLES_A_VIDER_POSTGRES = {
 REGLES_SQLITE = {
     "fedow_core_fedowuser": {
         "password": "mot_de_passe",
+        "email": "identifiant",
         "username": "identifiant",
         "first_name": "nom",
         "last_name": "nom",
@@ -545,11 +555,27 @@ class Anonymiseur:
         if mode == "identifiant":
             if valeur == "":
                 return ""
-            valeur_sans_email, nombre_d_emails = self.remplacer_les_emails(valeur)
-            if nombre_d_emails > 0 or valeur.endswith("@" + DOMAINE_DES_FAUX_EMAILS):
+            valeur_sans_espaces = valeur.strip()
+
+            # Deja anonymisee (relance du script) : on la garde telle quelle.
+            # / Already anonymised (script run again): kept as is.
+            deja_un_faux_email = valeur_sans_espaces.endswith("@" + DOMAINE_DES_FAUX_EMAILS)
+            deja_un_pseudonyme = EXPRESSION_PSEUDONYME_D_IDENTIFIANT.fullmatch(
+                valeur_sans_espaces
+            )
+            if deja_un_faux_email or deja_un_pseudonyme:
+                return valeur
+
+            # Un e-mail seul (des espaces autour au plus) : le meme faux e-mail que partout.
+            # / A lone e-mail (spaces around at most): the same fake e-mail as everywhere.
+            if EXPRESSION_EMAIL.fullmatch(valeur_sans_espaces):
+                valeur_sans_email, _nombre_d_emails = self.remplacer_les_emails(valeur)
                 return valeur_sans_email
-            # Aucun e-mail reconnu (« jonas », « admin@local ») : tout devient un pseudonyme.
-            # / No e-mail recognised: the whole login becomes a pseudonym.
+
+            # Tout le reste devient un pseudonyme, valeur ENTIERE : « jonas », « jean@gmail »,
+            # « jean=x@gmail.com ». Dans ce dernier cas, l'expression ne verrait que
+            # « x@gmail.com » et « jean= » resterait en clair.
+            # / Anything else: the WHOLE value becomes a pseudonym (no clear-text leftover).
             return self.pseudonyme(valeur, nombre_de_caracteres=16)
         raise ValueError(f"Mode inconnu : {mode}")
 

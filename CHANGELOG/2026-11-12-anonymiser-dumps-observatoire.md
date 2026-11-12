@@ -21,7 +21,7 @@ données personnelles ni les secrets de la production.
 |---|---|
 | `seo/scripts_observatoire/anonymiser_dump.py` | Nouveau : le script (bibliothèque standard seulement) |
 | `seo/scripts_observatoire/README.md` | Nouveau : mode d'emploi |
-| `tests/pytest/test_anonymiser_dump.py` | Nouveau : 33 tests sur données fabriquées |
+| `tests/pytest/test_anonymiser_dump.py` | Nouveau : 35 tests sur données fabriquées |
 | `TECH_DOC/SESSIONS/OBSERVATOIRE/CHANTIER-03-anonymisation-des-dumps.md` | Nouveau : spec |
 | `TECH_DOC/SESSIONS/OBSERVATOIRE/INDEX.md` | Ligne du chantier 03 |
 
@@ -54,7 +54,7 @@ Lespass et dans Fedow a le même faux e-mail des deux côtés.
 
 ### Tests automatiques
 `docker exec lespass_django poetry run pytest tests/pytest/test_anonymiser_dump.py -q`
-(33 tests). 23 mutations volontaires du script ont chacune fait échouer au moins un test.
+(35 tests). 26 mutations volontaires du script ont chacune fait échouer au moins un test.
 
 ### Test 5 — arrêt en cours de route
 Lancer le script sur une grosse base SQLite, puis `kill -TERM` pendant le traitement.
