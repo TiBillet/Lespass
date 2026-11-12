@@ -24,11 +24,13 @@ FLUX :
    CaisseViewSet.ajouter_table (laboutik/views.py) : la Table est creee en base,
    puis redirection avec id_table -> la nouvelle table est choisie.
 3. « Continuer sans table » -> retire cette couche, l'ecran de vente reste.
-4. « Service direct » -> lien force_service_direct=true -> rechargement complet.
+   C'est la seule facon de vendre sans table : le panier se paie avec VALIDER.
+   Le bouton « Tables » du header fait revenir la grille.
 
 ATTRIBUT COTTON :
 - avec_bouton_continuer ("oui" par defaut) : "non" cache « Continuer sans table »,
   utile quand il n'y a pas d'ecran de vente dessous (views/tables.html).
+  Dans ce cas, la grille ne propose plus que les tuiles de table.
 
 ACCROCHES JS A NE PAS RENOMMER :
 #main-tables-definition (retire par « Continuer sans table »),
@@ -104,20 +106,13 @@ ACCROCHES JS A NE PAS RENOMMER :
   <footer class="tables-screen-foot">
     {% if avec_bouton_continuer == "oui" %}
     <button type="button"
-            class="tables-foot-bt tables-foot-bt--secondaire"
+            class="tables-foot-bt tables-foot-bt--primaire"
             onclick="document.querySelector('#main-tables-definition').remove()"
             data-testid="resto-table-skip">
       <span class="material-symbols-outlined" aria-hidden="true">shopping_cart</span>
       {% translate "Continuer sans table" %}
     </button>
     {% endif %}
-    <a class="tables-foot-bt tables-foot-bt--primaire"
-       href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}&force_service_direct=true"
-       data-nav-spinner
-       data-testid="resto-table-service-direct">
-      <span class="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
-      {% translate "Service direct" %}
-    </a>
   </footer>
 
   <!-- MODALE AJOUT DE TABLE — mode="hide" : cachee, jamais retiree du DOM.

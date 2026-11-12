@@ -3444,10 +3444,6 @@ class CaisseViewSet(viewsets.ViewSet):
         # Get the table UUID (restaurant mode only)
         id_table = request.GET.get("id_table") or None
 
-        # Le paramètre force_service_direct permet de court-circuiter le mode tables
-        # The force_service_direct parameter bypasses table mode
-        force_service_direct = request.GET.get("force_service_direct") == "true"
-
         # --- Charger le point de vente depuis la DB ---
         # --- Load the point of sale from DB ---
         try:
@@ -3501,7 +3497,7 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # Service direct (pas de tables) → interface de vente directe
         # Direct service (no tables) → direct sales interface
-        if pv.service_direct or force_service_direct:
+        if pv.service_direct:
             titre_page = _("Service direct")
             template_name = "laboutik/views/common_user_interface.html"
 

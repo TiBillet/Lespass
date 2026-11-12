@@ -85,13 +85,7 @@
               data-nav-spinner
               data-testid="header-tables">
         <span class="material-symbols-outlined" aria-hidden="true">chair</span>
-        {# Table choisie : son nom remplace « Tables ». Un clic ramene a la grille. #}
-        {# / Selected table: its name replaces "Tables". A click goes to the grid. #}
-        {% if nom_table %}
-          <span class="sr-only">{% translate "Table" %} :</span>{{ nom_table }}
-        {% else %}
-          {% translate "Tables" %}
-        {% endif %}
+        {% translate "Tables" %}
       </button>
     {% endif %}
     <button class="hdr-nav-btn"

@@ -532,6 +532,40 @@ class TestRestoAdditionTable(FastTenantTestCase):
         self.assertNotIn('data-testid="addition-ajouter-a-la-table"', html)
         self.assertNotIn('data-testid="resto-touche-envoyer-prepa"', html)
 
+    def test_la_grille_propose_seulement_continuer_sans_table(self):
+        """
+        Sans table choisie, la grille s'affiche. Son pied de page n'a qu'un bouton :
+        « Continuer sans table ». Il n'y a pas de bouton « Service direct ».
+        / The grid footer only offers "continue without a table".
+        """
+        html = self.client_http.get(
+            "/laboutik/caisse/point_de_vente/",
+            {"uuid_pv": str(self.point_de_vente.uuid)},
+        ).content.decode()
+
+        self.assertIn('data-testid="resto-tables-screen"', html)
+        self.assertIn('data-testid="resto-table-skip"', html)
+        self.assertNotIn('data-testid="resto-table-service-direct"', html)
+
+    def test_force_service_direct_est_ignore(self):
+        """
+        Le parametre force_service_direct=true ne change rien : un point de vente
+        sans service direct garde l'ecran restaurant et sa grille des tables.
+        / force_service_direct=true is ignored: restaurant screen and grid stay.
+        """
+        reponse = self.client_http.get(
+            "/laboutik/caisse/point_de_vente/",
+            {
+                "uuid_pv": str(self.point_de_vente.uuid),
+                "force_service_direct": "true",
+            },
+        )
+        html = reponse.content.decode()
+
+        self.assertEqual(reponse.status_code, 200)
+        self.assertTemplateUsed(reponse, "laboutik/views/restaurant_interface.html")
+        self.assertIn('data-testid="resto-tables-screen"', html)
+
     # ------------------------------------------------------------------ #
     #  Envoi prepa / Send to preparation
     # ------------------------------------------------------------------ #
