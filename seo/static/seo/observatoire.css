@@ -1,0 +1,149 @@
+/*
+ * OBSERVATOIRE DES INSTANCES — styles de la page
+ * / INSTANCE OBSERVATORY — page styles
+ *
+ * LOCALISATION : seo/static/seo/observatoire.css
+ * CHARGE PAR : seo/templates/seo/observatoire.html
+ *
+ * Tout est confine sous .obs : la page vit dans le cadre de l'admin Unfold et ne
+ * doit pas toucher a ses styles. Les couleurs sont des variables CSS lues aussi
+ * par le JS (couleur_css) pour les graphiques.
+ * Polices du depot, aucune ressource externe : Luciole (texte, concue pour la
+ * lisibilite) et Unbounded (titres), dans pages/static/V2/fonts/.
+ * / Everything is scoped under .obs. Local fonts only: Luciole and Unbounded.
+ */
+@font-face { font-family: "Luciole"; src: url("../V2/fonts/Luciole-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Luciole"; src: url("../V2/fonts/Luciole-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Unbounded"; src: url("../V2/fonts/Unbounded-Variable-latin.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+.obs{
+  --fond:#f4ede0; --papier:#faf8f5; --encre:#17141a; --encre-2:#63515e; --trait:#ded7cd; --brume:#ece7e1;
+  --accent:#006cb5;
+  --n-festival:#d22e59; --n-mixte:#b07d0e; --n-lieu:#2a7fbf; --n-adhesions:#63515e; --n-indet:#c9c0b4;
+  --a-tres:#155829; --a-actif:#4f9b63; --a-peu:#d9b44a; --a-bid:#b9a6c9; --a-inactif:#c9c0b4; --n-ponct:#a8998a; --t-petit:#9cc7e6; --t-moyen:#4f93c8; --t-gros:#1d5a8c;
+  --ok-bg:#e6f3ea; --ok:#155829; --moy-bg:#fbf2d9; --moy:#61490a; --lourd-bg:#fbeaea; --lourd:#922220; --cree-bg:#e6f0f8; --cree:#1f5172;
+  --letchi:#e93363; --input-bord:#988264; --btn:#86ceff; --btn-hover:#a5d7f9;
+  --f-titre:'Unbounded','Luciole',system-ui,sans-serif;
+  --f-texte:'Luciole',system-ui,sans-serif;
+  --ruban:linear-gradient(90deg,#e93363 0%,#e9b322 25%,#259d49 50%,#4296cc 72%,#8b5fb0 88%,#e93363 100%);
+}
+.obs *{box-sizing:border-box}
+.obs [hidden]{display:none!important}
+.obs{background:var(--fond);color:var(--encre);font:400 15px/1.55 var(--f-texte);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.obs .ruban{height:4px;background:var(--ruban);margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)))}
+.obs .page{max-width:1240px;margin:0 auto;display:grid;gap:28px}
+.obs header{padding-top:28px;display:grid;gap:6px}
+.obs h1{font:800 clamp(22px,3.4vw,32px)/1.15 var(--f-titre);letter-spacing:-.02em;margin:0;text-wrap:balance}
+.obs h2{font:600 17px/1.3 var(--f-titre);margin:0;letter-spacing:-.01em;text-wrap:balance}
+.obs h3{font:700 14px/1.3 var(--f-texte);margin:0}
+.obs .sous{color:var(--encre-2);margin:0;max-width:72ch}
+.obs .num{font-variant-numeric:tabular-nums}
+.obs .bloc{background:var(--papier);border:1px solid var(--trait);border-radius:16px;padding:20px;display:grid;gap:16px;min-width:0}
+.obs .tete-bloc{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px 16px}
+.obs .tete-bloc p{margin:0;color:var(--encre-2);font-size:13.5px;max-width:70ch}
+.obs .tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.obs .tuile{background:var(--papier);border:1px solid var(--trait);border-radius:12px;padding:14px 16px;display:grid;gap:2px;align-content:start}
+.obs .tuile .lib{font-size:12.5px;color:var(--encre-2);letter-spacing:.02em}
+.obs .tuile .val{font:800 24px/1.2 var(--f-titre);font-variant-numeric:tabular-nums}
+.obs .tuile .det{font-size:12.5px;color:var(--encre-2)}
+.obs .deux{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:20px}
+.obs .matrice{width:100%;border-collapse:separate;border-spacing:4px;font-variant-numeric:tabular-nums}
+.obs .matrice th{font-size:12.5px;color:var(--encre-2);font-weight:700;text-align:left;padding:2px 6px}
+.obs .matrice td{background:var(--brume);border-radius:8px;text-align:center;padding:10px 4px;font-weight:700;font-size:16px;cursor:pointer;position:relative}
+.obs .matrice td.vide{color:var(--encre-2);font-weight:400;cursor:default}
+.obs .matrice td:hover:not(.vide),.obs .matrice td:focus-visible{outline:2px solid var(--encre);outline-offset:-2px}
+.obs .matrice td.choisi{outline:2px solid var(--accent);outline-offset:-2px}
+.obs .pastille{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.obs .barre-act{display:flex;height:28px;border-radius:8px;overflow:hidden;gap:2px;background:var(--papier)}
+.obs .barre-act span{display:block;min-width:2px}
+.obs .legende{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;margin:0;padding:0;list-style:none}
+.obs .legende li{display:flex;align-items:center;gap:6px}
+.obs .legende b{font-variant-numeric:tabular-nums}
+.obs .encart{border-left:3px solid var(--trait);padding:4px 0 4px 12px;font-size:13.5px;color:var(--encre-2);margin:0}
+.obs .encart strong{color:var(--encre)}
+.obs details.seuils{border:1px dashed var(--trait);border-radius:12px;padding:10px 14px}
+.obs details.seuils summary{cursor:pointer;font-weight:700}
+.obs .grille-seuils{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 18px;margin-top:12px}
+.obs .grille-seuils label{display:grid;gap:4px;font-size:13px;color:var(--encre-2)}
+.obs input,.obs select{font:15px var(--f-texte);color:var(--encre);background:var(--papier);border:1.5px solid var(--trait);border-radius:10px;height:38px;padding:0 10px;min-width:0}
+.obs input:focus-visible,.obs select:focus-visible,.obs button:focus-visible{outline:2px solid var(--encre);outline-offset:1px}
+.obs .controles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px}
+.obs .controles label{display:grid;gap:4px;font-size:12.5px;color:var(--encre-2);font-weight:700;letter-spacing:.02em}
+.obs .case{display:flex!important;align-items:center;gap:8px;align-self:end;height:38px;font-weight:400!important}
+.obs .case input{height:auto}
+.obs .zone-graph{position:relative;height:clamp(300px,46vh,440px);min-width:0}
+.obs .fiche{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 18px;font-size:13.5px;background:var(--brume);border-radius:12px;padding:12px 14px}
+.obs .fiche dt{font-size:12px;color:var(--encre-2);font-weight:700;letter-spacing:.02em}
+.obs .fiche dd{margin:0}
+.obs .pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.obs .pill.leger{background:var(--ok-bg);color:var(--ok)}
+.obs .pill.moyen{background:var(--moy-bg);color:var(--moy)}
+.obs .pill.lourd{background:var(--lourd-bg);color:var(--lourd)}
+.obs .pill.creer{background:var(--cree-bg);color:var(--cree)}
+.obs .defile{overflow-x:auto;border-radius:12px;border:1px solid var(--trait)}
+.obs table.liste{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+.obs table.liste th,.obs table.liste td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--brume);white-space:nowrap}
+.obs table.liste th{position:sticky;top:0;background:var(--papier);font-size:12px;color:var(--encre-2);letter-spacing:.02em}
+.obs table.liste th button{all:unset;cursor:pointer;font-weight:700}
+.obs table.liste th button:focus-visible{outline:2px solid var(--encre)}
+.obs table.liste td.r,.obs table.liste th.r{text-align:right}
+.obs table.liste tr:last-child td{border-bottom:0}
+.obs .liste-haut{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:end}
+.obs .liste-haut label{display:grid;gap:4px;font-size:12.5px;color:var(--encre-2);font-weight:700}
+.obs .alerte{color:var(--lourd);font-weight:700}
+.obs .page-standard{display:grid;gap:28px}
+.obs .page-standard[hidden]{display:none!important}
+.obs .calcul{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px 24px;
+  background:var(--papier);border:1px solid var(--trait);border-radius:12px;padding:12px 16px}
+.obs .calcul-info{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;min-width:0}
+.obs .calcul-lib{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--encre-2)}
+.obs .calcul-date{font:600 16px/1.3 var(--f-titre);font-variant-numeric:tabular-nums}
+.obs .calcul-par{font-size:13.5px;color:var(--encre-2)}
+.obs .lien-retour{color:var(--encre);font-weight:700;text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:3px}
+.obs .onglets{display:flex;gap:4px;border-bottom:1.5px solid var(--trait)}
+.obs .onglets button{all:unset;cursor:pointer;padding:10px 18px;font:600 15px var(--f-titre);color:var(--encre-2);
+  border-bottom:3px solid transparent;margin-bottom:-1.5px}
+.obs .onglets button[aria-selected="true"]{color:var(--encre);border-bottom-color:var(--letchi)}
+.obs .onglets button:hover{color:var(--encre)}
+.obs .onglets button:focus-visible{outline:2px solid var(--encre);outline-offset:-2px;border-radius:6px}
+.obs .exemples{display:flex;flex-wrap:wrap;gap:8px}
+.obs .exemples button{all:unset;cursor:pointer;font-size:13.5px;font-weight:700;padding:6px 14px;border-radius:999px;
+  border:1px solid var(--trait);background:var(--fond)}
+.obs .exemples button:hover{border-color:var(--encre)}
+.obs .exemples button:focus-visible{outline:2px solid var(--encre);outline-offset:1px}
+.obs .exemples span{font-size:12.5px;color:var(--encre-2);align-self:center;margin-right:4px}
+.obs .modes{display:inline-flex;border:1.5px solid var(--trait);border-radius:999px;padding:3px;gap:2px;width:fit-content;background:var(--fond)}
+.obs .modes button{all:unset;cursor:pointer;padding:6px 16px;border-radius:999px;font-weight:700;font-size:13.5px;color:var(--encre-2)}
+.obs .modes button[aria-pressed="true"]{background:var(--papier);color:var(--encre);box-shadow:0 0 0 1px var(--trait)}
+.obs .modes button:focus-visible{outline:2px solid var(--encre);outline-offset:1px}
+.obs .bloc-phrases{display:grid;gap:12px}
+.obs .formes{display:flex;flex-wrap:wrap;gap:8px}
+.obs .formes button{all:unset;cursor:pointer;padding:8px 16px;border-radius:12px;border:1.5px solid var(--trait);font-weight:700;font-size:14px;background:var(--papier)}
+.obs .formes button[aria-pressed="true"]{border-color:var(--letchi);box-shadow:inset 0 -3px 0 var(--letchi)}
+.obs .formes button:focus-visible{outline:2px solid var(--encre);outline-offset:1px}
+.obs .phrase{margin:0;font-size:clamp(16px,2vw,19px);line-height:2.3;max-width:62ch}
+.obs .phrase select{height:34px;font:700 inherit/1 var(--f-texte);font-size:.92em;color:var(--encre);background:var(--fond);
+  border:1.5px solid var(--input-bord);border-radius:999px;padding:0 10px;margin:0 2px;max-width:100%;vertical-align:baseline;cursor:pointer}
+.obs .phrase select{field-sizing:content}
+.obs .phrase select:disabled{opacity:.45;cursor:not-allowed}
+.obs .phrase-aide{margin:0;font-size:13px;color:var(--encre-2);max-width:72ch}
+.obs .filtres{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.obs .mesure-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}
+.obs .reglages{border:1px solid var(--trait);border-radius:12px;padding:10px 14px 14px;margin:0;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 14px;min-width:0}
+.obs .reglages legend{font-weight:700;font-size:13px;padding:0 6px}
+.obs .reglages label{display:grid;gap:4px;font-size:12.5px;color:var(--encre-2);font-weight:700;letter-spacing:.02em}
+.obs .reglages label[hidden]{display:none}
+.obs .lecture{margin:0;font-size:15px;max-width:80ch}
+.obs .lecture b{font-weight:700}
+.obs .zone-graph.grand{height:clamp(320px,56vh,560px)}
+.obs details.donnees summary{cursor:pointer;font-weight:700;font-size:13.5px}
+.obs details.donnees[open] summary{margin-bottom:10px}
+.obs footer{color:var(--encre-2);font-size:12.5px}
+@media (prefers-reduced-motion:reduce){.obs *{transition:none!important;animation:none!important}}
+.obs{border-radius:16px;overflow:hidden}
+/* Bandeaux d'information (migration Fedow, lieux legacy) et bilan du calcul.
+   / Information banners and computation summary. */
+.obs .bandeau{border-left:3px solid var(--moy);background:var(--moy-bg);color:var(--moy);border-radius:8px;padding:8px 12px;font-size:13.5px;margin:0}
+.obs .calcul-bilan{font-size:13px;color:var(--encre-2)}
+.obs .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}

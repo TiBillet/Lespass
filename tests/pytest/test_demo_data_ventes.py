@@ -1,255 +1,277 @@
 """
-Tests pytest pour le seed de demo des ventes comptables.
-/ Pytest tests for the accounting sales demo seed.
+tests/pytest/test_demo_data_ventes.py
+L'historique des ventes de démo, écrit par le vrai moteur de vente, et ses clôtures.
+/ The demo sales history, written by the real sales engine, and its closures.
 
 LOCALISATION : tests/pytest/test_demo_data_ventes.py
 
-Couvre le module Administration/management/commands/_demo_data_v2_ventes.py :
-6 tests sur l'integrite des donnees generees + la cohérence du rapport
-comptable produit par RapportComptableService.
+RÈGLES MÉTIER TESTÉES (Administration/management/commands/_demo_data_v2_ventes.py)
+- Chaque article écrit par le seed a sa vente, et elle est réglée.
+- Une clôture M par mois de ventes, au chiffre d'affaires de 1 000,00 €.
+- Les numéros des ventes suivent l'ordre de leurs heures ; la chaîne des ventes est
+  saine ; l'intégrité de chaque J est « OK ».
+- Tous les moyens et cas du programme sont présents.
+- Un second passage n'écrit rien : ni vente, ni clôture.
+- Le reset refuse sans DEBUG et TEST ; le passage à blanc ne supprime rien ; le vrai
+  reset vide les ventes et les clôtures, sans toucher aux lignes de create_test_pos_data.
+/ Business rules: every seeded item has its settled sale; one M per month at 1,000 €;
+numbers follow times, chain is sound; every case is present; a second run writes
+nothing; the reset is guarded and has a dry run.
 
-Strategie : reutilise la DB dev (meme pattern qu'admin tests + onboard).
+Schéma dédié (`FastTenantTestCase`) : le seed écrit des ventes et des clôtures, que
+toute clôture lit pour le lieu entier. Deux mois d'historique (`nombre_de_mois=2`) au
+lieu de 24, pour la durée du test : le programme est le même chaque mois.
+/ Dedicated schema; two months instead of 24 for speed (same programme every month).
+
+Spécification : TECH_DOC/SESSIONS/COMPTABILITE/CHANTIER-07-seed-ventes-reelles.md
 """
-from datetime import timedelta
-from decimal import Decimal
 
-import pytest
-from django.utils import timezone
-from django_tenants.utils import tenant_context
+import sys
+
+# Le code Django vit dans /DjangoFiles a l'interieur du conteneur.
+# / Django code lives in /DjangoFiles inside the container.
+sys.path.insert(0, "/DjangoFiles")
+
+import django  # noqa: E402
+
+django.setup()
+
+from datetime import time  # noqa: E402
+from decimal import Decimal  # noqa: E402
+
+from django.core.management import call_command  # noqa: E402
+from django.db import connection  # noqa: E402
+from django.test import override_settings  # noqa: E402
+from django_tenants.test.cases import FastTenantTestCase  # noqa: E402
+
+from Administration.management.commands._demo_data_v2_ventes import (  # noqa: E402
+    CHIFFRE_D_AFFAIRES_D_UN_MOIS_EN_CENTIMES,
+    DEMO_PRODUCT_PREFIX,
+    reinitialiser_les_ventes_du_lieu,
+    seed_clotures_demo,
+    seed_ventes_demo,
+)
+from BaseBillet.models import Configuration, LigneArticle, PaymentMethod  # noqa: E402
+from BaseBillet.models_vente import Reglement, Vente  # noqa: E402
+from comptabilite.models import ClotureCaisse  # noqa: E402
+from comptabilite.ventilation import ecritures_de_l_export  # noqa: E402
+from laboutik.integrity import verifier_chaine_ventes  # noqa: E402
+from laboutik.management.commands.create_test_pos_data import (  # noqa: E402
+    UUID_TRANSACTION_DES_LIGNES_DE_DEMO,
+)
+from laboutik.models import LaboutikConfiguration  # noqa: E402
+
+NOMBRE_DE_MOIS_DU_TEST = 2
+
+# Le programme d'un mois : 30 ventes (dont 2 avoirs) et 31 articles.
+# / A month's programme: 30 sales (2 credit notes) and 31 items.
+NOMBRE_DE_VENTES_PAR_MOIS = 30
+NOMBRE_D_ARTICLES_PAR_MOIS = 31
 
 
-# ---------------------------------------------------------------------------
-# Override : reutiliser la DB dev au lieu d'une test DB temporaire.
-# / Override: reuse the dev DB instead of a temporary test DB.
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="session")
-def django_db_setup():
-    """Pas de creation de test DB — on utilise la DB dev existante."""
-    pass
-
-
-@pytest.fixture(autouse=True, scope="session")
-def _enable_db_access(django_db_blocker):
-    """Desactive le bloqueur d'acces DB de pytest-django pour la session."""
-    django_db_blocker.unblock()
-    yield
-    django_db_blocker.restore()
-
-
-pytestmark = pytest.mark.django_db
-
-
-# ---------------------------------------------------------------------------
-# Fixture : seed sur tenant lespass + cleanup automatique
-# ---------------------------------------------------------------------------
-
-@pytest.fixture
-def seed_lespass():
+class TestSeedDesVentesReelles(FastTenantTestCase):
     """
-    Lance le seed sur le tenant lespass avec reset=True (etat propre).
-    Yield (stats, debut, fin) ou debut/fin couvrent la periode generee.
-    Cleanup : suppression des donnees demo a la fin.
-    / Run the seed on 'lespass' tenant with reset=True. Cleanup after.
+    L'historique de démo et ses clôtures. / The demo history and its closures.
     """
-    from Customers.models import Client
-    from Administration.management.commands._demo_data_v2_ventes import (
-        seed_ventes_demo, _reset_ventes_demo,
-    )
 
-    tenant = Client.objects.get(schema_name="lespass")
+    @classmethod
+    def get_test_schema_name(cls):
+        return "test_demo_ventes_historique"
 
-    # Fenetre : aujourd'hui debut → demain debut. Couvre largement le datetime
-    # backdate "hier 14h" du seed.
-    # / Window: today start -> tomorrow start. Wide enough for the backdated time.
-    now_local = timezone.localtime()
-    debut = (now_local - timedelta(days=2)).replace(hour=0, minute=0, second=0, microsecond=0)
-    fin = now_local.replace(hour=23, minute=59, second=59, microsecond=999999)
+    @classmethod
+    def get_test_tenant_domain(cls):
+        return "test-demo-ventes-historique.tibillet.localhost"
 
-    with tenant_context(tenant):
-        stats = seed_ventes_demo(reset=True)
+    @classmethod
+    def setup_tenant(cls, tenant):
+        """`Client.name` est unique et obligatoire. / Client.name is unique."""
+        tenant.name = "Test demo ventes historique"
 
-    yield stats, debut, fin, tenant
+    def setUp(self):
+        """
+        Le lieu (Paris, fermeture 2 h, sans TVA par défaut) et la caisse de démo
+        (`create_test_pos_data` : Bar, produits, monnaies, catégories au 707000).
+        / The venue and the demo POS.
+        """
+        connection.set_tenant(self.tenant)
 
-    # Cleanup
-    with tenant_context(tenant):
-        _reset_ventes_demo()
+        # Le singleton de la caisse porte la clé des empreintes (tests/PIEGES.md 9.86).
+        # / The register singleton holds the fingerprint key.
+        LaboutikConfiguration.get_solo().save()
 
+        configuration = Configuration.get_solo()
+        configuration.fuseau_horaire = "Europe/Paris"
+        configuration.heure_de_fermeture = time(2, 0)
+        configuration.vat_taxe = Decimal("0")
+        configuration.save()
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+        call_command("create_test_pos_data", schema=self.tenant.schema_name)
 
-def test_seed_cree_au_moins_15_lignes_distinctes(seed_lespass):
-    """
-    Le seed cree au moins 15 LigneArticle : 5 billets + 12 adhesions
-    (8 SF + 4 unitaires) + 3 QR/NFC + 1 avoir + 1 remboursement = 22 lignes.
-    / Seed creates at least 15 LigneArticle (typical: 22).
-    """
-    stats, _, _, _ = seed_lespass
-    assert stats["nb_lignes_creees"] >= 15, (
-        f"Attendu >= 15 lignes, obtenu {stats['nb_lignes_creees']}"
-    )
+    def _ecrire_l_historique_et_cloturer(self):
+        """
+        L'historique de 2 mois, puis ses clôtures. Rend aussi les uuid des articles qui
+        existaient avant (ceux de create_test_pos_data).
+        / The 2-month history, then its closures; plus the items existing before.
+        """
+        uuids_des_articles_d_avant = set(LigneArticle.objects.values_list("uuid", flat=True))
+        stats = seed_ventes_demo(nombre_de_mois=NOMBRE_DE_MOIS_DU_TEST)
+        clotures_creees = seed_clotures_demo(self.tenant.schema_name)
+        return stats, clotures_creees, uuids_des_articles_d_avant
 
+    def test_chaque_article_ecrit_par_le_seed_a_sa_vente_reglee(self):
+        stats, _clotures, uuids_des_articles_d_avant = self._ecrire_l_historique_et_cloturer()
 
-def test_seed_idempotent_avec_reset(seed_lespass):
-    """
-    Re-lancer le seed avec reset=True produit le meme nombre de lignes.
-    / Re-running with reset=True produces the same count.
-    """
-    from Administration.management.commands._demo_data_v2_ventes import (
-        seed_ventes_demo,
-    )
+        articles_du_seed = LigneArticle.objects.exclude(uuid__in=uuids_des_articles_d_avant)
+        assert stats["cas_sautes"] == []
+        assert stats["nombre_de_ventes"] == NOMBRE_DE_VENTES_PAR_MOIS * NOMBRE_DE_MOIS_DU_TEST
+        assert articles_du_seed.count() == NOMBRE_D_ARTICLES_PAR_MOIS * NOMBRE_DE_MOIS_DU_TEST
+        assert stats["nombre_d_articles"] == articles_du_seed.count()
+        assert articles_du_seed.filter(vente__isnull=True).count() == 0
+        assert articles_du_seed.exclude(vente__statut=Vente.Statut.REGLEE).count() == 0
 
-    stats_premier, _, _, tenant = seed_lespass
+    def test_une_cloture_m_par_mois_de_ventes_au_chiffre_d_affaires_de_1000_euros(self):
+        stats, clotures_creees, _avant = self._ecrire_l_historique_et_cloturer()
 
-    # 2e seed avec reset (fixture deja faite : on en relance un)
-    # / Second seed with reset (fixture already ran one)
-    with tenant_context(tenant):
-        stats_second = seed_ventes_demo(reset=True)
+        clotures_m = ClotureCaisse.objects.filter(
+            niveau=ClotureCaisse.NIVEAU_MENSUEL
+        ).order_by("datetime_debut")
+        assert clotures_creees[ClotureCaisse.NIVEAU_MENSUEL] == NOMBRE_DE_MOIS_DU_TEST
+        assert clotures_m.count() == NOMBRE_DE_MOIS_DU_TEST
 
-    assert stats_second["nb_lignes_creees"] == stats_premier["nb_lignes_creees"]
-    assert stats_second["total_ttc_centimes"] == stats_premier["total_ttc_centimes"]
+        fuseau_du_lieu = Configuration.get_solo().get_tzinfo()
+        mois_des_clotures = []
+        for cloture_m in clotures_m:
+            assert cloture_m.total_general == CHIFFRE_D_AFFAIRES_D_UN_MOIS_EN_CENTIMES == 100000
+            assert cloture_m.nombre_transactions == NOMBRE_DE_VENTES_PAR_MOIS
+            mois_des_clotures.append(
+                cloture_m.datetime_debut.astimezone(fuseau_du_lieu).strftime("%Y-%m")
+            )
+        assert mois_des_clotures == stats["mois_ecrits"]
 
+    def test_les_numeros_suivent_les_heures_et_la_chaine_des_ventes_est_saine(self):
+        self._ecrire_l_historique_et_cloturer()
 
-def test_seed_total_ttc_correspond_aux_lignes_demo(seed_lespass):
-    """
-    La somme(amount * qty) des LigneArticle [DEMO] (status V/P/F/N) correspond
-    au stats['total_ttc_centimes']. On filtre par prefixe pour ne pas etre
-    pollue par d'autres tests qui auraient laisse des LigneArticle dans la
-    meme fenetre de temps (DB dev partagee).
-    / Sum of demo LigneArticle matches stats. We filter by prefix to avoid
-    / pollution from other tests sharing the dev DB.
-    """
-    from django.db.models import Sum, F
-    from django.db.models.functions import Coalesce
-    from decimal import Decimal
-    from BaseBillet.models import LigneArticle, SaleOrigin
-
-    stats, _, _, tenant = seed_lespass
-
-    with tenant_context(tenant):
-        # On reproduit exactement le filtre du _base_queryset mais en se
-        # restreignant aux produits prefixes par '[DEMO] '.
-        # / Same filter as _base_queryset, restricted to [DEMO] products.
-        total = LigneArticle.objects.filter(
-            pricesold__productsold__product__name__startswith="[DEMO] ",
-            status__in=[
-                LigneArticle.VALID,
-                LigneArticle.PAID,
-                LigneArticle.FREERES,
-                LigneArticle.CREDIT_NOTE,
-            ],
-        ).exclude(sale_origin=SaleOrigin.LABOUTIK).aggregate(
-            t=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
-        )["t"]
-
-    assert int(total) == stats["total_ttc_centimes"], (
-        f"Somme demo={int(total)} cts, stats={stats['total_ttc_centimes']} cts"
-    )
-
-
-def test_seed_ventilation_tva_par_taux(seed_lespass):
-    """
-    3 taux de TVA non nuls presents : 5.5%, 10%, 20% (et 0% pour les adhesions et la
-    vente payee en jetons cadeau).
-    Les montants correspondent aux chiffres ronds prevus, calcules en filtrant
-    sur les lignes [DEMO] uniquement (DB dev partagee).
-    / 3 non-zero VAT rates present. Filter on [DEMO] to avoid pollution.
-    """
-    from django.db.models import Sum, F
-    from django.db.models.functions import Coalesce
-    from decimal import Decimal
-    from BaseBillet.models import LigneArticle, SaleOrigin
-
-    _, _, _, tenant = seed_lespass
-
-    with tenant_context(tenant):
-        rows = (
-            LigneArticle.objects.filter(
-                pricesold__productsold__product__name__startswith="[DEMO] ",
-                status__in=[
-                    LigneArticle.VALID,
-                    LigneArticle.PAID,
-                    LigneArticle.FREERES,
-                    LigneArticle.CREDIT_NOTE,
-                ],
-            ).exclude(sale_origin=SaleOrigin.LABOUTIK)
-            .values("vat")
-            .annotate(ttc=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")))
+        heures_par_numero = list(
+            Vente.objects.filter(statut=Vente.Statut.REGLEE)
+            .order_by("numero")
+            .values_list("datetime_encaissement", flat=True)
         )
-        par_taux = {str(r["vat"]): int(r["ttc"]) for r in rows}
+        assert heures_par_numero == sorted(heures_par_numero)
 
-    # 3 taux non-nuls attendus / 3 non-zero rates expected
-    assert "5.50" in par_taux, f"TVA 5.5% absente. Trouves: {list(par_taux)}"
-    assert "10.00" in par_taux, f"TVA 10% absente. Trouves: {list(par_taux)}"
-    assert "20.00" in par_taux, f"TVA 20% absente. Trouves: {list(par_taux)}"
+        cle_du_lieu = LaboutikConfiguration.get_solo().get_or_create_hmac_key()
+        assert verifier_chaine_ventes(cle_du_lieu) == []
 
-    # Biere : 20×5€ = 100€ TTC à 20% / Beer
-    assert par_taux["20.00"] == 10000
-    # Billets : 200+80+120+20 = 420 - 20 (avoir) = 400€ TTC à 10% / Tickets
-    assert par_taux["10.00"] == 40000
-    # Food : 40€ TTC à 5.5% (le sandwich payé en jetons, 60€, est à TVA 0 : D8 bis)
-    # / Food: 40 € at 5.5 % (the 60 € sandwich paid in tokens is at 0 % VAT)
-    assert par_taux["5.50"] == 4000
+        # Une J par journée de ventes (le 6 et le 20 de chaque mois), toutes « OK ».
+        # / One J per sales day, all "OK".
+        clotures_j = ClotureCaisse.objects.filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
+        assert clotures_j.count() == 2 * NOMBRE_DE_MOIS_DU_TEST
+        for cloture_j in clotures_j:
+            assert cloture_j.rapport_json["integrite"]["statut"] == "OK"
 
+    def test_l_export_comptable_de_chaque_j_ne_manque_d_aucun_compte(self):
+        """
+        Chaque J s'exporte (FEC, API comptable) : chaque article et chaque règlement a
+        son compte. Un règlement SF sans sa monnaie FED, par exemple, n'en a pas.
+        / Every J exports: every item and payment has its account.
+        """
+        self._ecrire_l_historique_et_cloturer()
 
-def test_seed_avoir_et_remboursement_distincts(seed_lespass):
-    """
-    La section remboursements distingue credit_notes (inclus dans total)
-    et refunded (hors total). Montants attendus pour les lignes [DEMO] :
-    -20€ et -16€.
-    / Refund section distinguishes credit_notes (in total) from refunded (out).
-    """
-    from django.db.models import Sum, F, Count
-    from django.db.models.functions import Coalesce
-    from decimal import Decimal
-    from BaseBillet.models import LigneArticle, SaleOrigin
+        clotures_j = ClotureCaisse.objects.filter(niveau=ClotureCaisse.NIVEAU_JOURNALIER)
+        for cloture_j in clotures_j:
+            export_de_la_j = ecritures_de_l_export(cloture_j)
+            assert len(export_de_la_j["ecritures"]) > 0
 
-    _, _, _, tenant = seed_lespass
+    def test_tous_les_moyens_et_cas_du_programme_sont_presents(self):
+        self._ecrire_l_historique_et_cloturer()
 
-    with tenant_context(tenant):
-        cn = LigneArticle.objects.filter(
-            pricesold__productsold__product__name__startswith="[DEMO] ",
-            status=LigneArticle.CREDIT_NOTE,
-        ).exclude(sale_origin=SaleOrigin.LABOUTIK).aggregate(
-            t=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
-            n=Count("pk"),
+        moyens_des_reglements = set(Reglement.objects.values_list("moyen", flat=True))
+        moyens_attendus = {
+            PaymentMethod.STRIPE_FED,
+            PaymentMethod.STRIPE_NOFED,
+            PaymentMethod.STRIPE_SEPA_NOFED,
+            PaymentMethod.STRIPE_RECURENT,
+            PaymentMethod.CC,
+            PaymentMethod.CASH,
+            PaymentMethod.CHEQUE,
+            PaymentMethod.TRANSFER,
+            PaymentMethod.LOCAL_EURO,
+            PaymentMethod.LOCAL_GIFT,
+            PaymentMethod.FREE,
+        }
+        assert moyens_attendus - moyens_des_reglements == set()
+
+        # Trois recharges par mois, hors chiffre d'affaires : en ligne R et E, caisse RE.
+        # / Three top-ups a month, off revenue.
+        recharges = LigneArticle.objects.filter(
+            vente__nature=Vente.Nature.VENTE, hors_chiffre_affaires=True
         )
-        rf = LigneArticle.objects.filter(
-            pricesold__productsold__product__name__startswith="[DEMO] ",
-            status=LigneArticle.REFUNDED,
-        ).exclude(sale_origin=SaleOrigin.LABOUTIK).aggregate(
-            t=Coalesce(Sum(F("amount") * F("qty")), Decimal("0")),
-            n=Count("pk"),
+        assert recharges.count() == 3 * NOMBRE_DE_MOIS_DU_TEST
+
+        # Deux avoirs par mois : un billet, une vente entière.
+        # / Two credit notes a month.
+        avoirs = Vente.objects.filter(nature=Vente.Nature.AVOIR, statut=Vente.Statut.REGLEE)
+        assert avoirs.count() == 2 * NOMBRE_DE_MOIS_DU_TEST
+        assert LigneArticle.objects.filter(status=LigneArticle.CREDIT_NOTE).count() == (
+            2 * NOMBRE_DE_MOIS_DU_TEST
         )
 
-    # Avoir : -20€ x 1 ligne / Credit note
-    assert int(cn["t"]) == -2000, f"Avoir attendu -2000 cts, obtenu {int(cn['t'])}"
-    assert cn["n"] == 1
+        # Des ventes gratuites, sans règlement : billets offerts et prix libres à 0 €.
+        # / Free sales, without payment.
+        ventes_sans_reglement = Vente.objects.filter(
+            statut=Vente.Statut.REGLEE, reglements__isnull=True
+        )
+        assert ventes_sans_reglement.count() == 3 * NOMBRE_DE_MOIS_DU_TEST
 
-    # Remboursement : -16€ x 1 ligne / Refund
-    assert int(rf["t"]) == -1600, f"Refund attendu -1600 cts, obtenu {int(rf['t'])}"
-    assert rf["n"] == 1
+    def test_un_second_passage_n_ecrit_ni_vente_ni_cloture(self):
+        self._ecrire_l_historique_et_cloturer()
+        nombre_de_ventes_apres_le_premier = Vente.objects.count()
+        nombre_de_clotures_apres_le_premier = ClotureCaisse.objects.count()
 
+        second_passage = seed_ventes_demo(nombre_de_mois=NOMBRE_DE_MOIS_DU_TEST)
+        clotures_du_second_passage = seed_clotures_demo(self.tenant.schema_name)
 
-def test_seed_tous_payment_methods_couverts(seed_lespass):
-    """
-    Tous les payment_method TiBillet sont couverts : SF, SN, SP, SR, CC, CA,
-    CH, TR, QR, LE, LG, NA. Exception : UK (Unknown) qui n'est jamais cree
-    intentionnellement.
-    / All TiBillet payment methods are covered (except UK which is never
-    intentionally created).
-    """
-    from comptabilite.services import RapportComptableService
+        assert second_passage["deja_des_ventes"] is True
+        assert second_passage["nombre_de_ventes"] == 0
+        assert clotures_du_second_passage == {"J": 0, "H": 0, "M": 0, "A": 0}
+        assert Vente.objects.count() == nombre_de_ventes_apres_le_premier
+        assert ClotureCaisse.objects.count() == nombre_de_clotures_apres_le_premier
 
-    _, debut, fin, tenant = seed_lespass
+    def test_le_reset_refuse_sans_debug_et_test(self):
+        self._ecrire_l_historique_et_cloturer()
+        nombre_de_ventes = Vente.objects.count()
 
-    with tenant_context(tenant):
-        totaux = RapportComptableService(debut, fin).calculer_totaux_par_moyen()
+        with override_settings(DEBUG=False, TEST=True):
+            with self.assertRaises(RuntimeError):
+                reinitialiser_les_ventes_du_lieu(passage_a_blanc=False)
+        with override_settings(DEBUG=True, TEST=False):
+            with self.assertRaises(RuntimeError):
+                reinitialiser_les_ventes_du_lieu(passage_a_blanc=False)
 
-    codes_attendus = {"SF", "SN", "SP", "SR", "CC", "CA", "CH", "TR", "QR", "LE", "LG", "NA"}
-    codes_presents = set(totaux.keys()) - {"total", "currency_code"}
+        assert Vente.objects.count() == nombre_de_ventes
 
-    manquants = codes_attendus - codes_presents
-    assert not manquants, f"PaymentMethod manquants : {manquants}"
+    def test_le_passage_a_blanc_ne_supprime_rien_et_le_reset_vide_ventes_et_clotures(self):
+        self._ecrire_l_historique_et_cloturer()
+        nombre_de_ventes = Vente.objects.count()
+        nombre_de_clotures = ClotureCaisse.objects.count()
+        lignes_de_create_test_pos_data = LigneArticle.objects.filter(
+            uuid_transaction=UUID_TRANSACTION_DES_LIGNES_DE_DEMO
+        ).count()
+
+        with override_settings(DEBUG=True, TEST=True):
+            nombres_a_blanc = reinitialiser_les_ventes_du_lieu(passage_a_blanc=True)
+            assert nombres_a_blanc["ventes"] == nombre_de_ventes
+            assert nombres_a_blanc["clotures"] == nombre_de_clotures
+            assert Vente.objects.count() == nombre_de_ventes
+            assert ClotureCaisse.objects.count() == nombre_de_clotures
+
+            reinitialiser_les_ventes_du_lieu(passage_a_blanc=False)
+
+        assert Vente.objects.count() == 0
+        assert Reglement.objects.count() == 0
+        assert ClotureCaisse.objects.count() == 0
+        assert LigneArticle.objects.filter(
+            pricesold__productsold__product__name__startswith=DEMO_PRODUCT_PREFIX
+        ).count() == 0
+        assert LigneArticle.objects.filter(
+            uuid_transaction=UUID_TRANSACTION_DES_LIGNES_DE_DEMO
+        ).count() == lignes_de_create_test_pos_data

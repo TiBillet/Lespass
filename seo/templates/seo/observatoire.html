@@ -1,0 +1,324 @@
+{% extends 'unfold/layouts/base.html' %}
+{% load i18n static %}
+
+{% comment %}
+OBSERVATOIRE DES INSTANCES — page de l'admin, reservee au superadmin
+/ INSTANCE OBSERVATORY — admin page, superadmin only
+
+LOCALISATION : seo/templates/seo/observatoire.html
+Rendue par seo/views_observatoire.py, page_observatoire() (GET /admin/observatoire/).
+
+CE QUE FAIT CETTE PAGE
+Elle affiche le dernier calcul de l'observatoire, fait la nuit par le beat Celery
+ou par `manage.py refresh_observatoire`. Elle ne lance JAMAIS de calcul : aucun
+bouton, aucun formulaire.
+/ Shows the last nightly computation. Never computes: no button, no form.
+
+FLUX :
+1. La vue passe `donnees_observatoire` (calcul + textes traduits) par json_script.
+2. seo/static/seo/observatoire.js le lit, classe les lieux, remplit les zones vides
+   de ce gabarit (#tuiles, #matrice, #liste...) et dessine les graphiques avec
+   Chart.js, deja charge par Unfold sur toutes les pages.
+3. Sans calcul en cache, seul le message « Aucun calcul » s'affiche.
+
+Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
+/ No inline style or script.
+{% endcomment %}
+
+{% block title %}{% translate "Observatoire des instances" %} | {{ site_title }}{% endblock %}
+
+{% block extrastyle %}
+    <link rel="stylesheet" href="{% static 'seo/observatoire.css' %}">
+{% endblock %}
+
+{% block extrahead %}
+    {{ donnees_observatoire|json_script:"observatoire-donnees" }}
+    <script src="{% static 'seo/observatoire.js' %}" defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="obs" data-testid="observatoire-page">
+<div class="ruban" aria-hidden="true"></div>
+<div class="page">
+
+    <header>
+        <h1>{% translate "Observatoire des instances TiBillet" %}</h1>
+        {% if calcul %}
+            <p class="sous">
+                {% blocktranslate with nombre_de_mois=calcul.mois|length premier=calcul.mois|first dernier=calcul.mois|last count nombre=calcul.inst|length %}{{ nombre }} instance, de {{ premier }} à {{ dernier }} ({{ nombre_de_mois }} mois).{% plural %}{{ nombre }} instances, de {{ premier }} à {{ dernier }} ({{ nombre_de_mois }} mois).{% endblocktranslate %}
+            </p>
+        {% endif %}
+    </header>
+
+    {# Le dernier calcul : quand, par qui, et son bilan. #}
+    {# / The last computation: when, by whom, and its summary. #}
+    <div class="calcul" role="status" data-testid="observatoire-date-calcul">
+        <div class="calcul-info">
+            <span class="calcul-lib">{% translate "Dernier calcul" %}</span>
+            {% if date_du_calcul %}
+                <span class="calcul-date">{{ date_du_calcul|date:"j F Y, H:i" }}</span>
+                <span class="calcul-par">
+                    {% if calcul.calcule_par == "cron" %}{% translate "calcul de la nuit" %}{% else %}{% translate "lancé par manage.py" %}{% endif %}
+                    ·
+                    {% if jours_depuis_le_calcul == 0 %}{% translate "aujourd'hui" %}{% elif jours_depuis_le_calcul == 1 %}{% translate "hier" %}{% else %}{% blocktranslate with jours=jours_depuis_le_calcul %}il y a {{ jours }} jours{% endblocktranslate %}{% endif %}
+                </span>
+            {% else %}
+                <span class="calcul-date">{% translate "aucun" %}</span>
+            {% endif %}
+        </div>
+        {% if calcul.bilan %}
+            <span class="calcul-bilan" data-testid="observatoire-bilan">
+                {% blocktranslate with lus=calcul.bilan.lieux_lus duree=calcul.bilan.duree_s %}{{ lus }} lieux lus en {{ duree }} s{% endblocktranslate %}{% if calcul.bilan.erreurs %}, <span class="alerte">{% blocktranslate with nombre=calcul.bilan.erreurs|length %}{{ nombre }} lieu(x) en erreur{% endblocktranslate %}</span>{% endif %}.
+            </span>
+        {% endif %}
+    </div>
+
+    {% if not calcul %}
+
+        {# Aucun calcul : on le dit, et on ne lance RIEN. #}
+        {# / No computation: say so, and run NOTHING. #}
+        <section class="bloc" data-testid="observatoire-vide">
+            <h2>{% translate "Aucun calcul pour l'instant" %}</h2>
+            <p>{% translate "Il sera fait cette nuit, ou par la commande manage.py refresh_observatoire." %}</p>
+        </section>
+
+    {% else %}
+
+        {# ---------- Le reseau depuis le debut / The network since the beginning ---------- #}
+        {# Chiffres cumules, pour une presentation. Rendus par le serveur, sans JS. #}
+        {# / Cumulative figures for a presentation. Server-rendered, no JS. #}
+        {% if reseau %}
+            <section class="bloc" aria-labelledby="t-reseau" data-testid="observatoire-reseau">
+                <div class="tete-bloc">
+                    <h2 id="t-reseau">{% translate "Le réseau depuis le début" %}</h2>
+                    <p>{% translate "Ordres de grandeur pour une présentation. Chaque chiffre dit ce qu'il couvre." %}</p>
+                </div>
+                <div class="tuiles">
+                    <div class="tuile" data-testid="observatoire-reseau-lieux">
+                        <span class="lib">{% translate "Lieux" %}</span>
+                        <span class="val">{{ reseau.lieux }}</span>
+                    </div>
+                    <div class="tuile" data-testid="observatoire-reseau-comptes">
+                        <span class="lib">{% translate "Utilisateurs" %}</span>
+                        <span class="val">≈ {{ reseau.comptes|floatformat:"0g" }}</span>
+                        <span class="det">{% translate "comptes du réseau" %}</span>
+                    </div>
+                    <div class="tuile" data-testid="observatoire-reseau-recharges">
+                        <span class="lib">{% translate "Transactions (recharges)" %}</span>
+                        {% if reseau.fedow_legacy_a_repondu %}
+                            <span class="val">≈ {{ total_des_recharges_en_euros|floatformat:"0g" }} €</span>
+                            <span class="det">{% translate "recharges cashless en euros, Fedow legacy et moteur V2" %}</span>
+                        {% else %}
+                            <span class="val">—</span>
+                            <span class="det alerte">{% translate "Fedow legacy n'a pas répondu lors du calcul" %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="tuile" data-testid="observatoire-reseau-billets">
+                        <span class="lib">{% translate "Billets vendus" %}</span>
+                        <span class="val">≈ {{ reseau.billets_valides|floatformat:"0g" }}</span>
+                        <span class="det">{% blocktranslate with nombre=reseau.billets_scannes|floatformat:"0g" %}dont {{ nombre }} scannés à l'entrée{% endblocktranslate %}</span>
+                    </div>
+                    <div class="tuile" data-testid="observatoire-reseau-cartes">
+                        <span class="lib">{% translate "Cartes cashless" %}</span>
+                        {% if reseau.cartes %}
+                            <span class="val">≈ {{ reseau.cartes.total|floatformat:"0g" }}</span>
+                            <span class="det">{% blocktranslate with nombre=reseau.cartes.liees_a_un_compte|floatformat:"0g" %}dont {{ nombre }} liées à un compte (Fedow legacy){% endblocktranslate %}</span>
+                        {% else %}
+                            <span class="val">—</span>
+                            <span class="det alerte">{% translate "Fedow legacy n'a pas répondu lors du calcul" %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="tuile" data-testid="observatoire-reseau-benevolat">
+                        <span class="lib">{% translate "Heures de bénévolat" %}</span>
+                        <span class="val">≈ {{ reseau.heures_de_benevolat|floatformat:"0g" }} h</span>
+                        <span class="det">{% translate "créneaux à horaires du planning bénévole, par personne inscrite" %}</span>
+                    </div>
+                </div>
+                {% if recharges_par_asset %}
+                    <details class="donnees">
+                        <summary>{% translate "Détail des recharges par monnaie" %}</summary>
+                        <div class="defile" style="max-height:420px">
+                            <table class="liste" data-testid="observatoire-reseau-recharges-detail">
+                                <thead><tr>
+                                    <th>{% translate "Monnaie" %}</th>
+                                    <th>{% translate "Catégorie" %}</th>
+                                    <th>{% translate "Moteur" %}</th>
+                                    <th class="r">{% translate "Total rechargé" %}</th>
+                                    <th class="r">{% translate "Recharges" %}</th>
+                                </tr></thead>
+                                <tbody>
+                                    {% for recharge in recharges_par_asset %}
+                                        <tr>
+                                            <td>{{ recharge.nom }}</td>
+                                            <td>{{ recharge.categorie }}</td>
+                                            <td>{{ recharge.moteur }}</td>
+                                            <td class="r">{{ recharge.total_affiche|floatformat:"0g" }} {{ recharge.unite }}</td>
+                                            <td class="r">{{ recharge.nombre|floatformat:"0g" }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        <p class="bandeau" data-testid="observatoire-bandeau-legacy">
+            {% translate "Les lieux encore en moteur legacy n'ont pas encore leurs clôtures dans TiBillet : leurs chiffres apparaîtront après l'import." %}
+            {% translate "Cartes actives : en cours de migration, beaucoup de données sont encore dans le Fedow legacy." %}
+        </p>
+
+        <nav class="onglets" role="tablist" aria-label="{% translate "Mode d'affichage" %}">
+            <button type="button" role="tab" id="o-standard" aria-controls="vue-standard" aria-selected="true" data-testid="observatoire-onglet-standard">{% translate "Vue standard" %}</button>
+            <button type="button" role="tab" id="o-mesure" aria-controls="vue-mesure" aria-selected="false" data-testid="observatoire-onglet-sur-mesure">{% translate "Sur mesure" %}</button>
+        </nav>
+
+        {# ---------- Onglet « Sur mesure » / "Custom" tab ---------- #}
+        <section class="bloc" id="vue-mesure" role="tabpanel" aria-labelledby="o-mesure" hidden>
+            <div class="tete-bloc">
+                <h2 id="m-titre">{% translate "Graphique sur mesure" %}</h2>
+                <p>{% translate "Choisis ce que tu croises. Le graphique et son tableau se mettent à jour à chaque changement." %}</p>
+            </div>
+            <div class="exemples" id="exemples" aria-label="{% translate "Exemples prêts à l'emploi" %}"></div>
+            <div class="modes" role="group" aria-label="{% translate "Façon de construire le graphique" %}">
+                <button type="button" id="mode-phrases" aria-pressed="true">{% translate "En phrases" %}</button>
+                <button type="button" id="mode-avance" aria-pressed="false">{% translate "Mode avancé" %}</button>
+            </div>
+            <div id="bloc-phrases" class="bloc-phrases">
+                <div class="formes" role="group" aria-label="{% translate "Ce que je cherche" %}">
+                    <button type="button" data-forme="suivre" aria-pressed="true">{% translate "Comparer ou suivre une valeur" %}</button>
+                    <button type="button" data-forme="croiser" aria-pressed="false">{% translate "Croiser deux indicateurs" %}</button>
+                    <button type="button" data-forme="repartir" aria-pressed="false">{% translate "Répartir un total" %}</button>
+                </div>
+                <p class="phrase" id="phrase"></p>
+                <p class="phrase-aide" id="phrase-aide"></p>
+            </div>
+            <div id="bloc-avance" hidden>
+                <fieldset class="reglages">
+                    <legend>{% translate "Construire" %}</legend>
+                    <label for="a-type">{% translate "Type de graphique" %}<select id="a-type">
+                        <option value="nuage">{% translate "Nuage de points : un indicateur contre un autre" %}</option>
+                        <option value="mois">{% translate "Évolution mois par mois" %}</option>
+                        <option value="groupe">{% translate "Barres par groupe d'instances" %}</option>
+                        <option value="classement">{% translate "Classement des instances" %}</option>
+                        <option value="anneau">{% translate "Anneau : répartition d'un total" %}</option>
+                    </select></label>
+                    <label for="a-y" id="l-a-y"><span>{% translate "Indicateur" %}</span><select id="a-y"></select></label>
+                    <label for="a-x" id="l-a-x">{% translate "Axe horizontal" %}<select id="a-x"></select></label>
+                    <label for="a-g" id="l-a-g"><span>{% translate "Regrouper par" %}</span><select id="a-g"></select></label>
+                    <label for="a-calc" id="l-a-calc">{% translate "Calcul entre instances" %}<select id="a-calc">
+                        <option value="moyenne">{% translate "Moyenne par instance" %}</option>
+                        <option value="mediane">{% translate "Médiane par instance" %}</option>
+                        <option value="total">{% translate "Total" %}</option>
+                    </select></label>
+                    <label for="a-periode">{% translate "Période" %}<select id="a-periode">
+                        <option value="12">{% translate "12 derniers mois" %}</option>
+                        <option value="prec">{% translate "12 mois précédents" %}</option>
+                        <option value="tout">{% translate "Toute la période" %}</option>
+                    </select></label>
+                    <label for="a-couleur" id="l-a-couleur"><span>{% translate "Couleur ou séries" %}</span><select id="a-couleur">
+                        <option value="nature">{% translate "Nature" %}</option>
+                        <option value="activite">{% translate "Activité" %}</option>
+                        <option value="taille">{% translate "Taille" %}</option>
+                        <option value="aucune">{% translate "Aucune" %}</option>
+                    </select></label>
+                </fieldset>
+            </div>
+            <fieldset class="reglages filtres">
+                <legend>{% translate "Filtrer et afficher" %}</legend>
+                <label for="m-nat">{% translate "Nature" %}<select id="m-nat"><option value="">{% translate "Toutes" %}</option></select></label>
+                <label for="m-act">{% translate "Activité" %}<select id="m-act"><option value="">{% translate "Toutes" %}</option></select></label>
+                <label for="m-taille">{% translate "Taille" %}<select id="m-taille"><option value="">{% translate "Toutes" %}</option></select></label>
+                <label class="case" for="m-zero"><input type="checkbox" id="m-zero" checked> {% translate "Ignorer les valeurs nulles" %}</label>
+                <label class="case" for="m-log" id="l-m-log"><input type="checkbox" id="m-log"> {% translate "Échelle logarithmique" %}</label>
+            </fieldset>
+            <p class="lecture" id="m-lecture" aria-live="polite"></p>
+            <div class="zone-graph grand"><canvas id="m-graph" aria-describedby="m-lecture" data-testid="observatoire-graphique-sur-mesure"></canvas></div>
+            <details class="donnees">
+                <summary id="m-resume-tableau">{% translate "Voir les données du graphique" %}</summary>
+                <div class="defile" style="max-height:420px"><table class="liste" id="m-tableau"></table></div>
+            </details>
+        </section>
+
+        {# ---------- Vue standard / Standard view ---------- #}
+        <div id="vue-standard" role="tabpanel" aria-labelledby="o-standard" class="page-standard">
+            <section class="tuiles" id="tuiles" aria-label="{% translate "Synthèse" %}" data-testid="observatoire-tuiles"></section>
+
+            <section class="bloc" aria-labelledby="t-qualif">
+                <div class="tete-bloc">
+                    <h2 id="t-qualif">{% translate "Qualifier les instances" %}</h2>
+                    <p>{% translate "Clique une case du tableau pour filtrer l'explorateur et la liste." %}</p>
+                </div>
+                <div class="deux">
+                    <div style="display:grid;gap:10px;min-width:0">
+                        <h3>{% translate "Taille × nature" %} <span style="font-weight:400;color:var(--encre-2)">{% translate "(instances utilisées sur les 12 derniers mois)" %}</span></h3>
+                        <div class="defile" style="border:0"><table class="matrice" id="matrice" data-testid="observatoire-matrice"></table></div>
+                        <ul class="legende" id="leg-nature"></ul>
+                    </div>
+                    <div style="display:grid;gap:12px;align-content:start;min-width:0">
+                        <h3>{% translate "Niveau d'activité" %} <span style="font-weight:400;color:var(--encre-2)">{% translate "(toutes les instances)" %}</span></h3>
+                        <div class="barre-act" id="barre-act" role="img" data-testid="observatoire-barre-activite"></div>
+                        <ul class="legende" id="leg-act" data-testid="observatoire-legende-activite"></ul>
+                        <p class="encart" id="encart-abandon"></p>
+                    </div>
+                </div>
+                <details class="seuils" data-testid="observatoire-seuils">
+                    <summary>{% translate "Régler les seuils de classement" %}</summary>
+                    <div class="grille-seuils" id="seuils"></div>
+                </details>
+            </section>
+
+            <section class="bloc" aria-labelledby="t-expl">
+                <div class="tete-bloc">
+                    <h2 id="t-expl">{% translate "Explorer un indicateur" %}</h2>
+                    <p id="filtre-actif" aria-live="polite"></p>
+                </div>
+                <div class="controles">
+                    <label for="c-ind">{% translate "Indicateur" %}<select id="c-ind"></select></label>
+                    <label for="c-vue">{% translate "Vue" %}<select id="c-vue">
+                        <option value="mois">{% translate "Total par mois" %}</option>
+                        <option value="moyNature">{% translate "Moyenne par instance et par mois, selon la nature" %}</option>
+                        <option value="groupe">{% translate "Moyenne sur 12 mois, par groupe" %}</option>
+                        <option value="classement">{% translate "Classement des instances" %}</option>
+                        <option value="nuage">{% translate "Nuage : un indicateur contre un autre" %}</option>
+                    </select></label>
+                    <label for="c-groupe" id="l-groupe">{% translate "Regrouper par" %}<select id="c-groupe">
+                        <option value="nature">{% translate "Nature" %}</option>
+                        <option value="taille">{% translate "Taille" %}</option>
+                        <option value="activite">{% translate "Activité" %}</option>
+                        <option value="categorie">{% translate "Catégorie déclarée" %}</option>
+                    </select></label>
+                    <label for="c-ind2" id="l-ind2">{% translate "Axe vertical" %}<select id="c-ind2"></select></label>
+                    <label for="c-nat">{% translate "Nature" %}<select id="c-nat"><option value="">{% translate "Toutes" %}</option></select></label>
+                    <label for="c-act">{% translate "Activité" %}<select id="c-act"><option value="">{% translate "Toutes" %}</option></select></label>
+                    <label class="case" for="c-log" id="l-log"><input type="checkbox" id="c-log" checked> {% translate "Échelle logarithmique" %}</label>
+                </div>
+                <div class="zone-graph">
+                    <canvas id="graph" aria-describedby="graph-texte" data-testid="observatoire-graphique"></canvas>
+                </div>
+                <p class="visually-hidden" id="graph-texte"></p>
+                <dl class="fiche" id="fiche"></dl>
+            </section>
+
+            <section class="bloc" aria-labelledby="t-liste">
+                <div class="tete-bloc">
+                    <h2 id="t-liste">{% translate "Instances" %}</h2>
+                    <p>{% translate "« Écart » signale une catégorie déclarée à la création qui ne correspond pas à l'usage observé." %}</p>
+                </div>
+                <div class="liste-haut">
+                    <label for="c-cherche">{% translate "Rechercher" %}<input id="c-cherche" type="search" placeholder="{% translate "Nom du lieu" %}"></label>
+                    <label class="case" for="c-dormants"><input type="checkbox" id="c-dormants"> {% translate "Afficher les instances inactives" %}</label>
+                    <span id="nb-liste" class="sous num" style="font-size:13px" aria-live="polite"></span>
+                </div>
+                <div class="defile" style="max-height:520px"><table class="liste" id="liste" data-testid="observatoire-liste"></table></div>
+            </section>
+        </div>
+
+        <footer>{% translate "Chiffres des clôtures comptables de chaque lieu, montants en euros TTC. Sauf mention contraire, les totaux par instance portent sur les 12 derniers mois. Les connexions admin valent 0 : elles ne sont pas encore enregistrées." %}</footer>
+
+    {% endif %}
+
+</div>
+</div>
+{% endblock %}

@@ -63,6 +63,7 @@ class StaffAdminSite(UnfoldAdminSite):
         from django.urls import path
 
         from Administration.admin.dashboard import page_de_domaine, page_de_module
+        from seo.views_observatoire import page_observatoire
 
         routes_des_modules = [
             path(
@@ -74,6 +75,15 @@ class StaffAdminSite(UnfoldAdminSite):
                 "domaine/<slug:cle>/",
                 self.admin_view(page_de_domaine),
                 name="page_de_domaine",
+            ),
+            # Observatoire des instances : LECTURE SEULE, reservee au superadmin
+            # (controle dans la vue : admin_view laisse passer tout admin du lieu).
+            # Aucune route ne lance le calcul (cf. TECH_DOC/SESSIONS/OBSERVATOIRE/).
+            # / Instance observatory: read-only, superadmin only (checked in the view).
+            path(
+                "observatoire/",
+                self.admin_view(page_observatoire),
+                name="observatoire",
             ),
         ]
         return routes_des_modules + super().get_urls()

@@ -1169,6 +1169,16 @@ def _construire_sections_modules(request):
                     ),
                     "permission": root_permission,
                 },
+                {
+                    # Observatoire des instances : chiffres de tout le reseau.
+                    # Le menu ne fait que cacher le lien : c'est la vue qui refuse
+                    # (403) un admin de lieu (seo/views_observatoire.py).
+                    # / Network figures. The menu only hides the link; the view refuses.
+                    "title": _("Observatoire des instances"),
+                    "icon": "monitoring",
+                    "link": _safe_rev("staff_admin:observatoire"),
+                    "permission": root_permission,
+                },
                 # This menu option is here only for debug purpose
                 # {
                 #     "title": _("Produits"),

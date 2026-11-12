@@ -28,6 +28,10 @@ class SEOCache(models.Model):
     SITEMAP_INDEX = "sitemap_index"
     GLOBAL_COUNTS = "global_counts"
     FEDERATION_INCOMING = "federation_incoming"
+    # Observatoire des instances : chiffres internes de tout le reseau, lus par
+    # le superadmin dans l'admin. Ecrit la nuit par refresh_observatoire.
+    # / Instance observatory: internal network figures, read by the superadmin.
+    OBSERVATOIRE = "observatoire"
 
     CACHE_TYPE_CHOICES = [
         (TENANT_SUMMARY, _("Tenant summary (config, stats, domain)")),
@@ -39,6 +43,7 @@ class SEOCache(models.Model):
         (SITEMAP_INDEX, _("Cross-tenant sitemap index (ROOT)")),
         (GLOBAL_COUNTS, _("Global counts: events, lieux (ROOT)")),
         (FEDERATION_INCOMING, _("Incoming FederatedPlace edges by target tenant")),
+        (OBSERVATOIRE, _("Observatoire des instances (ROOT)")),
     ]
 
     cache_type = models.CharField(
