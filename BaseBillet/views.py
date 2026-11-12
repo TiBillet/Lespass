@@ -61,7 +61,7 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_payment_link_user
-from BaseBillet.validators import MembershipValidator, LinkQrCodeValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
+from BaseBillet.validators import MembershipValidator, ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, PaiementHorsLigneSerializer, WizardPlaceSelectSerializer, WizardPlaceMapSerializer, \
     WizardEventSerializer
 from BaseBillet.models_vente import Vente
 from BaseBillet.services_libelle_prix import (
@@ -783,162 +783,196 @@ def emailconfirmation(request, token):
 
 
 class ScanQrCode(viewsets.ViewSet):  # /qr
+    """
+    Scan du QR code d'une carte TiBillet.
+    / Scanning the QR code of a TiBillet card.
+
+    LOCALISATION : BaseBillet/views.py
+    Spec : TECH_DOC/SESSIONS/OTP/CHANTIER-07-qrcode-par-le-guichet.md
+
+    RÈGLE : le scan ne connecte jamais personne. Une personne anonyme part
+    d'abord au guichet de connexion (code à 6 chiffres), comme pour réserver
+    ou adhérer. Lier une carte demande un clic sur un bouton (POST) : un simple
+    lien ou une image ne doit jamais lier une carte à un compte.
+    / Scanning never logs anyone in. Anonymous people go to the login desk first.
+    Linking a card always needs a button click (POST).
+
+    FLUX :
+    1. GET /qr/<uuid>/ (retrieve) : lit la carte chez Fedow, puis
+       - anonyme -> /connexion/?next=/qr/<uuid>/ ;
+       - carte de la personne -> /my_account/ ;
+       - carte d'un autre compte -> message, /my_account/ ;
+       - carte vierge, la personne a déjà une carte -> message, /my_account/
+         (elle déclare l'ancienne perdue, puis rescanne celle-ci) ;
+       - carte vierge -> page de confirmation (fonctionnel/lier_la_carte.html).
+    2. POST /qr/<uuid>/lier/ (lier) : relit la carte chez Fedow, puis la lie
+       au compte de la personne connectée.
+    / 1. GET reads the card and routes the person. 2. POST links it.
+
+    PERMISSIONS : posées sur chaque action. Ne pas ajouter de get_permissions()
+    qui renverrait AllowAny pour tout : il écraserait le IsAuthenticated de `lier`.
+    / Permissions are set per action. Never add a get_permissions() returning AllowAny.
+    """
     authentication_classes = [SessionAuthentication, ]
+    permission_classes = [permissions.AllowAny, ]
+
+    def lire_la_carte_chez_fedow(self, qrcode_uuid):
+        """
+        Demande la carte à Fedow. 404 si Fedow ne la connaît pas.
+        / Asks Fedow for the card. 404 if Fedow does not know it.
+
+        L'appel se fait depuis un lieu qui a déjà échangé avec Fedow (une salle).
+        Ce tenant_context ne sert QU'À cette lecture : la liaison, elle, se fait
+        toujours sur le lieu d'origine de la carte (voir retrieve, étape 2).
+        / Read from a venue known by Fedow. The linking itself never runs in this block.
+
+        :return: dict QrCardValidator (wallet_uuid, is_wallet_ephemere, origin)
+        """
+        lieu_qui_parle_a_fedow: Client = connection.tenant
+        if lieu_qui_parle_a_fedow.categorie != Client.SALLE_SPECTACLE:
+            lieu_qui_parle_a_fedow = Client.objects.filter(categorie=Client.SALLE_SPECTACLE).first()
+
+        with tenant_context(lieu_qui_parle_a_fedow):
+            carte_chez_fedow = FedowAPI().NFCcard.qr_retrieve(qrcode_uuid)
+
+        if not carte_chez_fedow:
+            raise Http404("Unknow qrcode_uuid")
+        return carte_chez_fedow
 
     def retrieve(self, request, pk=None):
-        # TODO: Serializer ?
+        # 1. Le QR code porte un UUID. Autre chose : 404.
+        # / 1. The QR code carries a UUID. Anything else: 404.
         try:
-            qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
+            qrcode_uuid = uuid.UUID(pk)
         except ValueError:
-            logger.warning("ValueError, not an uuid")
             raise Http404()
-        except Exception as e:
-            logger.error(e)
-            raise e
 
-        # 1) checket fedow 2) checker origin card 3) rediriger vers primary_domain
-        # redirection des cartes génériques
-        tenant: Client = connection.tenant
-        # Besoin d'etre sur un tenant qui a déja échangé avec Fedow
-        if tenant.categorie != Client.SALLE_SPECTACLE:
-            tenant = Client.objects.filter(categorie=Client.SALLE_SPECTACLE).first()
-        with tenant_context(tenant):
-            fedowAPI = FedowAPI()
-            serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
-            if not serialized_qrcode_card:
-                raise Http404("Unknow qrcode_uuid")
+        carte_chez_fedow = self.lire_la_carte_chez_fedow(qrcode_uuid)
 
-            lespass_domain = serialized_qrcode_card['origin']['place']['lespass_domain']
-            if not lespass_domain:
-                raise Http404("Origin error")
+        # 2. La carte se gère sur le domaine principal de son lieu d'origine.
+        # On compare l'HÔTE de la requête, jamais une sous-chaîne de l'adresse :
+        # `?x=<domaine>` ne doit pas éviter la redirection.
+        # / 2. The card is handled on its origin venue's primary domain. Compare the host.
+        domaine_du_lieu_d_origine = carte_chez_fedow['origin']['place']['lespass_domain']
+        if not domaine_du_lieu_d_origine:
+            raise Http404("Origin error")
+        domaine = get_object_or_404(Domain, domain=domaine_du_lieu_d_origine)
+        domaine_principal = domaine.tenant.get_primary_domain()
+        hote_de_la_requete = request.get_host().split(":")[0]
+        if hote_de_la_requete != domaine_principal.domain:
+            return HttpResponseRedirect(f"https://{domaine_principal.domain}/qr/{qrcode_uuid}/")
 
-            domain = get_object_or_404(Domain, domain=lespass_domain)
-            primary_domain = domain.tenant.get_primary_domain()
-            if primary_domain.domain not in request.build_absolute_uri():
-                return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
+        # 3. Anonyme : d'abord le guichet. Il revient ici une fois connecté.
+        # / 3. Anonymous: the login desk first. It comes back here once logged in.
+        adresse_de_cette_page = f"/qr/{qrcode_uuid}/"
+        if not request.user.is_authenticated:
+            return redirect("/connexion/?" + urlencode({"next": adresse_de_cette_page}))
 
-            if not serialized_qrcode_card:
-                logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
-                raise Http404()
+        # 4. Connecté. On compare avec le portefeuille de la personne.
+        # get_or_create_wallet : le portefeuille peut manquer si Fedow était en
+        # panne au moment de la connexion (connexion_retour ne bloque pas).
+        # / 4. Logged in. Compare with the person's wallet (created if missing).
+        fedow_api = FedowAPI()
+        portefeuille_de_la_personne, portefeuille_tout_neuf = fedow_api.wallet.get_or_create_wallet(request.user)
 
-            # La carte n'a pas d'user, on redirige vers la page de renseignement d'user
-            if serialized_qrcode_card['is_wallet_ephemere']:
-                logger.info("Wallet ephemere, on demande le mail")
-                template_context = get_context(request)
-                template_context['qrcode_uuid'] = qrcode_uuid
-                template_context['base_template'] = 'fonctionnel/blank_base.html'
-                # Logout au cas où on scanne les cartes à la suite.
-                logout(request)
-                return render(request, "fonctionnel/register.html", context=template_context)
+        carte_de_la_personne = f"{carte_chez_fedow['wallet_uuid']}" == f"{portefeuille_de_la_personne.uuid}"
+        if carte_de_la_personne:
+            return redirect("/my_account/")
 
-            # Si wallet non ephemere, alors on a un user :
-            wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+        carte_vierge = carte_chez_fedow['is_wallet_ephemere']
+        if not carte_vierge:
+            # On ne dit jamais à qui la carte appartient.
+            # / Never tell who owns the card.
+            messages.add_message(request, messages.ERROR, _("Cette carte est liée à un autre compte."))
+            return redirect("/my_account/")
 
-            user: TibilletUser = wallet.user
-            user.is_active = True
-            user.save()
+        if not portefeuille_tout_neuf and self.la_personne_a_deja_une_carte(fedow_api, request.user):
+            messages.add_message(
+                request, messages.WARNING,
+                _("Vous avez déjà une carte. Pour la remplacer, déclarez-la perdue dans votre compte, "
+                  "puis scannez de nouveau la nouvelle carte."),
+            )
+            return redirect("/my_account/")
 
-            # Parti pris : On logue l'user lorsqu'il scanne sa carte.
-            login(request, user)
+        # 5. Carte vierge : la page de confirmation, avec le bouton « Lier ».
+        # / 5. Blank card: the confirmation page, with the "Link" button.
+        template_context = get_context(request)
+        template_context['qrcode_uuid'] = qrcode_uuid
+        template_context['base_template'] = 'fonctionnel/blank_base.html'
+        return render(request, "fonctionnel/lier_la_carte.html", context=template_context)
 
-            # Pour les tests :
-            # On est sur le moteur de démonstration / test
-            # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.TEST or settings.DEBUG:
-                token = user.get_connect_token()
-                base_url = connection.tenant.get_primary_domain().domain
-                connexion_url = f"https://{base_url}/emailconfirmation/{token}"
-                messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+    def la_personne_a_deja_une_carte(self, fedow_api, user):
+        """
+        Fedow fait foi : la personne a-t-elle déjà une carte liée ?
+        / Fedow is the source of truth: does the person already have a linked card?
+        """
+        portefeuille_chez_fedow = fedow_api.wallet.retrieve_by_signature(user)
+        return portefeuille_chez_fedow.validated_data['has_user_card']
 
-            return redirect("/my_account")
+    @action(detail=True, methods=['POST'], permission_classes=[permissions.IsAuthenticated, ])
+    def lier(self, request, pk=None):
+        """
+        Bouton « Lier cette carte à mon compte » (fonctionnel/lier_la_carte.html).
+        / "Link this card to my account" button.
 
-    # @action(detail=False, methods=['POST'])
-    # def link_with_email_confirm(self, request):
-    # Si l'user a déja une carte
+        La carte est TOUJOURS liée au compte connecté (request.user) : aucun email
+        n'est lu dans le formulaire. La carte est relue chez Fedow : elle a pu être
+        liée par quelqu'un d'autre entre l'affichage de la page et le clic.
+        / Always linked to request.user. The card is read again from Fedow.
 
-    @action(detail=False, methods=['POST'])
-    def link(self, request):
-        # data=request.POST.dict() in the controler for boolean
-        # logger.info(request.POST.dict())
-        # import ipdb; ipdb.set_trace()
-        # data=request.POST.dict() in the controler for boolean
-        validator = LinkQrCodeValidator(data=request.POST.dict())
-        if not validator.is_valid():
-            for error in validator.errors:
-                logger.error(f"{error} : {validator.errors[error][0]}")
-                messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+        FLUX (le même qu'en caisse ou en admin, sans l'email) :
+        1. Fedow fusionne le portefeuille de la carte dans celui de la personne :
+           l'argent déjà sur la carte passe sur son compte.
+        2. Lespass aligne sa copie locale des cartes sur Fedow, puis lie la carte.
+        3. Les adhésions prises en caisse avec ce numéro de carte passent sur le compte.
+        / Fedow merge, local copy, then memberships taken with this card number.
+        """
+        try:
+            qrcode_uuid = uuid.UUID(pk)
+        except ValueError:
+            raise Http404()
 
-        # Le mail est envoyé
-        email = validator.validated_data['email']
-        user: TibilletUser = get_or_create_user(email, force_mail=True)
-        if validator.validated_data.get('newsletter'):
-            send_to_ghost_email.delay(email)
+        user: TibilletUser = request.user
+        carte_chez_fedow = self.lire_la_carte_chez_fedow(qrcode_uuid)
+        if not carte_chez_fedow['is_wallet_ephemere']:
+            messages.add_message(request, messages.ERROR, _("Cette carte est liée à un autre compte."))
+            return redirect("/my_account/")
 
-        # import ipdb; ipdb.set_trace()
-        if not user:
-            # Le mail n'est pas validé par django (example.org?)
-            messages.add_message(request, messages.ERROR, f"{_('Invalid email')}")
-            logger.error("email validé par validateur DRF mais pas par get_or_create_user "
-                         "-> email de confirmation a renvoyé une erreur")
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+        fedow_api = FedowAPI()
+        portefeuille, portefeuille_tout_neuf = fedow_api.wallet.get_or_create_wallet(user)
 
-        if validator.data.get('lastname') and not user.last_name:
-            user.last_name = validator.data.get('lastname')
-        if validator.data.get('firstname') and not user.first_name:
-            user.first_name = validator.data.get('firstname')
-        if validator.data.get('newsletter'):
-            send_to_ghost_email.delay(email, f"{user.first_name} {user.last_name}")
-        # On retire le mail valid : impose la vérification du mail en cas de nouvelle carte
-        user.email_valid = False
-        user.save()
+        # Une seule carte par compte (anti-vol, vérifié aussi chez Fedow et en local).
+        # / One card per account (anti-theft, also checked by Fedow and locally).
+        if not portefeuille_tout_neuf and self.la_personne_a_deja_une_carte(fedow_api, user):
+            messages.add_message(
+                request, messages.ERROR,
+                _("Vous avez déjà une carte. Pour la remplacer, déclarez-la perdue dans votre compte, "
+                  "puis scannez de nouveau la nouvelle carte."),
+            )
+            return redirect("/my_account/")
 
-        fedowAPI = FedowAPI()
-        wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-        # Si l'user possède déja un wallet et une carte référencée dans Fedow,
-
-        # il ne peut pas avoir de deuxièmes cartes
-        # Evite le vol de carte : si je connais l'email d'une personne,
-        # je peux avoir son wallet juste en mettant son email sur une nouvelle carte…
-        # Fonctionne de concert avec la vérification chez Fedow : fedow_core.views.linkwallet_cardqrcode : 385
-        if not created:
-            logger.info(f"wallet {wallet} non created after get_or_create_wallet")
-            retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
-            if retrieve_wallet.validated_data['has_user_card']:
-                messages.add_message(request, messages.ERROR,
-                                     _("You seem to already have a TiBillet card linked to your wallet. "
-                                       "Please revoke it first in your profile area to link a new one."))
-                return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
-
-        # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
-        qrcode_uuid = validator.validated_data['qrcode_uuid']
-        linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
-        if not linked_serialized_card:
-            # QR code inconnu de Fedow (carte non enregistrée / pas encore activée) ou
-            # échec de la liaison. On affiche un message explicite et on s'arrête : sans
-            # ce return, le code plus bas faisait linked_serialized_card['qrcode_uuid']
-            # sur False → TypeError "'bool' object is not subscriptable" (500).
-            # / Unknown QR code on Fedow side (card not registered / not activated yet) or
-            # link failure. Show an explicit message and stop: without this return, the code
-            # below did linked_serialized_card['qrcode_uuid'] on False → TypeError 500.
+        # 1. La fusion chez Fedow. / 1. The merge on Fedow.
+        carte_liee_chez_fedow = fedow_api.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
+        if not carte_liee_chez_fedow:
             messages.add_message(request, messages.ERROR,
                                  _("Cette carte n'est pas reconnue. Elle n'est peut-être pas encore activée."))
-            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+            return redirect("/my_account/")
 
-        # D'abord, on recopie l'état de Fedow : une ancienne carte détachée chez Fedow
-        # sans passer par Lespass (VOID de la caisse V1) bloquerait sinon la liaison
-        # locale de la nouvelle (`UserADejaCarte`). Un échec ici (sur une AUTRE carte de
-        # la personne) ne doit pas empêcher la liaison locale de la nouvelle, plus bas.
-        # / First copy Fedow's state: an old card detached on Fedow behind Lespass's back
-        #   (V1 register VOID) would otherwise block the new card's local link. A failure
-        #   here must not prevent the new card's local link below.
+        # 2. La copie locale. D'abord l'état de Fedow : une ancienne carte détachée
+        # chez Fedow sans passer par Lespass (VOID de la caisse V1) bloquerait sinon
+        # la liaison locale de la nouvelle (`UserADejaCarte`). Les deux étapes ne
+        # bloquent jamais : la fusion chez Fedow a réussi, une incohérence locale est
+        # journalisée (logger.error = alerte Sentry), pas montrée à la personne.
+        # / 2. The local copy, aligned on Fedow first. Never blocking: errors are logged.
+        from QrcodeCashless.services import (
+            aligner_les_cartes_locales_sur_fedow,
+            relier_la_copie_locale_de_la_carte,
+        )
         try:
-            from QrcodeCashless.services import aligner_les_cartes_locales_sur_fedow
-
-            cartes_du_porteur_chez_fedow = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+            cartes_de_la_personne_chez_fedow = fedow_api.NFCcard.retrieve_card_by_signature(user)
             aligner_les_cartes_locales_sur_fedow(
                 user,
-                cartes_du_porteur_chez_fedow,
+                cartes_de_la_personne_chez_fedow,
                 ip=get_client_ip(request),
             )
         except Exception as erreur_alignement:
@@ -947,57 +981,35 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 f"alignement local impossible ({erreur_alignement})."
             )
 
-        # Mettre la copie LOCALE de la carte d'accord : elle porte la même personne.
-        # Sans elle, le point de vente V2 ne sait pas identifier l'adherent au comptoir.
-        # La carte existe ici : liaison locale (transactionnelle et idempotente). Elle
-        # n'existe pas encore (lieu V2 dont les cartes vivent chez l'ancien Fedow) : sa
-        # copie est fabriquée depuis la fiche que Fedow vient de rendre. Lieu legacy : rien.
-        # Non bloquant : la fusion cote Fedow a reussi, une incoherence locale ne doit pas
-        # transformer un parcours abouti en message d'erreur.
-        # / Bring the LOCAL card copy in line (same person): link it, or build it from
-        #   the record Fedow just returned. Non-blocking.
         try:
-            from QrcodeCashless.services import relier_la_copie_locale_de_la_carte
-
             relier_la_copie_locale_de_la_carte(
-                linked_serialized_card,
+                carte_liee_chez_fedow,
                 user,
                 ip=get_client_ip(request),
             )
         except Exception as erreur_liaison_locale:
-            # INCOHERENCE : Fedow a accepte la liaison, la base locale la refuse
-            # (`UserADejaCarte`, ou autre). Les deux bases divergent sur le proprietaire
-            # de la carte, et c'est la version LOCALE que lit le point de vente.
-            # A remonter, pas seulement a journaliser.
-            # / INCONSISTENCY: Fedow accepted the link, the local database refuses it. The
-            #   two bases disagree on who owns the card, and the POS reads the LOCAL one.
+            # INCOHERENCE : Fedow a accepté la liaison, la base locale la refuse. Le
+            # point de vente lit la version LOCALE : à remonter, pas seulement à journaliser.
+            # / INCONSISTENCY: Fedow accepted, local refused. The POS reads the local one.
             logger.error(
                 f"Divergence Fedow/Lespass sur la carte {qrcode_uuid} : liee cote Fedow "
                 f"pour {user.email}, refusee cote Lespass ({erreur_liaison_locale}). "
                 f"Le point de vente utilisera le proprietaire LOCAL."
             )
 
-        # On retourne sur la page GET /qr/
-        # Qui redirigera si besoin et affichera l'erreur
-        logger.info(
-            f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
+        # 3. Les adhésions prises en caisse avec cette carte, avant qu'elle ait un compte.
+        # / 3. Memberships taken at the POS with this card, before it had an account.
+        numero_de_la_carte = carte_liee_chez_fedow.get('number_printed')
+        if numero_de_la_carte:
+            for adhesion in Membership.objects.filter(user__isnull=True, card_number=numero_de_la_carte):
+                adhesion.user = user
+                adhesion.first_name = user.first_name
+                adhesion.last_name = user.last_name
+                adhesion.save()
 
-        # On check si des adhésions n'ont pas été faites avec la carte en wallet ephemère
-        card_number = linked_serialized_card.get('number_printed')
-        if card_number:
-            for membership in Membership.objects.filter(
-                    user__isnull=True,
-                    card_number=card_number):
-                membership.user = user
-                membership.first_name = user.first_name
-                membership.last_name = user.last_name
-                membership.save()
-
-        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
-
-    def get_permissions(self):
-        permission_classes = [permissions.AllowAny]
-        return [permission() for permission in permission_classes]
+        logger.info(f"SCAN QRCODE LIER : carte {qrcode_uuid} liee au portefeuille {portefeuille} de {user.email}")
+        messages.add_message(request, messages.SUCCESS, _("Votre carte est liée à votre compte."))
+        return redirect("/my_account/")
 
 
 class SpecialAdminAction(viewsets.ViewSet):
@@ -1933,14 +1945,16 @@ class MyAccount(viewsets.ViewSet):
                              _("Mail sent, please check spam too!"))
         return HttpResponseClientRedirect('/my_account/')
 
-    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
+    @action(detail=True, methods=['POST'], permission_classes=[TenantAdminPermission])
     def admin_lost_my_card(self, request, pk, *args, **kwargs):
         """
         Bouton « carte perdue » de la fiche d'un usager, dans l'admin.
         / "Lost card" button on a user's page, in the admin.
 
         LOCALISATION : BaseBillet/views.py
-        Appelee par : Administration/templates/admin/membership/wallet_info.html (hx-get).
+        Appelee par : Administration/templates/admin/membership/wallet_info.html (hx-post).
+        POST obligatoire : un GET a effet de bord se declenche par un simple lien ou une image.
+        / POST only: a GET with side effects fires from a plain link or image.
 
         DROITS : les memes que l'admin (TenantAdminPermission : admin du lieu ou superuser).
         DRF repond 403 avant d'entrer ici si l'appelant n'a pas ces droits.
@@ -1975,7 +1989,7 @@ class MyAccount(viewsets.ViewSet):
                                  _("Le détachement de la carte a échoué. Réessayez dans un instant."))
         return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
-    @action(detail=True, methods=['GET'])
+    @action(detail=True, methods=['POST'])
     def lost_my_card(self, request, pk):
         """
         Bouton « carte perdue » de l'espace de l'usager (/my_account/).
@@ -1986,6 +2000,10 @@ class MyAccount(viewsets.ViewSet):
         DROITS : l'usager connecte, avec un email valide, sur SA carte (le porteur est
         toujours request.user : on ne peut pas viser la carte de quelqu'un d'autre).
         / The logged-in user, with a valid email, on THEIR card only.
+
+        POST obligatoire : un GET a effet de bord se declenche par un simple lien ou une
+        image. Detacher la carte, puis faire ouvrir /qr/<carte vierge>/, donnerait sinon
+        la nouvelle carte a l'attaquant. / POST only: a GET fires from a plain link.
 
         :param pk: numero imprime de la carte
         """

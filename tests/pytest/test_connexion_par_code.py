@@ -33,7 +33,6 @@ from django_tenants.utils import tenant_context
 from AuthBillet.connexion_par_code import (
     cle_cache,
     cle_cache_ip,
-    cle_cache_ip_echecs,
     envoyer_un_code_de_connexion,
     verifier_le_code_de_connexion,
 )
@@ -90,7 +89,6 @@ def cles_a_nettoyer(tenant_public):
             cles.append(cle_cache(email, suffixe))
     for ip in ips_utilisees:
         cles.append(cle_cache_ip(ip))
-        cles.append(cle_cache_ip_echecs(ip))
     with tenant_context(tenant_public):
         cache.delete_many(cles)
 
@@ -331,41 +329,6 @@ def test_un_code_faux_renvoie_faux(tenant, tenant_public, cles_a_nettoyer):
                 resultat = verifier_le_code_de_connexion(email, "222222")
 
     assert resultat == "faux"
-
-
-@override_settings(CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN=3)
-def test_trop_de_codes_faux_depuis_une_ip_bloque_meme_le_bon_code(
-    tenant, tenant_public, cles_a_nettoyer
-):
-    """
-    Force brute sur plusieurs emails depuis une même IP : après 3 codes faux (plafond
-    réglé à 3), plus aucun code n'est vérifié depuis cette IP, même le bon, quel que
-    soit l'email. Une autre IP n'est pas touchée.
-    / Brute force across emails from one IP: after the cap, even the right code fails.
-    """
-    nouvel_email, nouvelle_ip = cles_a_nettoyer
-    ip_de_l_attaquant = nouvelle_ip()
-    emails_vises = [nouvel_email(), nouvel_email(), nouvel_email()]
-    email_de_la_victime = nouvel_email()
-
-    with patch("AuthBillet.connexion_par_code.generer_code_otp", return_value="111111"):
-        with patch(CHEMIN_DE_LA_TACHE_MAIL):
-            with tenant_context(tenant_public):
-                for email in emails_vises + [email_de_la_victime]:
-                    envoyer_un_code_de_connexion(email, nouvelle_ip(), "fr", tenant)
-
-                for email in emails_vises:
-                    verifier_le_code_de_connexion(email, "222222", ip_de_l_attaquant)
-
-                resultat_depuis_l_ip_bloquee = verifier_le_code_de_connexion(
-                    email_de_la_victime, "111111", ip_de_l_attaquant
-                )
-                resultat_depuis_une_autre_ip = verifier_le_code_de_connexion(
-                    email_de_la_victime, "111111", nouvelle_ip()
-                )
-
-    assert resultat_depuis_l_ip_bloquee == "trop_d_essais_ip"
-    assert resultat_depuis_une_autre_ip == "ok"
 
 
 def test_sans_code_demande_ou_code_expire_renvoie_expire(

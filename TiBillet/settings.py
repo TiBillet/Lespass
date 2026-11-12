@@ -412,14 +412,6 @@ TENANT_LIMIT_SET_CALLS = True
 #   High on purpose (festival wifi = one IP). Empty value = 500.
 CONNEXION_CODE_PLAFOND_IP_10_MIN = int(os.environ.get('CONNEXION_CODE_PLAFOND_IP_10_MIN') or 500)
 
-# Connexion par code : nombre maximum de codes FAUX tapés depuis une adresse IP,
-# par tranche de 10 minutes, tous lieux confondus. Au-delà, plus aucun code n'est
-# vérifié depuis cette adresse jusqu'à la fin de la tranche. C'est la protection
-# contre la force brute du code à 6 chiffres (5 essais par code ne suffisent pas :
-# on peut demander des codes pour beaucoup d'adresses email). Une valeur vide = 100.
-# / Wrong codes per IP per 10-minute window. Brute-force protection. Empty = 100.
-CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN = int(os.environ.get('CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN') or 100)
-
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
     # Redirige (301) vers le domaine principal du tenant si on arrive sur un

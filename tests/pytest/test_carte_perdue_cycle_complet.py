@@ -150,9 +150,9 @@ def _adherent_avec_wallet_fedow(tenant, prefixe):
 
 def _lier_la_carte_comme_le_parcours_qr(tenant, utilisateur, carte):
     """
-    Lie la carte au porteur comme ScanQrCode.link : chez Fedow, puis dans Lespass.
+    Lie la carte au porteur comme ScanQrCode.lier : chez Fedow, puis dans Lespass.
     Leve l'exception de Lespass si la liaison locale est refusee (ex. UserADejaCarte).
-    / Links the card like ScanQrCode.link: Fedow, then Lespass.
+    / Links the card like ScanQrCode.lier: Fedow, then Lespass.
     """
     from fedow_connect.fedow_api import FedowAPI
     from fedow_core.services import CarteService
@@ -291,7 +291,7 @@ def _perte_declaree_dans_mon_compte(tenant, utilisateur, carte, admin_user):
     navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
     navigateur.force_login(utilisateur)
     with override_settings(DEBUG=True):
-        reponse = navigateur.get(f"/my_account/{carte.number}/lost_my_card/")
+        reponse = navigateur.post(f"/my_account/{carte.number}/lost_my_card/")
     _verifier_la_reponse_du_bouton(reponse, niveaux_de_message.SUCCESS)
 
 
@@ -300,7 +300,7 @@ def _perte_declaree_par_un_admin(tenant, utilisateur, carte, admin_user):
     navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
     navigateur.force_login(admin_user)
     with override_settings(DEBUG=True):
-        reponse = navigateur.get(
+        reponse = navigateur.post(
             f"/my_account/{utilisateur.pk}:{carte.number}/admin_lost_my_card/",
             HTTP_REFERER=REFERER_DE_L_ADMIN,
         )
@@ -340,7 +340,7 @@ FACONS_DE_DECLARER_LA_PERTE = {
             raises=AssertionError,
             reason=(
                 "Trou connu : une carte detachee chez Fedow sans passer par Lespass reste "
-                "liee dans CarteCashless.user jusqu'au prochain /qr/link/ ou /my_account/ "
+                "liee dans CarteCashless.user jusqu'a la prochaine liaison par QR ou /my_account/ "
                 "du porteur (aligner_les_cartes_locales_sur_fedow). Entre-temps, la caisse "
                 "V2 lit encore le lien local (verification Fedow au scan a decider)."
             ),
@@ -445,7 +445,7 @@ def test_double_clic_le_second_ne_signale_pas_d_erreur(
     adresse = f"/my_account/{utilisateur.pk}:{carte.number}/admin_lost_my_card/"
 
     with override_settings(DEBUG=True):
-        premier_clic = navigateur_admin_du_lieu.get(adresse, HTTP_REFERER=REFERER_DE_L_ADMIN)
+        premier_clic = navigateur_admin_du_lieu.post(adresse, HTTP_REFERER=REFERER_DE_L_ADMIN)
     _verifier_la_reponse_du_bouton(premier_clic, niveaux_de_message.SUCCESS)
 
     # Second clic avec un client neuf : le client de test ne suit pas HX-Redirect, donc le
@@ -454,7 +454,7 @@ def test_double_clic_le_second_ne_signale_pas_d_erreur(
     second_navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU, raise_request_exception=False)
     second_navigateur.force_login(admin_user)
     with caplog.at_level(logging.WARNING), override_settings(DEBUG=True):
-        second_clic = second_navigateur.get(adresse, HTTP_REFERER=REFERER_DE_L_ADMIN)
+        second_clic = second_navigateur.post(adresse, HTTP_REFERER=REFERER_DE_L_ADMIN)
     _verifier_la_reponse_du_bouton(second_clic, niveaux_de_message.INFO)
 
     erreurs_journalisees = [r for r in caplog.records if r.levelno >= logging.ERROR]
@@ -485,7 +485,7 @@ def test_le_bouton_repare_une_carte_deja_detachee_chez_fedow(
         assert carte_a.user_id == utilisateur.pk, "Precondition : la carte est encore liee en local."
 
     with override_settings(DEBUG=True):
-        reponse = navigateur_admin_du_lieu.get(
+        reponse = navigateur_admin_du_lieu.post(
             f"/my_account/{utilisateur.pk}:{carte_a.number}/admin_lost_my_card/",
             HTTP_REFERER=REFERER_DE_L_ADMIN,
         )
@@ -528,10 +528,10 @@ def test_liaison_par_qrcode_apres_un_void_v1_detache_l_ancienne_carte_et_lie_la_
 ):
     """
     Carte A detachee chez Fedow par la caisse V1, encore liee en local. Le porteur lie une
-    carte B par /qr/link/ : A est detachee en local, B est liee en local, sans alerte de
+    carte B par POST /qr/<uuid>/lier/ : A est detachee en local, B est liee en local, sans alerte de
     divergence.
     / Card A detached on Fedow by the V1 register. The holder links card B through
-    /qr/link/: A is detached locally, B is linked locally, no divergence alert.
+    POST /qr/<uuid>/lier/: A is detached locally, B is linked locally, no divergence alert.
     """
     utilisateur, carte_a = _carte_detachee_chez_fedow_seulement(
         tenant, detail_des_cartes, "voidlink",
@@ -539,15 +539,10 @@ def test_liaison_par_qrcode_apres_un_void_v1_detache_l_ancienne_carte_et_lie_la_
     carte_b = _carte_connue_de_fedow_et_de_lespass(tenant, detail_des_cartes)
 
     navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
-    with caplog.at_level(logging.WARNING), override_settings(DEBUG=True), \
-            mock.patch("BaseBillet.views.get_or_create_user", return_value=utilisateur):
-        reponse = navigateur.post("/qr/link/", {
-            "email": utilisateur.email,
-            "emailConfirmation": utilisateur.email,
-            "cgu": True,
-            "qrcode_uuid": str(carte_b.uuid),
-        })
-    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+    navigateur.force_login(utilisateur)
+    with caplog.at_level(logging.WARNING), override_settings(DEBUG=True):
+        reponse = navigateur.post(f"/qr/{carte_b.uuid}/lier/")
+    assert reponse.status_code == 302, f"statut inattendu : {reponse.status_code}"
 
     with tenant_context(tenant):
         carte_a.refresh_from_db()
@@ -683,7 +678,7 @@ def test_carte_liee_localement_a_un_autre_usager_reste_a_lui_et_alerte(
     navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
     navigateur.force_login(utilisateur)
     with caplog.at_level(logging.WARNING), override_settings(DEBUG=True):
-        reponse = navigateur.get(f"/my_account/{carte.number}/lost_my_card/")
+        reponse = navigateur.post(f"/my_account/{carte.number}/lost_my_card/")
     _verifier_la_reponse_du_bouton(reponse, niveaux_de_message.SUCCESS)
 
     with tenant_context(tenant):
@@ -768,25 +763,20 @@ def test_liaison_par_qrcode_d_une_carte_videe_ailleurs_passe_au_nouveau_porteur(
 ):
     """
     Une carte videe en caisse V1 est libre chez Fedow, mais sa copie locale garde l'ancien
-    porteur. Une autre personne la lie par /qr/link/ : la copie locale passe a son nom,
+    porteur. Une autre personne la lie par POST /qr/<uuid>/lier/ : la copie locale passe a son nom,
     sans alerte de divergence.
     / A card voided on the V1 register is free on Fedow, its local copy keeps the former
-    holder. Someone else links it through /qr/link/: the local copy follows.
+    holder. Someone else links it through POST /qr/<uuid>/lier/: the local copy follows.
     """
     ancien_porteur, carte = _carte_liee_et_son_porteur(tenant, detail_des_cartes, "videe")
     _perte_declaree_par_un_autre_client_fedow(tenant, ancien_porteur, carte, admin_user=None)
     nouveau_porteur = _adherent_avec_wallet_fedow(tenant, "nouveau")
 
     navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU)
-    with caplog.at_level(logging.WARNING), override_settings(DEBUG=True), \
-            mock.patch("BaseBillet.views.get_or_create_user", return_value=nouveau_porteur):
-        reponse = navigateur.post("/qr/link/", {
-            "email": nouveau_porteur.email,
-            "emailConfirmation": nouveau_porteur.email,
-            "cgu": True,
-            "qrcode_uuid": str(carte.uuid),
-        })
-    assert reponse.status_code == 200, f"statut inattendu : {reponse.status_code}"
+    navigateur.force_login(nouveau_porteur)
+    with caplog.at_level(logging.WARNING), override_settings(DEBUG=True):
+        reponse = navigateur.post(f"/qr/{carte.uuid}/lier/")
+    assert reponse.status_code == 302, f"statut inattendu : {reponse.status_code}"
 
     with tenant_context(tenant):
         carte.refresh_from_db()
@@ -810,7 +800,7 @@ def test_une_carte_primaire_de_caissier_perdue_n_ouvre_plus_la_caisse(
         CartePrimaire.objects.create(carte=carte)
 
     with override_settings(DEBUG=True):
-        reponse = navigateur_admin_du_lieu.get(
+        reponse = navigateur_admin_du_lieu.post(
             f"/my_account/{utilisateur.pk}:{carte.number}/admin_lost_my_card/",
             HTTP_REFERER=REFERER_DE_L_ADMIN,
         )
@@ -850,7 +840,7 @@ def test_un_superuser_peut_declarer_une_carte_perdue_depuis_l_admin(tenant, deta
     navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU, raise_request_exception=False)
     navigateur.force_login(superuser)
     with override_settings(DEBUG=True):
-        reponse = navigateur.get(
+        reponse = navigateur.post(
             f"/my_account/{utilisateur.pk}:{carte.number}/admin_lost_my_card/",
             HTTP_REFERER=REFERER_DE_L_ADMIN,
         )
@@ -874,7 +864,7 @@ def test_un_usager_non_admin_ne_peut_pas_declarer_la_carte_d_un_autre(tenant, de
     navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU, raise_request_exception=False)
     navigateur.force_login(intrus)
     with override_settings(DEBUG=True):
-        reponse = navigateur.get(
+        reponse = navigateur.post(
             f"/my_account/{utilisateur.pk}:{carte.number}/admin_lost_my_card/",
             HTTP_REFERER=REFERER_DE_L_ADMIN,
         )
@@ -918,7 +908,7 @@ def test_un_admin_d_un_autre_lieu_ne_peut_pas_declarer_la_carte(tenant, detail_d
     navigateur = DjangoClient(HTTP_HOST=HOTE_DU_LIEU, raise_request_exception=False)
     navigateur.force_login(admin_d_ailleurs)
     with override_settings(DEBUG=True):
-        reponse = navigateur.get(
+        reponse = navigateur.post(
             f"/my_account/{utilisateur.pk}:{carte.number}/admin_lost_my_card/",
             HTTP_REFERER=REFERER_DE_L_ADMIN,
         )
@@ -946,7 +936,7 @@ def test_admin_lost_my_card_avec_un_identifiant_mal_forme_repond_400(navigateur_
     ]
     for identifiant_mal_forme in identifiants_mal_formes:
         with override_settings(DEBUG=True):
-            reponse = navigateur_admin_du_lieu.get(
+            reponse = navigateur_admin_du_lieu.post(
                 f"/my_account/{identifiant_mal_forme}/admin_lost_my_card/",
                 HTTP_REFERER=REFERER_DE_L_ADMIN,
             )
@@ -958,7 +948,7 @@ def test_admin_lost_my_card_avec_un_identifiant_mal_forme_repond_400(navigateur_
 def test_admin_lost_my_card_avec_un_usager_inconnu_repond_404(navigateur_admin_du_lieu):
     """Un uuid bien forme mais inconnu donne 404. / A well-formed but unknown uuid gives 404."""
     with override_settings(DEBUG=True):
-        reponse = navigateur_admin_du_lieu.get(
+        reponse = navigateur_admin_du_lieu.post(
             f"/my_account/{uuid_module.uuid4()}:ABCDEF12/admin_lost_my_card/",
             HTTP_REFERER=REFERER_DE_L_ADMIN,
         )

@@ -408,7 +408,7 @@ def _declarer_perdue_depuis_mon_compte(page, login_as, login_as_admin, email, nu
     login_as(page, email)
     page.goto('/my_account/card/')
     morceau_d_adresse = f"/my_account/{numero_carte}/lost_my_card/"
-    bouton = page.locator(f'[hx-get="{morceau_d_adresse}"]').first
+    bouton = page.locator(f'[hx-post="{morceau_d_adresse}"]').first
     _double_clic_sur_le_bouton_carte_perdue(
         page, bouton, morceau_d_adresse, confirmation_sweetalert=True,
     )
@@ -420,7 +420,7 @@ def _declarer_perdue_depuis_l_admin(page, login_as, login_as_admin, email, numer
     page.goto(f'/admin/AuthBillet/humanuser/{uuid_adherent}/change/')
     page.locator(f'[hx-get="/my_account/{uuid_adherent}/admin_my_cards/"]').click()
     morceau_d_adresse = f"/my_account/{uuid_adherent}:{numero_carte}/admin_lost_my_card/"
-    bouton = page.locator(f'[hx-get="{morceau_d_adresse}"]').first
+    bouton = page.locator(f'[hx-post="{morceau_d_adresse}"]').first
     _double_clic_sur_le_bouton_carte_perdue(page, bouton, morceau_d_adresse)
 
 
@@ -523,7 +523,8 @@ def test_carte_perdue_les_jetons_suivent_l_adherent_et_jamais_qui_reprend_la_car
     try:
         page_de_qui_trouve = contexte_de_qui_trouve.new_page()
         _lier_la_carte_par_son_qrcode(
-            page_de_qui_trouve, _qrcode_de_la_carte(django_shell, numero_carte_a),
+            page_de_qui_trouve, login_as, django_shell,
+            _qrcode_de_la_carte(django_shell, numero_carte_a),
             email_de_qui_trouve,
         )
         # Son « Mon espace » : la carte A, et un solde nul, sans cadeau.

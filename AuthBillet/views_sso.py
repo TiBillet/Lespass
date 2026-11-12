@@ -83,7 +83,6 @@ MESSAGES_D_ERREUR_DU_CODE = {
     "faux": MESSAGE_CODE_INCORRECT,
     "bloque": _("Trop d'essais. Demandez un nouveau code."),
     "expire": _("Ce code a expiré. Demandez un nouveau code."),
-    "trop_d_essais_ip": _("Trop de codes faux depuis cette connexion. Réessayez dans 10 minutes."),
 }
 
 
@@ -537,9 +536,7 @@ def verifier_le_code(request):
 
     # 2. Vérification du code, sur le guichet (sans tenant_context).
     # / 2. Code check, on the desk.
-    resultat_de_la_verification = verifier_le_code_de_connexion(
-        email, code_saisi, get_client_ip(request)
-    )
+    resultat_de_la_verification = verifier_le_code_de_connexion(email, code_saisi)
     if resultat_de_la_verification != "ok":
         return rendre_l_etape_code(
             request,

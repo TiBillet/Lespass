@@ -15,7 +15,7 @@ locale de deux façons :
 - au premier scan NFC (caisse, borne, tireuse), par le rapatriement
   (`QrcodeCashless/services.py`, `trouver_ou_rapatrier_la_carte`) ;
 - quand la personne lie sa carte par QR code (`BaseBillet/views.py`,
-  `ScanQrCode.link`).
+  `ScanQrCode.lier`).
 Dans les deux cas, la carte locale doit porter sa propriétaire si l'ancien Fedow la
 dit liée. Sinon, la caisse la prend pour une carte anonyme.
 
@@ -93,7 +93,6 @@ pytestmark = pytest.mark.django_db
 # Adresses des vues (laboutik/urls.py, BaseBillet/urls.py).
 # / View addresses.
 URL_DU_RETOUR_CARTE = "/laboutik/paiement/retour_carte/"
-URL_DE_LA_LIAISON_PAR_QRCODE = "/qr/link/"
 
 # Le domaine du lieu `lespass` de la base de dev. / The dev `lespass` venue domain.
 DOMAINE_DU_LIEU = "lespass.tibillet.localhost"
@@ -506,7 +505,7 @@ def test_liaison_par_qrcode_d_une_carte_absente_en_local_la_cree_avec_sa_proprie
     lieu,
 ):
     """
-    La personne scanne le QR de sa carte et donne son email AVANT tout scan en caisse :
+    La personne connectée lie sa carte par le QR code AVANT tout scan en caisse :
     la carte n'existe que chez l'ancien Fedow. L'ancien Fedow lie la carte et rend sa
     fiche complète. La carte locale doit alors exister, avec cette personne.
     / The person links the card by QR code BEFORE any register scan: the local card
@@ -526,24 +525,17 @@ def test_liaison_par_qrcode_d_une_carte_absente_en_local_la_cree_avec_sa_proprie
     # MagicMock nu rendrait une liste vide : l'alignement detacherait ses cartes locales.
     # / After the link, Fedow lists this card as the person's only one.
     client_de_la_liaison.NFCcard.retrieve_card_by_signature.return_value = [carte_fedow.fiche]
+    # La vue relit la carte chez Fedow avant de la lier : elle doit etre vierge.
+    # / The view reads the card again from Fedow: it must be blank.
+    client_de_la_liaison.NFCcard.qr_retrieve.return_value = {"is_wallet_ephemere": True}
 
     navigateur = ClientHttpDjango(HTTP_HOST=DOMAINE_DU_LIEU)
+    navigateur.force_login(proprietaire)
     with patch.object(FedowConfig, "can_fedow", return_value=True):
         with patch("BaseBillet.views.FedowAPI", return_value=client_de_la_liaison):
-            with patch(
-                "BaseBillet.views.get_or_create_user", return_value=proprietaire
-            ):
-                reponse = navigateur.post(
-                    URL_DE_LA_LIAISON_PAR_QRCODE,
-                    {
-                        "email": proprietaire.email,
-                        "emailConfirmation": proprietaire.email,
-                        "cgu": True,
-                        "qrcode_uuid": str(uuid_du_qrcode),
-                    },
-                )
+            reponse = navigateur.post(f"/qr/{uuid_du_qrcode}/lier/")
 
-    assert reponse.status_code in (200, 204, 302), reponse.status_code
+    assert reponse.status_code == 302, reponse.status_code
     assert client_de_la_liaison.NFCcard.linkwallet_cardqrcode.called
     carte_locale = CarteCashless.objects.filter(uuid=uuid_du_qrcode).first()
     assert carte_locale is not None, (

@@ -889,6 +889,32 @@ stripe_metadata = {
 
 - **Tenant-scoped singletons** (via django-solo): `Configuration.get_solo()` returns the config for the current tenant automatically.
 
+### Droits d'admin : `is_staff` est BANNI
+
+**Un droit d'admin se vérifie TOUJOURS ainsi, et seulement ainsi :**
+
+```python
+# Admin du lieu OU superuser. Rien d'autre.
+# / Venue admin OR superuser. Nothing else.
+if not (request.user.is_superuser or request.user.is_current_tenant_admin()):
+    return HttpResponseForbidden()
+```
+
+- **Jamais `is_staff`**, ni dans une vue, ni dans un gabarit, ni dans une permission DRF
+  (`IsAdminUser` lit `is_staff`), ni avec `@staff_member_required`. Le modèle User vit dans
+  le schéma `public` : `is_staff` est **un seul drapeau pour tous les lieux**. L'admin du
+  lieu A a `is_staff=True`, il passerait donc un contrôle `is_staff` sur le lieu B.
+- **Les `()` sont obligatoires** : `is_current_tenant_admin` est une méthode. Sans
+  parenthèses, Python la voit comme vraie, et **tout compte connecté passe**. (Dans un
+  gabarit, Django appelle la méthode tout seul : `{% if user.is_current_tenant_admin %}`.)
+- Pour une API ou l'admin Unfold : `TenantAdminPermission` / `TenantAdminPermissionWithRequest`
+  (`ApiBillet/permissions.py`) appliquent déjà cette règle.
+- Django et Unfold lisent encore `is_staff` pour de l'affichage. Le code du projet peut donc
+  l'écrire, mais **ne le lit jamais pour décider d'un droit**.
+- Incident : `crowds/views.py` écrivait `is_staff or ... or is_current_tenant_admin` (sans
+  `()`). N'importe quel compte connecté pouvait clôturer un projet ou valider un budget.
+  Test : `tests/pytest/test_crowds_actions_reservees_aux_admins.py`.
+
 ### Executer du code dans le contexte d'un tenant specifique
 
 Quand une tache de fond (Celery, management command, script) doit agir sur
@@ -1367,6 +1393,7 @@ Le mainteneur decide. Jamais l'assistant.
 | HTMX target without `aria-live` | Add `aria-live="polite"` on dynamic regions | Screen readers miss updates |
 | Interactive element without `data-testid` | Add `data-testid="module-element-context"` | E2E tests break on class changes |
 | Cache keys without tenant ID | Include `connection.tenant.pk` | Multi-tenant isolation |
+| `is_staff`, `IsAdminUser`, `@staff_member_required` pour un droit | `user.is_superuser or user.is_current_tenant_admin()` (avec les `()`) | `is_staff` est partagé par tous les lieux (multi-tenant) |
 | Server-side validation only | Add `htmx:configRequest` client check too | Fewer unnecessary round-trips |
 | `get_queryset()` / `get_serializer_class()` | Inline explicit queries and serializer calls | No hidden dispatch |
 | Tailwind classes in Unfold admin | Inline styles or CSS variables | Custom classes not in Unfold bundle |

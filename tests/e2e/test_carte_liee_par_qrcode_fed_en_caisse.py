@@ -11,9 +11,9 @@ Un lieu V2 peut avoir des cartes qui n'existent QUE chez l'ancien Fedow : aucune
 `CarteCashless` locale ne leur correspond tant que la caisse ne les a pas scannees.
 Ce fichier suit la vie d'une telle carte, contre le VRAI Fedow et le VRAI Stripe :
 
-1. La personne scanne le QR code de sa carte (`GET /qr/<qrcode_uuid>/`,
-   `ScanQrCode.retrieve`) : la carte est anonyme, le formulaire email s'affiche.
-2. Elle donne son email (`POST /qr/link/`, `ScanQrCode.link`) : l'ancien Fedow lie
+1. La personne connectee scanne le QR code de sa carte (`GET /qr/<qrcode_uuid>/`,
+   `ScanQrCode.retrieve`) : la carte est anonyme, la page « Lier ma carte » s'affiche.
+2. Elle clique « Lier » (`POST /qr/<uuid>/lier/`, `ScanQrCode.lier`) : l'ancien Fedow lie
    la carte a son portefeuille (`linkwallet_cardqrcode`). Cote Lespass,
    `CarteService.lier_a_user` cherche la carte en local.
 3. Elle recharge du FED en ligne : `/my_account/` → `refill_wallet` → Stripe
@@ -346,33 +346,35 @@ def _fed_de_l_adherent_sans_cache(django_shell, email):
 # ---------------------------------------------------------------------------
 
 
-def _lier_la_carte_par_son_qrcode(page, uuid_du_qrcode, email):
-    """La personne scanne le QR code de sa carte et donne son email.
+def _lier_la_carte_par_son_qrcode(page, login_as, django_shell, uuid_du_qrcode, email):
+    """La personne connectee scanne le QR code de sa carte et clique « Lier ».
 
-    Vrai parcours : `GET /qr/<uuid>/` affiche le formulaire (carte anonyme), le
-    formulaire part en htmx sur `POST /qr/link/`, la vue renvoie vers `/qr/<uuid>/`,
-    qui connecte la personne et l'envoie sur `/my_account`.
-    / Real journey: the form shows, posts via htmx, the view sends back to /qr/<uuid>/
-    which logs the person in and redirects to /my_account.
+    Vrai parcours : `GET /qr/<uuid>/` affiche la page de confirmation (carte vierge,
+    personne connectee), le bouton envoie `POST /qr/<uuid>/lier/`, qui lie la carte au
+    compte connecte et renvoie sur `/my_account/`. La connexion elle-meme (guichet et
+    code) est testee ailleurs (test_connexion_par_code.py) : ici, `login_as`.
+    / Real journey: confirmation page, "Link" button, POST, back to /my_account/.
+    Login itself is tested elsewhere: login_as here.
     """
-    page.goto(f"/qr/{uuid_du_qrcode}/")
-    formulaire = page.locator("#linkform")
-    if formulaire.count() == 0:
-        pytest.fail(
-            f"Le scan du QR code n'affiche pas le formulaire email : la carte n'est pas "
-            f"vue comme anonyme. Page : {page.url} — {page.locator('body').inner_text()[:500]}"
-        )
+    # Le compte existe et a prouve son email, comme apres le guichet.
+    # / The account exists with a proven email, as after the login desk.
+    django_shell(
+        "from AuthBillet.utils import get_or_create_user\n"
+        f"utilisateur = get_or_create_user('{email}', send_mail=False)\n"
+        "utilisateur.is_active = True\n"
+        "utilisateur.email_valid = True\n"
+        "utilisateur.save()\n"
+    )
+    login_as(page, email)
 
-    formulaire.locator("#link_email").fill(email)
-    formulaire.locator("#confirm-email").fill(email)
-    # Le lieu peut exiger le nom (`config.need_name`) : on remplit si les champs sont la.
-    # / The venue may require the name: fill the fields when present.
-    champ_prenom = formulaire.locator('input[name="firstname"]')
-    if champ_prenom.count() > 0:
-        champ_prenom.fill("Douglas")
-        formulaire.locator('input[name="lastname"]').fill("Adams")
-    formulaire.locator("#cgu").check()
-    formulaire.locator('button[type="submit"]').click()
+    page.goto(f"/qr/{uuid_du_qrcode}/")
+    bouton_lier = page.locator('[data-testid="qrcode-bouton-lier"]')
+    if bouton_lier.count() == 0:
+        pytest.fail(
+            f"Le scan du QR code n'affiche pas le bouton « Lier » : la carte n'est pas "
+            f"vue comme vierge. Page : {page.url} — {page.locator('body').inner_text()[:500]}"
+        )
+    bouton_lier.click()
 
     try:
         page.wait_for_url(lambda url: "/my_account" in url, timeout=30_000)
@@ -381,21 +383,6 @@ def _lier_la_carte_par_son_qrcode(page, uuid_du_qrcode, email):
             "La liaison par QR code n'a pas abouti sur /my_account. "
             f"Page : {page.url} — {page.locator('body').inner_text()[:600]}"
         )
-
-    # La liaison retire `email_valid` : tant que l'email n'est pas confirme, la page
-    # solde n'offre pas la recharge. En dev, `ScanQrCode.retrieve` pose dans les
-    # messages le lien de confirmation « TEST MODE » (`/emailconfirmation/<token>`),
-    # celui que la personne recevrait par email. On le suit, comme elle le ferait.
-    # / Linking clears email_valid: no top-up until the email is confirmed. In dev the
-    # view posts the "TEST MODE" confirmation link in the messages: follow it.
-    lien_de_confirmation = page.locator('a[href*="/emailconfirmation/"]')
-    if lien_de_confirmation.count() == 0:
-        pytest.fail(
-            "Apres la liaison par QR code, la page n'affiche pas le lien de confirmation "
-            "« TEST MODE » (/emailconfirmation/<token>) : impossible de confirmer l'email. "
-            f"Page : {page.url} — {page.locator('body').inner_text()[:600]}"
-        )
-    page.goto(lien_de_confirmation.first.get_attribute("href"))
 
 
 def _recharger_du_fed_en_ligne(
@@ -659,6 +646,7 @@ def _verifier_la_vente_du_cafe_payee_en_fed(ventes):
 @pytest.mark.stripe_listen
 def test_carte_liee_par_qrcode_puis_rechargee_en_fed_paie_un_cafe_a_la_caisse(
     page,
+    login_as,
     pos_page,
     django_shell,
     fill_stripe_card,
@@ -682,8 +670,8 @@ def test_carte_liee_par_qrcode_puis_rechargee_en_fed_paie_un_cafe_a_la_caisse(
     tag_de_la_carte = carte["tag"]
     email = f"e2e-qr-fed-{uuid_module.uuid4().hex[:8]}@tibillet.test"
 
-    # --- 2. La personne scanne le QR code et donne son email ---
-    _lier_la_carte_par_son_qrcode(page, carte["qrcode_uuid"], email)
+    # --- 2. La personne connectee scanne le QR code et clique « Lier » ---
+    _lier_la_carte_par_son_qrcode(page, login_as, django_shell, carte["qrcode_uuid"], email)
 
     # --- 3. Elle recharge du FED en ligne (vrai Stripe) ---
     recharge = _recharger_du_fed_en_ligne(
@@ -810,6 +798,7 @@ def test_carte_liee_par_qrcode_puis_rechargee_en_fed_paie_un_cafe_a_la_caisse(
 @pytest.mark.stripe_listen
 def test_temoin_carte_scannee_en_caisse_avant_la_liaison_par_qrcode_paie_un_cafe_en_fed(
     page,
+    login_as,
     pos_page,
     django_shell,
     fill_stripe_card,
@@ -847,7 +836,7 @@ def test_temoin_carte_scannee_en_caisse_avant_la_liaison_par_qrcode_paie_un_cafe
     )
 
     # --- 3. Liaison par QR code : la carte locale recoit l'adherent ---
-    _lier_la_carte_par_son_qrcode(page, carte["qrcode_uuid"], email)
+    _lier_la_carte_par_son_qrcode(page, login_as, django_shell, carte["qrcode_uuid"], email)
     carte_locale = _lire_la_carte_locale(django_shell, tag_de_la_carte)
     assert carte_locale["email_du_titulaire"] == email, (
         f"La liaison par QR code n'a pas pose l'adherent sur la carte locale deja "

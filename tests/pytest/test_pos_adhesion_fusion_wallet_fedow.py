@@ -8,7 +8,7 @@ LOCALISATION : tests/pytest/test_pos_adhesion_fusion_wallet_fedow.py
 
 POURQUOI CE FICHIER / WHY THIS FILE :
 Depuis toujours, TiBillet ne lie JAMAIS une carte chargee d'un seul cote. Le parcours web
-`/qr/link/` fait les trois etapes dans l'ordre (`BaseBillet/views.py`) :
+`POST /qr/<uuid>/lier/` fait les trois etapes dans l'ordre (`BaseBillet/views.py`) :
    1. `get_or_create_wallet(user)`      — Fedow cree le wallet du user AVEC sa cle publique
    2. `linkwallet_card_number(...)`     — Fedow absorbe le wallet ephemere de la carte
    3. fusion locale des Tokens          — Lespass deplace le solde local

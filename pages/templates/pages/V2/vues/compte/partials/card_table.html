@@ -33,7 +33,7 @@ Chargé en HTMX par vues/compte/card.html (hx-trigger="revealed").
         {% blocktranslate asvar question_carte_perdue with numero=card.number_printed %}Déclarer la carte {{ numero }} perdue ? Elle sera détachée de votre compte : plus personne ne pourra payer avec. Votre solde reste sur votre compte, et vous pourrez lier une nouvelle carte.{% endblocktranslate %}
         <button type="button" class="btn btn--outline btn--sm"
                 aria-label="{% translate 'I lost my card' %}"
-                hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
+                hx-post="/my_account/{{ card.number_printed }}/lost_my_card/"
                 hx-confirm="{{ question_carte_perdue }}"
                 hx-disabled-elt="this"
                 data-testid="compte-carte-perdue"

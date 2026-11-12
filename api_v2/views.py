@@ -276,7 +276,9 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
         input_serializer.is_valid(raise_exception=True)
         state = input_serializer.validated_data.get("actionStatus") or BudgetItem.State.REQUESTED
         if state in [BudgetItem.State.APPROVED, BudgetItem.State.REJECTED]:
-            if not (request.user.is_staff or request.user.is_superuser):
+            # Valider ou rejeter : admin du lieu OU superuser. Jamais `is_staff`,
+            # partagé par tous les lieux. / Venue admin OR superuser, never is_staff.
+            if not (request.user.is_superuser or request.user.is_current_tenant_admin()):
                 state = BudgetItem.State.REQUESTED
         item = BudgetItem.objects.create(
             initiative=initiative,

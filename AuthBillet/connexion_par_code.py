@@ -93,14 +93,6 @@ def cle_cache_ip(adresse_ip: str) -> str:
     return f"login_code_ip:{adresse_ip}:demandes_des_10_min"
 
 
-def cle_cache_ip_echecs(adresse_ip: str) -> str:
-    """
-    Clé de cache du compteur de codes faux tapés depuis une adresse IP.
-    / Cache key of an IP address wrong-code counter.
-    """
-    return f"login_code_ip:{adresse_ip}:echecs_des_10_min"
-
-
 def augmenter_un_compteur(cle: str, duree_de_vie_en_secondes: int) -> int:
     """
     Ajoute 1 à un compteur du cache et renvoie la nouvelle valeur.
@@ -234,7 +226,7 @@ def envoyer_un_code_de_connexion(email: str, adresse_ip, langue: str, lieu) -> s
     return "envoye"
 
 
-def verifier_le_code_de_connexion(email: str, code_saisi: str, adresse_ip=None) -> str:
+def verifier_le_code_de_connexion(email: str, code_saisi: str) -> str:
     """
     Vérifie le code tapé par la personne.
     / Checks the code typed by the user.
@@ -242,32 +234,23 @@ def verifier_le_code_de_connexion(email: str, code_saisi: str, adresse_ip=None) 
     LOCALISATION : AuthBillet/connexion_par_code.py
 
     FLUX :
-    0. Trop de codes faux depuis cette adresse IP dans les 10 dernières
-       minutes → "trop_d_essais_ip", sans même regarder le code.
     1. Pas d'empreinte en cache → "expire" (code trop vieux, déjà servi, ou
        jamais demandé).
     2. Un essai de plus est compté AVANT de comparer le code.
     3. Plus de 5 essais → "bloque".
     4. Code juste → on efface l'empreinte : le code ne sert qu'une fois.
-    5. Code faux → compté pour l'adresse IP, puis "faux", ou "bloque" si
-       c'était le dernier essai permis.
+    5. Code faux → "faux", ou "bloque" si c'était le dernier essai permis.
 
-    Le plafond par IP (settings.CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN) borne la
-    force brute : sans lui, demander des codes pour beaucoup d'adresses email
-    donne 5 essais par adresse. La lecture du compteur (get) puis la comparaison
-    peuvent laisser passer quelques essais de trop sous forte concurrence : c'est
-    accepté, la borne reste du même ordre.
-    / The per-IP cap bounds brute force across many emails. A small overshoot
-    under concurrency is accepted.
+    Pas de plafond par adresse IP sur la vérification : derrière le wifi d'un
+    festival, des milliers de personnes partagent une seule IP. Un tel plafond
+    laisserait une seule personne bloquer la connexion de tout le festival. La
+    force brute reste bornée par compte (5 essais par code, 10 codes par heure)
+    et par le plafond de demandes de code par IP (D9, CHANTIER-02).
+    / No per-IP cap on verification: a festival wifi is one IP. Brute force stays
+    bounded per account and by the per-IP code request cap.
 
-    :param adresse_ip: l'IP de la requête, ou None (pas de plafond par IP)
-    :return: "ok", "faux", "expire", "bloque" ou "trop_d_essais_ip"
+    :return: "ok", "faux", "expire" ou "bloque"
     """
-    if adresse_ip is not None:
-        nombre_d_echecs_de_l_ip = cache.get(cle_cache_ip_echecs(adresse_ip), 0)
-        if nombre_d_echecs_de_l_ip >= settings.CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN:
-            return "trop_d_essais_ip"
-
     cle_de_l_empreinte = cle_cache(email, "empreinte")
     cle_des_essais = cle_cache(email, "essais")
 
@@ -294,19 +277,6 @@ def verifier_le_code_de_connexion(email: str, code_saisi: str, adresse_ip=None) 
         if not empreinte_effacee_par_cette_requete:
             return "expire"
         return "ok"
-
-    # Code faux : compté pour l'adresse IP (plafond contre la force brute).
-    # / Wrong code: counted for the IP address (brute-force cap).
-    if adresse_ip is not None:
-        nombre_d_echecs_de_l_ip = augmenter_un_compteur(
-            cle_cache_ip_echecs(adresse_ip),
-            DUREE_DE_LA_TRANCHE_IP_EN_SECONDES,
-        )
-        if nombre_d_echecs_de_l_ip == settings.CONNEXION_CODE_PLAFOND_ECHECS_IP_10_MIN:
-            logger.warning(
-                f"Connexion par code : l'adresse IP {adresse_ip} a atteint le plafond "
-                f"de {nombre_d_echecs_de_l_ip} codes faux en 10 minutes."
-            )
 
     # Le dernier essai permis était faux : la personne doit demander un nouveau code.
     # / The last allowed attempt was wrong: a new code is needed.

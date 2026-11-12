@@ -1,0 +1,52 @@
+{% extends base_template %}
+{% load i18n %}
+{% comment %}
+  PAGE « LIER MA CARTE » — confirmation avant de lier une carte vierge au compte.
+  / "Link my card" page: confirmation before linking a blank card to the account.
+
+  LOCALISATION : BaseBillet/templates/fonctionnel/lier_la_carte.html
+  Rendu par : BaseBillet/views.py, ScanQrCode.retrieve (carte vierge, personne connectée).
+  Envoie vers : POST /qr/<uuid>/lier/ (ScanQrCode.lier), qui lie la carte au compte connecté.
+
+  Pourquoi un bouton : un simple lien ou une image ne doit jamais lier une carte.
+  Sinon, ouvrir le lien de la carte d'un inconnu suffirait à la recevoir : il
+  paierait ensuite au bar avec l'argent du compte.
+  / A plain link or image must never link a card: hence the POST button.
+
+  Formulaire classique (sans htmx) avec {% csrf_token %} : il marche sans JavaScript.
+{% endcomment %}
+
+{% block main %}
+    <div class="flex-fill">
+        <div class="container-lg py-5">
+            <div class="row">
+                <div class="col-md-8 offset-md-2 col-lg-6 offset-lg-3 col-xl-4 offset-xl-4" data-testid="qrcode-lier-la-carte">
+                    <h1>{% translate "Lier ma carte TiBillet" %}</h1>
+                    <p>
+                        {% blocktranslate trimmed with email=user.email %}
+                            Cette carte va être liée à votre compte <strong>{{ email }}</strong>.
+                        {% endblocktranslate %}
+                    </p>
+                    <p>
+                        {% translate "Si la carte porte déjà de l'argent, il passe sur votre compte. Ensuite, elle paie avec l'argent de votre compte : liez-la seulement si vous l'avez en main." %}
+                    </p>
+
+                    <form method="post" action="/qr/{{ qrcode_uuid }}/lier/">
+                        {% csrf_token %}
+                        <p class="form-text">
+                            {% blocktranslate trimmed %}
+                                En liant cette carte, j'accepte
+                                <a href="https://tibillet.github.io/documentation_v3/les-bases-et-valeurs-tibillet/aspects-legaux-et-reglementaires/cgu-cgv/?h=cgu" target="_blank" rel="noopener">les conditions générales</a>.
+                            {% endblocktranslate %}
+                        </p>
+                        <button type="submit" class="btn btn-primary btn-lg w-100 mb-3" data-testid="qrcode-bouton-lier">
+                            {% translate "Lier cette carte à mon compte" %}
+                        </button>
+                    </form>
+
+                    <a href="/my_account/" data-testid="qrcode-lier-annuler">{% translate "Annuler" %}</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

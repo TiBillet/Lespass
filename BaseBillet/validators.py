@@ -168,26 +168,6 @@ class TagValidator(serializers.Serializer):
     tags = serializers.PrimaryKeyRelatedField(source="slug", queryset=Tag.objects.all(), many=True)
 
 
-class LinkQrCodeValidator(serializers.Serializer):
-    email = serializers.EmailField(required=True, allow_null=False)
-    emailConfirmation = serializers.EmailField(required=True, allow_null=False)
-    firstname = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    lastname = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    # data=request.POST.dict() in the controler for boolean
-    cgu = serializers.BooleanField(required=True, allow_null=False)
-    newsletter = serializers.BooleanField(required=False, allow_null=True)
-    qrcode_uuid = serializers.UUIDField()
-
-    def validate(self, attrs):
-        email = attrs['email']
-        emailConfirmation = attrs['emailConfirmation']
-        if emailConfirmation != email:
-            logger.error(_(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
-            raise serializers.ValidationError(
-                _(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
-        return attrs
-
-
 class LoginEmailValidator(serializers.Serializer):
     email = serializers.EmailField()
 

@@ -6,7 +6,7 @@ POURQUOI / WHY :
 `CarteService` (fedow_core/services.py) est entierement teste par
 `tests/pytest/test_scan_qr_carte_v2.py` — mais ces tests appellent le SERVICE directement.
 Ils restent verts meme si aucune vue ne l'appelle. C'est exactement ce qui est arrive : les
-vues `lost_my_card` et `ScanQrCode.link` parlaient a Fedow sans jamais ecrire cote Lespass,
+vues `lost_my_card` et `ScanQrCode.lier` parlaient a Fedow sans jamais ecrire cote Lespass,
 et 17 tests verts ne le voyaient pas.
 / CarteService is fully covered by test_scan_qr_carte_v2.py — but those tests call the SERVICE
 directly and stay green even if no view calls it. That is precisely what happened.
@@ -109,7 +109,7 @@ def test_lost_my_card_detache_la_carte_cote_lespass(carte_liee_a_un_user):
     api.NFCcard.lost_my_card_by_signature.return_value = True
 
     with mock.patch("BaseBillet.views.FedowAPI", return_value=api):
-        reponse = navigateur.get(f"/my_account/{carte.number}/lost_my_card/")
+        reponse = navigateur.post(f"/my_account/{carte.number}/lost_my_card/")
 
     assert reponse.status_code in (200, 204, 302), f"statut inattendu : {reponse.status_code}"
     assert api.NFCcard.lost_my_card_by_signature.called, "Fedow n'a pas ete prevenu."
@@ -153,7 +153,7 @@ def test_lost_my_card_ne_detache_rien_si_fedow_refuse(carte_liee_a_un_user):
     )
 
     with mock.patch("BaseBillet.views.FedowAPI", return_value=api):
-        navigateur.get(f"/my_account/{carte.number}/lost_my_card/")
+        navigateur.post(f"/my_account/{carte.number}/lost_my_card/")
 
     assert api.NFCcard.lost_my_card_by_signature.called, (
         "Fedow n'a pas ete sollicite : la vue a court-circuite la declaration."
@@ -208,8 +208,8 @@ def carte_vierge_et_user_sans_carte():
 
 
 def test_le_parcours_qr_lie_la_carte_cote_lespass(carte_vierge_et_user_sans_carte):
-    """Scanner son QR code et donner son email doit lier la carte DANS LA BASE LESPASS.
-    / Scanning the QR code and giving an email must link the card IN THE LESPASS DATABASE.
+    """Lier sa carte par le bouton du QR code doit la lier DANS LA BASE LESPASS.
+    / Linking a card through the QR code button must link it IN THE LESPASS DATABASE.
 
     Fedow fusionne bien les wallets de son cote, mais sans `CarteCashless.user` la carte
     reste « anonyme » pour la caisse V2 : le solde federe est masque par le garde
@@ -247,21 +247,17 @@ def test_le_parcours_qr_lie_la_carte_cote_lespass(carte_vierge_et_user_sans_cart
         api.NFCcard.linkwallet_cardqrcode.return_value,
     ]
 
+    # La vue relit la carte chez Fedow avant de la lier : elle doit etre vierge.
+    # / The view reads the card again from Fedow: it must be blank.
+    api.NFCcard.qr_retrieve.return_value = {"wallet_uuid": str(uuid_module.uuid4()), "is_wallet_ephemere": True}
+
     navigateur = DjangoClient(HTTP_HOST="lespass.tibillet.localhost")
+    navigateur.force_login(user)
 
-    with mock.patch("BaseBillet.views.FedowAPI", return_value=api), \
-            mock.patch("BaseBillet.views.get_or_create_user", return_value=user):
-        reponse = navigateur.post(
-            "/qr/link/",
-            {
-                "email": user.email,
-                "emailConfirmation": user.email,
-                "cgu": True,
-                "qrcode_uuid": str(qrcode_uuid),
-            },
-        )
+    with mock.patch("BaseBillet.views.FedowAPI", return_value=api):
+        reponse = navigateur.post(f"/qr/{qrcode_uuid}/lier/")
 
-    assert reponse.status_code in (200, 204, 302), f"statut inattendu : {reponse.status_code}"
+    assert reponse.status_code == 302, f"statut inattendu : {reponse.status_code}"
     assert api.NFCcard.linkwallet_cardqrcode.called, "Fedow n'a pas ete sollicite."
 
     with tenant_context(tenant):

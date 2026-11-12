@@ -152,9 +152,10 @@ class ArticleViewSet(viewsets.ViewSet):
         """
         article = get_object_or_404(Article, uuid=pk)
         
-        # Verification des permissions
-        # Permission check
-        if article.author != request.user and not request.user.is_staff:
+        # Verification des permissions. Multi-tenant : jamais is_staff (partage
+        # par tous les lieux), mais is_superuser or is_current_tenant_admin().
+        # / Permission check. Multi-tenant: never is_staff.
+        if article.author != request.user and not request.user.is_superuser:
             return render(request, "errors/403.html", status=403)
         
         if request.method == 'GET':
@@ -195,7 +196,7 @@ class ArticleViewSet(viewsets.ViewSet):
         """
         article = get_object_or_404(Article, uuid=pk)
         
-        if article.author != request.user and not request.user.is_staff:
+        if article.author != request.user and not request.user.is_superuser:
             return render(request, "errors/403.html", status=403)
         
         if request.method == 'GET':

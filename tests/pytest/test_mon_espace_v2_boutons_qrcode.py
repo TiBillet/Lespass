@@ -536,7 +536,7 @@ class TestMonEspaceV2BoutonsQrCode(FastTenantTestCase):
                 numero_de_la_carte = CarteCashless.objects.get(user=adherent).number
                 bouton = balise_par_testid(html, "compte-carte-perdue")
                 assert bouton is not None
-                assert bouton[1]["hx-get"] == f"/my_account/{numero_de_la_carte}/lost_my_card/"
+                assert bouton[1]["hx-post"] == f"/my_account/{numero_de_la_carte}/lost_my_card/"
                 assert numero_de_la_carte in bouton[1]["hx-confirm"]
 
     def test_un_seul_gestionnaire_de_confirmation_par_page(self):
