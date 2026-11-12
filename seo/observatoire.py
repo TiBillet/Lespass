@@ -763,5 +763,7 @@ def calculer_observatoire_du_reseau(
         "calcule_par": calcule_par,
         "bilan": bilan,
         "inst": lignes_des_instances,
-        "reseau": reseau_depuis_le_debut(len(lignes_des_instances), totaux_cumules_des_lieux),
+        "reseau": reseau_depuis_le_debut(
+            len(lignes_des_instances), totaux_cumules_des_lieux
+        ),
     }

@@ -13,6 +13,38 @@ from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
 
+
+# Sel de signature du captcha du formulaire de contact. Lu aussi par ContactValidator.
+# / Signing salt of the contact form captcha. Also read by ContactValidator.
+SEL_CAPTCHA_CONTACT = "captcha-formulaire-contact"
+
+
+@register.simple_tag
+def captcha_contact():
+    """
+    Question anti-spam du formulaire de contact : « combien font x + y ? ».
+    Le serveur tire x et y, et signe la bonne réponse dans un jeton.
+    Le visiteur ne renvoie que sa réponse et le jeton : il ne choisit plus la question.
+    Avant, x et y venaient du navigateur : un robot envoyait x=0, y=0, réponse=0.
+    / Anti-spam question of the contact form: "how much is x + y?".
+    The server draws x and y and signs the right answer in a token.
+    The visitor only sends back the answer and the token: they no longer choose the question.
+    Before, x and y came from the browser: a bot sent x=0, y=0, answer=0.
+
+    Pas de session : la page est vue par des robots d'indexation, on n'écrit rien en base.
+    / No session: crawlers see the page, nothing is written to the database.
+    """
+    from django.core import signing
+
+    premier_nombre = randint(1, 9)
+    second_nombre = randint(1, 9)
+    jeton_signe = signing.dumps(premier_nombre + second_nombre, salt=SEL_CAPTCHA_CONTACT)
+    return {
+        "x": premier_nombre,
+        "y": second_nombre,
+        "jeton": jeton_signe,
+    }
+
 @register.simple_tag
 def maptiler_key():
     """

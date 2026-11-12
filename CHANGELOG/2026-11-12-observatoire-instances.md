@@ -24,7 +24,7 @@ serveur ni recalculer le chiffre d'affaires à côté des tickets Z.
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `seo/observatoire.py` | Nouveau : le calcul (2 requêtes sur le public, 6 par lieu) |
+| `seo/observatoire.py` | Nouveau : le calcul (4 requêtes sur le public et 1 appel Fedow, puis 8 par lieu) |
 | `seo/management/commands/refresh_observatoire.py` | Nouveau : la commande ; n'écrit rien si aucun lieu n'a été lu |
 | `seo/views_observatoire.py` | Nouveau : la page, GET seul, 403 si pas superadmin, textes traduits |
 | `seo/templates/seo/observatoire.html` | Nouveau : le gabarit (cadre Unfold) |

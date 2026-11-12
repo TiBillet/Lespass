@@ -72,8 +72,8 @@ Celery beat (chaque nuit, 2 h 30)          manage.py refresh_observatoire
                               |
                               v
         seo/observatoire.py : calculer_observatoire_du_reseau()
-           - 2 requêtes sur le schéma public
-           - 6 requêtes par lieu, dans tenant_context()
+           - 4 requêtes sur le schéma public + 1 appel HTTP à Fedow legacy
+           - 8 requêtes par lieu, dans tenant_context()
                               |
                               v
         SEOCache(cache_type=OBSERVATOIRE, tenant=None)   (aucune expiration)
@@ -100,7 +100,7 @@ Navigateur du superadmin
 - Options : `--mois` (défaut 24, minimum 13 : la page compare deux années) et
   `--par` (`"manage.py"` par défaut, `"cron"` depuis le beat).
 - Elle écrit sur `stderr` une ligne par lieu avec sa durée, puis un bilan :
-  lieux lus, schémas ignorés, erreurs, durée totale.
+  lieux lus, erreurs, durée totale.
 - Un lieu en erreur (dont un schéma sans tables) est noté dans `bilan.erreurs` et
   journalisé ; les autres sont lus.
 - **Garde-fou :** si aucun lieu n'a été lu, elle lève `CommandError` et
@@ -140,7 +140,7 @@ Nouveau fichier, séparé de `seo/services.py`.
 comme `seo/services.py:154` et `comptabilite/tasks.py:1130`. Lire un emplacement
 `WAITING_CONFIG` pendant que `cron_morning` le migre provoque un interblocage.
 
-### 5.3 Requêtes sur le schéma public : 2 requêtes
+### 5.3 Requêtes sur le schéma public : 2 requêtes (+ 2 pour le bloc 5 bis)
 
 **P1 — lieux et nombre d'admins :** la requête 5.2 avec
 `.annotate(nombre_de_comptes_admin=Count("user_admin", distinct=True)).order_by("name")`.
@@ -151,7 +151,7 @@ comme `seo/services.py:154` et `comptabilite/tasks.py:1130`. Lire un emplacement
 `Count("card", distinct=True)`. Seul le moteur Fedow V2 interne alimente cette
 table : la page affiche le bandeau de la section 7.3.
 
-### 5.4 Requêtes dans le schéma de chaque lieu : 6 requêtes
+### 5.4 Requêtes dans le schéma de chaque lieu : 6 requêtes (+ 2 pour le bloc 5 bis)
 
 **L1 — clôtures mensuelles.** `ClotureCaisse.objects.filter(niveau=NIVEAU_MENSUEL, datetime_fin__gt=premier_jour)`.
 Filtre sur la **fin** : la M du mois le plus ancien d'un lieu à l'est du serveur
@@ -162,7 +162,8 @@ le gros `detail.ventes_par_produit`.
 
 **L2 — clôtures journalières des mois sans clôture mensuelle.** Les J qui
 **commencent** après la fin de la dernière M lue (ou après le premier jour s'il n'y a
-aucune M), **sauf la J « reprise »** (`rapport_json__en_tete__reprise=True`) :
+aucune M), **sauf la J « reprise »**, exclue par `rapport_json__contains={"en_tete": {"reprise": True}}`
+(une comparaison de clé vaudrait NULL pour une J sans clé « reprise » et l'exclurait aussi) :
 elle couvre tout l'historique d'avant la bascule. Une J est rangée dans le mois
 de sa fin. Une J finit à l'heure de fermeture + 2 h, pas à minuit : celle de la
 soirée du 31 est déjà dans la M et n'est pas reprise. Limite connue : les ventes
@@ -180,7 +181,7 @@ Les agrégats L3 à L5 (`TruncMonth`) découpent les mois dans le fuseau du serv
 | `ca_adhesions` | somme des `total_ttc_en_centimes` de `detail.adhesions.*` |
 | `ca_billetterie` | somme des `total_ttc_en_centimes` de `detail.billets.*.par_tarif.*` |
 | `ca_caisse` | `chiffre_affaires.par_origine.LB.total_ttc_en_centimes` |
-| `recharges_ligne` | `annexe.recharges_et_cartes.recharges_encaissees.par_moyen`, moyens `SF`, `SN`, `SP`, `SR` |
+| `recharges_ligne` | `annexe.recharges_et_cartes.recharges_encaissees.par_moyen`, moyens Stripe `SN`, `SP`, `SR` (le rapport écarte `SF`, qui n'est pas un moyen d'argent) |
 | `recharges_place` | même dictionnaire, tous les autres moyens |
 | `inscriptions` | somme des `quantite` de `detail.billets.*.par_tarif.*` |
 | `adhesions` | somme des `quantite` de `detail.adhesions.*` |
@@ -219,8 +220,8 @@ activité qui le rattache.
 
 | | Prototype | Cible |
 |---|---|---|
-| Schéma public | 2 + 400 (`count()` des admins) | **2** |
-| Par lieu | 7, dont 2 qui chargent des lignes | **6**, toutes agrégées ou extraites en SQL |
+| Schéma public | 2 + 400 (`count()` des admins) | **4**, + 1 appel HTTP à Fedow (bloc 5 bis) |
+| Par lieu | 7, dont 2 qui chargent des lignes | **8** (6 + 2 du bloc 5 bis), toutes agrégées ou extraites en SQL |
 | Où ça tourne | requête HTTP | worker Celery, la nuit |
 
 ## 5 bis. Le bloc « Le réseau depuis le début »
@@ -284,7 +285,9 @@ une migration `AlterField`, même si **la base ne change pas**.
   adhesions, ca_total, ca_billetterie, ca_adhesions, ca_caisse, recharges_ligne,
   recharges_place, cartes_actives, connexions_admin, usagers`.
 - Positions : schéma, nom, catégorie déclarée, création, points de vente, admins, compteurs.
-- `connexions_admin` : zéros, la donnée n'existe pas encore.
+- `connexions_admin` : zéros, la donnée n'existe pas encore. La page ne l'affiche pas
+  (ni indicateur, ni colonne, ni seuil) ; la règle « bidouillage » de `classer()` le lit
+  toujours et le retrouvera le jour où la donnée existera.
 
 ## 7. La page dans l'admin
 
@@ -326,7 +329,7 @@ Sur le JS :
   leurs clôtures dans TiBillet : leurs chiffres apparaîtront après l'import. »
 - **Bandeau cartes actives** : « En cours de migration : beaucoup de données
   sont encore dans le Fedow legacy. »
-- **Afficher le bilan** près de la date du calcul : lieux lus, en erreur, ignorés.
+- **Afficher le bilan** près de la date du calcul : lieux lus, en erreur.
 - **Renommer en FALC** (`o` → `instance`, `S` → `seuils`, `N` → `nombre_de_mois`…),
   commentaires bilingues, `LOCALISATION`, flux en tête.
 - **Ne pas changer les règles de classement** (`classer()`) ni les seuils. Seul
@@ -398,7 +401,7 @@ Après le travail : `manage.py check`, tests ciblés `seo` et admin.
 ## 11. Critères d'acceptation
 
 - [ ] Aucune route HTTP ne lance le calcul. Seuls le beat et `manage.py` le font.
-- [ ] L'argent vient des clôtures ; 2 requêtes sur le public, 6 par lieu, aucune ligne chargée en mémoire.
+- [ ] L'argent vient des clôtures ; 4 requêtes sur le public et 1 appel Fedow, 8 par lieu, aucune ligne chargée en mémoire.
 - [ ] Les données vivent dans `SEOCache`, sans expiration. Plus rien dans `Backup/`.
 - [ ] La page est dans « Root Configuration », en 403 pour un non-superadmin.
 - [ ] Aucune ressource externe (CDN, Google Fonts).
@@ -414,6 +417,7 @@ Après le travail : `manage.py check`, tests ciblés `seo` et admin.
 | 2026-11-12 | Spec v1 | Rédigée à partir du prototype Cowork (dans `SEO/CHANTIER-13`). |
 | 2026-11-12 | Relecture Fable | Vue DRF bloquée par `HasAPIKey`, règle du CA fausse, exclusion `WAITING_CONFIG`, garde-fou cache. |
 | 2026-11-12 | Spec v2 | Déplacée dans `OBSERVATOIRE/`. L'argent vient des clôtures M et J. Cache sans expiration (`SEOCache` seul). Vue en fonction Django. |
+| 2026-11-12 | Audit Fable complet | Corrigé : tuile « Lieux » = lieux lus, bulles « sommeil » (événements datés), rôle `img` du « ? », docs. Retiré : connexions admin de l'affichage, gardes JS sans effet. |
 | 2026-11-12 | Relecture Fable du code | Corrigé : M du mois le plus ancien (filtre sur la fin), J à cheval sur la M comptée deux fois, `SF` retiré des recharges en ligne. Retiré : contrôle de format du cache, `schemas_ignores`, positions 2-3 du jeu fictif, détour par `_get`. |
 | 2026-11-12 | Bloc réseau | Ajout du bloc « Le réseau depuis le début » et de la route Fedow `statistiques_reseau` (dépôt `../Fedow`). |
 | 2026-11-12 | Implémentation | Code, 15 tests pytest et 2 E2E verts, 9 + 2 mutations détectées. Piège trouvé : `.exclude(rapport_json__en_tete__reprise=True)` exclut aussi les J SANS clé « reprise » (NULL en SQL) ; on utilise `rapport_json__contains`. |

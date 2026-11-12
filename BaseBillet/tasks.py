@@ -1465,6 +1465,16 @@ def redirect_post_webhook_stripe_from_public(url, data):
 
 @app.task
 def contact_mailer(sender, subject, message):
+    """
+    Envoie le message du formulaire de contact au lieu, avec une copie à `sender`.
+    `sender` DOIT être l'adresse du compte connecté (request.user.email), jamais
+    une adresse saisie : un robot y mettait l'adresse de sa cible, et TiBillet lui
+    envoyait du spam à notre nom (incident du 2026-11-10).
+    / Sends the contact form message to the venue, with a copy to `sender`.
+    `sender` MUST be the logged-in account's address (request.user.email), never
+    a typed address: a bot typed its target's address there, and TiBillet
+    spammed it in our name (incident of 2026-11-10).
+    """
     configuration = Configuration.get_solo()
     mail = CeleryMailerClass(
         email=[sender, configuration.email],

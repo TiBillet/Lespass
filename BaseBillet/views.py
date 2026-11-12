@@ -3296,6 +3296,18 @@ class HomeViewset(viewsets.ViewSet):
     @action(detail=False, methods=['POST'])
     def contact(self, request):
         logger.info(request.data)
+
+        # Réservé aux personnes connectées : le lieu répond à l'adresse vérifiée du compte.
+        # Aucune adresse saisie à la main, donc le formulaire ne peut plus relayer du spam.
+        # / Logged-in people only: the venue replies to the account's verified address.
+        # No hand-typed address, so the form can no longer relay spam.
+        if not request.user.is_authenticated:
+            messages.add_message(
+                request, messages.ERROR,
+                _("Connectez-vous pour écrire à l'équipe du lieu. Elle vous répondra à l'adresse de votre compte."),
+            )
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
         validator = ContactValidator(data=request.data, context={'request': request})
         if not validator.is_valid():
             for error in validator.errors:
@@ -3303,7 +3315,7 @@ class HomeViewset(viewsets.ViewSet):
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         contact_mailer.delay(
-            sender=validator.validated_data['email'],
+            sender=request.user.email,
             subject=validator.validated_data['subject'],
             message=validator.validated_data['message'],
         )
