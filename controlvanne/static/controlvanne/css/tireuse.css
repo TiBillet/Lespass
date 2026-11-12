@@ -1,3 +1,7 @@
+/* Hallmark · checked: 2026-11-12 · scope: app · genre: playful (inferred) · theme: maquette Létireuz (kept) · built: the project · redesign: polish (responsive only) */
+/* Hallmark · waive 54 · libellés en capitales espacées (Prix, Solde, carte, Fût) · ils font partie de la maquette validée par les lieux */
+/* Hallmark · waive 9 · même raison que 54 : le look de la maquette est gardé à l'identique */
+
 /* =================================================================
    ÉCRAN TIREUSE SANS CONTACT — feuille de style unique
    / Contactless tap screen — single stylesheet
@@ -5,8 +9,9 @@
    LOCALISATION : controlvanne/static/controlvanne/css/tireuse.css
 
    Reprise de la maquette TEMP-tibillet-tireuse-main/tireuses-non-tactile.
-   L'écran du Pi n'est pas tactile. Il fait 1280×800.
-   / Taken from the mockup. The Pi screen is not touch-enabled, 1280×800.
+   La maquette est dessinée pour un écran de 1280×800.
+   L'écran du Pi n'est pas tactile.
+   / Taken from the mockup, drawn for a 1280×800 screen. Non-touch screen.
 
    PRINCIPE :
    Le JS (ecran_tireuse.js) pose seulement l'attribut data-etat sur la
@@ -14,6 +19,20 @@
    Valeurs possibles de data-etat :
      veille · service · tirage · fin · refus · maintenance
    / JS only sets data-etat on the tap root. This CSS decides what to show.
+
+   RESPONSIVE — comment l'écran s'adapte :
+   1. Le cadre (.tireuse__frame) est un « conteneur » CSS.
+   2. L'unité --tireuse-u vaut 1 pixel de la maquette, mis à l'échelle
+      de la largeur du cadre. Cadre de 1280 px : 1 unité = 1 px.
+      Cadre de 640 px : 1 unité = 0,5 px.
+   3. Toutes les tailles du cadre sont écrites en unités de maquette,
+      avec un plancher en px pour rester lisible sur un petit écran.
+   4. En paysage, le cadre garde la forme 16/10 de la maquette et
+      grandit avec l'écran. En portrait, il prend tout l'écran et les
+      blocs passent en colonne.
+   / RESPONSIVE: the frame is a CSS container. --tireuse-u is one mockup
+   pixel scaled to the frame width. Landscape keeps the 16/10 shape,
+   portrait fills the screen and stacks the blocks.
 
    Utilisé par :
    - controlvanne/templates/controlvanne/kiosk_detail.html (une tireuse)
@@ -45,7 +64,8 @@
      fallback letter stays a capital. */
   --tireuse-font-title: 'Sonder Sans', var(--font-display);
 
-  /* --- Espacements (échelle 4 pt) / Spacing scale --- */
+  /* --- Espacements fixes (échelle 4 pt) : page liste et simulateur ---
+     / Fixed spacing scale: list page and simulator */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -58,6 +78,25 @@
   --radius-s: 8px;
   --radius-m: 12px;
   --radius-pill: 999px;
+
+  /* --- Unité de maquette / Mockup unit ---
+     1 px de la maquette 1280×800, mis à l'échelle de la largeur du cadre.
+     ATTENTION : 100cqi est calculé là où la variable est UTILISÉE, pas ici.
+     Dans le cadre (.tireuse__frame), 100cqi = la largeur du cadre.
+     Hors d'un conteneur, 100cqi retombe sur la largeur de l'écran.
+     / One mockup pixel scaled to the frame width. 100cqi is resolved
+     where the variable is used, not here. */
+  --tireuse-u: calc(100cqi / 1280);
+
+  /* Espacements du cadre, en unités de maquette
+     / Frame spacing, in mockup units */
+  --tireuse-s-1: calc(4 * var(--tireuse-u));
+  --tireuse-s-2: calc(8 * var(--tireuse-u));
+  --tireuse-s-3: calc(12 * var(--tireuse-u));
+  --tireuse-s-4: calc(16 * var(--tireuse-u));
+  --tireuse-s-5: calc(24 * var(--tireuse-u));
+  --tireuse-s-6: calc(32 * var(--tireuse-u));
+  --tireuse-s-7: calc(48 * var(--tireuse-u));
 
   /* --- Accent : la SEULE couleur qui change d'un lieu à l'autre ---
      Fond d'écran, pastille remplie, chiffres importants.
@@ -81,36 +120,47 @@
   --tireuse-radius-sm: 4px;
   --tireuse-shadow-card: 0 4px 4px rgba(0, 0, 0, 0.25);
 
-  /* --- Tailles de texte (lu à distance) / Text sizes (read from afar) --- */
-  --tireuse-fs-title: 80px;
-  --tireuse-fs-screen-title: 56px;
-  --tireuse-fs-lead: 28px;
-  --tireuse-fs-body: 24px;
-  --tireuse-fs-step: 18px;
-  --tireuse-fs-legal: 16px;
-  --tireuse-fs-brand: 14px;
-  --tireuse-fs-mention: 18px;          /* mention légale obligatoire / legal notice */
-  --tireuse-fs-min: 14px;              /* plus petit texte de la liste / smallest list text */
-  --tireuse-fs-title-long: 60px;       /* nom de bière de 13 à 20 caractères */
-  --tireuse-fs-title-tres-long: 44px;  /* nom de bière de plus de 20 caractères */
-  --tireuse-fs-serve-name: 48px;       /* nom de la bière pendant le service */
-  --tireuse-fs-readout: 56px;          /* volume sous le verre / volume under the glass */
-  --tireuse-fs-card-value: 26px;       /* valeurs Prix / Solde / Verres */
-  --tireuse-fs-serve-heading: 34px;    /* « Je me sers » */
-  --tireuse-fs-cheers: 40px;           /* « Bonne soif ! » */
-  --tireuse-fs-banner: 24px;           /* bandeau « connexion perdue » */
-  --tireuse-fs-list-title: clamp(28px, 8vw, 48px);
+  /* --- Tailles de texte (lu à distance) / Text sizes (read from afar) ---
+     max(plancher, taille de la maquette × unité) :
+     à 1280 px de large on retrouve exactement la maquette ;
+     sur un petit écran, le texte ne descend jamais sous le plancher.
+     / max(floor, mockup size × unit): exact mockup at 1280 px wide,
+     never below the floor on a small screen. */
+  --tireuse-fs-title: max(36px, calc(80 * var(--tireuse-u)));
+  --tireuse-fs-screen-title: max(30px, calc(56 * var(--tireuse-u)));
+  --tireuse-fs-lead: max(18px, calc(28 * var(--tireuse-u)));
+  --tireuse-fs-body: max(16px, calc(24 * var(--tireuse-u)));
+  --tireuse-fs-step: max(16px, calc(18 * var(--tireuse-u)));
+  --tireuse-fs-legal: max(14px, calc(16 * var(--tireuse-u)));
+  --tireuse-fs-brand: max(12px, calc(14 * var(--tireuse-u)));
+  --tireuse-fs-mention: max(14px, calc(18 * var(--tireuse-u)));         /* mention légale obligatoire / legal notice */
+  --tireuse-fs-title-long: max(32px, calc(60 * var(--tireuse-u)));      /* nom de bière de 13 à 20 caractères */
+  --tireuse-fs-title-tres-long: max(26px, calc(44 * var(--tireuse-u))); /* nom de bière de plus de 20 caractères */
+  --tireuse-fs-serve-name: max(26px, calc(48 * var(--tireuse-u)));      /* nom de la bière pendant le service */
+  --tireuse-fs-readout: max(32px, calc(56 * var(--tireuse-u)));         /* volume sous le verre / volume under the glass */
+  --tireuse-fs-card-value: max(18px, calc(26 * var(--tireuse-u)));      /* valeurs Prix / Solde / Verres */
+  --tireuse-fs-serve-heading: max(22px, calc(34 * var(--tireuse-u)));   /* « Je me sers » */
+  --tireuse-fs-cheers: max(24px, calc(40 * var(--tireuse-u)));          /* « Bonne soif ! » */
+  /* Tailles fixes : page liste, bandeau, vignettes
+     / Fixed sizes: list page, banner, thumbnails */
+  --tireuse-fs-banner: clamp(16px, 2.5vw, 24px);  /* bandeau « connexion perdue » */
+  --tireuse-fs-min: 14px;                         /* plus petit texte de la liste / smallest list text */
+  --tireuse-fs-list-legal: 16px;
+  --tireuse-fs-list-title: clamp(28px, 6vw, 48px);
 
-  /* --- Géométrie du cadre (écran 1280×800) / Frame geometry --- */
-  --tireuse-frame-w: 1280px;
-  --tireuse-frame-h: 800px;
-  --tireuse-frame-pad-x: 65px;
-  --tireuse-frame-pad-y: 55px;
-  --tireuse-card-h: 690px;
-  --tireuse-card-pad-y: 33px;
-  --tireuse-card-pad-x: 55px;
-  --tireuse-media-w: 192px;
-  --tireuse-label-h: 219px;
+  /* --- Géométrie du cadre, en unités de maquette / Frame geometry --- */
+  --tireuse-frame-ratio: 16 / 10;          /* forme de l'écran 1280×800 */
+  --tireuse-frame-max-w: 2560px;           /* au-delà, des marges apparaissent */
+  --tireuse-frame-pad-x: calc(65 * var(--tireuse-u));
+  --tireuse-frame-pad-y: calc(55 * var(--tireuse-u));
+  --tireuse-card-pad-y: calc(33 * var(--tireuse-u));
+  --tireuse-card-pad-x: calc(55 * var(--tireuse-u));
+  --tireuse-media-w: max(120px, calc(192 * var(--tireuse-u)));
+  --tireuse-label-h: max(137px, calc(219 * var(--tireuse-u)));
+  --tireuse-glass-w: max(78px, calc(130 * var(--tireuse-u)));
+  --tireuse-glass-h: max(120px, calc(200 * var(--tireuse-u)));
+  --tireuse-step-num: max(26px, calc(30 * var(--tireuse-u)));
+  --tireuse-mark: max(60px, calc(88 * var(--tireuse-u)));
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
@@ -176,22 +226,49 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 /* =================================================================
    PAGE D'UNE TIREUSE (kiosk_detail)
    ================================================================= */
+/* Le cadre est centré verticalement dans l'écran.
+   / The frame is vertically centred on the screen. */
 .tireuse {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  overflow-y: auto;
+  min-height: 100dvh;
+  display: flex;
+  /* safe : si le cadre dépasse la hauteur de l'écran, son haut reste visible
+     / safe: if the frame is taller than the screen, its top stays visible */
+  align-items: center;
+  align-items: safe center;
 }
+.tireuse > main { width: 100%; }
 
-/* Cadre à taille fixe : la carte puis le bas de page.
-   / Fixed-size frame: the card, then the footer. */
+/* Cadre : la carte puis le bas de page.
+   En paysage, il garde la forme 16/10 de la maquette. Sa largeur est la
+   plus petite de : l'écran, 1,6 × la hauteur de l'écran, 2560 px.
+   Ainsi il tient toujours en entier, sans défilement.
+   C'est un conteneur : ses enfants mesurent tout en --tireuse-u.
+   / Frame: card then footer. Landscape keeps the 16/10 shape and always
+   fits the screen. It is a container: children size themselves in --tireuse-u. */
 .tireuse__frame {
+  container-type: inline-size;
+  container-name: tireuse;
   position: relative;
-  width: var(--tireuse-frame-w);
-  height: var(--tireuse-frame-h);
-  padding: var(--tireuse-frame-pad-y) var(--tireuse-frame-pad-x) 0;
+  width: min(100%, 160vh, var(--tireuse-frame-max-w));
+  width: min(100%, 160dvh, var(--tireuse-frame-max-w));
+  aspect-ratio: var(--tireuse-frame-ratio);
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
+}
+
+/* Zone des étapes : prend toute la hauteur laissée par le pied.
+   INDISPENSABLE : le padding est ici et pas sur le cadre. Un conteneur ne
+   peut pas se mesurer lui-même en cqi, ses enfants oui.
+   / Stage area: fills the height left by the footer. Padding lives here,
+   not on the frame: a container cannot size itself in cqi. */
+.tireuse__stages {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--tireuse-frame-pad-y) var(--tireuse-frame-pad-x) 0;
 }
 
 /* ---------- Affichage des étapes selon l'état ----------
@@ -203,17 +280,29 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 [data-etat="tirage"] .stage--service,
 [data-etat="fin"] .stage--fin,
 [data-etat="refus"] .stage--refus,
-[data-etat="maintenance"] .stage--maintenance { display: block; }
+[data-etat="maintenance"] .stage--maintenance {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 
-/* ---------- Carte sombre commune ---------- */
+/* ---------- Carte sombre commune ----------
+   Elle remplit l'étape : pas de hauteur fixe.
+   / Dark card fills the stage: no fixed height. */
 .beer-card,
 .screen {
-  height: var(--tireuse-card-h);
+  flex: 1 1 auto;
+  min-height: 0;
   padding: var(--tireuse-card-pad-y) var(--tireuse-card-pad-x);
   background: var(--tireuse-ink);
   border-radius: var(--radius-s);
   box-shadow: var(--tireuse-shadow-card);
   color: var(--tireuse-fg);
+}
+.screen {
+  display: flex;
+  flex-direction: column;
 }
 .screen--center {
   display: grid;
@@ -227,6 +316,7 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   font-size: var(--tireuse-fs-screen-title);
   line-height: 1.05;
   overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 /* =================================================================
@@ -234,13 +324,14 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
    ================================================================= */
 .beer-card {
   display: flex;
-  gap: var(--space-7);
+  gap: var(--tireuse-s-7);
 }
 .beer-card__body {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 .beer-card__title,
 .serve2__beer-name {
@@ -250,8 +341,9 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   font-size: var(--tireuse-fs-title);
   line-height: 1;
   overflow-wrap: anywhere;
+  min-width: 0;
 }
-/* Nom long : la taille baisse pour ne pas sortir du cadre de 1280×800.
+/* Nom long : la taille baisse pour ne pas sortir du cadre.
    La classe est posée par le template selon la longueur du nom.
    / Long name: smaller size so it stays inside the frame. */
 .beer-card__title--long { font-size: var(--tireuse-fs-title-long); }
@@ -273,7 +365,7 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   flex-wrap: nowrap;
   max-width: 100%;
   overflow: hidden;
-  margin-top: var(--space-4);
+  margin-top: var(--tireuse-s-4);
 }
 .serve2__ident .beer-specs__item {
   flex: 0 0 auto;
@@ -287,14 +379,14 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   display: inline-flex;
   flex-wrap: wrap;
   align-items: stretch;
-  margin: var(--space-6) 0 0;
+  margin: var(--tireuse-s-6) 0 0;
   padding: 0;
   list-style: none;
 }
 .beer-specs__item {
   display: inline-flex;
   align-items: center;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--tireuse-s-2) var(--tireuse-s-3);
   border: 1px solid var(--tireuse-fg);
   font-weight: 700;
   font-size: var(--tireuse-fs-body);
@@ -306,16 +398,18 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 
 /* Description : texte de l'éditeur de l'admin (HTML). Limitée à 7 lignes
    pour ne jamais pousser le prix et « Présentez votre carte » hors du cadre.
+   Moins de lignes sur un écran bas ou en portrait (voir plus bas).
    / Admin editor HTML, clamped to 7 lines to stay inside the frame. */
 .beer-card__desc {
-  margin-top: var(--space-6);
-  max-width: 719px;
+  --lignes-description: 7;
+  margin-top: var(--tireuse-s-6);
+  max-width: min(100%, max(calc(719 * var(--tireuse-u)), 32ch));
   font-size: var(--tireuse-fs-body);
   line-height: 1.25;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 7;
-  line-clamp: 7;
+  -webkit-line-clamp: var(--lignes-description);
+  line-clamp: var(--lignes-description);
   overflow: hidden;
 }
 /* Titres, listes et paragraphes de l'éditeur : même taille que le texte
@@ -324,24 +418,30 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 .beer-card__desc :is(ul, ol) { margin: 0; padding-left: 1.2em; }
 .beer-card__desc p { margin: 0; }
 .beer-card__price {
-  margin-top: var(--space-7);
+  margin-top: var(--tireuse-s-7);
   font-weight: 700;
   font-size: var(--tireuse-fs-lead);
 }
 
 /* Indice « Présentez votre carte » (pas de bouton : écran non tactile)
-   / "Present your card" hint (no button: non-touch screen) */
+   margin-top: auto le colle en bas de la carte.
+   / "Present your card" hint, pinned to the bottom of the card. */
 .present-hint {
   margin-top: auto;
+  padding-top: var(--tireuse-s-4);
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--tireuse-s-3);
   color: var(--tireuse-accent);
 }
 .present-hint__icon {
   display: grid;
   place-items: center;
   animation: nfc-pulse 1.6s var(--ease-in-out) infinite;
+}
+.present-hint__icon svg {
+  width: max(32px, calc(40 * var(--tireuse-u)));
+  height: auto;
 }
 .present-hint__text {
   font-weight: 700;
@@ -359,8 +459,9 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-7);
-  padding-top: var(--space-5);
+  gap: var(--tireuse-s-7);
+  padding-top: var(--tireuse-s-5);
+  min-width: 0;
 }
 .beer-media__label {
   width: var(--tireuse-media-w);
@@ -373,13 +474,15 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   font-size: var(--tireuse-fs-body);
   line-height: 1.25;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 /* =================================================================
    ÉTAPES SERVICE et TIRAGE — même écran
    ================================================================= */
 .serve2 {
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -387,21 +490,21 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-5);
-  margin-bottom: var(--space-5);
-  padding-bottom: var(--space-5);
+  gap: var(--tireuse-s-5);
+  margin-bottom: var(--tireuse-s-5);
+  padding-bottom: var(--tireuse-s-5);
   border-bottom: 1px solid var(--tireuse-filet);
 }
 .serve2__ident { display: flex; flex-direction: column; min-width: 0; }
 
 /* Salutation : « Bonjour Camille » ou juste « Bonjour »
    / Greeting: "Hello Camille" or just "Hello" */
-.card-chip { text-align: right; }
+.card-chip { flex: 0 0 auto; text-align: right; }
 .card-chip__line { font-size: var(--tireuse-fs-body); }
 .card-chip__hello { opacity: .8; }
 .card-chip__name { font-family: var(--font-display); font-weight: 600; }
 .card-chip__id {
-  margin-top: var(--space-1);
+  margin-top: var(--tireuse-s-1);
   font-size: var(--tireuse-fs-legal);
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -419,10 +522,12 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 .card-facts { display: flex; align-items: stretch; }
 .card-fact {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
+  justify-content: center;
+  gap: var(--tireuse-s-1);
+  padding: var(--tireuse-s-3) var(--tireuse-s-4);
   border: 1px solid var(--tireuse-fg);
   text-align: center;
 }
@@ -456,21 +561,23 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 .serve-block,
 .glass-block {
   flex: 1 1 0;
+  min-width: 0;
   border: 1px solid var(--tireuse-fg);
-  padding: var(--space-5);
+  padding: var(--tireuse-s-5);
 }
 .glass-block { margin-left: -1px; }
 
 .serve-block {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--tireuse-s-5);
 }
 .serve-block__title {
   margin: 0;
   font-family: var(--tireuse-font-title);
   font-weight: 900;
   font-size: var(--tireuse-fs-serve-heading);
+  line-height: 1.1;
 }
 .serve-block__steps {
   list-style: none;
@@ -478,19 +585,19 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--tireuse-s-4);
 }
 .step-line {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--tireuse-s-3);
   opacity: .5;
   transition: opacity .25s var(--ease-out);
 }
 .step-line__num {
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
+  width: var(--tireuse-step-num);
+  height: var(--tireuse-step-num);
   display: grid;
   place-items: center;
   border: 2px solid var(--tireuse-fg);
@@ -530,12 +637,13 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4);
+  gap: var(--tireuse-s-4);
 }
 .serve__glass {
   position: relative;
-  width: 130px;
-  height: 200px;
+  flex: 0 0 auto;
+  width: var(--tireuse-glass-w);
+  height: var(--tireuse-glass-h);
   border: 4px solid var(--tireuse-verre-bord);
   border-top: 0;
   border-radius: 6px 6px 22px 22px;
@@ -581,30 +689,32 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-3);
-  max-width: 900px;
+  gap: var(--tireuse-s-3);
+  max-width: min(900px, 100%);
+  min-width: 0;
 }
 .done__mark {
-  width: 88px;
-  height: 88px;
+  width: var(--tireuse-mark);
+  height: var(--tireuse-mark);
   display: grid;
   place-items: center;
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--tireuse-s-3);
   border-radius: var(--radius-pill);
   background: var(--tireuse-accent);
   color: var(--tireuse-fg);
 }
+.done__mark svg { width: 50%; height: 50%; }
 .done__mark--alerte { background: var(--tireuse-alerte); }
 .done__mark--maintenance { background: var(--zanana); color: var(--tireuse-ink); }
-.done__line { font-size: var(--tireuse-fs-lead); }
+.done__line { font-size: var(--tireuse-fs-lead); line-height: 1.35; }
 .done__line strong,
 .done__balance strong { color: var(--tireuse-accent); font-variant-numeric: tabular-nums; }
-.done__balance { font-size: var(--tireuse-fs-body); opacity: .85; }
+.done__balance { font-size: var(--tireuse-fs-body); line-height: 1.35; opacity: .85; }
 /* Volume rincé : caché tant qu'aucun rinçage n'a commencé (champ vide)
    / Rinsed volume: hidden until a rinse starts (empty field) */
 .maintenance__volume:has([data-champ="volume-cl"]:empty) { display: none; }
 .done__cheers {
-  margin-top: var(--space-3);
+  margin-top: var(--tireuse-s-3);
   font-family: var(--tireuse-font-title);
   font-weight: 900;
   font-size: var(--tireuse-fs-cheers);
@@ -614,22 +724,34 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
    du bilan d'un coup d'œil, même de loin et quelle que soit la couleur du fût.
    / Refusal: a wide red border around the card, visible from afar. */
 .stage--refus .screen {
-  box-shadow: inset 0 0 0 10px var(--tireuse-alerte), var(--tireuse-shadow-card);
+  box-shadow: inset 0 0 0 max(6px, calc(10 * var(--tireuse-u))) var(--tireuse-alerte), var(--tireuse-shadow-card);
 }
 
 /* =================================================================
    BAS DE PAGE — mention légale + signature
+   Dans le cadre, la hauteur du pied vient de la maquette (55 px).
+   / Footer. Inside the frame, its height comes from the mockup (55 px).
    ================================================================= */
 .tireuse__footer {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  min-height: var(--tireuse-frame-pad-y);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-5);
+  column-gap: var(--tireuse-s-5);
+  row-gap: var(--tireuse-s-1);
+  padding: var(--tireuse-s-2) var(--tireuse-frame-pad-x);
 }
 /* Mention légale obligatoire : blanche sur l'accent, assez grande pour être lue.
    / Mandatory legal notice: white on the accent, large enough to be read. */
-.tireuse__legal { font-size: var(--tireuse-fs-mention); font-weight: 700; line-height: 1.25; }
+.tireuse__legal {
+  flex: 1 1 30ch;
+  min-width: 0;
+  font-size: var(--tireuse-fs-mention);
+  font-weight: 700;
+  line-height: 1.25;
+}
 .tireuse__brand {
   font-size: var(--tireuse-fs-brand);
   white-space: nowrap;
@@ -639,11 +761,134 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 .tireuse__brand .brand-tibillet { font-family: var(--font-display); font-weight: 600; }
 
 /* =================================================================
+   ÉCRAN BAS EN PAYSAGE (Pi 7 pouces : 800×480, 1024×600)
+   Les planchers de lisibilité grossissent le texte par rapport au cadre.
+   On retire donc des lignes de description et on resserre les marges.
+   / Short landscape screens: fewer description lines, tighter spacing.
+   ================================================================= */
+@media (orientation: landscape) and (max-height: 640px) {
+  .beer-card__desc { --lignes-description: 4; margin-top: var(--tireuse-s-5); }
+  .beer-specs { margin-top: var(--tireuse-s-5); }
+  .beer-card__price { margin-top: var(--tireuse-s-5); }
+  .serve-block { gap: var(--tireuse-s-3); }
+  .serve-block__steps { gap: var(--tireuse-s-2); }
+  .serve-block,
+  .glass-block { padding: var(--tireuse-s-4); }
+  .serve2__head { margin-bottom: var(--tireuse-s-4); padding-bottom: var(--tireuse-s-4); }
+  .serve2__ident .beer-specs { margin-top: var(--tireuse-s-2); }
+  .glass-block { gap: var(--tireuse-s-2); }
+}
+
+/* Très bas (téléphone couché, moins de 440 px de haut) : on garde
+   l'essentiel. La description et le mode d'emploi détaillé sont cachés,
+   le titre « Je me sers » et les numéros restent.
+   / Very short (phone in landscape): keep the essentials only. */
+@media (orientation: landscape) and (max-height: 440px) {
+  .beer-card__desc { display: none; }
+  .beer-card__media { display: none; }
+  .serve-block__steps .step-line__text { font-size: var(--tireuse-fs-legal); }
+  .serve2__head { margin-bottom: var(--tireuse-s-3); padding-bottom: var(--tireuse-s-3); }
+  .glass-block { flex-direction: row; }
+  .tireuse__frame {
+    --tireuse-glass-w: 52px;
+    --tireuse-glass-h: 80px;
+  }
+}
+
+/* =================================================================
+   ÉCRAN EN PORTRAIT (Pi tourné, tablette, téléphone)
+   Le cadre prend tout l'écran au lieu de garder la forme 16/10.
+   Il peut grandir plus haut que l'écran : la page défile alors.
+   / Portrait: the frame fills the screen instead of keeping 16/10.
+   It may grow taller than the screen: the page then scrolls.
+   ================================================================= */
+@media (orientation: portrait) {
+  .tireuse { align-items: stretch; }
+  .tireuse__frame {
+    width: 100%;
+    aspect-ratio: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  /* En portrait, la largeur est petite : on prend des marges un peu plus
+     larges que la maquette pour ne pas coller aux bords.
+     / Portrait: slightly larger margins so content does not touch the edges. */
+  .tireuse__stages {
+    padding: max(16px, calc(48 * var(--tireuse-u))) max(16px, calc(48 * var(--tireuse-u))) 0;
+  }
+  .tireuse__footer {
+    padding: var(--space-3) max(16px, calc(48 * var(--tireuse-u)));
+  }
+  .beer-card__desc { --lignes-description: 8; }
+}
+
+/* =================================================================
+   EMPILEMENT EN PORTRAIT
+   Les blocs côte à côte passent l'un sous l'autre.
+   Les sélecteurs commencent par .tireuse__frame : ces règles ne touchent
+   pas les vignettes de la page liste, qui ont aussi des .card-fact.
+   / Portrait stacking. Selectors start with .tireuse__frame so the list
+   page thumbnails (which also use .card-fact) are not affected.
+   ================================================================= */
+@media (orientation: portrait) {
+  /* Veille : l'étiquette et la brasserie passent au-dessus, en ligne.
+     / Idle: label and brewery move on top, in a row. */
+  .tireuse__frame .beer-card {
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+  .tireuse__frame .beer-card__media {
+    order: -1;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-4);
+    padding-top: 0;
+  }
+  .tireuse__frame .beer-media__label {
+    width: max(96px, 18cqi);
+    height: max(110px, 20.5cqi);
+  }
+  .tireuse__frame .beer-media__brewery { text-align: left; }
+
+  /* Service : salutation sous le nom, mode d'emploi au-dessus du verre.
+     Le verre prend la place qui reste et grandit avec la largeur.
+     / Service: greeting under the name, instructions above the glass.
+     The glass takes the remaining space and grows with the width. */
+  .tireuse__frame .serve2__head { flex-direction: column; gap: var(--space-2); }
+  .tireuse__frame .card-chip { text-align: left; }
+  .tireuse__frame .serve2__body { flex-direction: column; overflow: visible; }
+  .tireuse__frame .serve-block { flex: 0 0 auto; }
+  .tireuse__frame .glass-block {
+    flex: 1 1 auto;
+    margin-left: 0;
+    margin-top: -1px;
+  }
+  .tireuse__frame {
+    --tireuse-glass-w: clamp(78px, 26cqi, 260px);
+    --tireuse-glass-h: clamp(120px, 40cqi, 400px);
+  }
+}
+
+/* Téléphone debout : les cases Prix / Solde / Verres peuvent passer
+   à la ligne, les pastilles aussi.
+   / Phone portrait: fact boxes and chips may wrap. */
+@media (orientation: portrait) and (max-width: 480px) {
+  .tireuse__frame .card-facts { flex-wrap: wrap; }
+  .tireuse__frame .card-fact { flex: 1 1 140px; margin-top: -1px; }
+  .tireuse__frame .card-fact__value { white-space: normal; overflow-wrap: anywhere; }
+  .tireuse__frame .serve2__ident .beer-specs { flex-wrap: wrap; }
+}
+
+/* =================================================================
    PAGE LISTE (kiosk_list) — toutes les tireuses en vignettes
+   Les tailles sont fixes ou suivent la vignette, pas le cadre.
+   / List page. Sizes are fixed or follow the thumbnail, not the frame.
    ================================================================= */
 .tireuse--liste {
   display: block;
-  padding: var(--space-6) var(--space-4);
+  padding: var(--space-6) max(var(--space-4), 3vw);
 }
 .tireuses-page {
   max-width: 1400px;
@@ -656,22 +901,35 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   font-size: var(--tireuse-fs-list-title);
   line-height: 1.05;
   overflow-wrap: anywhere;
+  min-width: 0;
 }
 .tireuses-grille {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: var(--space-5);
 }
-.tireuses-page .tireuse__footer { margin-top: var(--space-6); flex-wrap: wrap; }
+/* Pied de la page liste : tailles fixes, pas d'unité de maquette.
+   / List page footer: fixed sizes, no mockup unit. */
+.tireuses-page .tireuse__footer {
+  margin-top: var(--space-6);
+  padding: 0;
+  column-gap: var(--space-5);
+  row-gap: var(--space-2);
+}
+.tireuses-page .tireuse__legal { font-size: var(--tireuse-fs-list-legal); }
+.tireuses-page .tireuse__brand { font-size: var(--tireuse-fs-min); }
 .tireuses-vide {
   padding: var(--space-6);
   background: var(--tireuse-ink);
   color: var(--tireuse-fg);
   border-radius: var(--radius-s);
-  font-size: var(--tireuse-fs-body);
+  font-size: var(--tireuse-fs-list-legal);
 }
 
+/* Chaque vignette est un conteneur : ses tailles suivent SA largeur.
+   / Each thumbnail is a container: its sizes follow ITS width. */
 .vignette {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -690,7 +948,7 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 }
 .vignette__tete > div { min-width: 0; }
 .vignette__nom-tireuse {
-  font-size: var(--tireuse-fs-legal);
+  font-size: var(--tireuse-fs-min);
   letter-spacing: .06em;
   text-transform: uppercase;
   opacity: .7;
@@ -699,13 +957,14 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   margin: 0;
   font-family: var(--tireuse-font-title);
   font-weight: 900;
-  font-size: clamp(28px, 7vw, 36px);
+  font-size: clamp(24px, 9cqi, 40px);
   line-height: 1.05;
   overflow-wrap: anywhere;
+  min-width: 0;
 }
 .vignette .beer-specs { margin-top: 0; }
-.vignette .beer-specs__item { font-size: var(--tireuse-fs-legal); padding: var(--space-1) var(--space-2); }
-.vignette__prix { font-weight: 700; font-size: var(--tireuse-fs-mention); }
+.vignette .beer-specs__item { font-size: var(--tireuse-fs-min); padding: var(--space-1) var(--space-2); }
+.vignette__prix { font-weight: 700; font-size: var(--tireuse-fs-list-legal); }
 
 /* Pastille d'état : un libellé par état, le CSS montre le bon.
    / State pill: one label per state, CSS shows the right one. */
@@ -730,11 +989,21 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 [data-etat="refus"] .vignette__etat { background: var(--tireuse-alerte); }
 [data-etat="maintenance"] .vignette__etat { background: var(--zanana); color: var(--tireuse-ink); }
 
-.vignette .card-fact { padding: var(--space-2) var(--space-3); }
+.vignette .card-facts { flex-wrap: wrap; }
+.vignette .card-fact {
+  flex: 1 1 120px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  margin-top: -1px;
+}
 .vignette .card-fact__label { font-size: var(--tireuse-fs-min); }
-/* Valeurs de la liste : peuvent passer à la ligne sur petit écran
-   / List values may wrap on small screens */
-.vignette .card-fact__value { font-size: 20px; white-space: normal; overflow-wrap: anywhere; }
+/* Valeurs de la liste : peuvent passer à la ligne sur petite vignette
+   / List values may wrap on small thumbnails */
+.vignette .card-fact__value {
+  font-size: clamp(18px, 6cqi, 22px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 .vignette__message:empty { display: none; }
 .vignette__message {
@@ -785,13 +1054,30 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   right: var(--space-4);
   top: var(--space-4);
   z-index: 100;
-  max-width: min(380px, calc(100vw - 2 * var(--space-4)));
+  /* Position fixe : 100 % = la largeur de l'écran
+     / Fixed position: 100% = the screen width */
+  max-width: min(380px, calc(100% - 2 * var(--space-4)));
+  max-height: calc(100% - 2 * var(--space-4));
+  overflow-y: auto;
   background: var(--tireuse-panneau-demo);
   color: var(--tireuse-fg);
   border: 1px dashed var(--zanana);
   border-radius: var(--radius-m);
   box-shadow: var(--tireuse-shadow-card);
-  font-size: var(--tireuse-fs-brand);
+  font-size: 14px;
+}
+/* Téléphone : le panneau ouvert se pose en bas, sur toute la largeur,
+   et garde le haut de l'écran visible.
+   / Phone: the open panel sits at the bottom, full width. */
+@media (max-width: 600px) {
+  .demo-sim[open] {
+    top: auto;
+    bottom: var(--space-2);
+    left: var(--space-2);
+    right: var(--space-2);
+    max-width: none;
+    max-height: 60vh;
+  }
 }
 .demo-sim__resume {
   padding: var(--space-2) var(--space-4);
@@ -811,7 +1097,7 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
   justify-content: space-between;
   gap: var(--space-2);
 }
-.demo-sim__tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.demo-sim__tag { font-size: 12px; font-weight: 700; letter-spacing: .08em; }
 .demo-sim__boutons { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .demo-sim__btn {
   padding: var(--space-1) var(--space-3);
@@ -835,6 +1121,7 @@ body:has(#ws-status-banner:not([hidden])) main { opacity: .5; }
 .demo-sim__btn--ghost:hover { background: var(--tireuse-filet); }
 .demo-sim__debit { display: flex; align-items: center; gap: var(--space-3); }
 .demo-sim__debit input { flex: 1 1 auto; min-width: 0; accent-color: var(--zanana); }
+.demo-sim__debit input:focus-visible { outline: 2px solid var(--zanana); outline-offset: 2px; }
 .demo-sim__debit-valeur { min-width: 70px; text-align: right; font-weight: 700; }
 .demo-sim__indicateurs { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 /* Message du simulateur : gris clair, ou rouge en cas d'erreur (classe posée
