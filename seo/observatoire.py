@@ -559,13 +559,17 @@ def statistiques_de_fedow_legacy():
     """
     try:
         configuration_root = RootConfiguration.get_solo()
-        cle_root = configuration_root.get_fedow_create_place_apikey()
+        # La variable DOIT s'appeler api_key : Sentry recopie les variables locales
+        # dans ses evenements, et ne masque que des noms precis (api_key, apikey,
+        # secret, token...). Un autre nom enverrait la cle root en clair dans Sentry.
+        # / MUST be named api_key: Sentry masks only exact names among local variables.
+        api_key = configuration_root.get_fedow_create_place_apikey()
         # Meme appel que fedow_connect/fedow_api.py (_get) : certificat verifie hors
         # DEBUG, timeout obligatoire. Pas de signature : la cle root suffit.
         # / Same call as fedow_connect _get: certificate checked outside DEBUG, timeout.
         reponse = requests.get(
             f"https://{configuration_root.fedow_domain}/statistiques_reseau/",
-            headers={"Authorization": f"Api-Key {cle_root}"},
+            headers={"Authorization": f"Api-Key {api_key}"},
             verify=not settings.DEBUG,
             timeout=30,
         )

@@ -1,4 +1,4 @@
-{% load i18n tibitags %}
+{% load i18n %}
 {% comment %}
 Formulaire de contact : réservé aux personnes connectées. Le lieu répond à l'adresse
 du compte, qui reçoit aussi une copie. Aucune adresse n'est saisie à la main : avant,
@@ -22,18 +22,6 @@ target's address and TiBillet spammed it (2026-11-10).
         <div class="mb-3">
             <label for="message" class="form-label">{% trans "Message" %}</label>
             <textarea class="form-control" id="message" rows="3" required name="message"></textarea>
-        </div>
-        <!-- Captcha léger anti-spam : question tirée et signée par le serveur (tag captcha_contact) -->
-        <!-- / Light anti-spam captcha: question drawn and signed by the server (captcha_contact tag) -->
-        {% captcha_contact as captcha %}
-        <div class="mb-3">
-            <label for="answer" class="form-label">
-                {% trans "Anti-spam" %} — {% trans "How much is" %}
-                {{ captcha.x }} + {{ captcha.y }} ?
-            </label>
-            <input type="number" class="form-control" id="answer" name="answer" required inputmode="numeric" pattern="[0-9]*">
-            <input type="hidden" name="captcha_jeton" value="{{ captcha.jeton }}">
-            <div class="form-text">{% trans "Please answer this simple question to prove you are human." %}</div>
         </div>
     </div>
     <div class="pt-3">

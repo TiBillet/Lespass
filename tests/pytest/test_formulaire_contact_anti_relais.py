@@ -9,13 +9,12 @@ TiBillet envoyait alors une « copie » à cette cible, depuis facteur@mail.tibi
 (the captcha came from the browser) and its target's address in "email".
 TiBillet then sent a "copy" to that target, from facteur@mail.tibillet.coop.
 
-Depuis : formulaire réservé aux personnes connectées, adresse = celle du compte,
-captcha tiré et signé par le serveur.
-/ Since then: logged-in people only, address = the account's, captcha drawn
-and signed by the server.
+Depuis : formulaire réservé aux personnes connectées, adresse = celle du compte.
+Plus de captcha : une session connectée suppose une adresse vérifiée.
+/ Since then: logged-in people only, address = the account's.
+No captcha anymore: a logged-in session implies a verified address.
 
 Code testé / Tested code :
-  BaseBillet/templatetags/tibitags.py (captcha_contact)
   BaseBillet/validators.py (ContactValidator)
   BaseBillet/views.py (HomeViewset.contact)
   BaseBillet/tasks.py (contact_mailer)
@@ -26,51 +25,38 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
-from django.core import signing
 from django.template.loader import render_to_string
 from django.test import Client as HttpClient
 from django_tenants.utils import tenant_context
-
-from BaseBillet.templatetags.tibitags import SEL_CAPTCHA_CONTACT, captcha_contact
 
 DOMAINE_DU_LIEU = "lespass.tibillet.localhost"
 ADRESSE_DE_LA_CIBLE = "cible-du-robot@mock.test"
 
 
-def _poster_le_formulaire(client, donnees_du_captcha):
+def _poster_le_formulaire(client):
     """
     Poste le formulaire de contact, avec Celery remplacé par un espion.
-    Le champ « email » est envoyé quand même, comme le ferait un robot.
+    Le champ « email » et l'ancien captcha sont envoyés quand même, comme le ferait le robot.
     Renvoie les arguments passés à contact_mailer.delay, ou None si rien n'est parti.
     / Posts the contact form, with Celery replaced by a spy.
-    The "email" field is sent anyway, as a bot would.
+    The "email" field and the old captcha are sent anyway, as the bot would.
     Returns the arguments given to contact_mailer.delay, or None if nothing was sent.
     """
-    donnees = {
+    donnees_du_robot = {
         "email": ADRESSE_DE_LA_CIBLE,
         "subject": "Secafi Expertise — billetterie prix libre",
         "message": "Bonjour",
+        "x": 0,
+        "y": 0,
+        "answer": 0,
     }
-    donnees.update(donnees_du_captcha)
 
     with patch("BaseBillet.views.contact_mailer.delay") as espion_de_l_envoi:
-        client.post("/home/contact/", donnees)
+        client.post("/home/contact/", donnees_du_robot)
 
     if not espion_de_l_envoi.called:
         return None
     return espion_de_l_envoi.call_args.kwargs
-
-
-def _captcha_bien_repondu():
-    """Un captcha tiré par le serveur, avec la bonne réponse. / A server-drawn captcha, answered right."""
-    captcha = captcha_contact()
-    return {"captcha_jeton": captcha["jeton"], "answer": captcha["x"] + captcha["y"]}
-
-
-def _client_connecte(utilisateur):
-    client = HttpClient(HTTP_HOST=DOMAINE_DU_LIEU)
-    client.force_login(utilisateur)
-    return client
 
 
 # --- La vue / The view ---
@@ -78,62 +64,27 @@ def _client_connecte(utilisateur):
 
 def test_un_visiteur_anonyme_ne_peut_rien_envoyer():
     """
-    Anonyme, même avec un captcha juste : rien ne part.
-    / Anonymous, even with a right captcha: nothing is sent.
+    Anonyme : rien ne part, même avec l'ancienne attaque du robot.
+    / Anonymous: nothing is sent, even with the bot's old attack.
     """
     client_anonyme = HttpClient(HTTP_HOST=DOMAINE_DU_LIEU)
 
-    arguments_de_l_envoi = _poster_le_formulaire(client_anonyme, _captcha_bien_repondu())
-
-    assert arguments_de_l_envoi is None
-
-
-def test_le_robot_qui_choisit_sa_question_est_refuse(admin_user):
-    """
-    L'ancienne attaque : x=0, y=0, answer=0, sans jeton signé. Rien ne part.
-    / The old attack: x=0, y=0, answer=0, no signed token. Nothing is sent.
-    """
-    arguments_de_l_envoi = _poster_le_formulaire(
-        _client_connecte(admin_user), {"x": 0, "y": 0, "answer": 0}
-    )
-
-    assert arguments_de_l_envoi is None
-
-
-def test_un_jeton_fabrique_a_la_main_est_refuse(admin_user):
-    """
-    Un jeton non signé par le serveur est refusé, même avec la « bonne » réponse.
-    / A token not signed by the server is refused, even with the "right" answer.
-    """
-    jeton_falsifie = signing.dumps(0, salt=SEL_CAPTCHA_CONTACT, key="pas-la-cle-du-serveur")
-
-    arguments_de_l_envoi = _poster_le_formulaire(
-        _client_connecte(admin_user), {"captcha_jeton": jeton_falsifie, "answer": 0}
-    )
-
-    assert arguments_de_l_envoi is None
-
-
-def test_une_mauvaise_reponse_est_refusee(admin_user):
-    """Le jeton est bon, la réponse est fausse : rien ne part. / Right token, wrong answer: nothing sent."""
-    captcha = captcha_contact()
-
-    arguments_de_l_envoi = _poster_le_formulaire(
-        _client_connecte(admin_user),
-        {"captcha_jeton": captcha["jeton"], "answer": captcha["x"] + captcha["y"] + 1},
-    )
+    arguments_de_l_envoi = _poster_le_formulaire(client_anonyme)
 
     assert arguments_de_l_envoi is None
 
 
 def test_l_adresse_utilisee_est_celle_du_compte_pas_celle_postee(admin_user):
     """
-    Connecté, captcha juste : le message part avec l'adresse du compte.
-    Le champ « email » posté par un robot est ignoré.
-    / Logged in, right captcha: the message uses the account address.
-    The "email" field posted by a bot is ignored.
+    Connecté : le message part avec l'adresse du compte.
+    Le champ « email » posté à la main est ignoré.
+    / Logged in: the message uses the account address.
+    The hand-posted "email" field is ignored.
     """
-    arguments_de_l_envoi = _poster_le_formulaire(_client_connecte(admin_user), _captcha_bien_repondu())
+    client_connecte = HttpClient(HTTP_HOST=DOMAINE_DU_LIEU)
+    client_connecte.force_login(admin_user)
+
+    arguments_de_l_envoi = _poster_le_formulaire(client_connecte)
 
     assert arguments_de_l_envoi is not None
     assert arguments_de_l_envoi["sender"] == admin_user.email
@@ -174,16 +125,15 @@ def test_le_gabarit_anonyme_propose_la_connexion_sans_formulaire(tenant):
     assert 'data-bs-target="#loginPanel"' in html
 
 
-def test_le_gabarit_connecte_n_a_plus_de_champ_email(tenant, admin_user):
+def test_le_gabarit_connecte_n_a_ni_champ_email_ni_captcha(tenant, admin_user):
     """
-    Connecté : le formulaire n'a ni champ email ni x/y, mais porte le jeton signé.
-    / Logged in: the form has no email field nor x/y, but carries the signed token.
+    Connecté : le formulaire n'a ni champ email ni captcha, et affiche l'adresse du compte.
+    / Logged in: the form has no email field nor captcha, and shows the account address.
     """
     with tenant_context(tenant):
         html = render_to_string("commun/formulaires/contact.html", {"user": admin_user})
 
     assert "<form" in html
     assert 'name="email"' not in html
-    assert 'name="x"' not in html
-    assert 'name="captcha_jeton"' in html
+    assert 'name="answer"' not in html
     assert admin_user.email in html

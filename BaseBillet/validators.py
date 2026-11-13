@@ -145,38 +145,6 @@ class ContactValidator(serializers.Serializer):
     # / No email field: the address is the logged-in account's (see HomeViewset.contact).
     subject = serializers.CharField()
     message = serializers.CharField()
-    # Captcha arithmétique : la bonne réponse est signée par le serveur dans captcha_jeton
-    # (tag captcha_contact). Le client ne fournit plus x et y.
-    # / Arithmetic captcha: the right answer is signed by the server in captcha_jeton
-    # (captcha_contact tag). The client no longer provides x and y.
-    captcha_jeton = serializers.CharField()
-    answer = serializers.IntegerField(required=True)
-
-    # Durée de validité du jeton : une page ouverte toute une journée reste utilisable.
-    # / Token lifetime: a page left open for a whole day still works.
-    DUREE_DE_VALIDITE_DU_CAPTCHA_EN_SECONDES = 24 * 3600
-
-    def validate(self, attrs):
-        from django.core import signing
-        from BaseBillet.templatetags.tibitags import SEL_CAPTCHA_CONTACT
-
-        # Jeton absent, falsifié ou expiré : on refuse sans détailler.
-        # / Missing, forged or expired token: refuse without details.
-        try:
-            bonne_reponse = signing.loads(
-                attrs['captcha_jeton'],
-                salt=SEL_CAPTCHA_CONTACT,
-                max_age=self.DUREE_DE_VALIDITE_DU_CAPTCHA_EN_SECONDES,
-            )
-        except signing.BadSignature:
-            raise serializers.ValidationError(
-                {'answer': [_("La question anti-spam a expiré. Rechargez la page.")]}
-            )
-
-        if attrs['answer'] != bonne_reponse:
-            raise serializers.ValidationError({'answer': [_('Wrong answer to the anti-spam question.')]})
-
-        return attrs
 
 
 class TagValidator(serializers.Serializer):
