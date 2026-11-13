@@ -2848,6 +2848,11 @@ details.module + details.module { margin-top: var(--space-4); }
 .compte-adhesion__infos dd { margin: 0; }
 .compte-adhesion__pied { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 
+
+.form-check-input[type="radio"]{
+  border-color : black;
+}
+
 @media (max-width: 47.99rem) {
   .reservation-card { grid-template-columns: minmax(0, 1fr); }
   .reservation-card__cover { min-height: 140px; }
