@@ -7,9 +7,10 @@
  *
  * CE QUE FAIT CE FICHIER
  * Il lit les chiffres calcules la nuit par le serveur, classe chaque lieu
- * (tres actif, actif, peu utilise, bidouillage, sommeil ; festival, lieu...),
- * puis dessine la synthese, la matrice taille x nature, l'explorateur, la liste
- * et l'onglet « Sur mesure ».
+ * (activite : tres actif, actif, peu utilise, sommeil ; usages : agenda,
+ * billetterie, caisse... ; rythme : saisonnier, regulier...), puis dessine la
+ * synthese, la matrice taille x rythme, l'explorateur, la liste et l'onglet
+ * « Sur mesure ».
  * Le classement est fait ICI, dans le navigateur, et pas sur le serveur : le
  * superadmin regle les seuils dans la page et voit le resultat tout de suite.
  * Ce fichier ne lance JAMAIS de calcul sur le serveur : il ne fait aucune requete.
@@ -132,6 +133,20 @@
     const COMPTEURS_EN_CENTIMES = ["ca_total", "ca_billetterie", "ca_adhesions", "ca_caisse",
         "recharges_ligne", "recharges_place"];
 
+    // Les seuils FIXES (decision du mainteneur : pas dans le panneau des seuils).
+    // Un mois est un « mois d'usage » si UNE de ces valeurs est atteinte.
+    // / FIXED thresholds. A month is a "month of use" if ONE of these is reached.
+    const SEUILS_DU_MOIS_D_USAGE = {
+        evenements: 1, billets: 10, chiffre_affaires: 200, adhesions: 5, recharges: 200,
+        transactions_cashless: 20, locations: 1,
+    };
+    // Un lieu a un usage si son total des 12 derniers mois atteint ce seuil.
+    // / A venue has a use when its 12-month total reaches this threshold.
+    const SEUILS_DES_USAGES = {
+        agenda: 3, billetterie_gratuite: 10, billetterie_payante: 10, adhesions: 5,
+        caisse_transactions: 20, caisse_chiffre_affaires: 200, location: 1,
+    };
+
     function preparer_une_instance(instance) {
         const compteurs = instance.compteurs_par_mois;
         for (const cle_du_compteur of COMPTEURS_EN_CENTIMES) {
@@ -145,12 +160,29 @@
         compteurs.recharges = compteurs.recharges_ligne.map(function (valeur, index) {
             return valeur + compteurs.recharges_place[index];
         });
-        // Un mois « reel » : un usage qu'un admin qui bidouille ne produit pas seul.
-        // / A "real" month: usage that a tinkering admin does not produce alone.
+        compteurs.billets = compteurs.billets_gratuits.map(function (valeur, index) {
+            return valeur + compteurs.billets_payants[index];
+        });
+        // Le volume d'activite du mois : les actes des gens (billets, adhesions,
+        // paiements cashless), pas l'argent. Le rythme se lit dessus : un festival en
+        // caisse V1 ou une fete gratuite a peu de CA dans Lespass, mais du volume.
+        // / The month's activity volume: people's acts, not money. Rhythm reads it.
+        compteurs.volume = compteurs.billets.map(function (valeur, index) {
+            return valeur + compteurs.adhesions[index] + compteurs.transactions_cashless[index];
+        });
+        // Un « mois d'usage » : au moins un signe que le lieu se sert de TiBillet ce
+        // mois-la. Un seul evenement publie suffit (un conseil d'administration, une
+        // assemblee de benevoles : le lieu est vivant).
+        // / A "month of use": at least one sign the venue uses TiBillet that month.
         compteurs.reel = compteurs.ca_total.map(function (chiffre_affaires, index) {
-            const usage_reel = compteurs.inscriptions[index] >= 10 || chiffre_affaires >= 200
-                || compteurs.adhesions[index] >= 5 || compteurs.recharges[index] >= 200;
-            return usage_reel ? 1 : 0;
+            const usage_du_mois = compteurs.evenements[index] >= SEUILS_DU_MOIS_D_USAGE.evenements
+                || compteurs.billets[index] >= SEUILS_DU_MOIS_D_USAGE.billets
+                || chiffre_affaires >= SEUILS_DU_MOIS_D_USAGE.chiffre_affaires
+                || compteurs.adhesions[index] >= SEUILS_DU_MOIS_D_USAGE.adhesions
+                || compteurs.recharges[index] >= SEUILS_DU_MOIS_D_USAGE.recharges
+                || compteurs.transactions_cashless[index] >= SEUILS_DU_MOIS_D_USAGE.transactions_cashless
+                || compteurs.locations[index] >= SEUILS_DU_MOIS_D_USAGE.locations;
+            return usage_du_mois ? 1 : 0;
         });
         return instance;
     }
@@ -163,8 +195,8 @@
             // (calculer_observatoire_du_reseau, lignes_des_instances).
             // / Position order is written by seo/observatoire.py.
             const instance = {
-                id: ligne[0], nom: ligne[1], cat: ligne[2], cree: ligne[3],
-                pdv: ligne[4], admins: ligne[5],
+                id: ligne[0], nom: ligne[1], cree: ligne[2],
+                pdv: ligne[3], admins: ligne[4], federe: ligne[5],
                 compteurs_par_mois: {},
             };
             cles_des_compteurs.forEach(function (cle_du_compteur, position) {
@@ -185,18 +217,15 @@
     // ============================================================
 
     const seuils = {
-        actifCA: 10000, actifInscr: 1000, tresActifMois: 9, bidouillageCnx: 2,
-        petitMax: 10000, moyenMax: 100000, festivalConcentration: 70, mixtePic: 4, adhesionsPart: 70,
+        actifMois: 3, tresActifMois: 9,
+        petitMax: 10000, moyenMax: 100000, festivalConcentration: 70, mixtePic: 4,
         abandonSilence: 6, abandonMoisMax: 3, abandonCAMax: 5000, baisse: 50,
     };
     // L'ordre d'affichage des seuils. Leurs libelles viennent de Python (textes « seuil_* »).
     // / Display order of the thresholds. Labels come from Python.
-    // bidouillageCnx n'est pas affiche : les connexions admin ne sont pas encore
-    // enregistrees (elles valent 0). La regle de classer() le garde, sans effet.
-    // / bidouillageCnx is not shown: admin logins are not recorded yet (always 0).
-    const ORDRE_DES_SEUILS = ["actifCA", "actifInscr", "tresActifMois", "petitMax",
-        "moyenMax", "festivalConcentration", "mixtePic", "adhesionsPart", "abandonSilence",
-        "abandonMoisMax", "abandonCAMax", "baisse"];
+    const ORDRE_DES_SEUILS = ["actifMois", "tresActifMois", "petitMax", "moyenMax",
+        "festivalConcentration", "mixtePic", "abandonSilence", "abandonMoisMax", "abandonCAMax",
+        "baisse"];
 
     function classer_une_instance(instance) {
         const compteurs = instance.compteurs_par_mois;
@@ -204,20 +233,21 @@
         const chiffre_affaires = compteurs.ca_total;
         const mois_reels = compteurs.reel;
         const est_dans_les_12_derniers_mois = function (index) { return index >= N - 12; };
+        const total_des_12_derniers_mois = function (cle_du_compteur) {
+            return somme(compteurs[cle_du_compteur].slice(N - 12));
+        };
 
         const ca_12_mois = somme(chiffre_affaires.filter(function (v, i) { return est_dans_les_12_derniers_mois(i); }));
         const ca_avant = somme(chiffre_affaires.filter(function (v, i) { return !est_dans_les_12_derniers_mois(i); }));
         const ca_toute_la_periode = ca_12_mois + ca_avant;
-        const inscriptions_12_mois = somme(compteurs.inscriptions.slice(N - 12));
-        const connexions_12_mois = somme(compteurs.connexions_admin.slice(N - 12));
-        const evenements_12_mois = somme(compteurs.evenements.slice(N - 12));
         const mois_reels_12_mois = somme(mois_reels.slice(N - 12));
+        const mois_reels_avant = somme(mois_reels.slice(0, N - 12));
         const mois_reels_en_tout = somme(mois_reels);
         const dernier_mois_reel = mois_reels.lastIndexOf(1);
         const mois_de_silence = dernier_mois_reel < 0 ? N : N - 1 - dernier_mois_reel;
 
-        // Recurrent : un mois d'usage reel revient a la meme saison (+/- 1 mois) un an plus tard.
-        // / Recurring: a real month comes back the same season (+/- 1 month) a year later.
+        // Recurrent : un mois d'usage revient a la meme saison (+/- 1 mois) un an plus tard.
+        // / Recurring: a month of use comes back the same season (+/- 1 month) a year later.
         let recurrent = false;
         for (let i = 0; i < N - 11; i++) {
             if (mois_reels[i] && (mois_reels[i + 11] || mois_reels[i + 12] || (i + 13 < N && mois_reels[i + 13]))) {
@@ -227,49 +257,80 @@
         const abandon = mois_reels_en_tout > 0 && mois_reels_en_tout <= seuils.abandonMoisMax
             && mois_de_silence >= seuils.abandonSilence && ca_toute_la_periode < seuils.abandonCAMax && !recurrent;
 
+        // L'activite : la regularite, en mois d'usage sur les 12 derniers mois.
+        // « Tres actif » demande aussi d'etre « actif » : un seuil tres actif regle plus
+        // bas que le seuil actif ne fait pas passer un lieu peu utilise en tres actif.
+        // / Activity: regularity, in months of use over the last 12 months.
         let activite;
-        if (abandon) {
+        if (abandon || mois_reels_12_mois === 0) {
             activite = "sommeil";
-        } else if (mois_reels_12_mois === 0) {
-            activite = (connexions_12_mois >= seuils.bidouillageCnx || evenements_12_mois > 0) ? "bidouillage" : "sommeil";
-        } else if (ca_12_mois >= seuils.actifCA || inscriptions_12_mois >= seuils.actifInscr) {
+        } else if (mois_reels_12_mois >= seuils.actifMois) {
             activite = mois_reels_12_mois >= seuils.tresActifMois ? "tres_actif" : "actif";
         } else {
             activite = "peu_utilise";
         }
 
-        const ca_des_12_mois = chiffre_affaires.slice(N - 12);
+        // Les usages : un lieu peut en avoir plusieurs. « reseau » est une valeur fixe
+        // (lieu federe) : un lieu en sommeil peut l'avoir.
+        // / Uses: a venue can have several. "reseau" is fixed (federated venue).
+        const usages = [];
+        if (total_des_12_derniers_mois("evenements") >= SEUILS_DES_USAGES.agenda) { usages.push("agenda"); }
+        if (total_des_12_derniers_mois("billets_gratuits") >= SEUILS_DES_USAGES.billetterie_gratuite) { usages.push("billetterie_gratuite"); }
+        if (total_des_12_derniers_mois("billets_payants") >= SEUILS_DES_USAGES.billetterie_payante) { usages.push("billetterie_payante"); }
+        if (total_des_12_derniers_mois("adhesions") >= SEUILS_DES_USAGES.adhesions) { usages.push("adhesions"); }
+        if (total_des_12_derniers_mois("transactions_cashless") >= SEUILS_DES_USAGES.caisse_transactions
+            || total_des_12_derniers_mois("ca_caisse") >= SEUILS_DES_USAGES.caisse_chiffre_affaires) { usages.push("caisse"); }
+        if (total_des_12_derniers_mois("locations") >= SEUILS_DES_USAGES.location) { usages.push("location"); }
+        if (instance.federe) { usages.push("reseau"); }
+        if (!usages.length) { usages.push("aucun"); }
+
+        // Le rythme, lu sur le VOLUME d'activite (pas sur le CA). Concentration : la
+        // part des 2 meilleurs mois consecutifs. Pic : le meilleur mois rapporte au
+        // mois median des mois d'usage.
+        // / Rhythm, read on activity VOLUME (not revenue).
+        const volume_des_12_mois = compteurs.volume.slice(N - 12);
+        const volume_total_des_12_mois = somme(volume_des_12_mois);
         let meilleurs_deux_mois = 0;
         for (let i = 0; i < 11; i++) {
-            meilleurs_deux_mois = Math.max(meilleurs_deux_mois, ca_des_12_mois[i] + ca_des_12_mois[i + 1]);
+            meilleurs_deux_mois = Math.max(meilleurs_deux_mois, volume_des_12_mois[i] + volume_des_12_mois[i + 1]);
         }
-        const concentration = ca_12_mois ? meilleurs_deux_mois / ca_12_mois : 0;
-        const ca_des_mois_reels = ca_des_12_mois
+        const concentration = volume_total_des_12_mois ? meilleurs_deux_mois / volume_total_des_12_mois : 0;
+        const volumes_des_mois_reels = volume_des_12_mois
             .filter(function (v, i) { return mois_reels[N - 12 + i]; })
             .sort(function (a, b) { return a - b; });
-        const mois_median = ca_des_mois_reels.length ? ca_des_mois_reels[Math.floor(ca_des_mois_reels.length / 2)] : 0;
-        const pic = mois_median ? Math.max.apply(null, ca_des_12_mois) / mois_median : 0;
+        const mois_median = volumes_des_mois_reels.length ? volumes_des_mois_reels[Math.floor(volumes_des_mois_reels.length / 2)] : 0;
+        const pic = mois_median ? Math.max.apply(null, volume_des_12_mois) / mois_median : 0;
+        const nouveau = mois_reels_avant === 0;
 
-        let nature = "indetermine";
-        if (activite !== "sommeil" && activite !== "bidouillage") {
-            if (ca_12_mois && somme(compteurs.ca_adhesions.slice(N - 12)) / ca_12_mois * 100 >= seuils.adhesionsPart) {
-                nature = "adhesions";
-            } else if (concentration * 100 >= seuils.festivalConcentration && mois_reels_12_mois <= 5) {
-                nature = (recurrent || ca_avant === 0) ? "festival" : "ponctuel";
+        let rythme = "indetermine";
+        if (activite !== "sommeil" && volume_total_des_12_mois > 0) {
+            if (concentration * 100 >= seuils.festivalConcentration && mois_reels_12_mois <= 5) {
+                rythme = (recurrent || nouveau) ? "saisonnier" : "ponctuel";
             } else if (pic >= seuils.mixtePic) {
-                nature = "mixte";
+                rythme = "temps_forts";
             } else {
-                nature = "lieu";
+                rythme = "regulier";
             }
         }
         const taille = ca_12_mois < seuils.petitMax ? "petit" : ca_12_mois < seuils.moyenMax ? "moyen" : "gros";
+
+        // La tendance : sur le CA si le lieu en avait avant les 12 derniers mois, sinon
+        // sur les mois d'usage. Sur les mois d'usage seuls, un lieu deja regulier ne
+        // pourrait jamais etre « en hausse ».
+        // / Trend: on revenue when there was some before, else on months of use.
         let tendance = "";
-        if (activite !== "sommeil" && activite !== "bidouillage") {
+        if (activite !== "sommeil") {
+            let valeur_actuelle = ca_12_mois;
+            let valeur_avant = ca_avant;
             if (ca_avant === 0) {
+                valeur_actuelle = mois_reels_12_mois;
+                valeur_avant = mois_reels_avant;
+            }
+            if (valeur_avant === 0) {
                 tendance = "nouveau";
-            } else if (ca_12_mois < ca_avant * seuils.baisse / 100) {
+            } else if (valeur_actuelle < valeur_avant * seuils.baisse / 100) {
                 tendance = "en_baisse";
-            } else if (ca_12_mois > ca_avant * 1.5) {
+            } else if (valeur_actuelle > valeur_avant * 1.5) {
                 tendance = "en_hausse";
             } else {
                 tendance = "stable";
@@ -277,13 +338,13 @@
         }
         Object.assign(instance, {
             ca12: ca_12_mois, reels12: mois_reels_12_mois, silence: mois_de_silence, recurrent: recurrent,
-            abandon: abandon, activite: activite, nature: nature, taille: taille, tendance: tendance,
+            abandon: abandon, activite: activite, usages: usages, rythme: rythme, taille: taille, tendance: tendance,
         });
     }
 
     // ============================================================
-    // 3. Les indicateurs, les natures, les activites
-    // / 3. Indicators, natures, activity levels
+    // 3. Les indicateurs, les rythmes, les usages, les activites
+    // / 3. Indicators, rhythms, uses, activity levels
     // ============================================================
 
     // Comment chaque indicateur se resume sur 12 mois : somme, meilleur mois, ou
@@ -292,8 +353,9 @@
     const AGREGATION_DES_INDICATEURS = {
         ca_total: "somme", ca_billetterie: "somme", ca_adhesions: "somme", ca_caisse: "somme",
         recharges: "somme", recharges_ligne: "somme", recharges_place: "somme",
-        cartes_actives: "max", evenements: "somme",
-        inscriptions: "somme", billets_scannes: "somme", adhesions: "somme",
+        transactions_cashless: "somme", portemonnaies_actifs: "max", evenements: "somme",
+        billets: "somme", billets_gratuits: "somme", billets_payants: "somme", billets_scannes: "somme",
+        adhesions: "somme", locations: "somme", volume: "somme",
         usagers: "max", reel: "somme", pdv: "statique", admins: "statique",
     };
     const ORDRE_DES_INDICATEURS = Object.keys(AGREGATION_DES_INDICATEURS);
@@ -306,15 +368,19 @@
         };
     }
 
-    const NATURES = ["festival", "mixte", "lieu", "adhesions", "ponctuel", "indetermine"];
-    const VARIABLE_DE_COULEUR_DES_NATURES = {
-        festival: "--n-festival", mixte: "--n-mixte", lieu: "--n-lieu",
-        adhesions: "--n-adhesions", ponctuel: "--n-ponct", indetermine: "--n-indet",
+    const RYTHMES = ["saisonnier", "ponctuel", "temps_forts", "regulier", "indetermine"];
+    const VARIABLE_DE_COULEUR_DES_RYTHMES = {
+        saisonnier: "--n-festival", ponctuel: "--n-ponct", temps_forts: "--n-mixte",
+        regulier: "--n-lieu", indetermine: "--n-indet",
     };
-    const ACTIVITES = ["tres_actif", "actif", "peu_utilise", "bidouillage", "sommeil"];
+    // Un lieu peut avoir plusieurs usages : ils servent aux filtres, a la liste et aux
+    // barres « par usage », jamais la ou il faut une seule valeur par lieu.
+    // / A venue may have several uses: filters, list and "per use" bars only.
+    const USAGES = ["agenda", "billetterie_gratuite", "billetterie_payante", "adhesions", "caisse",
+        "location", "reseau", "aucun"];
+    const ACTIVITES = ["tres_actif", "actif", "peu_utilise", "sommeil"];
     const VARIABLE_DE_COULEUR_DES_ACTIVITES = {
-        tres_actif: "--a-tres", actif: "--a-actif", peu_utilise: "--a-peu",
-        bidouillage: "--a-bid", sommeil: "--a-inactif",
+        tres_actif: "--a-tres", actif: "--a-actif", peu_utilise: "--a-peu", sommeil: "--a-inactif",
     };
     const TAILLES = ["petit", "moyen", "gros"];
     const VARIABLE_DE_COULEUR_DES_TAILLES = {petit: "--t-petit", moyen: "--t-moyen", gros: "--t-gros"};
@@ -334,8 +400,8 @@
         return agregation === "max" ? Math.max.apply(null, douze_derniers_mois) : somme(douze_derniers_mois);
     }
 
-    function couleur_de_la_nature(nature, transparence) {
-        return couleur_css(VARIABLE_DE_COULEUR_DES_NATURES[nature]) + (transparence || "");
+    function couleur_du_rythme(rythme, transparence) {
+        return couleur_css(VARIABLE_DE_COULEUR_DES_RYTHMES[rythme]) + (transparence || "");
     }
 
     // ============================================================
@@ -346,14 +412,16 @@
     let case_choisie_dans_la_matrice = null;
 
     function instances_filtrees() {
-        const nature_choisie = document.getElementById("c-nat").value;
+        const usage_choisi = document.getElementById("c-usage").value;
+        const rythme_choisi = document.getElementById("c-rythme").value;
         const activite_choisie = document.getElementById("c-act").value;
         return liste_des_instances.filter(function (instance) {
-            if (nature_choisie && instance.nature !== nature_choisie) { return false; }
+            if (usage_choisi && !instance.usages.includes(usage_choisi)) { return false; }
+            if (rythme_choisi && instance.rythme !== rythme_choisi) { return false; }
             if (activite_choisie && instance.activite !== activite_choisie) { return false; }
             if (case_choisie_dans_la_matrice) {
                 return instance.taille === case_choisie_dans_la_matrice.taille
-                    && instance.nature === case_choisie_dans_la_matrice.nature
+                    && instance.rythme === case_choisie_dans_la_matrice.rythme
                     && est_utilisee(instance.activite);
             }
             return true;
@@ -370,18 +438,20 @@
         const ca_du_reseau = somme(liste_des_instances.map(function (instance) { return instance.ca12; }));
         const recharges_du_reseau = somme(liste_des_instances.map(function (instance) { return valeur_agregee(instance, "recharges"); }));
         const recharges_en_ligne = somme(liste_des_instances.map(function (instance) { return valeur_agregee(instance, "recharges_ligne"); }));
-        const cartes_par_mois = liste_des_mois.map(function (mois, index) {
-            return somme(liste_des_instances.map(function (instance) { return instance.compteurs_par_mois.cartes_actives[index]; }));
+        // Les porte-monnaie distincts ne s'additionnent pas vraiment entre lieux (une
+        // personne paie dans deux lieux) : la tuile le dit, c'est un ordre de grandeur.
+        // / Distinct wallets do not really add up across venues: an order of magnitude.
+        const portemonnaies_par_mois = liste_des_mois.map(function (mois, index) {
+            return somme(liste_des_instances.map(function (instance) { return instance.compteurs_par_mois.portemonnaies_actifs[index]; }));
         }).slice(N - 12);
-        const meilleur_mois_des_cartes = Math.max.apply(null, cartes_par_mois);
+        const meilleur_mois_des_portemonnaies = Math.max.apply(null, portemonnaies_par_mois);
         const annees_de_creation = liste_des_instances.map(function (instance) { return +instance.cree.slice(0, 4) || 9999; });
         const tres_actives = nombre_d_instances_avec_l_activite("tres_actif");
-        const bidouillages = nombre_d_instances_avec_l_activite("bidouillage");
 
         // Les seuils EN COURS, pour les bulles « ? » : elles suivent les reglages.
         // / The CURRENT thresholds, for the "?" bubbles: they follow the settings.
         const seuils_en_cours = {
-            actif_ca: formater_nombre(seuils.actifCA), actif_inscriptions: seuils.actifInscr,
+            actif_mois: seuils.actifMois,
             tres_actif_mois: seuils.tresActifMois,
             abandon_mois: seuils.abandonMoisMax, abandon_silence: seuils.abandonSilence,
             abandon_ca: formater_nombre(seuils.abandonCAMax),
@@ -400,8 +470,8 @@
             [texte("tuile_peu_utilisees"), formater_nombre(nombre_d_instances_avec_l_activite("peu_utilise")),
                 texte("tuile_peu_utilisees_detail"),
                 texte("methode_peu_utilisees", seuils_en_cours) + usage_reel],
-            [texte("tuile_sommeil"), formater_nombre(nombre_d_instances_avec_l_activite("sommeil") + bidouillages),
-                texte("tuile_sommeil_detail", {nombre: bidouillages}),
+            [texte("tuile_sommeil"), formater_nombre(nombre_d_instances_avec_l_activite("sommeil")),
+                texte("tuile_sommeil_detail"),
                 texte("methode_sommeil", seuils_en_cours) + usage_reel],
             [texte("tuile_abandons"), formater_nombre(nombre_d_abandons),
                 texte("tuile_abandons_detail", {mois: seuils.abandonSilence}),
@@ -411,9 +481,9 @@
             [texte("tuile_recharges"), formater_nombre(recharges_du_reseau, "€"),
                 texte("tuile_recharges_detail", {pourcentage: Math.round(recharges_en_ligne / (recharges_du_reseau || 1) * 100)}),
                 texte("methode_recharges")],
-            [texte("tuile_cartes"), formater_nombre(meilleur_mois_des_cartes),
-                texte("tuile_cartes_detail", {mois: libelles_des_mois[N - 12 + cartes_par_mois.indexOf(meilleur_mois_des_cartes)]}),
-                texte("methode_cartes")],
+            [texte("tuile_portemonnaies"), formater_nombre(meilleur_mois_des_portemonnaies),
+                texte("tuile_portemonnaies_detail", {mois: libelles_des_mois[N - 12 + portemonnaies_par_mois.indexOf(meilleur_mois_des_portemonnaies)]}),
+                texte("methode_portemonnaies")],
         ];
         // Meme HTML que seo/templates/seo/partials/observatoire_aide.html.
         // / Same HTML as the observatoire_aide.html partial.
@@ -427,26 +497,29 @@
 
     function rendre_qualification() {
         const instances_utilisees = liste_des_instances.filter(function (instance) { return est_utilisee(instance.activite); });
-        const natures_affichees = NATURES.filter(function (nature) { return nature !== "indetermine"; });
+        // « indetermine » reste affiche : un lieu actif par ses seuls evenements n'a pas
+        // de volume, donc pas de rythme, et doit rester visible dans la matrice.
+        // / "indetermine" stays: a venue active through events only has no rhythm.
+        const rythmes_affiches = RYTHMES;
 
-        // La matrice taille x nature. Une case non vide est un bouton qui filtre.
-        // / The size x nature matrix. A non-empty cell is a filtering button.
-        let html = `<tr><th></th>${natures_affichees.map(function (nature) {
-            return `<th><span class="pastille" style="background:var(${VARIABLE_DE_COULEUR_DES_NATURES[nature]})"></span>${libelle_de("natures", nature)}</th>`;
+        // La matrice taille x rythme. Une case non vide est un bouton qui filtre.
+        // / The size x rhythm matrix. A non-empty cell is a filtering button.
+        let html = `<tr><th></th>${rythmes_affiches.map(function (rythme) {
+            return `<th><span class="pastille" style="background:var(${VARIABLE_DE_COULEUR_DES_RYTHMES[rythme]})"></span>${libelle_de("rythmes", rythme)}</th>`;
         }).join("")}<th>${texte("total")}</th></tr>`;
         TAILLES.forEach(function (taille) {
-            html += `<tr><th>${libelle_de("tailles", taille)}</th>` + natures_affichees.map(function (nature) {
-                const nombre = instances_utilisees.filter(function (instance) { return instance.taille === taille && instance.nature === nature; }).length;
-                const est_choisie = case_choisie_dans_la_matrice && case_choisie_dans_la_matrice.taille === taille && case_choisie_dans_la_matrice.nature === nature;
+            html += `<tr><th>${libelle_de("tailles", taille)}</th>` + rythmes_affiches.map(function (rythme) {
+                const nombre = instances_utilisees.filter(function (instance) { return instance.taille === taille && instance.rythme === rythme; }).length;
+                const est_choisie = case_choisie_dans_la_matrice && case_choisie_dans_la_matrice.taille === taille && case_choisie_dans_la_matrice.rythme === rythme;
                 if (!nombre) {
                     return `<td class="vide">·</td>`;
                 }
-                const etiquette = texte("matrice_case", {nombre: nombre, taille: libelle_de("tailles", taille), nature: libelle_de("natures", nature)});
-                return `<td tabindex="0" role="button" data-t="${taille}" data-n="${nature}" class="${est_choisie ? "choisi" : ""}" aria-label="${echapper_html(etiquette)}">${nombre}</td>`;
+                const etiquette = texte("matrice_case", {nombre: nombre, taille: libelle_de("tailles", taille), rythme: libelle_de("rythmes", rythme)});
+                return `<td tabindex="0" role="button" data-t="${taille}" data-n="${rythme}" class="${est_choisie ? "choisi" : ""}" aria-label="${echapper_html(etiquette)}">${nombre}</td>`;
             }).join("") + `<td class="vide">${instances_utilisees.filter(function (instance) { return instance.taille === taille; }).length}</td></tr>`;
         });
-        html += `<tr><th>${texte("total")}</th>${natures_affichees.map(function (nature) {
-            return `<td class="vide">${instances_utilisees.filter(function (instance) { return instance.nature === nature; }).length}</td>`;
+        html += `<tr><th>${texte("total")}</th>${rythmes_affiches.map(function (rythme) {
+            return `<td class="vide">${instances_utilisees.filter(function (instance) { return instance.rythme === rythme; }).length}</td>`;
         }).join("")}<td class="vide">${instances_utilisees.length}</td></tr>`;
 
         const matrice = document.getElementById("matrice");
@@ -454,9 +527,9 @@
         matrice.querySelectorAll("td[data-t]").forEach(function (cellule) {
             const choisir_la_case = function () {
                 const taille = cellule.dataset.t;
-                const nature = cellule.dataset.n;
-                const deja_choisie = case_choisie_dans_la_matrice && case_choisie_dans_la_matrice.taille === taille && case_choisie_dans_la_matrice.nature === nature;
-                case_choisie_dans_la_matrice = deja_choisie ? null : {taille: taille, nature: nature};
+                const rythme = cellule.dataset.n;
+                const deja_choisie = case_choisie_dans_la_matrice && case_choisie_dans_la_matrice.taille === taille && case_choisie_dans_la_matrice.rythme === rythme;
+                case_choisie_dans_la_matrice = deja_choisie ? null : {taille: taille, rythme: rythme};
                 rendre_qualification();
                 rendre_graphique();
                 rendre_liste();
@@ -469,7 +542,7 @@
                 }
             };
         });
-        document.getElementById("leg-nature").innerHTML = `<li>${texte("legende_nature")}</li>`;
+        document.getElementById("leg-rythme").innerHTML = `<li>${texte("legende_rythme")}</li>`;
 
         // La barre des niveaux d'activite, avec son equivalent texte (aria-label).
         // / The activity bar, with its text equivalent (aria-label).
@@ -486,10 +559,10 @@
         }).join("");
 
         const abandons = liste_des_instances.filter(function (instance) { return instance.abandon; });
-        const festivals_recurrents = liste_des_instances.filter(function (instance) { return instance.nature === "festival" && instance.recurrent; }).length;
+        const saisonniers_recurrents = liste_des_instances.filter(function (instance) { return instance.rythme === "saisonnier" && instance.recurrent; }).length;
         document.getElementById("encart-abandon").innerHTML = texte("encart_abandon", {
             nombre: `<strong>${abandons.length}</strong>`, mois_max: seuils.abandonMoisMax,
-            silence: seuils.abandonSilence, festivals: festivals_recurrents,
+            silence: seuils.abandonSilence, saisonniers: saisonniers_recurrents,
         });
     }
 
@@ -550,53 +623,56 @@
                 borderRadius: 4, borderSkipped: "bottom", maxBarThickness: 36}]},
                 options: {...options_de_base, plugins: {...options_de_base.plugins, legend: {display: false},
                     title: {display: true, color: couleur_du_texte, text: texte("graphique_annee_precedente")}}, scales: {x: axe_des_mois, y: echelle(definition.u)}}};
-        } else if (vue === "moyNature") {
-            configuration = est_statique ? graphique_sans_historique : {type: "line", data: {labels: libelles_des_mois, datasets: NATURES.filter(function (n) { return n !== "indetermine"; }).map(function (nature) {
-                const groupe = instances.filter(function (instance) { return instance.nature === nature; });
-                return {label: `${libelle_de("natures", nature)} (${groupe.length})`,
+        } else if (vue === "moyRythme") {
+            configuration = est_statique ? graphique_sans_historique : {type: "line", data: {labels: libelles_des_mois, datasets: RYTHMES.filter(function (r) { return r !== "indetermine"; }).map(function (rythme) {
+                const groupe = instances.filter(function (instance) { return instance.rythme === rythme; });
+                return {label: `${libelle_de("rythmes", rythme)} (${groupe.length})`,
                     data: liste_des_mois.map(function (m, i) { return groupe.length ? somme(groupe.map(function (instance) { return instance.compteurs_par_mois[cle][i]; })) / groupe.length : null; }),
-                    borderColor: couleur_de_la_nature(nature), backgroundColor: couleur_de_la_nature(nature), borderWidth: 2, pointRadius: 2.5, pointHoverRadius: 5, tension: .25};
+                    borderColor: couleur_du_rythme(rythme), backgroundColor: couleur_du_rythme(rythme), borderWidth: 2, pointRadius: 2.5, pointHoverRadius: 5, tension: .25};
             }).filter(function (serie) { return serie.data.some(function (v) { return v; }); })},
                 options: {...options_de_base, scales: {x: axe_des_mois, y: echelle(texte("unite_par_instance", {unite: definition.u}))}}};
         } else if (vue === "groupe") {
             const regroupement = document.getElementById("c-groupe").value;
-            const famille = {nature: "natures", taille: "tailles", activite: "activites", categorie: "categories"}[regroupement];
-            const groupes = regroupement === "nature" ? NATURES : regroupement === "taille" ? TAILLES : regroupement === "activite" ? ACTIVITES
-                : Array.from(new Set(liste_des_instances.map(function (instance) { return instance.cat; })));
-            const groupe_de = function (instance) {
-                return regroupement === "nature" ? instance.nature : regroupement === "taille" ? instance.taille : regroupement === "activite" ? instance.activite : instance.cat;
+            const famille = {rythme: "rythmes", taille: "tailles", activite: "activites", usage: "usages"}[regroupement];
+            const groupes = regroupement === "rythme" ? RYTHMES : regroupement === "taille" ? TAILLES : regroupement === "activite" ? ACTIVITES : USAGES;
+            // Par usage, un lieu compte dans CHACUN de ses usages (titre du graphique).
+            // / Per use, a venue counts in EACH of its uses (chart title says so).
+            const est_membre = function (instance, valeur_du_groupe) {
+                if (regroupement === "usage") { return instance.usages.includes(valeur_du_groupe); }
+                return instance[regroupement] === valeur_du_groupe;
             };
             const lignes = groupes.map(function (valeur_du_groupe) {
-                const membres = instances.filter(function (instance) { return groupe_de(instance) === valeur_du_groupe; });
+                const membres = instances.filter(function (instance) { return est_membre(instance, valeur_du_groupe); });
                 return {x: valeur_du_groupe, n: membres.length, v: membres.length ? somme(membres.map(function (instance) { return valeur_agregee(instance, cle); })) / membres.length : 0};
             }).filter(function (ligne) { return ligne.n; });
             configuration = {type: "bar", data: {labels: lignes.map(function (ligne) { return `${libelle_de(famille, ligne.x)} (${ligne.n})`; }),
                 datasets: [{label: texte("moyenne_par_instance_de", {indicateur: definition.lib}), data: lignes.map(function (ligne) { return ligne.v; }),
-                    backgroundColor: lignes.map(function (ligne) { return regroupement === "nature" ? couleur_de_la_nature(ligne.x) : regroupement === "activite" ? couleur_css(VARIABLE_DE_COULEUR_DES_ACTIVITES[ligne.x]) : couleur_css("--n-lieu"); }),
+                    backgroundColor: lignes.map(function (ligne) { return regroupement === "rythme" ? couleur_du_rythme(ligne.x) : regroupement === "activite" ? couleur_css(VARIABLE_DE_COULEUR_DES_ACTIVITES[ligne.x]) : couleur_css("--n-lieu"); }),
                     borderRadius: 4, borderSkipped: "bottom", maxBarThickness: 64}]},
-                options: {...options_de_base, interaction: {mode: "nearest", intersect: true}, plugins: {...options_de_base.plugins, legend: {display: false}},
+                options: {...options_de_base, interaction: {mode: "nearest", intersect: true}, plugins: {...options_de_base.plugins, legend: {display: false},
+                    title: {display: regroupement === "usage", color: couleur_du_texte, text: texte("graphique_usages_cumules")}},
                     scales: {x: {...axe_des_mois, ticks: {color: couleur_du_texte, autoSkip: false}}, y: echelle(texte("unite_par_instance_periode", {unite: definition.u, periode: periode_par_instance}))}}};
         } else if (vue === "classement") {
             const classement = instances.map(function (instance) { return {instance: instance, v: valeur_agregee(instance, cle)}; })
                 .filter(function (ligne) { return ligne.v > 0; }).sort(function (a, b) { return b.v - a.v; }).slice(0, 120);
             configuration = {type: "bar", data: {labels: classement.map(function (ligne) { return ligne.instance.nom; }), datasets: [{label: definition.lib,
-                data: classement.map(function (ligne) { return ligne.v; }), backgroundColor: classement.map(function (ligne) { return couleur_de_la_nature(ligne.instance.nature); }),
+                data: classement.map(function (ligne) { return ligne.v; }), backgroundColor: classement.map(function (ligne) { return couleur_du_rythme(ligne.instance.rythme); }),
                 borderRadius: 3, borderSkipped: "bottom", categoryPercentage: .9, barPercentage: .9}]},
                 options: {...options_de_base, interaction: {mode: "nearest", intersect: false, axis: "x"}, plugins: {...options_de_base.plugins, legend: {display: false},
                     tooltip: {callbacks: {title: function (c) { return c[0].label; }, label: function (c) {
                         const instance = classement[c.dataIndex].instance;
-                        return [` ${formater_nombre(c.parsed.y, definition.u)}`, ` ${libelle_de("natures", instance.nature)} · ${libelle_de("tailles", instance.taille)} · ${libelle_de("activites", instance.activite)}`];
+                        return [` ${formater_nombre(c.parsed.y, definition.u)}`, ` ${libelle_de("rythmes", instance.rythme)} · ${libelle_de("tailles", instance.taille)} · ${libelle_de("activites", instance.activite)}`];
                     }}},
                     title: {display: true, color: couleur_du_texte, text: texte(classement.length === 120 ? "classement_titre_120" : "classement_titre", {nombre: classement.length, periode: periode_par_instance})}},
                     scales: {x: {display: false}, y: echelle(definition.u, echelle_logarithmique)}}};
         } else {
             const definition_verticale = indicateur(cle_de_l_axe_vertical);
-            const series = NATURES.map(function (nature) {
-                return {label: libelle_de("natures", nature),
-                    data: instances.filter(function (instance) { return instance.nature === nature; })
+            const series = RYTHMES.map(function (rythme) {
+                return {label: libelle_de("rythmes", rythme),
+                    data: instances.filter(function (instance) { return instance.rythme === rythme; })
                         .map(function (instance) { return {x: valeur_agregee(instance, cle), y: valeur_agregee(instance, cle_de_l_axe_vertical), nom: instance.nom}; })
                         .filter(function (point) { return !echelle_logarithmique || (point.x > 0 && point.y > 0); }),
-                    backgroundColor: couleur_de_la_nature(nature, "cc"), borderColor: couleur_css("--papier"), borderWidth: 1.5, pointRadius: 5, pointHoverRadius: 7};
+                    backgroundColor: couleur_du_rythme(rythme, "cc"), borderColor: couleur_css("--papier"), borderWidth: 1.5, pointRadius: 5, pointHoverRadius: 7};
             }).filter(function (serie) { return serie.data.length; });
             configuration = {type: "scatter", data: {datasets: series}, options: {...options_de_base, interaction: {mode: "nearest", intersect: true},
                 plugins: {...options_de_base.plugins, tooltip: {callbacks: {label: function (c) { return ` ${c.raw.nom} : ${formater_nombre(c.raw.x, definition.u)} · ${formater_nombre(c.raw.y, definition_verticale.u)}`; }}}},
@@ -609,7 +685,7 @@
 
         let phrase_du_filtre = texte("selection_nombre", {nombre: instances.length});
         if (case_choisie_dans_la_matrice) {
-            phrase_du_filtre += " · " + texte("selection_case", {taille: libelle_de("tailles", case_choisie_dans_la_matrice.taille), nature: libelle_de("natures", case_choisie_dans_la_matrice.nature)});
+            phrase_du_filtre += " · " + texte("selection_case", {taille: libelle_de("tailles", case_choisie_dans_la_matrice.taille), rythme: libelle_de("rythmes", case_choisie_dans_la_matrice.rythme)});
         }
         document.getElementById("filtre-actif").textContent = phrase_du_filtre;
 
@@ -629,9 +705,9 @@
     // ---------- La liste des instances / The instance list ----------
 
     let tri_de_la_liste = {cle: "ca12", sens: -1};
-    const COLONNES_DE_LA_LISTE = [["nom"], ["nature"], ["taille"], ["activite"], ["tendance"], ["reels12", "r"],
-        ["ca12", "r"], ["rech", "r"], ["cartes", "r"], ["cat"]];
-    const COLONNES_TRIEES_PAR_ORDRE_ALPHABETIQUE = ["nom", "nature", "taille", "activite", "tendance", "cat"];
+    const COLONNES_DE_LA_LISTE = [["nom"], ["usages"], ["rythme"], ["taille"], ["activite"], ["tendance"],
+        ["reels12", "r"], ["ca12", "r"], ["rech", "r"], ["portemonnaies", "r"]];
+    const COLONNES_TRIEES_PAR_ORDRE_ALPHABETIQUE = ["nom", "usages", "rythme", "taille", "activite", "tendance"];
 
     function rendre_liste() {
         const recherche = document.getElementById("c-cherche").value.trim().toLowerCase();
@@ -642,19 +718,18 @@
         });
         instances.forEach(function (instance) {
             instance.rech = valeur_agregee(instance, "recharges");
-            instance.cartes = valeur_agregee(instance, "cartes_actives");
+            instance.portemonnaies = valeur_agregee(instance, "portemonnaies_actifs");
         });
         instances.sort(function (a, b) {
             const cle = tri_de_la_liste.cle;
-            return (a[cle] > b[cle] ? 1 : a[cle] < b[cle] ? -1 : 0) * tri_de_la_liste.sens;
+            // Les usages sont une liste : on les compare comme un texte.
+            // / Uses are a list: compared as text.
+            const valeur_a = cle === "usages" ? a.usages.join(",") : a[cle];
+            const valeur_b = cle === "usages" ? b.usages.join(",") : b[cle];
+            return (valeur_a > valeur_b ? 1 : valeur_a < valeur_b ? -1 : 0) * tri_de_la_liste.sens;
         });
         document.getElementById("nb-liste").textContent = texte("nombre_d_instances", {nombre: instances.length});
 
-        // « Ecart » : la categorie declaree a la creation ne correspond pas a l'usage.
-        // / "Gap": the category declared at creation does not match the observed use.
-        const ecart = function (instance) {
-            return (instance.cat === "F" && ["lieu", "adhesions"].includes(instance.nature)) || (instance.cat === "S" && instance.nature === "festival");
-        };
         const en_tete = COLONNES_DE_LA_LISTE.map(function (colonne) {
             const cle = colonne[0];
             const classe = colonne[1] || "";
@@ -664,18 +739,20 @@
             return `<th class="${classe}" aria-sort="${sens_aria}"><button type="button" data-k="${cle}">${texte("colonne_" + cle)}${fleche}</button></th>`;
         }).join("");
         const lignes = instances.slice(0, 300).map(function (instance) {
-            const festival_recurrent = instance.recurrent && instance.nature === "festival" ? " ↻" : "";
+            const saisonnier_recurrent = instance.recurrent && instance.rythme === "saisonnier" ? " ↻" : "";
             const pastille_abandon = instance.abandon ? ` <span class="pill lourd">${texte("pastille_abandon")}</span>` : "";
             const tendance = instance.tendance === "en_baisse" ? `<span class="pill moyen">${libelle_de("tendances", "en_baisse")}</span>` : (instance.tendance ? libelle_de("tendances", instance.tendance) : "·");
-            const pastille_ecart = ecart(instance) ? ` <span class="pill moyen">${texte("pastille_ecart")}</span>` : "";
+            const pastilles_des_usages = instance.usages.includes("aucun") ? "·" : instance.usages.map(function (usage) {
+                return `<span class="pill">${libelle_de("usages", usage)}</span>`;
+            }).join(" ");
             return `<tr><td>${echapper_html(instance.nom)}</td>`
-                + `<td><span class="pastille" style="background:var(${VARIABLE_DE_COULEUR_DES_NATURES[instance.nature]})"></span>${libelle_de("natures", instance.nature)}${festival_recurrent}</td>`
+                + `<td>${pastilles_des_usages}</td>`
+                + `<td><span class="pastille" style="background:var(${VARIABLE_DE_COULEUR_DES_RYTHMES[instance.rythme]})"></span>${libelle_de("rythmes", instance.rythme)}${saisonnier_recurrent}</td>`
                 + `<td>${est_utilisee(instance.activite) ? libelle_de("tailles", instance.taille) : "·"}</td>`
                 + `<td><span class="pastille" style="background:var(${VARIABLE_DE_COULEUR_DES_ACTIVITES[instance.activite]})"></span>${libelle_de("activites", instance.activite)}${pastille_abandon}</td>`
                 + `<td>${tendance}</td>`
                 + `<td class="r">${instance.reels12}</td><td class="r">${formater_nombre(instance.ca12, "€")}</td><td class="r">${formater_nombre(instance.rech, "€")}</td>`
-                + `<td class="r">${formater_nombre(instance.cartes)}</td>`
-                + `<td>${echapper_html(libelle_de("categories", instance.cat))}${pastille_ecart}</td></tr>`;
+                + `<td class="r">${formater_nombre(instance.portemonnaies)}</td></tr>`;
         }).join("");
         document.getElementById("liste").innerHTML = `<thead><tr>${en_tete}</tr></thead><tbody>${lignes}</tbody>`;
         document.querySelectorAll("#liste th button").forEach(function (bouton) {
@@ -738,13 +815,16 @@
         }).join("");
         document.getElementById("c-ind").innerHTML = options_des_indicateurs;
         document.getElementById("c-ind2").innerHTML = options_des_indicateurs;
-        document.getElementById("c-ind2").value = "cartes_actives";
-        const options_des_natures = NATURES.map(function (nature) { return `<option value="${nature}">${libelle_de("natures", nature)}</option>`; }).join("");
+        document.getElementById("c-ind2").value = "portemonnaies_actifs";
+        const options_des_rythmes = RYTHMES.map(function (rythme) { return `<option value="${rythme}">${libelle_de("rythmes", rythme)}</option>`; }).join("");
+        const options_des_usages = USAGES.map(function (usage) { return `<option value="${usage}">${libelle_de("usages", usage)}</option>`; }).join("");
         const options_des_activites = ACTIVITES.map(function (activite) { return `<option value="${activite}">${libelle_de("activites", activite)}</option>`; }).join("");
         const options_des_tailles = TAILLES.map(function (taille) { return `<option value="${taille}">${libelle_de("tailles", taille)}</option>`; }).join("");
-        document.getElementById("c-nat").insertAdjacentHTML("beforeend", options_des_natures);
+        document.getElementById("c-usage").insertAdjacentHTML("beforeend", options_des_usages);
+        document.getElementById("c-rythme").insertAdjacentHTML("beforeend", options_des_rythmes);
         document.getElementById("c-act").insertAdjacentHTML("beforeend", options_des_activites);
-        document.getElementById("m-nat").insertAdjacentHTML("beforeend", options_des_natures);
+        document.getElementById("m-usage").insertAdjacentHTML("beforeend", options_des_usages);
+        document.getElementById("m-rythme").insertAdjacentHTML("beforeend", options_des_rythmes);
         document.getElementById("m-act").insertAdjacentHTML("beforeend", options_des_activites);
         document.getElementById("m-taille").insertAdjacentHTML("beforeend", options_des_tailles);
     }
@@ -759,7 +839,7 @@
                 document.getElementById(onglet_suivant === "standard" ? "o-standard" : "o-mesure").focus();
             }
         };
-        ["c-ind", "c-vue", "c-groupe", "c-ind2", "c-nat", "c-act", "c-log"].forEach(function (identifiant) {
+        ["c-ind", "c-vue", "c-groupe", "c-ind2", "c-usage", "c-rythme", "c-act", "c-log"].forEach(function (identifiant) {
             document.getElementById(identifiant).onchange = function () {
                 rendre_graphique();
                 rendre_liste();
@@ -767,7 +847,7 @@
         });
         document.getElementById("c-cherche").oninput = rendre_liste;
         document.getElementById("c-dormants").onchange = rendre_liste;
-        document.getElementById("c-vue").value = "moyNature";
+        document.getElementById("c-vue").value = "moyRythme";
     }
 
     function demarrer() {
@@ -811,17 +891,18 @@
     // Axe horizontal possible :
     //   - un indicateur   -> nuage de points, une pastille par instance
     //   - le temps (mois) -> courbes, une serie par valeur de « couleur »
-    //   - un groupe       -> barres (nature, taille, activite, categorie)
+    //   - un groupe       -> barres (rythme, taille, activite)
     //   - les instances   -> classement en barres
     //   - une repartition -> anneau
     // ============================================================
 
+    // Des groupes a UNE valeur par lieu (couleurs, anneau, courbes). Les usages n'y
+    // sont pas : un lieu en a plusieurs. Ils servent de filtre (m-usage).
+    // / Single-valued groups only. Uses (several per venue) are a filter here.
     const GROUPES = {
-        nature: {famille: "natures", valeur: function (instance) { return instance.nature; }, ordre: function () { return NATURES; }},
+        rythme: {famille: "rythmes", valeur: function (instance) { return instance.rythme; }, ordre: function () { return RYTHMES; }},
         activite: {famille: "activites", valeur: function (instance) { return instance.activite; }, ordre: function () { return ACTIVITES; }},
         taille: {famille: "tailles", valeur: function (instance) { return instance.taille; }, ordre: function () { return TAILLES; }},
-        categorie: {famille: "categories", valeur: function (instance) { return instance.cat; },
-            ordre: function () { return Array.from(new Set(liste_des_instances.map(function (instance) { return instance.cat; }))).sort(); }},
     };
 
     function nom_du_groupe(dimension) {
@@ -829,7 +910,7 @@
     }
 
     function couleur_du_groupe(dimension, valeur) {
-        if (dimension === "nature") { return couleur_css(VARIABLE_DE_COULEUR_DES_NATURES[valeur] || "--n-indet"); }
+        if (dimension === "rythme") { return couleur_css(VARIABLE_DE_COULEUR_DES_RYTHMES[valeur] || "--n-indet"); }
         if (dimension === "activite") { return couleur_css(VARIABLE_DE_COULEUR_DES_ACTIVITES[valeur] || "--a-inactif"); }
         if (dimension === "taille") { return couleur_css(VARIABLE_DE_COULEUR_DES_TAILLES[valeur] || "--n-indet"); }
         return couleur_css("--n-lieu");
@@ -843,17 +924,21 @@
     // « Mode avance ». Elle est gardee dans le navigateur (localStorage), par confort.
     // / One config, edited by two UIs, kept in localStorage for convenience.
     const TYPES_DE_GRAPHIQUE = ["nuage", "mois", "groupe", "classement", "anneau"];
-    const CONFIGURATION_PAR_DEFAUT = {mode: "phrases", type: "nuage", x: "ca_total", y: "cartes_actives", g: "nature", calc: "moyenne",
-        periode: "12", couleur: "nature", nat: "", act: "", taille: "", zero: true, log: true};
-    const CLE_DU_STOCKAGE_LOCAL = "observatoire-sur-mesure-v3";
+    const CONFIGURATION_PAR_DEFAUT = {mode: "phrases", type: "nuage", x: "ca_total", y: "portemonnaies_actifs", g: "rythme", calc: "moyenne",
+        periode: "12", couleur: "rythme", usage: "", rythme: "", act: "", taille: "", zero: true, log: true};
+    // Le suffixe change quand les cles des indicateurs ou des groupes changent : une
+    // ancienne configuration gardee (indicateur disparu) ferait planter la page.
+    // / The suffix changes with indicator or group keys: an old saved config would crash.
+    const CLE_DU_STOCKAGE_LOCAL = "observatoire-sur-mesure-v4";
     let configuration_sur_mesure = {...CONFIGURATION_PAR_DEFAUT};
 
     const EXEMPLES = [
-        {cle: "exemple_cartes_ca", c: {type: "nuage", x: "ca_total", y: "cartes_actives", periode: "12", couleur: "nature", log: true, zero: true}},
-        {cle: "exemple_ca_nature", c: {type: "mois", y: "ca_total", calc: "moyenne", periode: "tout", couleur: "nature", log: false, zero: true}},
+        {cle: "exemple_portemonnaies_ca", c: {type: "nuage", x: "ca_total", y: "portemonnaies_actifs", periode: "12", couleur: "rythme", log: true, zero: true}},
+        {cle: "exemple_volume_rythme", c: {type: "mois", y: "volume", calc: "moyenne", periode: "tout", couleur: "rythme", log: false, zero: true}},
+        {cle: "exemple_billets", c: {type: "nuage", x: "billets_payants", y: "billets_gratuits", periode: "12", couleur: "activite", log: true, zero: true}},
         {cle: "exemple_recharges", c: {type: "nuage", x: "recharges_ligne", y: "recharges_place", periode: "12", couleur: "taille", log: true, zero: true}},
-        {cle: "exemple_scans", c: {type: "classement", y: "billets_scannes", periode: "12", couleur: "nature", log: true, zero: true}},
-        {cle: "exemple_repartition_nature", c: {type: "anneau", g: "nature", y: "ca_total", periode: "12", log: false, zero: true}},
+        {cle: "exemple_scans", c: {type: "classement", y: "billets_scannes", periode: "12", couleur: "rythme", log: true, zero: true}},
+        {cle: "exemple_repartition_rythme", c: {type: "anneau", g: "rythme", y: "volume", periode: "12", log: false, zero: true}},
         {cle: "exemple_composantes", c: {type: "anneau", g: "composantes", y: "ca_total", periode: "12", log: false, zero: true}},
         {cle: "exemple_instances_utilisees", c: {type: "mois", y: "reel", calc: "total", periode: "tout", couleur: "aucune", log: false, zero: false}},
     ];
@@ -862,11 +947,11 @@
     // / Fill-in sentence choices: [value, text key].
     const PERIODES = [["12", "periode_12"], ["prec", "periode_prec"], ["tout", "periode_tout"]];
     const CALCULS = [["total", "calcul_total"], ["moyenne", "calcul_moyenne"], ["mediane", "calcul_mediane"]];
-    const VUES = [["mois", "vue_mois"], ["g:nature", "vue_nature"], ["g:activite", "vue_activite"], ["g:taille", "vue_taille"],
-        ["g:categorie", "vue_categorie"], ["classement", "vue_classement"]];
-    const DISTINCTIONS = [["aucune", "distinguer_aucune"], ["nature", "distinguer_nature"], ["activite", "distinguer_activite"], ["taille", "distinguer_taille"]];
-    const COULEURS_DU_NUAGE = [["nature", "couleur_nature"], ["activite", "couleur_activite"], ["taille", "couleur_taille"], ["aucune", "couleur_aucune"]];
-    const DECOUPES = [["nature", "decoupe_nature"], ["activite", "decoupe_activite"], ["taille", "decoupe_taille"], ["categorie", "decoupe_categorie"],
+    const VUES = [["mois", "vue_mois"], ["g:rythme", "vue_rythme"], ["g:activite", "vue_activite"], ["g:taille", "vue_taille"],
+        ["classement", "vue_classement"]];
+    const DISTINCTIONS = [["aucune", "distinguer_aucune"], ["rythme", "distinguer_rythme"], ["activite", "distinguer_activite"], ["taille", "distinguer_taille"]];
+    const COULEURS_DU_NUAGE = [["rythme", "couleur_rythme"], ["activite", "couleur_activite"], ["taille", "couleur_taille"], ["aucune", "couleur_aucune"]];
+    const DECOUPES = [["rythme", "decoupe_rythme"], ["activite", "decoupe_activite"], ["taille", "decoupe_taille"],
         ["instances", "decoupe_instances"], ["composantes", "decoupe_composantes"]];
 
     function forme_choisie() {
@@ -878,7 +963,7 @@
     function vue_choisie() {
         if (configuration_sur_mesure.type === "mois") { return "mois"; }
         if (configuration_sur_mesure.type === "classement") { return "classement"; }
-        return "g:" + (GROUPES[configuration_sur_mesure.g] ? configuration_sur_mesure.g : "nature");
+        return "g:" + (GROUPES[configuration_sur_mesure.g] ? configuration_sur_mesure.g : "rythme");
     }
 
     let graphique_sur_mesure = null;
@@ -975,14 +1060,14 @@
         }
         if (forme === "croiser") {
             configuration_sur_mesure.type = "nuage";
-            if (configuration_sur_mesure.couleur === "aucune") { configuration_sur_mesure.couleur = "nature"; }
+            if (configuration_sur_mesure.couleur === "aucune") { configuration_sur_mesure.couleur = "rythme"; }
             if (configuration_sur_mesure.x === configuration_sur_mesure.y) {
-                configuration_sur_mesure.x = configuration_sur_mesure.y === "ca_total" ? "cartes_actives" : "ca_total";
+                configuration_sur_mesure.x = configuration_sur_mesure.y === "ca_total" ? "portemonnaies_actifs" : "ca_total";
             }
         } else if (forme === "repartir") {
             configuration_sur_mesure.type = "anneau";
             const decoupe_connue = DECOUPES.some(function (paire) { return paire[0] === configuration_sur_mesure.g; });
-            if (!decoupe_connue) { configuration_sur_mesure.g = "nature"; }
+            if (!decoupe_connue) { configuration_sur_mesure.g = "rythme"; }
         } else {
             configuration_sur_mesure.type = "mois";
         }
@@ -1005,7 +1090,7 @@
             dimensions = Object.keys(GROUPES).map(function (dimension) { return [dimension, nom_du_groupe(dimension)]; });
         }
         if (!dimensions.some(function (paire) { return paire[0] === configuration_sur_mesure.g; })) {
-            configuration_sur_mesure.g = "nature";
+            configuration_sur_mesure.g = "rythme";
         }
         document.getElementById("a-g").innerHTML = options_html(dimensions, configuration_sur_mesure.g);
         document.getElementById("a-calc").value = configuration_sur_mesure.calc;
@@ -1053,7 +1138,8 @@
     }
 
     function appliquer_les_filtres_a_l_ecran() {
-        document.getElementById("m-nat").value = configuration_sur_mesure.nat;
+        document.getElementById("m-usage").value = configuration_sur_mesure.usage;
+        document.getElementById("m-rythme").value = configuration_sur_mesure.rythme;
         document.getElementById("m-act").value = configuration_sur_mesure.act;
         document.getElementById("m-taille").value = configuration_sur_mesure.taille;
         document.getElementById("m-zero").checked = configuration_sur_mesure.zero;
@@ -1088,9 +1174,10 @@
         ["a-type", "a-y", "a-x", "a-g", "a-calc", "a-periode", "a-couleur"].forEach(function (identifiant) {
             document.getElementById(identifiant).onchange = lire_le_mode_avance;
         });
-        ["m-nat", "m-act", "m-taille", "m-zero", "m-log"].forEach(function (identifiant) {
+        ["m-usage", "m-rythme", "m-act", "m-taille", "m-zero", "m-log"].forEach(function (identifiant) {
             document.getElementById(identifiant).onchange = function () {
-                configuration_sur_mesure.nat = document.getElementById("m-nat").value;
+                configuration_sur_mesure.usage = document.getElementById("m-usage").value;
+                configuration_sur_mesure.rythme = document.getElementById("m-rythme").value;
                 configuration_sur_mesure.act = document.getElementById("m-act").value;
                 configuration_sur_mesure.taille = document.getElementById("m-taille").value;
                 configuration_sur_mesure.zero = document.getElementById("m-zero").checked;
@@ -1243,7 +1330,8 @@
         const nom_de_la_periode = configuration.periode === "tout" ? texte("periode_n_mois", {nombre: nombre_de_mois}) : texte({"12": "periode_12", prec: "periode_prec"}[configuration.periode]);
         const valeur_par_instance = definition_y.agg === "max" ? texte("par_instance_meilleur_mois") : definition_y.agg === "statique" ? texte("par_instance_valeur_actuelle") : texte("par_instance_total");
         const instances = liste_des_instances.filter(function (instance) {
-            return (!configuration.nat || instance.nature === configuration.nat)
+            return (!configuration.usage || instance.usages.includes(configuration.usage))
+                && (!configuration.rythme || instance.rythme === configuration.rythme)
                 && (!configuration.act || instance.activite === configuration.act)
                 && (!configuration.taille || instance.taille === configuration.taille);
         });
@@ -1292,9 +1380,9 @@
                 vertical: lib_y, horizontal: `<b>${echapper_html(definition_x.lib)}</b>`, periode: nom_de_la_periode, nombre: points.length,
                 couleur: dimension_de_couleur ? texte("lecture_couleur", {groupe: nom_du_groupe(dimension_de_couleur).toLowerCase()}) : "",
             }) + phrase_du_lien(spearman(points.map(function (point) { return point.x; }), points.map(function (point) { return point.y; })));
-            tableau = {tete: [texte("colonne_nom"), texte("colonne_nature"), texte("colonne_activite"), `${definition_x.lib} (${definition_x.u})`, `${definition_y.lib} (${definition_y.u})`],
+            tableau = {tete: [texte("colonne_nom"), texte("colonne_rythme"), texte("colonne_activite"), `${definition_x.lib} (${definition_x.u})`, `${definition_y.lib} (${definition_y.u})`],
                 lignes: points.sort(function (a, b) { return b.y - a.y; }).map(function (point) {
-                    return [point.instance.nom, libelle_de("natures", point.instance.nature), libelle_de("activites", point.instance.activite), formater_nombre(point.x, definition_x.u), formater_nombre(point.y, definition_y.u)];
+                    return [point.instance.nom, libelle_de("rythmes", point.instance.rythme), libelle_de("activites", point.instance.activite), formater_nombre(point.x, definition_x.u), formater_nombre(point.y, definition_y.u)];
                 })};
 
         } else if (type_d_axe === "mois") {
@@ -1430,7 +1518,7 @@
                     plugins: {...options_de_base.plugins, legend: {display: false}, tooltip: {callbacks: {title: function (t) { return t[0].label; },
                         label: function (t) {
                             const instance = affiches[t.dataIndex].instance;
-                            return [` ${formater_nombre(t.parsed.y, definition_y.u)}`, ` ${libelle_de("natures", instance.nature)} · ${libelle_de("tailles", instance.taille)} · ${libelle_de("activites", instance.activite)}`];
+                            return [` ${formater_nombre(t.parsed.y, definition_y.u)}`, ` ${libelle_de("rythmes", instance.rythme)} · ${libelle_de("tailles", instance.taille)} · ${libelle_de("activites", instance.activite)}`];
                         }}}},
                     scales: {x: {display: false}, y: axe(definition_y.u, configuration.log)}}};
             lecture = texte("lecture_classement", {
@@ -1438,9 +1526,9 @@
                 limite: classement.length > 150 ? texte("lecture_150_premieres") : "",
                 couleur: dimension_de_couleur ? texte("lecture_couleur", {groupe: nom_du_groupe(dimension_de_couleur).toLowerCase()}) : "",
             });
-            tableau = {tete: [texte("colonne_rang"), texte("colonne_nom"), texte("colonne_nature"), texte("colonne_activite"), `${definition_y.lib} (${definition_y.u})`],
+            tableau = {tete: [texte("colonne_rang"), texte("colonne_nom"), texte("colonne_rythme"), texte("colonne_activite"), `${definition_y.lib} (${definition_y.u})`],
                 lignes: classement.map(function (ligne, index) {
-                    return [index + 1, ligne.instance.nom, libelle_de("natures", ligne.instance.nature), libelle_de("activites", ligne.instance.activite), formater_nombre(ligne.v, definition_y.u)];
+                    return [index + 1, ligne.instance.nom, libelle_de("rythmes", ligne.instance.rythme), libelle_de("activites", ligne.instance.activite), formater_nombre(ligne.v, definition_y.u)];
                 })};
         }
 

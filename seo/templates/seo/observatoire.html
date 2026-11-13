@@ -171,8 +171,10 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
         {% endif %}
 
         <p class="bandeau" data-testid="observatoire-bandeau-legacy">
-            {% translate "Les lieux encore en moteur legacy n'ont pas encore leurs clôtures dans TiBillet : leurs chiffres apparaîtront après l'import." %}
-            {% translate "Cartes actives : en cours de migration, beaucoup de données sont encore dans le Fedow legacy." %}
+            {% translate "Les lieux encore sur LaBoutik V1 n'ont pas leurs ventes de caisse détaillées dans TiBillet : leur chiffre d'affaires de caisse arrivera avec l'import. Leurs paiements cashless (carte NFC et QR code) sont lus dans Fedow legacy." %}
+            {% if reseau and not reseau.fedow_legacy_a_repondu %}
+                <strong class="alerte" data-testid="observatoire-alerte-fedow">{% translate "Fedow legacy n'a pas répondu lors du calcul : les paiements cashless V1 manquent, des lieux qui n'utilisent que la caisse V1 apparaissent en sommeil." %}</strong>
+            {% endif %}
         </p>
 
         <nav class="onglets" role="tablist" aria-label="{% translate "Mode d'affichage" %}">
@@ -224,7 +226,7 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
                         <option value="tout">{% translate "Toute la période" %}</option>
                     </select></label>
                     <label for="a-couleur" id="l-a-couleur"><span>{% translate "Couleur ou séries" %}</span><select id="a-couleur">
-                        <option value="nature">{% translate "Nature" %}</option>
+                        <option value="rythme">{% translate "Rythme" %}</option>
                         <option value="activite">{% translate "Activité" %}</option>
                         <option value="taille">{% translate "Taille" %}</option>
                         <option value="aucune">{% translate "Aucune" %}</option>
@@ -233,7 +235,8 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
             </div>
             <fieldset class="reglages filtres">
                 <legend>{% translate "Filtrer et afficher" %}</legend>
-                <label for="m-nat">{% translate "Nature" %}<select id="m-nat"><option value="">{% translate "Toutes" %}</option></select></label>
+                <label for="m-usage">{% translate "Usage" %}<select id="m-usage"><option value="">{% translate "Tous" %}</option></select></label>
+                <label for="m-rythme">{% translate "Rythme" %}<select id="m-rythme"><option value="">{% translate "Tous" %}</option></select></label>
                 <label for="m-act">{% translate "Activité" %}<select id="m-act"><option value="">{% translate "Toutes" %}</option></select></label>
                 <label for="m-taille">{% translate "Taille" %}<select id="m-taille"><option value="">{% translate "Toutes" %}</option></select></label>
                 <label class="case" for="m-zero"><input type="checkbox" id="m-zero" checked> {% translate "Ignorer les valeurs nulles" %}</label>
@@ -258,9 +261,9 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
                 </div>
                 <div class="deux">
                     <div style="display:grid;gap:10px;min-width:0">
-                        <h3>{% translate "Taille × nature" %} <span style="font-weight:400;color:var(--encre-2)">{% translate "(instances utilisées sur les 12 derniers mois)" %}</span></h3>
+                        <h3>{% translate "Taille × rythme" %} <span style="font-weight:400;color:var(--encre-2)">{% translate "(instances utilisées sur les 12 derniers mois)" %}</span></h3>
                         <div class="defile" style="border:0"><table class="matrice" id="matrice" data-testid="observatoire-matrice"></table></div>
-                        <ul class="legende" id="leg-nature"></ul>
+                        <ul class="legende" id="leg-rythme"></ul>
                     </div>
                     <div style="display:grid;gap:12px;align-content:start;min-width:0">
                         <h3>{% translate "Niveau d'activité" %} <span style="font-weight:400;color:var(--encre-2)">{% translate "(toutes les instances)" %}</span></h3>
@@ -284,19 +287,20 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
                     <label for="c-ind">{% translate "Indicateur" %}<select id="c-ind"></select></label>
                     <label for="c-vue">{% translate "Vue" %}<select id="c-vue">
                         <option value="mois">{% translate "Total par mois" %}</option>
-                        <option value="moyNature">{% translate "Moyenne par instance et par mois, selon la nature" %}</option>
+                        <option value="moyRythme">{% translate "Moyenne par instance et par mois, selon le rythme" %}</option>
                         <option value="groupe">{% translate "Moyenne sur 12 mois, par groupe" %}</option>
                         <option value="classement">{% translate "Classement des instances" %}</option>
                         <option value="nuage">{% translate "Nuage : un indicateur contre un autre" %}</option>
                     </select></label>
                     <label for="c-groupe" id="l-groupe">{% translate "Regrouper par" %}<select id="c-groupe">
-                        <option value="nature">{% translate "Nature" %}</option>
+                        <option value="usage">{% translate "Usage" %}</option>
+                        <option value="rythme">{% translate "Rythme" %}</option>
                         <option value="taille">{% translate "Taille" %}</option>
                         <option value="activite">{% translate "Activité" %}</option>
-                        <option value="categorie">{% translate "Catégorie déclarée" %}</option>
                     </select></label>
                     <label for="c-ind2" id="l-ind2">{% translate "Axe vertical" %}<select id="c-ind2"></select></label>
-                    <label for="c-nat">{% translate "Nature" %}<select id="c-nat"><option value="">{% translate "Toutes" %}</option></select></label>
+                    <label for="c-usage">{% translate "Usage" %}<select id="c-usage" data-testid="observatoire-filtre-usage"><option value="">{% translate "Tous" %}</option></select></label>
+                    <label for="c-rythme">{% translate "Rythme" %}<select id="c-rythme"><option value="">{% translate "Tous" %}</option></select></label>
                     <label for="c-act">{% translate "Activité" %}<select id="c-act"><option value="">{% translate "Toutes" %}</option></select></label>
                     <label class="case" for="c-log" id="l-log"><input type="checkbox" id="c-log" checked> {% translate "Échelle logarithmique" %}</label>
                 </div>
@@ -310,7 +314,7 @@ Pas de <style> ni de <script> en ligne : tout est dans seo/static/seo/.
             <section class="bloc" aria-labelledby="t-liste">
                 <div class="tete-bloc">
                     <h2 id="t-liste">{% translate "Instances" %}</h2>
-                    <p>{% translate "« Écart » signale une catégorie déclarée à la création qui ne correspond pas à l'usage observé." %}</p>
+                    <p>{% translate "Un lieu peut avoir plusieurs usages. « ↻ » : un lieu saisonnier qui revient à la même saison un an plus tard." %}</p>
                 </div>
                 <div class="liste-haut">
                     <label for="c-cherche">{% translate "Rechercher" %}<input id="c-cherche" type="search" placeholder="{% translate "Nom du lieu" %}"></label>

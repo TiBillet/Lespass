@@ -8,7 +8,9 @@ Spec : TECH_DOC/SESSIONS/OBSERVATOIRE/SPEC.md (section 8).
 CE QUE CES TESTS PROTEGENT (la partie navigateur, que pytest ne voit pas) :
 1. Le JS lit les donnees, dessine le graphique et remplit la liste.
 2. Changer un seuil reclasse les lieux, sans recharger la page.
-3. Un nom de lieu malveillant s'affiche comme du texte, il ne s'execute pas.
+3. Un lieu qui n'a que des billets gratuits est « actif » s'il est regulier, et porte
+   l'usage « billetterie gratuite » ; le filtre par usage le retrouve.
+4. Un nom de lieu malveillant s'affiche comme du texte, il ne s'execute pas.
 
 Le cache de l'observatoire est REMPLACE par un jeu connu pendant le test, puis
 remis tel quel a la fin (try/finally) : la base de dev est partagee, sans rollback.
@@ -29,14 +31,16 @@ pytestmark = [pytest.mark.e2e, pytest.mark.admin]
 
 NOM_DE_LIEU_MALVEILLANT = '<img src=x onerror="window.__observatoire_xss=1">'
 
-# Un lieu tres actif : 1 250 EUR de CA chaque mois pendant 13 mois, soit 15 000 EUR
-# sur 12 mois. Avec le seuil par defaut (10 000 EUR), il est « tres actif ».
-# Au-dessus de 15 000 EUR, il devient « peu utilise ».
-# / A very active venue: 15,000 EUR over 12 months; above that threshold, "barely used".
+# Deux lieux tres actifs : 1 250 EUR de CA chaque mois pendant 13 mois, donc 12 mois
+# d'usage sur 12. Un lieu gratuit : 15 billets gratuits sur chacun des 3 derniers mois,
+# donc 3 mois d'usage : « actif » avec le seuil par defaut (3). Avec un seuil « Actif »
+# a 13 mois, plus personne n'est actif : tout le monde devient « peu utilise ».
+# / Two very active venues (12 months of use), one free venue (3 months of use).
 NOMBRE_DE_MOIS = 13
 CLES = [
     "evenements",
-    "inscriptions",
+    "billets_gratuits",
+    "billets_payants",
     "billets_scannes",
     "adhesions",
     "ca_total",
@@ -45,17 +49,20 @@ CLES = [
     "ca_caisse",
     "recharges_ligne",
     "recharges_place",
-    "cartes_actives",
-    "connexions_admin",
+    "locations",
+    "transactions_cashless",
+    "portemonnaies_actifs",
     "usagers",
 ]
 
 
-def compteurs_du_lieu(ca_mensuel_en_centimes):
+def compteurs_du_lieu(ca_mensuel_en_centimes=0, billets_gratuits_des_3_derniers_mois=0):
     tableaux = []
     for cle in CLES:
         if cle in ("ca_total", "ca_caisse"):
             tableaux.append([ca_mensuel_en_centimes] * NOMBRE_DE_MOIS)
+        elif cle == "billets_gratuits":
+            tableaux.append([0] * (NOMBRE_DE_MOIS - 3) + [billets_gratuits_des_3_derniers_mois] * 3)
         else:
             tableaux.append([0] * NOMBRE_DE_MOIS)
     return tableaux
@@ -68,9 +75,9 @@ def jeu_de_donnees_connu():
         "mois": mois,
         "calcule_le": "2026-01-15T02:30",
         "calcule_par": "cron",
-        "bilan": {"lieux_lus": 2, "erreurs": [], "duree_s": 1.0},
+        "bilan": {"lieux_lus": 3, "erreurs": [], "duree_s": 1.0},
         "reseau": {
-            "lieux": 2,
+            "lieux": 3,
             "comptes": 10,
             "fedow_legacy_a_repondu": True,
             "total_des_recharges_en_centimes": 0,
@@ -83,24 +90,34 @@ def jeu_de_donnees_connu():
             "heures_du_planning": 0,
             "heures_des_tokens_cadeaux_legacy": 0,
         },
+        # [schema, nom, cree, points de vente, admins, federe, compteurs]
         "inst": [
             [
                 "lieu-actif",
                 "Lieu très actif",
-                "S",
                 "2024-01-01",
                 1,
                 2,
-                compteurs_du_lieu(125_000),
+                False,
+                compteurs_du_lieu(ca_mensuel_en_centimes=125_000),
             ],
             [
                 "lieu-xss",
                 NOM_DE_LIEU_MALVEILLANT,
-                "S",
                 "2024-01-01",
                 0,
                 1,
-                compteurs_du_lieu(125_000),
+                False,
+                compteurs_du_lieu(ca_mensuel_en_centimes=125_000),
+            ],
+            [
+                "lieu-gratuit",
+                "Lieu gratuit",
+                "2025-01-01",
+                0,
+                1,
+                False,
+                compteurs_du_lieu(billets_gratuits_des_3_derniers_mois=15),
             ],
         ],
     }
@@ -148,28 +165,32 @@ class TestAdminObservatoire:
         self, page, login_as_admin, cache_de_l_observatoire_connu
     ):
         """
-        Le graphique se dessine ; monter le seuil « Actif » au-dessus du CA des lieux
-        les fait passer de « très actif » a « peu utilisé ».
+        Le graphique se dessine ; monter le seuil « Actif » a 13 mois d'usage fait
+        passer tous les lieux en « peu utilisé » (« très actif » demande aussi d'etre
+        actif).
         / The chart is drawn; raising the "active" threshold reclassifies the venues.
         """
         login_as_admin(page)
         page.goto(f"{BASE_URL}/admin/observatoire/")
 
-        expect(page.get_by_test_id("observatoire-tuiles")).to_contain_text("2")
+        expect(page.get_by_test_id("observatoire-tuiles")).to_contain_text("3")
         graphique_dessine = page.evaluate(
             "() => !!(window.Chart && Chart.getChart(document.getElementById('graph')))"
         )
         assert graphique_dessine
 
-        legende = page.get_by_test_id("observatoire-legende-activite")
-        expect(legende).to_contain_text("très actif 2")
+        # Une ligne de legende par activite, dans l'ordre : tres actif, actif, peu
+        # utilise, sommeil.
+        # / One legend line per activity, in order.
+        lignes_de_la_legende = page.get_by_test_id("observatoire-legende-activite").locator("li")
+        expect(lignes_de_la_legende.nth(0)).to_have_text("très actif 2")
+        expect(lignes_de_la_legende.nth(1)).to_have_text("actif 1")
 
         page.get_by_test_id("observatoire-seuils").locator("summary").click()
-        champ_du_seuil_actif = page.get_by_test_id("observatoire-seuil-actifCA")
-        champ_du_seuil_actif.fill("20000")
+        page.get_by_test_id("observatoire-seuil-actifMois").fill("13")
 
-        expect(legende).to_contain_text("très actif 0")
-        expect(legende).to_contain_text("peu utilisé 2")
+        expect(lignes_de_la_legende.nth(0)).to_have_text("très actif 0")
+        expect(lignes_de_la_legende.nth(2)).to_have_text("peu utilisé 3")
 
     def test_la_bulle_d_aide_s_ouvre_au_survol_et_suit_les_seuils(
         self, page, login_as_admin, cache_de_l_observatoire_connu
@@ -188,17 +209,38 @@ class TestAdminObservatoire:
         expect(bulle_des_actives).to_be_hidden()
         aide_des_actives.hover()
         expect(bulle_des_actives).to_be_visible()
-        expect(bulle_des_actives).to_contain_text("10 k")
+        expect(bulle_des_actives).to_contain_text("au moins 3 mois d'usage")
 
         page.get_by_test_id("observatoire-seuils").locator("summary").click()
-        page.get_by_test_id("observatoire-seuil-actifCA").fill("20000")
+        page.get_by_test_id("observatoire-seuil-actifMois").fill("5")
         aide_des_actives = page.get_by_test_id("observatoire-aide-synthese-1")
         aide_des_actives.hover()
-        expect(aide_des_actives.locator(".bulle")).to_contain_text("20 k")
+        expect(aide_des_actives.locator(".bulle")).to_contain_text("au moins 5 mois d'usage")
 
         aide_des_lieux = page.get_by_test_id("observatoire-aide-reseau-lieux")
         aide_des_lieux.hover()
         expect(aide_des_lieux.locator(".bulle")).to_be_visible()
+
+    def test_un_lieu_aux_billets_gratuits_est_actif_et_filtre_par_son_usage(
+        self, page, login_as_admin, cache_de_l_observatoire_connu
+    ):
+        """
+        Un lieu sans argent, avec 15 billets gratuits sur 3 mois, est « actif » et porte
+        l'usage « billetterie gratuite ». Le filtre par usage ne garde que lui.
+        / A money-less venue with free tickets on 3 months is "active" and filterable.
+        """
+        login_as_admin(page)
+        page.goto(f"{BASE_URL}/admin/observatoire/")
+
+        liste = page.get_by_test_id("observatoire-liste")
+        ligne_du_lieu_gratuit = liste.locator("tr", has_text="Lieu gratuit")
+        expect(ligne_du_lieu_gratuit).to_contain_text("billetterie gratuite")
+        expect(ligne_du_lieu_gratuit.locator("td").nth(4)).to_have_text("actif")
+
+        page.get_by_test_id("observatoire-filtre-usage").select_option("billetterie_gratuite")
+
+        expect(liste.locator("tbody tr")).to_have_count(1)
+        expect(liste.locator("tbody tr")).to_contain_text("Lieu gratuit")
 
     def test_un_nom_de_lieu_malveillant_ne_s_execute_pas(
         self, page, login_as_admin, cache_de_l_observatoire_connu

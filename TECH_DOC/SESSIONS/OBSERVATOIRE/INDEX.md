@@ -13,6 +13,7 @@
 | 01 | Observatoire des instances : calcul nocturne depuis les clôtures, page admin superadmin | 🟢 Implémenté, non commité (2026-11-12) | [`SPEC.md`](SPEC.md) |
 | 02 | Historique des métriques dans le temps | 📋 À faire plus tard | [`CHANTIER-02-historique-des-metriques.md`](CHANTIER-02-historique-des-metriques.md) |
 | 03 | Anonymiser les dumps de prod (Lespass, Fedow, LaBoutik V1) : e-mails et clés API | 🟢 Implémenté, non commité (2026-11-12) | [`CHANTIER-03-anonymisation-des-dumps.md`](CHANTIER-03-anonymisation-des-dumps.md) |
+| 04 | Mesurer l'usage, pas seulement l'argent : billets gratuits, usages multiples, activité par régularité, rythme sur le volume, ventes Fedow legacy par lieu | 🟢 Implémenté, non commité (2026-11-13) | [`CHANTIER-04-usages-hors-argent.md`](CHANTIER-04-usages-hors-argent.md) |
 
 ## Dépendances
 
