@@ -8,7 +8,12 @@ LOCALISATION : controlvanne/templates/controlvanne/base_tireuse.html
 Base autonome, sans Bootstrap et sans barre de navigation.
 Elle charge une seule feuille de style : controlvanne/css/tireuse.css.
 Utilisée par kiosk_detail.html (une tireuse) et kiosk_list.html (toutes).
+L'écran s'adapte à toutes les tailles (petit écran du Pi, portrait,
+téléphone, TV) : tout est réglé dans tireuse.css.
+Le ?v= après le nom du CSS force le Chromium du Pi à recharger le fichier.
+Il faut l'augmenter à chaque modification de tireuse.css.
 / Standalone base, no Bootstrap, no navbar. Loads tireuse.css only.
+/ Responsive is handled in tireuse.css. Bump ?v= on every CSS change.
 
 Note : base.html (Bootstrap) reste en place pour la page de calibration.
 / Note: base.html (Bootstrap) is kept for the calibration page.
@@ -18,7 +23,7 @@ Note : base.html (Bootstrap) reste en place pour la page de calibration.
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{% translate "Tap panel" %}{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'controlvanne/css/tireuse.css' %}?v=5" />
+  <link rel="stylesheet" href="{% static 'controlvanne/css/tireuse.css' %}?v=6" />
   {% block head %}{% endblock %}
 </head>
 <body class="tireuse {% block body_class %}{% endblock %}">
