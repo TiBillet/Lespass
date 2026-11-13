@@ -1775,15 +1775,18 @@ class MembershipProductForm(ProductAdminCustomForm):
     )
 
     def clean(self):
-
         # Récupère le nombre de formulaires de prix dans l'inline
         prices_form_number = int(self.data.get("prices-TOTAL_FORMS"))
 
         # Itère sur ces formulaires, et vérifie s'il y a au moins un prix publié.
         product_has_published_price = False
         for i in range(0, prices_form_number):
-            price_is_publish = self.data.get(f"prices-{i}-publish",None)
-            if price_is_publish == 'on':
+
+            # Vérifie si le prix est publié, et qu'il n'est pas en train de se faire supprimer.
+            # Un prix publié, mais qui se fait supprimer n'aurait pas d'intéret
+            price_is_publish = self.data.get(f"prices-{i}-publish", None)
+            price_must_be_deleted = self.data.get(f"prices-{i}-DELETE", None)
+            if price_is_publish == 'on' and not price_must_be_deleted == 'on':
                 product_has_published_price = True
                 break
 

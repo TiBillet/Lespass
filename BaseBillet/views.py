@@ -4811,7 +4811,10 @@ class MembershipMVT(viewsets.ViewSet):
                 })
 
         template_context['federated_tenants'] = federated_tenant_dict
-        products = MembershipProduct.objects.filter(publish=True).prefetch_related('tag')
+        products = MembershipProduct.objects.filter(
+            publish=True,
+            prices__publish=True
+        ).distinct().prefetch_related('tag')
 
         for product in products:
             # Les tarifs en points ou en temps se vendent a la caisse seulement :
