@@ -207,6 +207,10 @@ class PointDeVenteAdmin(ModelAdmin):
         }),
     )
 
+    def get_queryset(self, request):
+        # N'afffiche pas les points de ventes de type tireuse, elles ont leurs propres admin
+        return super().get_queryset(request).exclude(comportement=PointDeVente.TIREUSE)
+
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)
 
@@ -990,6 +994,9 @@ class CartePrimaireAdmin(ModelAdmin):
         form = super().get_form(request, obj, **kwargs)
         if 'carte' in form.base_fields:
             form.base_fields['carte'].widget.can_add_related = False
+
+        # Supprime les points de ventes de type tireuse de la liste, pas besoins de les ouvrir avec une carte primaires.
+        form.base_fields["points_de_vente"].queryset = PointDeVente.objects.exclude(comportement=PointDeVente.TIREUSE)
         return form
 
     def get_readonly_fields(self, request, obj=None):
