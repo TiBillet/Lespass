@@ -5,6 +5,7 @@ import logging
 import os
 import smtplib
 import time
+from html.parser import HTMLParser
 from io import BytesIO
 from time import sleep
 from uuid import UUID
@@ -132,6 +133,95 @@ def contexte_commun_des_mails(adresses_de_reponse):
     }
 
 
+class _LecteurDeTexteDuMail(HTMLParser):
+    """
+    Lit le HTML d'un mail et garde le texte visible, ligne par ligne.
+    Utilisé seulement par texte_brut_depuis_le_html.
+    / Reads an email's HTML and keeps the visible text, line by line.
+    Only used by texte_brut_depuis_le_html.
+    """
+
+    # Balises dont le contenu ne s'affiche pas. / Tags whose content is not displayed.
+    BALISES_INVISIBLES = {"head", "style", "script", "title"}
+    # Balises qui passent à la ligne. / Tags that start a new line.
+    BALISES_DE_BLOC = {"p", "div", "tr", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.morceaux = []
+        self.profondeur_invisible = 0
+        # Pile des <div> ouvertes : True si la div est masquée (texte d'aperçu).
+        # / Stack of open <div>: True if the div is hidden (preview text).
+        self.pile_des_div_masquees = []
+        self.lien_en_cours = None
+
+    def handle_starttag(self, balise, attributs):
+        attributs = dict(attributs)
+        if balise in self.BALISES_INVISIBLES:
+            self.profondeur_invisible += 1
+        if balise == "div":
+            style = (attributs.get("style") or "").replace(" ", "")
+            div_masquee = "display:none" in style
+            self.pile_des_div_masquees.append(div_masquee)
+            if div_masquee:
+                self.profondeur_invisible += 1
+        if balise in self.BALISES_DE_BLOC:
+            self.morceaux.append("\n")
+        if balise == "a":
+            self.lien_en_cours = attributs.get("href")
+
+    def handle_endtag(self, balise):
+        if balise in self.BALISES_INVISIBLES:
+            self.profondeur_invisible -= 1
+        if balise == "div" and self.pile_des_div_masquees:
+            if self.pile_des_div_masquees.pop():
+                self.profondeur_invisible -= 1
+        if balise in self.BALISES_DE_BLOC:
+            self.morceaux.append("\n")
+        if balise == "a":
+            # Le lien est écrit après son texte, sinon le lecteur ne peut pas cliquer.
+            # / The link is written after its text, otherwise the reader cannot click.
+            lien = self.lien_en_cours
+            if lien and lien.startswith("http") and self.profondeur_invisible == 0:
+                self.morceaux.append(f" ({lien})")
+            self.lien_en_cours = None
+
+    def handle_data(self, texte):
+        if self.profondeur_invisible == 0:
+            self.morceaux.append(texte)
+
+
+def texte_brut_depuis_le_html(html):
+    """
+    Fabrique la version texte brut (text/plain) d'un mail à partir de son HTML.
+    Sans elle, le text/plain part vide : SpamAssassin ajoute MIME_HTML_ONLY et
+    MPART_ALT_DIFF (texte et HTML différents), et le mail perd des points anti-spam.
+    / Builds the plain-text (text/plain) version of an email from its HTML.
+    Without it, text/plain is empty: SpamAssassin adds MIME_HTML_ONLY and
+    MPART_ALT_DIFF (text and HTML differ), and the email loses anti-spam points.
+
+    LOCALISATION : BaseBillet/tasks.py
+    """
+    lecteur = _LecteurDeTexteDuMail()
+    lecteur.feed(html)
+    lecteur.close()
+    texte = "".join(lecteur.morceaux)
+
+    # Espaces insécables et caractères invisibles : des espaces simples, ou rien.
+    # / Non-breaking spaces and invisible characters: plain spaces, or nothing.
+    texte = texte.replace("\xa0", " ").replace("‌", "")
+
+    # Une ligne = ses mots séparés par un seul espace. Au plus une ligne vide d'affilée.
+    # / One line = its words separated by a single space. At most one blank line in a row.
+    lignes_propres = []
+    for ligne in texte.split("\n"):
+        ligne = " ".join(ligne.split())
+        if ligne == "" and (not lignes_propres or lignes_propres[-1] == ""):
+            continue
+        lignes_propres.append(ligne)
+    return "\n".join(lignes_propres).strip()
+
+
 class CeleryMailerClass():
 
     def __init__(self,
@@ -169,6 +259,12 @@ class CeleryMailerClass():
             if context:
                 contexte_complet.update(context)
             self.html = render_to_string(template, context=contexte_complet)
+            # Sans texte fourni (gabarit .txt), on le tire du HTML : un text/plain vide
+            # coûte des points anti-spam (MIME_HTML_ONLY, MPART_ALT_DIFF).
+            # / Without a given text (.txt template), derive it from the HTML: an empty
+            # text/plain costs anti-spam points (MIME_HTML_ONLY, MPART_ALT_DIFF).
+            if not self.text:
+                self.text = texte_brut_depuis_le_html(self.html)
         else:
             self.html = self.text
 
