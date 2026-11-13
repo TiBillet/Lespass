@@ -4455,6 +4455,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         EventDateFilter,
         IsProposalFilter,
         EventArchiveFilter,
+        ('postal_address', RelatedDropdownFilter),
         ('datetime', RangeDateTimeFilterWithTimeZone),
         'published',
     ]
