@@ -1012,6 +1012,12 @@ class CartePrimaire(models.Model):
         verbose_name=_("Creation date"),
     )
 
+    @property
+    def associated_user(self):
+        if self.carte.user:
+            return self.carte.user
+        return None
+
     def __str__(self):
         return f"{self.carte} (primary)"
 

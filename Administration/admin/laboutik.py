@@ -25,6 +25,7 @@ from solo.admin import SingletonModelAdmin
 from Administration.admin.base import ModelAdmin
 from unfold.admin import TabularInline
 from unfold.contrib.filters.admin import RelatedDropdownFilter
+from unfold.decorators import display, action
 
 from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
@@ -915,7 +916,7 @@ class CartePrimaireAdmin(ModelAdmin):
     warn_unsaved_form = True
     form = CartePrimaireAdminForm
 
-    list_display = ('carte', 'edit_mode', 'datetime')
+    list_display = ('carte', 'edit_mode', 'datetime', 'get_user_card')
     list_filter = ['edit_mode']
     search_fields = ['carte__tag_id', 'carte__number']
     filter_horizontal = ('points_de_vente',)
@@ -938,11 +939,19 @@ class CartePrimaireAdmin(ModelAdmin):
         (None, {
             'fields': (
                 'carte',
+                'get_user_card',
                 'edit_mode',
                 'points_de_vente',
             ),
         }),
     )
+
+    readonly_fields = ('get_user_card',)
+
+
+    @display(description=_("Utilisateur.rice associé.e"))
+    def get_user_card(self, carte_primaire):
+        return carte_primaire.associated_user
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """
