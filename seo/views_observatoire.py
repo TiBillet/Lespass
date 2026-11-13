@@ -35,7 +35,6 @@ from django.utils.dateparse import parse_datetime
 from django.utils.translation import gettext
 
 from ApiBillet.permissions import RootPermissionWithRequest
-from Customers.models import Client
 from seo.models import SEOCache
 from seo.observatoire import CATEGORIES_D_ASSET_EN_EUROS
 
@@ -55,28 +54,28 @@ def textes_de_la_page():
         "tuile_actives": _("Vraiment actives"),
         "tuile_actives_detail": _("dont {nombre} très actives"),
         "tuile_peu_utilisees": _("Peu utilisées"),
-        "tuile_peu_utilisees_detail": _("un usage réel, mais faible"),
+        "tuile_peu_utilisees_detail": _("un ou deux mois d'usage sur 12"),
         # Methodes de calcul des tuiles de la synthese (bulle « ? »). Les {marqueurs}
         # sont les seuils de classement EN COURS : la bulle suit les reglages.
         # / Methods of the summary tiles ("?" bubble), filled with the CURRENT thresholds.
         "aide_methode": _("Méthode de calcul"),
         "aide_usage_reel": _(
-            "Un mois d'« usage réel » : au moins 10 inscriptions, 200 € de CA, 5 adhésions ou 200 € de recharges dans le mois."
+            "Un « mois d'usage » : au moins 1 événement publié, 10 billets (gratuits compris), 200 € de CA, 5 adhésions, 200 € de recharges, 20 paiements cashless ou 1 location dans le mois."
         ),
         "methode_instances": _(
             "Lieux lus par le dernier calcul (sans le lieu racine ni les emplacements en attente). « Créées depuis » : la plus ancienne année de création."
         ),
         "methode_actives": _(
-            "Très actif + actif. Actif : au moins {actif_ca} € de CA ou {actif_inscriptions} inscriptions sur 12 mois. Très actif : en plus, au moins {tres_actif_mois} mois d'usage réel sur 12. Seuils réglables plus bas."
+            "Très actif + actif. Actif : au moins {actif_mois} mois d'usage sur 12. Très actif : au moins {tres_actif_mois} mois d'usage sur 12. L'argent ne compte pas ici, il sert à la taille. Seuils réglables plus bas."
         ),
         "methode_peu_utilisees": _(
-            "Au moins un mois d'usage réel sur 12, sans atteindre le seuil « Actif » ({actif_ca} € de CA ou {actif_inscriptions} inscriptions sur 12 mois). Même valeur que « peu utilisé » dans le niveau d'activité."
+            "Au moins un mois d'usage sur 12, mais moins de {actif_mois}. Même valeur que « peu utilisé » dans le niveau d'activité."
         ),
         "methode_sommeil": _(
-            "Aucun mois d'usage réel sur 12. Bidouillage : au moins un événement daté dans les 12 derniers mois, quand même. Sommeil : rien. Les abandons comptent aussi en sommeil."
+            "Aucun mois d'usage sur 12. Les abandons comptent aussi en sommeil."
         ),
         "methode_abandons": _(
-            "Au plus {abandon_mois} mois d'usage réel en tout, plus rien depuis {abandon_silence} mois, moins de {abandon_ca} € de CA sur toute la période, et pas de retour à la même saison un an plus tard."
+            "Au plus {abandon_mois} mois d'usage en tout, plus rien depuis {abandon_silence} mois, moins de {abandon_ca} € de CA sur toute la période, et pas de retour à la même saison un an plus tard."
         ),
         "methode_ca": _(
             "Chiffre d'affaires TTC des tickets Z de Lespass (clôtures mensuelles, puis journalières du mois en cours), sur les 12 derniers mois, tous lieux. Hors ventes de caisse des lieux encore sur LaBoutik V1 : elles arriveront avec l'import."
@@ -84,48 +83,51 @@ def textes_de_la_page():
         "methode_recharges": _(
             "Recharges encaissées lues dans les clôtures, sur les 12 derniers mois. En ligne = payées par Stripe. Ce n'est pas le total du bloc « depuis le début », qui lit Fedow legacy."
         ),
-        "methode_cartes": _(
-            "Meilleur mois des 12 derniers : cartes distinctes ayant servi dans le mois, moteur Fedow V2 seulement (migration en cours)."
+        "methode_portemonnaies": _(
+            "Meilleur mois des 12 derniers : porte-monnaie distincts qui ont payé en cashless (carte NFC ou QR code), Fedow V2 et Fedow legacy, additionnés entre lieux. Une personne qui paie dans deux lieux compte deux fois : c'est un ordre de grandeur."
         ),
-        "tuile_sommeil": _("En sommeil ou bidouillage"),
-        "tuile_sommeil_detail": _("{nombre} avec un admin qui bidouille"),
+        "tuile_sommeil": _("En sommeil"),
+        "tuile_sommeil_detail": _("aucun mois d'usage sur 12"),
         "tuile_abandons": _("Testées puis abandonnées"),
         "tuile_abandons_detail": _("vrai usage, puis rien depuis {mois} mois"),
         "tuile_ca": _("CA sur 12 mois"),
         "tuile_ca_detail": _("billetterie, adhésions, caisse"),
         "tuile_recharges": _("Recharges sur 12 mois"),
         "tuile_recharges_detail": _("{pourcentage} % en ligne"),
-        "tuile_cartes": _("Cartes NFC actives"),
-        "tuile_cartes_detail": _("meilleur mois : {mois}"),
+        "tuile_portemonnaies": _("Porte-monnaie actifs"),
+        "tuile_portemonnaies_detail": _("meilleur mois : {mois}"),
         # Qualification / Qualification
         "total": _("Total"),
-        "matrice_case": _("{nombre} instances, taille {taille}, nature {nature}"),
-        "legende_nature": _(
-            "Taille = CA des 12 derniers mois. « Ponctuel » : activité concentrée "
-            "qui ne revient pas l'année suivante."
+        "matrice_case": _("{nombre} instances, taille {taille}, rythme {rythme}"),
+        "legende_rythme": _(
+            "Taille = CA des 12 derniers mois. Rythme = forme de l'activité (billets, "
+            "adhésions, paiements cashless), pas de l'argent. « Saisonnier » : l'activité "
+            "tient sur 2 mois et revient l'année suivante. « Ponctuel » : elle ne revient "
+            "pas. « Temps forts » : activité toute l'année, avec des pics. « Indéterminé » : "
+            "pas d'activité à mesurer (des événements seulement)."
         ),
         "encart_abandon": _(
             "{nombre} instances testées puis abandonnées : au plus {mois_max} mois "
-            "d'usage réel, puis plus rien depuis {silence} mois, sans retour à la "
+            "d'usage, puis plus rien depuis {silence} mois, sans retour à la "
             "même saison. Les 24 mois évitent de confondre un festival en "
-            "intersaison avec un abandon : {festivals} festivals reviennent bien "
-            "d'une année sur l'autre."
+            "intersaison avec un abandon : {saisonniers} lieux saisonniers reviennent "
+            "bien d'une année sur l'autre."
         ),
         # Seuils / Thresholds
-        "seuil_actifCA": _("Actif : CA 12 mois d'au moins (€)"),
-        "seuil_actifInscr": _("… ou au moins N inscriptions sur 12 mois"),
-        "seuil_tresActifMois": _("Très actif : au moins N mois d'usage réel sur 12"),
+        "seuil_actifMois": _("Actif : au moins N mois d'usage sur 12"),
+        "seuil_tresActifMois": _("Très actif : au moins N mois d'usage sur 12"),
         "seuil_petitMax": _("Petit : CA 12 mois inférieur à (€)"),
         "seuil_moyenMax": _("Moyen : CA 12 mois inférieur à (€)"),
         "seuil_festivalConcentration": _(
-            "Festival : part du CA sur 2 mois consécutifs ≥ (%)"
+            "Saisonnier : part de l'activité sur 2 mois consécutifs ≥ (%)"
         ),
-        "seuil_mixtePic": _("Mixte : meilleur mois ≥ N × le mois médian"),
-        "seuil_adhesionsPart": _("Adhésions : part des adhésions dans le CA ≥ (%)"),
-        "seuil_abandonSilence": _("Abandon : plus d'usage réel depuis N mois"),
-        "seuil_abandonMoisMax": _("Abandon : au plus N mois d'usage réel en tout"),
+        "seuil_mixtePic": _("Temps forts : meilleur mois ≥ N × le mois médian"),
+        "seuil_abandonSilence": _("Abandon : plus d'usage depuis N mois"),
+        "seuil_abandonMoisMax": _("Abandon : au plus N mois d'usage en tout"),
         "seuil_abandonCAMax": _("Abandon : CA total inférieur à (€)"),
-        "seuil_baisse": _("En baisse : CA 12 mois sous N % de l'année d'avant"),
+        "seuil_baisse": _(
+            "En baisse : CA 12 mois (ou mois d'usage, sans CA avant) sous N % de l'année d'avant"
+        ),
         # Explorateur / Explorer
         "graphique_sans_historique": _(
             "Indicateur sans historique mensuel : choisis « Moyenne par groupe », "
@@ -133,6 +135,9 @@ def textes_de_la_page():
         ),
         "graphique_annee_precedente": _(
             "En clair : l'année précédente, pour comparaison"
+        ),
+        "graphique_usages_cumules": _(
+            "Un lieu compte dans chacun de ses usages : les groupes se chevauchent."
         ),
         "graphique_equivalent_texte": _(
             "Graphique de l'indicateur « {indicateur} » pour {nombre} instances. "
@@ -145,48 +150,47 @@ def textes_de_la_page():
         "unite_par_instance_periode": _("{unite} par instance ({periode})"),
         "moyenne_par_instance_de": _("{indicateur}, moyenne par instance"),
         "classement_titre": _(
-            "{nombre} instances avec une valeur non nulle ({periode}) · couleur = nature"
+            "{nombre} instances avec une valeur non nulle ({periode}) · couleur = rythme"
         ),
         "classement_titre_120": _(
             "{nombre} instances avec une valeur non nulle ({periode}), 120 premières "
-            "· couleur = nature"
+            "· couleur = rythme"
         ),
         "selection_nombre": _("{nombre} instances dans la sélection"),
-        "selection_case": _("case {taille} × {nature}"),
+        "selection_case": _("case {taille} × {rythme}"),
         "fiche_source": _("Où se trouve la donnée"),
         "fiche_axe_vertical": _("Axe vertical : {indicateur}"),
         # Liste / List
         "nombre_d_instances": _("{nombre} instances"),
         "colonne_nom": _("Instance"),
-        "colonne_nature": _("Nature"),
+        "colonne_usages": _("Usages"),
+        "colonne_rythme": _("Rythme"),
         "colonne_taille": _("Taille"),
         "colonne_activite": _("Activité"),
         "colonne_tendance": _("Tendance"),
         "colonne_reels12": _("Mois d'usage (12)"),
         "colonne_ca12": _("CA 12 mois"),
         "colonne_rech": _("Recharges"),
-        "colonne_cartes": _("Cartes (pic)"),
-        "colonne_cat": _("Catégorie déclarée"),
+        "colonne_portemonnaies": _("Porte-monnaie (pic)"),
         "colonne_mois": _("Mois"),
         "colonne_instances": _("Instances"),
         "colonne_part": _("Part"),
         "colonne_part_du_total": _("Part du total"),
         "colonne_rang": _("Rang"),
         "pastille_abandon": _("abandon"),
-        "pastille_ecart": _("écart"),
         # Sur mesure : groupes et choix / Custom: groups and choices
-        "groupe_nature": _("Nature"),
+        "groupe_rythme": _("Rythme"),
         "groupe_activite": _("Activité"),
         "groupe_taille": _("Taille"),
-        "groupe_categorie": _("Catégorie déclarée"),
         "groupe_instances": _("Instances"),
         "groupe_composantes": _("Composantes"),
         "exemples": _("Exemples :"),
-        "exemple_cartes_ca": _("Cartes actives selon le CA"),
-        "exemple_ca_nature": _("CA moyen par mois, selon la nature"),
+        "exemple_portemonnaies_ca": _("Porte-monnaie actifs selon le CA"),
+        "exemple_volume_rythme": _("Activité moyenne par mois, selon le rythme"),
+        "exemple_billets": _("Billets gratuits contre payants"),
         "exemple_recharges": _("Recharges en ligne contre sur place"),
         "exemple_scans": _("Les plus grands publics"),
-        "exemple_repartition_nature": _("Répartition du CA par nature"),
+        "exemple_repartition_rythme": _("Répartition de l'activité par rythme"),
         "exemple_composantes": _("D'où vient le CA"),
         "exemple_instances_utilisees": _("Instances utilisées, mois par mois"),
         "periode_12": _("les 12 derniers mois"),
@@ -203,23 +207,21 @@ def textes_de_la_page():
             "Sans objet pour un classement : chaque instance a sa propre valeur."
         ),
         "vue_mois": _("mois par mois"),
-        "vue_nature": _("par nature"),
+        "vue_rythme": _("par rythme"),
         "vue_activite": _("par niveau d'activité"),
         "vue_taille": _("par taille"),
-        "vue_categorie": _("par catégorie déclarée"),
         "vue_classement": _("instance par instance"),
         "distinguer_aucune": _("sans distinction"),
-        "distinguer_nature": _("en distinguant la nature"),
+        "distinguer_rythme": _("en distinguant le rythme"),
         "distinguer_activite": _("en distinguant l'activité"),
         "distinguer_taille": _("en distinguant la taille"),
-        "couleur_nature": _("couleur selon la nature"),
+        "couleur_rythme": _("couleur selon le rythme"),
         "couleur_activite": _("couleur selon l'activité"),
         "couleur_taille": _("couleur selon la taille"),
         "couleur_aucune": _("sans couleur"),
-        "decoupe_nature": _("la nature"),
+        "decoupe_rythme": _("le rythme"),
         "decoupe_activite": _("l'activité"),
         "decoupe_taille": _("la taille"),
-        "decoupe_categorie": _("la catégorie déclarée"),
         "decoupe_instances": _("les instances"),
         "decoupe_composantes": _("ses composantes"),
         "nom_periode": _("Période"),
@@ -339,6 +341,8 @@ def indicateurs_de_la_page():
     source_des_clotures = _(
         "Clôtures comptables du lieu (mensuelles, puis journalières du mois en cours)"
     )
+    source_des_billets = _("Billets du lieu (pas les clôtures : un billet gratuit ne passe pas toujours par une vente)")
+    source_de_fedow = _("Fedow V2 (fedow_core) et Fedow legacy (ventes NFC et QR code de la Place du lieu)")
     return {
         "ca_total": {
             "libelle": _("Chiffre d'affaires"),
@@ -393,30 +397,59 @@ def indicateurs_de_la_page():
             "definition": _("Recharges encaissées par le lieu à son point de vente."),
             "source": source_des_clotures,
         },
-        "cartes_actives": {
-            "libelle": _("Cartes NFC actives"),
-            "avec_article": _("les cartes NFC actives"),
-            "unite": _("cartes"),
+        "transactions_cashless": {
+            "libelle": _("Paiements cashless"),
+            "avec_article": _("les paiements cashless"),
+            "unite": _("paiements"),
             "definition": _(
-                "Cartes distinctes ayant servi au moins une fois dans le mois. Par instance : le meilleur mois."
+                "Paiements par carte NFC ou QR code reçus par le lieu dans le mois. Ce sont des transactions, pas des paniers : un panier payé en deux monnaies en compte deux."
             ),
-            "source": _(
-                "Moteur Fedow V2 interne (fedow_core). En cours de migration : beaucoup de données sont encore dans le Fedow legacy."
+            "source": source_de_fedow,
+        },
+        "portemonnaies_actifs": {
+            "libelle": _("Porte-monnaie actifs"),
+            "avec_article": _("les porte-monnaie actifs"),
+            "unite": _("porte-monnaie"),
+            "definition": _(
+                "Porte-monnaie distincts qui ont payé le lieu dans le mois (carte NFC ou QR code). Par instance : le meilleur mois."
             ),
+            "source": source_de_fedow,
         },
         "evenements": {
             "libelle": _("Événements"),
             "avec_article": _("les événements"),
             "unite": _("événements"),
-            "definition": _("Événements dont la date tombe dans le mois."),
+            "definition": _(
+                "Événements publiés dont la date tombe dans le mois. Les créneaux de bénévolat (sous-événements) ne comptent pas."
+            ),
             "source": _("Événements du lieu"),
         },
-        "inscriptions": {
-            "libelle": _("Inscriptions"),
-            "avec_article": _("les inscriptions"),
+        "billets": {
+            "libelle": _("Billets"),
+            "avec_article": _("les billets"),
             "unite": _("billets"),
-            "definition": _("Billets vendus dans le mois, gratuits compris."),
-            "source": source_des_clotures,
+            "definition": _(
+                "Billets valides (scannés ou non), gratuits et payants, rangés au mois de l'événement."
+            ),
+            "source": source_des_billets,
+        },
+        "billets_gratuits": {
+            "libelle": _("Billets gratuits"),
+            "avec_article": _("les billets gratuits"),
+            "unite": _("billets"),
+            "definition": _(
+                "Billets valides à 0 €, offerts depuis l'admin, ou sans tarif (créneau bénévole). Rangés au mois de l'événement."
+            ),
+            "source": source_des_billets,
+        },
+        "billets_payants": {
+            "libelle": _("Billets payants"),
+            "avec_article": _("les billets payants"),
+            "unite": _("billets"),
+            "definition": _(
+                "Billets valides vendus plus de 0 €. Rangés au mois de l'événement."
+            ),
+            "source": source_des_billets,
         },
         "billets_scannes": {
             "libelle": _("Billets scannés"),
@@ -431,8 +464,28 @@ def indicateurs_de_la_page():
             "libelle": _("Adhésions"),
             "avec_article": _("les adhésions"),
             "unite": _("adhésions"),
-            "definition": _("Adhésions vendues dans le mois."),
-            "source": source_des_clotures,
+            "definition": _(
+                "Adhésions payées ou validées dans le mois, gratuites comprises, renouvellements compris."
+            ),
+            "source": _("Lignes de vente d'adhésion du lieu"),
+        },
+        "locations": {
+            "libelle": _("Locations"),
+            "avec_article": _("les locations"),
+            "unite": _("locations"),
+            "definition": _(
+                "Réservations de salle ou de matériel payées ou confirmées, rangées au mois de leur début."
+            ),
+            "source": _("Réservations de ressources du lieu"),
+        },
+        "volume": {
+            "libelle": _("Volume d'activité"),
+            "avec_article": _("le volume d'activité"),
+            "unite": _("actes"),
+            "definition": _(
+                "Billets + adhésions + paiements cashless du mois. Sert au rythme."
+            ),
+            "source": _("Calculé à partir des indicateurs ci-dessus"),
         },
         "usagers": {
             "libelle": _("Usagers distincts"),
@@ -448,7 +501,7 @@ def indicateurs_de_la_page():
             "avec_article": _("les instances utilisées"),
             "unite": _("instances"),
             "definition": _(
-                "Instances avec un usage réel dans le mois (10 inscriptions, 200 €, 5 adhésions ou 200 € de recharges). Par instance : nombre de mois d'usage réel."
+                "Instances avec un usage dans le mois (1 événement publié, 10 billets, 200 €, 5 adhésions, 200 € de recharges, 20 paiements cashless ou 1 location). Par instance : nombre de mois d'usage."
             ),
             "source": _("Calculé à partir des indicateurs ci-dessus"),
         },
@@ -471,28 +524,33 @@ def indicateurs_de_la_page():
 
 def libelles_de_la_page():
     """
-    Les libelles des natures, activites, tailles, tendances et categories.
+    Les libelles des usages, rythmes, activites, tailles et tendances.
     Le JS travaille avec des cles ASCII (tres_actif...) et affiche ces libelles.
-    / Labels of natures, activity levels, sizes, trends and categories.
+    / Labels of uses, rhythms, activity levels, sizes and trends.
     """
     _ = gettext
-    libelles_des_categories = {}
-    for code_de_la_categorie, libelle_de_la_categorie in Client.CATEGORIE_CHOICES:
-        libelles_des_categories[code_de_la_categorie] = str(libelle_de_la_categorie)
     return {
-        "natures": {
-            "festival": _("festival"),
-            "mixte": _("mixte"),
-            "lieu": _("lieu"),
+        "usages": {
+            "agenda": _("agenda"),
+            "billetterie_gratuite": _("billetterie gratuite"),
+            "billetterie_payante": _("billetterie payante"),
             "adhesions": _("adhésions"),
+            "caisse": _("caisse"),
+            "location": _("location"),
+            "reseau": _("réseau"),
+            "aucun": _("aucun usage"),
+        },
+        "rythmes": {
+            "saisonnier": _("saisonnier"),
             "ponctuel": _("ponctuel"),
+            "temps_forts": _("temps forts"),
+            "regulier": _("régulier"),
             "indetermine": _("indéterminé"),
         },
         "activites": {
             "tres_actif": _("très actif"),
             "actif": _("actif"),
             "peu_utilise": _("peu utilisé"),
-            "bidouillage": _("bidouillage"),
             "sommeil": _("sommeil"),
         },
         "tailles": {"petit": _("petit"), "moyen": _("moyen"), "gros": _("gros")},
@@ -502,7 +560,6 @@ def libelles_de_la_page():
             "en_hausse": _("en hausse"),
             "stable": _("stable"),
         },
-        "categories": libelles_des_categories,
     }
 
 

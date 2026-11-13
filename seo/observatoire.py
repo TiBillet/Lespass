@@ -21,25 +21,29 @@ sans relancer le calcul.
 done by the page.
 
 D'OU VIENNENT LES CHIFFRES
-- L'argent (CA, recharges), les billets vendus et les adhesions vendues viennent
-  des CLOTURES COMPTABLES du lieu (`comptabilite.ClotureCaisse`) : ce sont les
-  chiffres des tickets Z. On ne recalcule pas le chiffre d'affaires.
+- L'argent (CA, recharges) vient des CLOTURES COMPTABLES du lieu
+  (`comptabilite.ClotureCaisse`) : ce sont les chiffres des tickets Z. On ne
+  recalcule pas le chiffre d'affaires.
   Mois finis : clotures mensuelles (M). Mois sans M (le mois en cours) : somme
   des clotures journalieres (J).
-- Les evenements, les billets scannes, les usagers et les points de vente
-  viennent des tables du lieu, en une requete agregee chacun.
-- Les comptes admin et les cartes actives viennent du schema public.
-/ Money comes from the accounting closures (Z figures). Other counters come from
-  one aggregated query each.
+- L'usage vient des tables du lieu, en une requete agregee chacun : evenements,
+  billets (gratuits, payants, scannes), adhesions, locations, usagers, points de
+  vente. Les billets gratuits ne passent pas tous par une vente : les clotures ne
+  les voient pas.
+- La caisse cashless : Fedow V2 (schema public) et Fedow legacy (un appel HTTP,
+  les ventes NFC et QR code de chaque Place).
+- Les comptes admin viennent du schema public.
+/ Money comes from the accounting closures (Z figures). Usage comes from the
+  venue's tables. Cashless from Fedow V2 and legacy.
 
 - Le bloc « depuis le debut » (presentation) : comptes et recharges V2 sur le
-  schema public, recharges et cartes de Fedow legacy (un appel HTTP), billets et
-  heures de benevolat de chaque lieu.
+  schema public, recharges et cartes de Fedow legacy (le meme appel HTTP), billets
+  et heures de benevolat de chaque lieu.
 
-COUT : 4 requetes sur le schema public et 1 appel a Fedow, puis 8 requetes par
+COUT : 4 requetes sur le schema public et 1 appel a Fedow, puis 12 requetes par
 lieu. Aucune ne charge des lignes une par une : ce sont des agregats, ou des cles
 extraites en SQL du rapport de chaque cloture.
-/ Cost: 4 public queries and 1 Fedow call, then 8 aggregated queries per venue.
+/ Cost: 4 public queries and 1 Fedow call, then 12 aggregated queries per venue.
 """
 
 import logging
@@ -57,11 +61,12 @@ from django.utils import timezone
 from django_tenants.utils import tenant_context
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Event, PaymentMethod, Ticket
+from BaseBillet.models import Event, FederatedPlace, LigneArticle, PaymentMethod, Ticket
 from BaseBillet.models_vente import Vente
-from booking.models import BesoinBenevole
+from booking.models import BesoinBenevole, Booking
 from comptabilite.models import ClotureCaisse
 from Customers.models import Client
+from fedow_connect.models import FedowConfig
 from fedow_core.models import Asset, Transaction
 from laboutik.models import PointDeVente
 from root_billet.models import RootConfiguration
@@ -75,7 +80,8 @@ logger = logging.getLogger(__name__)
 #   the contract with the JS: it is copied into the result and read by the JS.
 CLES_DES_COMPTEURS = [
     "evenements",
-    "inscriptions",
+    "billets_gratuits",
+    "billets_payants",
     "billets_scannes",
     "adhesions",
     "ca_total",
@@ -84,9 +90,30 @@ CLES_DES_COMPTEURS = [
     "ca_caisse",
     "recharges_ligne",
     "recharges_place",
-    "cartes_actives",
-    "connexions_admin",
+    "locations",
+    "transactions_cashless",
+    "portemonnaies_actifs",
     "usagers",
+]
+
+# Les statuts d'une ligne de vente d'adhesion comptee comme une adhesion du mois.
+# Une adhesion a 0 EUR ouvre aussi une ligne (statut FREERES). Un avoir ou un
+# remboursement n'est pas une adhesion de plus.
+# / Sale-line statuses counted as a membership of the month (0 EUR ones included).
+STATUTS_DES_LIGNES_D_ADHESION = [
+    LigneArticle.PAID,
+    LigneArticle.VALID,
+    LigneArticle.FREERES,
+]
+
+# Les locations comptees : payees ou confirmees. Une demande en attente, refusee ou
+# annulee n'est pas un usage.
+# / Counted bookings: paid or confirmed. Pending, refused or cancelled ones are not.
+STATUTS_DES_LOCATIONS_COMPTEES = [
+    Booking.PAID_BY_USER,
+    Booking.NO_ADMIN_VALID,
+    Booking.ADMIN_VALID,
+    Booking.FREERES_USERACTIV,
 ]
 
 # Les moyens de paiement d'une recharge EN LIGNE : tous les moyens Stripe.
@@ -219,24 +246,25 @@ def ajouter_une_cloture_aux_compteurs(compteurs_du_mois, extrait_de_la_cloture):
         else:
             compteurs_du_mois["recharges_place"] += montant_du_moyen
 
-    # Billets : articles du chiffre d'affaires relies a une reservation, par
-    # evenement puis par tarif (comptabilite/rapport.py, _detail_des_billets).
-    # / Tickets: revenue items linked to a booking, per event then per price.
+    # CA des billets : articles du chiffre d'affaires relies a une reservation, par
+    # evenement puis par tarif (comptabilite/rapport.py, _detail_des_billets). Le
+    # NOMBRE de billets ne se lit pas ici : une reservation gratuite ne passe pas
+    # par une vente (activite_du_lieu, requete 4).
+    # / Ticket revenue only. The ticket COUNT comes from the Ticket table.
     billets_par_evenement = extrait_de_la_cloture[CHEMIN_DES_BILLETS] or {}
     for evenement in billets_par_evenement.values():
         tarifs_de_l_evenement = evenement.get("par_tarif") or {}
         for tarif in tarifs_de_l_evenement.values():
-            compteurs_du_mois["inscriptions"] += _en_nombre(tarif.get("quantite"))
             compteurs_du_mois["ca_billetterie"] += _en_nombre(
                 tarif.get("total_ttc_en_centimes")
             )
 
-    # Adhesions : articles du chiffre d'affaires relies a une adhesion, par produit
-    # (comptabilite/rapport.py, _detail_des_adhesions).
-    # / Memberships: revenue items linked to a membership, per product.
+    # CA des adhesions : articles du chiffre d'affaires relies a une adhesion, par
+    # produit (comptabilite/rapport.py, _detail_des_adhesions). Le NOMBRE
+    # d'adhesions ne se lit pas ici (activite_du_lieu, requete 5).
+    # / Membership revenue only. The COUNT comes from the sale lines.
     adhesions_par_produit = extrait_de_la_cloture[CHEMIN_DES_ADHESIONS] or {}
     for adhesion in adhesions_par_produit.values():
-        compteurs_du_mois["adhesions"] += _en_nombre(adhesion.get("quantite"))
         compteurs_du_mois["ca_adhesions"] += _en_nombre(
             adhesion.get("total_ttc_en_centimes")
         )
@@ -255,17 +283,23 @@ def activite_du_lieu(premier_jour):
     Les compteurs mensuels du lieu COURANT. A appeler dans `tenant_context(lieu)`.
     / Monthly counters of the CURRENT venue. Call inside tenant_context.
 
-    FLUX : 6 requetes.
+    FLUX : 10 requetes, toutes en lecture.
     1. Clotures mensuelles (M) de la periode.
     2. Clotures journalieres (J) commencees apres la derniere M lue : elles couvrent
        les mois qui n'ont pas encore leur M (le mois en cours).
-    3. Evenements par mois.
-    4. Billets scannes par mois de l'evenement.
-    5. Usagers distincts (clients des ventes reglees) par mois.
-    6. Points de vente visibles.
+    3. Evenements publies par mois.
+    4. Billets gratuits, payants et scannes, par mois de l'evenement.
+    5. Adhesions par mois (lignes de vente d'adhesion).
+    6. Locations par mois.
+    7. Usagers distincts (clients des ventes reglees) par mois.
+    8. Points de vente visibles.
+    9. La Place Fedow legacy du lieu.
+    10. Les lieux dont ce lieu affiche l'agenda (FederatedPlace).
 
     :param premier_jour: datetime avec fuseau, debut de la periode
-    :return: (dict mois AAAA-MM -> compteurs, nombre de points de vente)
+    :return: dict avec
+        compteurs_par_mois (mois AAAA-MM -> compteurs), points_de_vente (nombre),
+        place_fedow (uuid hex ou None), lieux_affiches (liste d'uuid de Client)
     """
     compteurs_par_mois = {}
 
@@ -336,10 +370,15 @@ def activite_du_lieu(premier_jour):
             compteurs_de(mois_de_la_cloture), cloture_journaliere
         )
 
-    # 3. Evenements dont la date tombe dans le mois.
-    # / 3. Events whose date falls in the month.
+    # 3. Evenements publies dont la date tombe dans le mois. Sans parent : un creneau
+    # de benevolat est un sous-evenement, il ne fait pas un evenement de plus.
+    # / 3. Published events of the month. No parent: a volunteer slot is a sub-event.
     evenements_par_mois = (
-        Event.objects.filter(datetime__gte=premier_jour)
+        Event.objects.filter(
+            datetime__gte=premier_jour,
+            published=True,
+            parent__isnull=True,
+        )
         .annotate(mois=TruncMonth("datetime"))
         .values("mois")
         .annotate(nombre=Count("pk"))
@@ -347,28 +386,77 @@ def activite_du_lieu(premier_jour):
     for ligne in evenements_par_mois:
         compteurs_de(mois_d_un_moment(ligne["mois"]))["evenements"] = ligne["nombre"]
 
-    # 4. Billets scannes, rattaches au mois de l'evenement : le billet n'a pas de
-    # date de scan.
-    # / 4. Scanned tickets, filed under the event's month (no scan date exists).
-    billets_scannes_par_mois = (
+    # 4. Billets valides (non scannes et scannes), au mois de l'EVENEMENT.
+    # INDISPENSABLE : pas le mois de la reservation. `Reservation.created_at` a ete
+    # rempli par sa migration (BaseBillet 0235) : tous les anciens billets portent
+    # la meme date d'octobre 2026.
+    # Un billet est gratuit s'il a ete offert depuis l'admin (il garde alors le tarif
+    # payant dans `pricesold`), s'il n'a pas de tarif vendu (creneau benevole), ou si
+    # son tarif vendu vaut 0 (tarif gratuit, prix libre a 0, code promo a 100 %).
+    # / 4. Valid tickets, by EVENT month (Reservation.created_at was filled by its
+    #      migration). Free = offered by an admin, no sold price, or a 0 sold price.
+    billet_gratuit = (
+        Q(payment_method=PaymentMethod.FREE)
+        | Q(pricesold__isnull=True)
+        | Q(pricesold__prix=0)
+    )
+    billets_par_mois = (
         Ticket.objects.filter(
-            status=Ticket.SCANNED,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
             reservation__event__datetime__gte=premier_jour,
         )
         .annotate(mois=TruncMonth("reservation__event__datetime"))
         .values("mois")
+        .annotate(
+            nombre_de_billets=Count("pk"),
+            nombre_de_billets_gratuits=Count("pk", filter=billet_gratuit),
+            nombre_de_billets_scannes=Count("pk", filter=Q(status=Ticket.SCANNED)),
+        )
+    )
+    for ligne in billets_par_mois:
+        compteurs_du_mois = compteurs_de(mois_d_un_moment(ligne["mois"]))
+        compteurs_du_mois["billets_gratuits"] = ligne["nombre_de_billets_gratuits"]
+        compteurs_du_mois["billets_payants"] = (
+            ligne["nombre_de_billets"] - ligne["nombre_de_billets_gratuits"]
+        )
+        compteurs_du_mois["billets_scannes"] = ligne["nombre_de_billets_scannes"]
+
+    # 5. Adhesions : les lignes de vente d'adhesion du mois, gratuites comprises.
+    # Pas `Membership.date_added` : la fiche est creee avant le paiement, et un
+    # renouvellement (caisse, abonnement Stripe) met a jour la meme fiche.
+    # / 5. Memberships: the month's membership sale lines, free ones included.
+    adhesions_par_mois = (
+        LigneArticle.objects.filter(
+            membership__isnull=False,
+            status__in=STATUTS_DES_LIGNES_D_ADHESION,
+            datetime__gte=premier_jour,
+        )
+        .annotate(mois=TruncMonth("datetime"))
+        .values("mois")
         .annotate(nombre=Count("pk"))
     )
-    for ligne in billets_scannes_par_mois:
-        compteurs_de(mois_d_un_moment(ligne["mois"]))["billets_scannes"] = ligne[
-            "nombre"
-        ]
+    for ligne in adhesions_par_mois:
+        compteurs_de(mois_d_un_moment(ligne["mois"]))["adhesions"] = ligne["nombre"]
 
-    # 5. Usagers distincts : les clients des ventes reglees du mois. Un compte
+    # 6. Locations de salle ou de materiel, payees ou confirmees, au mois du debut.
+    # / 6. Paid or confirmed bookings, by start month.
+    locations_par_mois = (
+        Booking.objects.filter(
+            status__in=STATUTS_DES_LOCATIONS_COMPTEES,
+            start_datetime__gte=premier_jour,
+        )
+        .annotate(mois=TruncMonth("start_datetime"))
+        .values("mois")
+        .annotate(nombre=Count("pk"))
+    )
+    for ligne in locations_par_mois:
+        compteurs_de(mois_d_un_moment(ligne["mois"]))["locations"] = ligne["nombre"]
+
+    # 7. Usagers distincts : les clients des ventes reglees du mois. Un compte
     # TibilletUser est commun a tous les lieux : c'est son activite qui le
     # rattache a un lieu. distinct=True : un client qui achete deux fois ne compte
     # qu'une fois.
-    # / 5. Distinct users: clients of the month's settled sales, counted once.
+    # / 7. Distinct users: clients of the month's settled sales, counted once.
     usagers_par_mois = (
         Vente.objects.filter(
             statut=Vente.Statut.REGLEE,
@@ -381,11 +469,30 @@ def activite_du_lieu(premier_jour):
     for ligne in usagers_par_mois:
         compteurs_de(mois_d_un_moment(ligne["mois"]))["usagers"] = ligne["nombre"]
 
-    # 6. Points de vente visibles dans la caisse.
-    # / 6. Point of sale visible in the POS.
+    # 8. Points de vente visibles dans la caisse.
+    # / 8. Point of sale visible in the POS.
     nombre_de_points_de_vente = PointDeVente.objects.filter(hidden=False).count()
 
-    return compteurs_par_mois, nombre_de_points_de_vente
+    # 9. La Place Fedow legacy du lieu, pour retrouver ses ventes dans la reponse de
+    # Fedow. INDISPENSABLE : pas `FedowConfig.get_solo()`, qui CREE la ligne quand
+    # elle manque. Le calcul ne doit rien ecrire dans les lieux.
+    # / 9. The venue's legacy Fedow Place. Never get_solo(): it creates the row.
+    uuid_de_la_place = FedowConfig.objects.values_list(
+        "fedow_place_uuid", flat=True
+    ).first()
+    place_fedow = uuid_de_la_place.hex if uuid_de_la_place else None
+
+    # 10. Les lieux dont ce lieu affiche l'agenda. `FederatedPlace` vit chez le lieu
+    # qui affiche ; son champ `tenant` designe le lieu affiche.
+    # / 10. Venues whose agenda this venue shows (FederatedPlace.tenant).
+    lieux_affiches = list(FederatedPlace.objects.values_list("tenant_id", flat=True))
+
+    return {
+        "compteurs_par_mois": compteurs_par_mois,
+        "points_de_vente": nombre_de_points_de_vente,
+        "place_fedow": place_fedow,
+        "lieux_affiches": lieux_affiches,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -410,29 +517,58 @@ def lieux_du_reseau():
     )
 
 
-def cartes_actives_par_lieu_et_par_mois(premier_jour):
+def ventes_cashless_v2_par_lieu_et_par_mois(premier_jour):
     """
-    Cartes NFC distinctes ayant servi dans le mois, par lieu, en UNE requete.
-    Lu dans fedow_core.Transaction : seul le moteur Fedow V2 interne l'alimente.
-    Les lieux encore sur le Fedow legacy y ont peu ou pas de lignes.
-    COUNT(DISTINCT card) ignore les transactions sans carte.
-    / Distinct NFC cards used in the month, per venue, in ONE query (Fedow V2 only).
+    Les ventes cashless du moteur Fedow V2, par lieu et par mois, en UNE requete :
+    le nombre de transactions de vente et de porte-monnaie distincts qui ont paye.
+    Lu dans fedow_core.Transaction (schema public). Les lieux encore sur Fedow
+    legacy y ont peu ou pas de lignes : leurs ventes viennent de l'appel a Fedow.
+    / Fedow V2 cashless sales per venue and per month, in ONE query.
 
-    :return: dict uuid du lieu -> dict mois AAAA-MM -> nombre de cartes
+    :return: dict uuid du lieu -> dict mois AAAA-MM -> {"transactions", "portemonnaies"}
     """
-    cartes_par_lieu = {}
+    ventes_par_lieu = {}
     lignes = (
-        Transaction.objects.filter(datetime__gte=premier_jour)
+        Transaction.objects.filter(action=Transaction.SALE, datetime__gte=premier_jour)
         .annotate(mois=TruncMonth("datetime"))
         .values("tenant_id", "mois")
-        .annotate(nombre_de_cartes=Count("card", distinct=True))
+        .annotate(
+            transactions=Count("pk"),
+            portemonnaies=Count("sender", distinct=True),
+        )
     )
     for ligne in lignes:
         mois = mois_d_un_moment(ligne["mois"])
-        if ligne["tenant_id"] not in cartes_par_lieu:
-            cartes_par_lieu[ligne["tenant_id"]] = {}
-        cartes_par_lieu[ligne["tenant_id"]][mois] = ligne["nombre_de_cartes"]
-    return cartes_par_lieu
+        if ligne["tenant_id"] not in ventes_par_lieu:
+            ventes_par_lieu[ligne["tenant_id"]] = {}
+        ventes_par_lieu[ligne["tenant_id"]][mois] = {
+            "transactions": ligne["transactions"],
+            "portemonnaies": ligne["portemonnaies"],
+        }
+    return ventes_par_lieu
+
+
+def ajouter_les_ventes_cashless(compteurs_par_mois, ventes_par_mois):
+    """
+    Ajoute des ventes cashless (V2 ou legacy) aux compteurs mensuels d'un lieu.
+    / Adds cashless sales (V2 or legacy) to a venue's monthly counters.
+
+    Les transactions s'additionnent. Les porte-monnaie, non : un meme porte-monnaie
+    peut payer en V2 et en legacy dans le meme mois (un panier en assets locaux,
+    complete en FED). On garde le plus grand des deux nombres.
+    / Transactions add up. Wallets do not (the same wallet may pay in both): max.
+
+    :param compteurs_par_mois: dict mois -> compteurs, modifie sur place
+    :param ventes_par_mois: dict mois AAAA-MM -> {"transactions", "portemonnaies"}
+    """
+    for mois, ventes_du_mois in ventes_par_mois.items():
+        if mois not in compteurs_par_mois:
+            compteurs_par_mois[mois] = compteurs_vides()
+        compteurs_du_mois = compteurs_par_mois[mois]
+        compteurs_du_mois["transactions_cashless"] += ventes_du_mois["transactions"]
+        compteurs_du_mois["portemonnaies_actifs"] = max(
+            compteurs_du_mois["portemonnaies_actifs"], ventes_du_mois["portemonnaies"]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +681,7 @@ def recharges_du_moteur_v2():
 
 def statistiques_de_fedow_legacy():
     """
-    Les recharges par asset et les cartes, lues dans Fedow legacy.
+    Les recharges par asset, les cartes et les ventes par lieu, lues dans Fedow legacy.
     Route GET /statistiques_reseau/ de Fedow, avec la cle root de la billetterie.
     Fedow garde la reponse 1 h en cache : cet appel ne charge pas sa base.
     / Top-ups per asset and cards, read from legacy Fedow with the root key.
@@ -555,7 +691,7 @@ def statistiques_de_fedow_legacy():
     n'a pas repondu.
     / If Fedow does not answer: logged, None returned, the rest still computed.
 
-    :return: dict recharges_par_asset, cartes ; ou None
+    :return: dict recharges_par_asset, cartes, ventes_par_lieu ; ou None
     """
     try:
         configuration_root = RootConfiguration.get_solo()
@@ -580,20 +716,22 @@ def statistiques_de_fedow_legacy():
         return None
 
 
-def reseau_depuis_le_debut(nombre_de_lieux, totaux_cumules_des_lieux):
+def reseau_depuis_le_debut(
+    nombre_de_lieux, totaux_cumules_des_lieux, statistiques_legacy
+):
     """
     Le bloc « Le reseau depuis le debut ». Lu sur le schema public.
     / The "network since the beginning" block. Read on the public schema.
 
     :param nombre_de_lieux: nombre de lieux du reseau (requete P1)
     :param totaux_cumules_des_lieux: somme des totaux_du_lieu_depuis_le_debut()
+    :param statistiques_legacy: la reponse de Fedow legacy, ou None s'il n'a pas repondu
     """
     nombre_de_comptes_humains = TibilletUser.objects.filter(
         espece=TibilletUser.TYPE_HUM
     ).count()
 
     recharges_v2 = recharges_du_moteur_v2()
-    statistiques_legacy = statistiques_de_fedow_legacy()
     recharges_legacy = []
     cartes_legacy = None
     if statistiques_legacy is not None:
@@ -678,14 +816,23 @@ def calculer_observatoire_du_reseau(
     mois_de_la_periode = liste_des_mois(nombre_de_mois)
     premier_jour = premier_jour_de_la_periode(mois_de_la_periode)
 
-    # Schema public : les lieux et les cartes actives, pour tout le reseau (le bloc
-    # « depuis le debut » lit le reste a la fin).
-    # / Public schema: venues and active cards for the whole network.
+    # Schema public : les lieux et les ventes cashless V2, pour tout le reseau.
+    # / Public schema: venues and V2 cashless sales for the whole network.
     tous_les_lieux = lieux_du_reseau()
-    cartes_par_lieu = cartes_actives_par_lieu_et_par_mois(premier_jour)
+    ventes_v2_par_lieu = ventes_cashless_v2_par_lieu_et_par_mois(premier_jour)
+
+    # Fedow legacy : UN appel, avant la boucle. Il sert aux ventes de chaque lieu et
+    # au bloc « depuis le debut ». S'il ne repond pas, les ventes legacy valent 0 et
+    # la page le dit (fedow_legacy_a_repondu).
+    # / Legacy Fedow: ONE call, before the loop. If it fails, legacy sales are 0.
+    statistiques_legacy = statistiques_de_fedow_legacy()
+    ventes_legacy_par_place = {}
+    if statistiques_legacy is not None:
+        ventes_legacy_par_place = statistiques_legacy.get("ventes_par_lieu") or {}
 
     erreurs = []
     lignes_des_instances = []
+    uuids_des_lieux_federes = set()
     totaux_cumules_des_lieux = {
         "billets_valides": 0,
         "billets_scannes": 0,
@@ -696,9 +843,7 @@ def calculer_observatoire_du_reseau(
         debut_du_lieu = time.monotonic()
         try:
             with tenant_context(lieu):
-                compteurs_par_mois, nombre_de_points_de_vente = activite_du_lieu(
-                    premier_jour
-                )
+                activite = activite_du_lieu(premier_jour)
                 totaux_du_lieu = totaux_du_lieu_depuis_le_debut()
         except Exception as erreur:
             # Un lieu casse ne doit pas bloquer les autres : on note et on continue.
@@ -711,13 +856,26 @@ def calculer_observatoire_du_reseau(
         for cle_du_total, valeur_du_lieu in totaux_du_lieu.items():
             totaux_cumules_des_lieux[cle_du_total] += valeur_du_lieu
 
-        # Les cartes actives viennent du schema public (requete P2).
-        # / Active cards come from the public schema (query P2).
-        cartes_du_lieu = cartes_par_lieu.get(lieu.pk, {})
-        for mois, nombre_de_cartes in cartes_du_lieu.items():
-            if mois not in compteurs_par_mois:
-                compteurs_par_mois[mois] = compteurs_vides()
-            compteurs_par_mois[mois]["cartes_actives"] = nombre_de_cartes
+        # Les ventes cashless : V2 (schema public, par uuid du lieu) et legacy (reponse
+        # de Fedow, par uuid de la Place du lieu).
+        # / Cashless sales: V2 by venue uuid, legacy by the venue's Place uuid.
+        compteurs_par_mois = activite["compteurs_par_mois"]
+        ajouter_les_ventes_cashless(
+            compteurs_par_mois, ventes_v2_par_lieu.get(lieu.pk, {})
+        )
+        if activite["place_fedow"] is not None:
+            ajouter_les_ventes_cashless(
+                compteurs_par_mois,
+                ventes_legacy_par_place.get(activite["place_fedow"], {}),
+            )
+
+        # Federation : le lieu qui affiche ET les lieux affiches sont « federes ».
+        # Un lieu affiche n'a aucune ligne chez lui : on le note depuis l'autre lieu.
+        # / Federation: the showing venue AND the shown venues are "federated".
+        if activite["lieux_affiches"]:
+            uuids_des_lieux_federes.add(lieu.pk)
+            for uuid_du_lieu_affiche in activite["lieux_affiches"]:
+                uuids_des_lieux_federes.add(uuid_du_lieu_affiche)
 
         # Un tableau de valeurs mensuelles par compteur, dans l'ordre des cles.
         # / One monthly array per counter, in key order.
@@ -735,20 +893,26 @@ def calculer_observatoire_du_reseau(
             tableaux_des_compteurs.append(valeurs_du_compteur)
 
         # L'ordre de ces positions est lu par observatoire.js (charger_les_donnees).
-        # / The order of these positions is read by observatoire.js.
+        # La position 5 (« federe ») est remplie apres la boucle : un lieu peut etre
+        # affiche par un lieu lu plus tard.
+        # / The JS reads these positions. Position 5 ("federated") is set after the loop.
         lignes_des_instances.append(
             [
                 lieu.schema_name,
                 lieu.name,
-                lieu.categorie,
                 lieu.created_on.isoformat() if lieu.created_on else "",
-                nombre_de_points_de_vente,
+                activite["points_de_vente"],
                 lieu.nombre_de_comptes_admin,
+                lieu.pk,
                 tableaux_des_compteurs,
             ]
         )
         duree_du_lieu = time.monotonic() - debut_du_lieu
         journal(f"  {lieu.schema_name} : {duree_du_lieu:.2f} s")
+
+    for ligne_du_lieu in lignes_des_instances:
+        uuid_du_lieu = ligne_du_lieu[5]
+        ligne_du_lieu[5] = uuid_du_lieu in uuids_des_lieux_federes
 
     duree_totale = round(time.monotonic() - debut_du_calcul, 1)
     bilan = {
@@ -768,6 +932,6 @@ def calculer_observatoire_du_reseau(
         "bilan": bilan,
         "inst": lignes_des_instances,
         "reseau": reseau_depuis_le_debut(
-            len(lignes_des_instances), totaux_cumules_des_lieux
+            len(lignes_des_instances), totaux_cumules_des_lieux, statistiques_legacy
         ),
     }

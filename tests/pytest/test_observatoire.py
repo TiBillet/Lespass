@@ -8,7 +8,10 @@ Spec : TECH_DOC/SESSIONS/OBSERVATOIRE/SPEC.md (section 8).
 CE QUE CES TESTS PROTEGENT
 1. Les chiffres d'argent viennent des clotures comptables, lues au bon mois :
    mensuelles d'abord, journalieres ensuite, jamais la J « reprise ».
-2. Les compteurs hors clotures (billets scannes, usagers) sont justes.
+2. Les compteurs hors clotures sont justes : billets gratuits et payants au mois de
+   l'evenement, adhesions par leurs lignes de vente, locations, evenements publies,
+   usagers. Les ventes cashless de Fedow legacy vont au lieu de leur Place.
+   La federation marque les deux lieux. Le calcul n'ecrit rien dans les lieux.
 3. Un lieu en erreur ne bloque pas les autres ; un calcul rate n'ecrase pas le cache.
 4. La page n'est lisible QUE par le superadmin, en GET seulement.
 / Money comes from closures; other counters are right; failures are contained;
@@ -205,9 +208,11 @@ class TestObservatoire(FastTenantTestCase):
 
     def test_une_cloture_mensuelle_donne_l_argent_et_les_ventes_de_son_mois(self):
         """
-        Une M donne le CA, la caisse, les recharges en ligne et sur place, les
-        billets et les adhesions, rangés au mois de la cloture.
-        / An M closure gives revenue, POS, top-ups, tickets and memberships for its month.
+        Une M donne le CA, la caisse, les recharges en ligne et sur place, le CA des
+        billets et des adhesions, rangés au mois de la cloture. Le NOMBRE de billets
+        et d'adhesions ne vient pas de la cloture : il reste a 0 ici.
+        / An M closure gives the money of its month; ticket and membership COUNTS do not
+          come from closures.
         """
         debut_m3, debut_m2, debut_m1 = self.deux_mois_passes()
         self.creer_une_cloture(
@@ -223,9 +228,9 @@ class TestObservatoire(FastTenantTestCase):
             ),
         )
 
-        compteurs_par_mois, _points_de_vente = observatoire.activite_du_lieu(
-            self.premier_jour
-        )
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
         compteurs = compteurs_par_mois[debut_m2.strftime("%Y-%m")]
 
         assert compteurs["ca_total"] == 18200
@@ -234,8 +239,8 @@ class TestObservatoire(FastTenantTestCase):
         assert compteurs["ca_adhesions"] == 6000
         assert compteurs["recharges_ligne"] == 3000
         assert compteurs["recharges_place"] == 1500
-        assert compteurs["inscriptions"] == 4
-        assert compteurs["adhesions"] == 2
+        assert compteurs["billets_payants"] == 0
+        assert compteurs["adhesions"] == 0
 
     def test_une_journaliere_apres_la_derniere_mensuelle_compte_dans_son_mois(self):
         """
@@ -274,9 +279,9 @@ class TestObservatoire(FastTenantTestCase):
             rapport_de_cloture(total_ttc=300),
         )
 
-        compteurs_par_mois, _points_de_vente = observatoire.activite_du_lieu(
-            self.premier_jour
-        )
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
 
         assert compteurs_par_mois[debut_m1.strftime("%Y-%m")]["ca_total"] == 10000
         mois_de_la_fin = timezone.localtime(maintenant - timedelta(hours=1)).strftime(
@@ -304,9 +309,9 @@ class TestObservatoire(FastTenantTestCase):
             rapport_de_cloture(total_ttc=400),
         )
 
-        compteurs_par_mois, _points_de_vente = observatoire.activite_du_lieu(
-            self.premier_jour
-        )
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
 
         mois_de_la_fin = timezone.localtime(maintenant - timedelta(hours=2)).strftime(
             "%Y-%m"
@@ -336,9 +341,9 @@ class TestObservatoire(FastTenantTestCase):
             rapport_de_cloture(total_ttc=100000),
         )
 
-        compteurs_par_mois, _points_de_vente = observatoire.activite_du_lieu(
-            self.premier_jour
-        )
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
 
         assert compteurs_par_mois[mois_le_plus_ancien]["ca_total"] == 100000
 
@@ -364,9 +369,9 @@ class TestObservatoire(FastTenantTestCase):
             rapport_de_cloture(total_ttc=777),
         )
 
-        compteurs_par_mois, _points_de_vente = observatoire.activite_du_lieu(
-            self.premier_jour
-        )
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
 
         assert compteurs_par_mois[debut_m2.strftime("%Y-%m")]["ca_total"] == 10000
         assert debut_m1.strftime("%Y-%m") not in compteurs_par_mois
@@ -393,9 +398,9 @@ class TestObservatoire(FastTenantTestCase):
         Ticket.objects.create(reservation=reservation, status=Ticket.SCANNED)
         Ticket.objects.create(reservation=reservation, status=Ticket.NOT_SCANNED)
 
-        compteurs_par_mois, _points_de_vente = observatoire.activite_du_lieu(
-            self.premier_jour
-        )
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
 
         mois_de_l_evenement = timezone.localtime(date_de_l_evenement).strftime("%Y-%m")
         assert compteurs_par_mois[mois_de_l_evenement]["billets_scannes"] == 2
@@ -430,12 +435,268 @@ class TestObservatoire(FastTenantTestCase):
             Vente.objects.filter(client=client, statut=Vente.Statut.REGLEE).count() == 2
         )
 
-        compteurs_par_mois, _points_de_vente = observatoire.activite_du_lieu(
-            self.premier_jour
-        )
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
 
         mois_courant = timezone.localtime().strftime("%Y-%m")
         assert compteurs_par_mois[mois_courant]["usagers"] == 1
+
+
+    def creer_un_billet(self, reservation, tarif_vendu=None, statut=Ticket.NOT_SCANNED, moyen=None):
+        return Ticket.objects.create(
+            reservation=reservation,
+            pricesold=tarif_vendu,
+            status=statut,
+            payment_method=moyen,
+        )
+
+    def test_les_billets_gratuits_et_payants_sont_comptes_a_part(self):
+        """
+        Gratuit = tarif vendu a 0, billet offert (garde un tarif payant), ou sans
+        tarif vendu. Payant = le reste. Un billet annule ne compte pas.
+        / Free = 0 sold price, offered ticket, or no sold price. Cancelled: not counted.
+        """
+        from fabriques_vente import creer_tarif_vendu
+
+        date_de_l_evenement = timezone.now() - timedelta(days=1)
+        evenement = Event.objects.create(
+            name=f"TEST_obs billets {identifiant_unique()}", datetime=date_de_l_evenement
+        )
+        reservation = Reservation.objects.create(
+            user_commande=self.creer_un_utilisateur(), event=evenement
+        )
+        tarif_gratuit = creer_tarif_vendu(nom="Billet gratuit", prix_en_euros="0.00")
+        tarif_payant = creer_tarif_vendu(nom="Billet payant", prix_en_euros="10.00")
+        self.creer_un_billet(reservation, tarif_gratuit)
+        self.creer_un_billet(reservation, tarif_payant, moyen=PaymentMethod.FREE)
+        self.creer_un_billet(reservation, None)
+        self.creer_un_billet(reservation, tarif_payant, statut=Ticket.SCANNED)
+        self.creer_un_billet(reservation, tarif_payant, statut=Ticket.CANCELED)
+
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
+
+        mois_de_l_evenement = timezone.localtime(date_de_l_evenement).strftime("%Y-%m")
+        assert compteurs_par_mois[mois_de_l_evenement]["billets_gratuits"] == 3
+        assert compteurs_par_mois[mois_de_l_evenement]["billets_payants"] == 1
+        assert compteurs_par_mois[mois_de_l_evenement]["billets_scannes"] == 1
+
+    def test_un_evenement_non_publie_ou_un_sous_evenement_ne_compte_pas(self):
+        """
+        Seuls les evenements publies et sans parent comptent : un creneau de
+        benevolat est un sous-evenement.
+        / Only published events without a parent count.
+        """
+        date_de_l_evenement = timezone.now() - timedelta(days=1)
+        evenement_publie = Event.objects.create(
+            name=f"TEST_obs publie {identifiant_unique()}", datetime=date_de_l_evenement
+        )
+        Event.objects.create(
+            name=f"TEST_obs brouillon {identifiant_unique()}",
+            datetime=date_de_l_evenement,
+            published=False,
+        )
+        Event.objects.create(
+            name=f"TEST_obs creneau {identifiant_unique()}",
+            datetime=date_de_l_evenement,
+            parent=evenement_publie,
+        )
+
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
+
+        mois_de_l_evenement = timezone.localtime(date_de_l_evenement).strftime("%Y-%m")
+        assert compteurs_par_mois[mois_de_l_evenement]["evenements"] == 1
+
+    def test_les_adhesions_sont_comptees_par_leurs_lignes_de_vente_gratuites_comprises(self):
+        """
+        Une ligne d'adhesion payee et une a 0 EUR (statut FREERES) comptent. Une ligne
+        en attente de paiement ne compte pas.
+        / A paid line and a 0 EUR line count; a pending line does not.
+        """
+        from BaseBillet.models import LigneArticle, Membership
+        from fabriques_panier import creer_adhesion
+        from fabriques_vente import creer_tarif_vendu
+
+        adhesion = creer_adhesion()
+        tarif_vendu = creer_tarif_vendu(nom="Adhesion", prix_en_euros="15.00")
+        for statut, montant in [
+            (LigneArticle.VALID, 1500),
+            (LigneArticle.FREERES, 0),
+            (LigneArticle.UNPAID, 1500),
+        ]:
+            LigneArticle.objects.create(
+                pricesold=tarif_vendu,
+                qty=Decimal("1"),
+                amount=montant,
+                membership=Membership.objects.create(price=adhesion.tarif, user=None),
+                payment_method=PaymentMethod.CASH,
+                status=statut,
+            )
+
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
+
+        mois_courant = timezone.localtime().strftime("%Y-%m")
+        assert compteurs_par_mois[mois_courant]["adhesions"] == 2
+
+    def test_une_location_payee_compte_et_une_annulee_non(self):
+        """Locations payees ou confirmees seulement. / Paid or confirmed bookings only."""
+        from booking.models import Booking
+        from fabriques_panier import creer_ressource_avec_tarif
+
+        ressource = creer_ressource_avec_tarif()
+        for statut in [Booking.PAID_BY_USER, Booking.USER_CANCELED]:
+            Booking.objects.create(
+                resource=ressource.ressource,
+                user=self.creer_un_utilisateur(),
+                start_datetime=ressource.debut_du_creneau,
+                slot_duration_minutes=60,
+                slot_count=1,
+                status=statut,
+            )
+
+        compteurs_par_mois = observatoire.activite_du_lieu(self.premier_jour)[
+            "compteurs_par_mois"
+        ]
+
+        mois_du_creneau = timezone.localtime(ressource.debut_du_creneau).strftime("%Y-%m")
+        assert compteurs_par_mois[mois_du_creneau]["locations"] == 1
+
+    def test_le_calcul_ne_cree_pas_de_configuration_fedow_dans_le_lieu(self):
+        """
+        Un lieu sans FedowConfig n'en recoit pas : le calcul est en lecture seule.
+        / A venue without FedowConfig does not get one: the computation is read-only.
+        """
+        from fedow_connect.models import FedowConfig
+
+        FedowConfig.objects.all().delete()
+
+        activite = observatoire.activite_du_lieu(self.premier_jour)
+
+        assert activite["place_fedow"] is None
+        assert FedowConfig.objects.count() == 0
+
+    def test_les_ventes_cashless_v2_et_legacy_s_ajoutent_sans_doubler_les_porte_monnaie(self):
+        """
+        Transactions : V2 + legacy. Porte-monnaie : le plus grand des deux (une meme
+        personne peut payer en V2 et en legacy).
+        / Transactions add up; wallets take the max of V2 and legacy.
+        """
+        compteurs_par_mois = {}
+        observatoire.ajouter_les_ventes_cashless(
+            compteurs_par_mois, {"2026-10": {"transactions": 10, "portemonnaies": 4}}
+        )
+        observatoire.ajouter_les_ventes_cashless(
+            compteurs_par_mois, {"2026-10": {"transactions": 5, "portemonnaies": 6}}
+        )
+
+        assert compteurs_par_mois["2026-10"]["transactions_cashless"] == 15
+        assert compteurs_par_mois["2026-10"]["portemonnaies_actifs"] == 6
+
+    def valeurs_du_mois_courant(self, donnees, cle_du_compteur):
+        position = donnees["cles"].index(cle_du_compteur)
+        return donnees["inst"][0][6][position][-1]
+
+    def test_les_ventes_de_fedow_legacy_vont_au_lieu_de_leur_place(self):
+        """
+        Les ventes NFC et QR code de Fedow legacy sont rangees au lieu dont la Place
+        est dans sa FedowConfig. Les ventes d'une autre Place ne s'y ajoutent pas.
+        / Legacy sales go to the venue whose FedowConfig holds the Place.
+        """
+        from fedow_connect.models import FedowConfig
+
+        place_du_lieu = uuid.uuid4()
+        FedowConfig.objects.update_or_create(
+            pk=1, defaults={"fedow_place_uuid": place_du_lieu}
+        )
+        mois_courant = timezone.localtime().strftime("%Y-%m")
+        reponse_de_fedow = {
+            "recharges_par_asset": [],
+            "cartes": None,
+            "ventes_par_lieu": {
+                place_du_lieu.hex: {mois_courant: {"transactions": 25, "portemonnaies": 7}},
+                uuid.uuid4().hex: {mois_courant: {"transactions": 999, "portemonnaies": 99}},
+            },
+        }
+        with mock.patch.object(
+            observatoire, "lieux_du_reseau", return_value=self.lieu_de_test_seul()
+        ):
+            with mock.patch.object(
+                observatoire, "statistiques_de_fedow_legacy", return_value=reponse_de_fedow
+            ):
+                donnees = observatoire.calculer_observatoire_du_reseau(
+                    nombre_de_mois=13, journal=lambda texte: None
+                )
+
+        assert self.valeurs_du_mois_courant(donnees, "transactions_cashless") == 25
+        assert self.valeurs_du_mois_courant(donnees, "portemonnaies_actifs") == 7
+
+    def test_si_fedow_ne_repond_pas_les_ventes_legacy_valent_zero(self):
+        """
+        Fedow muet : les lieux sont quand meme lus, ventes legacy a 0, et le bloc
+        reseau le dit.
+        / Silent Fedow: venues still read, legacy sales 0, the block says so.
+        """
+        with mock.patch.object(
+            observatoire, "lieux_du_reseau", return_value=self.lieu_de_test_seul()
+        ):
+            with mock.patch.object(
+                observatoire, "statistiques_de_fedow_legacy", return_value=None
+            ):
+                donnees = observatoire.calculer_observatoire_du_reseau(
+                    nombre_de_mois=13, journal=lambda texte: None
+                )
+
+        assert donnees["bilan"]["lieux_lus"] == 1
+        assert self.valeurs_du_mois_courant(donnees, "transactions_cashless") == 0
+        assert donnees["reseau"]["fedow_legacy_a_repondu"] is False
+
+    def test_la_federation_marque_le_lieu_qui_affiche_et_le_lieu_affiche(self):
+        """
+        Le lieu A affiche l'agenda du lieu B (FederatedPlace chez A) : A et B sont
+        « federes ». B n'a aucune ligne chez lui.
+        / Venue A shows venue B's agenda: both are federated.
+        """
+        lieu_affiche = (
+            Client.objects.exclude(pk=self.tenant.pk)
+            .exclude(schema_name="public")
+            .first()
+        )
+        lieu_affiche.nombre_de_comptes_admin = 0
+        reponses_des_lieux = [
+            {"compteurs_par_mois": {}, "points_de_vente": 0, "place_fedow": None,
+             "lieux_affiches": [lieu_affiche.pk]},
+            {"compteurs_par_mois": {}, "points_de_vente": 0, "place_fedow": None,
+             "lieux_affiches": []},
+        ]
+        totaux_vides = {"billets_valides": 0, "billets_scannes": 0, "minutes_de_benevolat": 0}
+
+        with mock.patch.object(
+            observatoire,
+            "lieux_du_reseau",
+            return_value=self.lieu_de_test_seul() + [lieu_affiche],
+        ):
+            with mock.patch.object(
+                observatoire, "activite_du_lieu", side_effect=reponses_des_lieux
+            ):
+                with mock.patch.object(
+                    observatoire, "totaux_du_lieu_depuis_le_debut", return_value=totaux_vides
+                ):
+                    with mock.patch.object(
+                        observatoire, "statistiques_de_fedow_legacy", return_value=None
+                    ):
+                        donnees = observatoire.calculer_observatoire_du_reseau(
+                            nombre_de_mois=13, journal=lambda texte: None
+                        )
+
+        federe_par_schema = {ligne[0]: ligne[5] for ligne in donnees["inst"]}
+        assert federe_par_schema[self.tenant.schema_name] is True
+        assert federe_par_schema[lieu_affiche.schema_name] is True
 
     # ------------------------------------------------------------------
     # 3. Le schema public / The public schema
@@ -534,6 +795,11 @@ class TestObservatoire(FastTenantTestCase):
         assert donnees["calcule_par"] == "manage.py"
         ligne_du_lieu = donnees["inst"][0]
         assert ligne_du_lieu[0] == self.tenant.schema_name
+        # Position 5 : « federe », un booleen (jamais l'uuid du lieu, place tenue
+        # pendant la boucle).
+        # / Position 5: "federated", a boolean (never the venue uuid placeholder).
+        assert ligne_du_lieu[5] is False
+        assert len(ligne_du_lieu) == 7
         assert len(ligne_du_lieu[6]) == len(observatoire.CLES_DES_COMPTEURS)
 
     # ------------------------------------------------------------------
@@ -850,12 +1116,11 @@ class TestReseauDepuisLeDebut(FastTenantTestCase):
         }
 
         with mock.patch.object(
-            observatoire, "statistiques_de_fedow_legacy", return_value=reponse_de_fedow
+            observatoire, "recharges_du_moteur_v2", return_value=recharges_v2
         ):
-            with mock.patch.object(
-                observatoire, "recharges_du_moteur_v2", return_value=recharges_v2
-            ):
-                reseau = observatoire.reseau_depuis_le_debut(5, totaux_des_lieux)
+            reseau = observatoire.reseau_depuis_le_debut(
+                5, totaux_des_lieux, reponse_de_fedow
+            )
 
         assert reseau["total_des_recharges_en_centimes"] == 15700
         assert reseau["cartes"] == {"total": 9000, "liees_a_un_compte": 6000}
@@ -898,12 +1163,11 @@ class TestReseauDepuisLeDebut(FastTenantTestCase):
         }
 
         with mock.patch.object(
-            observatoire, "statistiques_de_fedow_legacy", return_value=reponse_de_fedow
+            observatoire, "recharges_du_moteur_v2", return_value=recharges_v2
         ):
-            with mock.patch.object(
-                observatoire, "recharges_du_moteur_v2", return_value=recharges_v2
-            ):
-                reseau = observatoire.reseau_depuis_le_debut(1, totaux_des_lieux)
+            reseau = observatoire.reseau_depuis_le_debut(
+                1, totaux_des_lieux, reponse_de_fedow
+            )
 
         assert reseau["heures_des_tokens_cadeaux_legacy"] == 100
         assert reseau["heures_du_planning"] == 2
@@ -920,10 +1184,12 @@ class TestReseauDepuisLeDebut(FastTenantTestCase):
             "get",
             side_effect=ConnectionError("Fedow éteint"),
         ):
-            reseau = observatoire.reseau_depuis_le_debut(
-                3,
-                {"billets_valides": 0, "billets_scannes": 0, "minutes_de_benevolat": 0},
-            )
+            statistiques_legacy = observatoire.statistiques_de_fedow_legacy()
+        reseau = observatoire.reseau_depuis_le_debut(
+            3,
+            {"billets_valides": 0, "billets_scannes": 0, "minutes_de_benevolat": 0},
+            statistiques_legacy,
+        )
 
         assert reseau["fedow_legacy_a_repondu"] is False
         assert reseau["cartes"] is None

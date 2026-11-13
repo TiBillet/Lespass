@@ -6,6 +6,12 @@
 **Source du prototype :** `~/Téléchargements/observatoire-tibillet/` (fait avec Claude Cowork)
 **Relecture :** Fable (2026-11-12), points retenus intégrés ci-dessous.
 
+> **Mis à jour par le chantier 04** ([`CHANTIER-04-usages-hors-argent.md`](CHANTIER-04-usages-hors-argent.md)) :
+> compteurs hors argent (billets gratuits et payants, adhésions, locations, ventes
+> cashless Fedow), classement par mois d'usage, usages et rythme à la place de la
+> nature, catégorie et bidouillage retirés. Les sections 5.4, 5.6 et 6.3 sont à jour ;
+> pour le classement, c'est le chantier 04 qui fait foi.
+
 ---
 
 ## 1. Contexte
@@ -183,8 +189,6 @@ Les agrégats L3 à L5 (`TruncMonth`) découpent les mois dans le fuseau du serv
 | `ca_caisse` | `chiffre_affaires.par_origine.LB.total_ttc_en_centimes` |
 | `recharges_ligne` | `annexe.recharges_et_cartes.recharges_encaissees.par_moyen`, moyens Stripe `SN`, `SP`, `SR` (le rapport écarte `SF`, qui n'est pas un moyen d'argent) |
 | `recharges_place` | même dictionnaire, tous les autres moyens |
-| `inscriptions` | somme des `quantite` de `detail.billets.*.par_tarif.*` |
-| `adhesions` | somme des `quantite` de `detail.adhesions.*` |
 
 `par_categorie` n'est PAS utilisé : un produit rangé dans une catégorie de caisse y
 est classé sous l'uuid de cette catégorie, pas sous `type_A` ou `type_B`. Le détail
@@ -193,14 +197,23 @@ est classé sous l'uuid de cette catégorie, pas sous `type_A` ou `type_B`. Le d
 Les montants restent en centimes jusqu'au JS, qui les affiche en euros.
 `ca_total` est lu tel quel : une adhésion vendue en caisse compte à la fois
 dans `ca_adhesions` et `ca_caisse`, et le total ne doit pas être reconstruit
-par addition. Les inscriptions et adhésions sont rattachées au **mois de la vente**.
+par addition. Le NOMBRE de billets et d'adhésions ne vient pas des clôtures : un
+billet gratuit ne passe pas toujours par une vente (L4, L5).
 Une clé absente d'un rapport vaut 0.
 
-**L3 — événements :** `Event` depuis le premier jour, par mois de `datetime`, `Count("pk")`.
-Le classement « bidouillage » en a besoin.
+**L3 — événements :** `Event` publiés et sans parent (un créneau de bénévolat est un
+sous-événement), par mois de `datetime`, `Count("pk")`.
 
-**L4 — billets scannés :** `Ticket` au statut `SCANNED`, par mois de
-`reservation__event__datetime`, `Count("pk")`. Le modèle n'a pas de date de scan.
+**L4 — billets :** `Ticket` valides (`NOT_SCANNED`, `SCANNED`), par mois de
+`reservation__event__datetime` (jamais `Reservation.created_at`, rempli par sa
+migration), une requête : gratuits (offerts, sans tarif vendu, ou tarif vendu à 0),
+payants, scannés. Le modèle n'a pas de date de scan.
+
+**L4 bis — adhésions :** `LigneArticle` liées à une adhésion, statuts `P`, `V`, `F`,
+par mois de `datetime` (gratuites et renouvellements compris).
+
+**L4 ter — locations :** `Booking` aux statuts `PA`, `AU`, `VA`, `FU`, par mois de
+`start_datetime`.
 
 **L5 — usagers distincts :** `Vente` réglées depuis le premier jour, par mois de
 `datetime_encaissement`, `Count("client", distinct=True)`. `TibilletUser` est
@@ -208,6 +221,17 @@ commun à tous les lieux : un compte n'appartient à aucun lieu, c'est son
 activité qui le rattache.
 
 **L6 — points de vente :** `PointDeVente.objects.filter(hidden=False).count()`.
+
+**L7 — Place Fedow legacy :** `FedowConfig.objects.values_list("fedow_place_uuid")`,
+jamais `get_solo()` (il crée la ligne). Sert à retrouver les ventes du lieu dans la
+réponse de Fedow (`ventes_par_lieu`, clé `uuid.hex`).
+
+**L8 — fédération :** `FederatedPlace.tenant_id` du lieu. Le lieu qui affiche et les
+lieux affichés sont marqués `federe` après la boucle.
+
+**Ventes cashless :** V2 en une requête sur le schéma public (`Transaction.SALE` par
+lieu et par mois), legacy par l'appel unique à Fedow, fait **avant** la boucle.
+Transactions additionnées, porte-monnaie : le plus grand des deux nombres.
 
 ### 5.5 Boucle sur les lieux
 
@@ -221,7 +245,7 @@ activité qui le rattache.
 | | Prototype | Cible |
 |---|---|---|
 | Schéma public | 2 + 400 (`count()` des admins) | **4**, + 1 appel HTTP à Fedow (bloc 5 bis) |
-| Par lieu | 7, dont 2 qui chargent des lignes | **8** (6 + 2 du bloc 5 bis), toutes agrégées ou extraites en SQL |
+| Par lieu | 7, dont 2 qui chargent des lignes | **12** (10 + 2 du bloc 5 bis), toutes agrégées ou extraites en SQL |
 | Où ça tourne | requête HTTP | worker Celery, la nuit |
 
 ## 5 bis. Le bloc « Le réseau depuis le début »
@@ -267,13 +291,13 @@ une migration `AlterField`, même si **la base ne change pas**.
 
 ```json
 {
-  "cles": ["evenements", "inscriptions", "...13 clés"],
+  "cles": ["evenements", "billets_gratuits", "...15 clés"],
   "mois": ["2024-12", "...", "2026-11"],
   "calcule_le": "2026-11-12T02:30",
   "calcule_par": "cron",
   "bilan": {"lieux_lus": 398, "erreurs": [], "duree_s": 120.4},
   "inst": [
-    ["schema", "Nom du lieu", "S", "2023-04-01", 2, 3,
+    ["schema", "Nom du lieu", "2023-04-01", 2, 3, true,
      [[...24 valeurs], "... un tableau par clé, dans l'ordre de cles"]]
   ],
   "reseau": {"lieux": 398, "comptes": 9000, "...": "voir 5 bis"}
@@ -281,13 +305,11 @@ une migration `AlterField`, même si **la base ne change pas**.
 ```
 
 - `cles` est **dans le cache** : c'est le contrat entre Python et JS. Le JS le
-  lit et ne le redéfinit pas. Ordre : `evenements, inscriptions, billets_scannes,
-  adhesions, ca_total, ca_billetterie, ca_adhesions, ca_caisse, recharges_ligne,
-  recharges_place, cartes_actives, connexions_admin, usagers`.
-- Positions : schéma, nom, catégorie déclarée, création, points de vente, admins, compteurs.
-- `connexions_admin` : zéros, la donnée n'existe pas encore. La page ne l'affiche pas
-  (ni indicateur, ni colonne, ni seuil) ; la règle « bidouillage » de `classer()` le lit
-  toujours et le retrouvera le jour où la donnée existera.
+  lit et ne le redéfinit pas. Ordre : `evenements, billets_gratuits, billets_payants,
+  billets_scannes, adhesions, ca_total, ca_billetterie, ca_adhesions, ca_caisse,
+  recharges_ligne, recharges_place, locations, transactions_cashless,
+  portemonnaies_actifs, usagers`.
+- Positions : schéma, nom, création, points de vente, admins, fédéré (booléen), compteurs.
 
 ## 7. La page dans l'admin
 
@@ -421,3 +443,4 @@ Après le travail : `manage.py check`, tests ciblés `seo` et admin.
 | 2026-11-12 | Relecture Fable du code | Corrigé : M du mois le plus ancien (filtre sur la fin), J à cheval sur la M comptée deux fois, `SF` retiré des recharges en ligne. Retiré : contrôle de format du cache, `schemas_ignores`, positions 2-3 du jeu fictif, détour par `_get`. |
 | 2026-11-12 | Bloc réseau | Ajout du bloc « Le réseau depuis le début » et de la route Fedow `statistiques_reseau` (dépôt `../Fedow`). |
 | 2026-11-12 | Implémentation | Code, 15 tests pytest et 2 E2E verts, 9 + 2 mutations détectées. Piège trouvé : `.exclude(rapport_json__en_tete__reprise=True)` exclut aussi les J SANS clé « reprise » (NULL en SQL) ; on utilise `rapport_json__contains`. |
+| 2026-11-13 | Chantier 04 | Usage hors argent : compteurs, classement par mois d'usage, usages, rythme sur le volume, ventes Fedow legacy par lieu. Voir le chantier 04. |
