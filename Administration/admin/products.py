@@ -1774,6 +1774,25 @@ class MembershipProductForm(ProductAdminCustomForm):
         initial=Product.ADHESION,
     )
 
+    def clean(self):
+
+        # Récupère le nombre de formulaires de prix dans l'inline
+        prices_form_number = int(self.data.get("prices-TOTAL_FORMS"))
+
+        # Itère sur ces formulaires, et vérifie s'il y a au moins un prix publié.
+        product_has_published_price = False
+        for i in range(0, prices_form_number):
+            price_is_publish = self.data.get(f"prices-{i}-publish",None)
+            if price_is_publish == 'on':
+                product_has_published_price = True
+                break
+
+        # S'il n'y a pas de prix publié, raise une erreur
+        if not product_has_published_price:
+            raise forms.ValidationError(_("Votre produit d'adhésion doit avoir au moins un tarif publié (un tarif gratuit fonctionne)."))
+
+        return super().clean()
+
 
 @admin.register(TicketProduct, site=staff_admin_site)
 class TicketProductAdmin(ProductAdmin):
