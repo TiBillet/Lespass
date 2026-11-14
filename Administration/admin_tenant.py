@@ -48,7 +48,8 @@ from Administration.admin import (  # noqa: F401
 # autodiscover, importing the module triggers the @admin.register calls.
 import pages.admin  # noqa: F401
 import datetime
-
+import io
+import zipfile
 import hmac
 import json
 from functools import partial
@@ -5899,7 +5900,7 @@ class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAd
     resource_classes = [TicketExportResource]
     export_form_class = ExportForm
 
-    actions = ["action_unscan_selected", "action_cancel_refund_selected"]
+    actions = ["action_unscan_selected", "action_cancel_refund_selected", "export_pdf_selected"]
 
     # Expandable section to display parent reservation custom form answers
     list_sections = [TicketCustomFormSection]
@@ -5909,6 +5910,30 @@ class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAd
 
     # Formulaire de modification
     form = TicketChangeAdmin
+
+    @admin.action(description=_("Exporter les billets sélectionnés en PDF"))
+    def export_pdf_selected(self, request, queryset):
+        files = []
+        # Parcours tout les billets et les convertis en dictionnaire
+        # {pdf : LE_PDF_EN_BINAIRE, name : LE_NOM_DU_FICHIER_PDF}
+        for billet in queryset:
+            pdf_binary = create_ticket_pdf(billet)
+            files.append({"pdf":pdf_binary, "name":billet.pdf_filename()})
+
+        # Crée un fichier ZIP
+        outfile = io.BytesIO()
+        with zipfile.ZipFile(outfile, 'w') as zf:
+            # Parcours les fichiers et les ajoute au ZIP
+            for file in files:
+                zf.writestr("{}.pdf".format(file["name"]), file["pdf"])
+
+
+        # Create the HTTP response and return the zip
+        response = HttpResponse(outfile.getvalue(), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename={_("billets")}.zip'
+
+        return response
+
 
     @admin.action(description=_("Unscan selected tickets"))
     def action_unscan_selected(self, request, queryset):
