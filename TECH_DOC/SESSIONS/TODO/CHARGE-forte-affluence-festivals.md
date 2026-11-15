@@ -35,6 +35,28 @@ sur l'**ancien Fedow** (distant).
 - **Les connexions** : workers Gunicorn / Daphne × connexions PostgreSQL ; Redis
   (Channels, WebSocket des tireuses et des caisses) ; file Celery (mails, tâches).
 - **Les requêtes lentes** : rapports temps réel, clôtures pendant le service.
+- **La survente de billets en réservation directe** (ajout du 2026-11-13, chantier
+  `TODO/BILLETTERIE-jauge-par-produit.md`, hors périmètre) : `ReservationValidator.validate`
+  (`BaseBillet/validators.py`) compte les places (jauge de l'événement, du produit, du
+  tarif) puis crée la réservation **sans verrou ni transaction**. Deux achats simultanés
+  peuvent donc passer tous les deux et dépasser une jauge. Le panier, lui, matérialise en
+  `SERIALIZABLE` (`services_commande.py`), et la caisse verrouille l'événement
+  (`select_for_update`).
+  - Un `select_for_update` sur l'événement dans le validateur garderait le verrou **pendant
+    l'appel HTTP à Stripe** (`TicketCreator` crée le paiement dans la même méthode) : en
+    rush, toutes les réservations d'un événement passeraient une par une.
+  - Piste propre : séparer « compter et créer les billets » (sous verrou, court) de
+    « créer le paiement Stripe » (après le commit). Cela touche `TicketCreator`, utilisé
+    par plusieurs parcours.
+  - À mesurer d'abord : combien de surventes réelles en rush, sachant que les billets en
+    cours de paiement (`DUREE_D_UN_PAIEMENT_EN_COURS`) occupent déjà la jauge.
+  - Le `SERIALIZABLE` du panier (`services_commande.py`) n'est posé que hors transaction
+    déjà ouverte : il protège panier contre panier, pas panier contre réservation directe.
+  - À dire aux lieux : sur une petite jauge (10 repas), un dépassement de 1 ou 2 est
+    possible en rush.
+- **La diffusion WebSocket des jauges** (`broadcast_jauge_event`, remise en service par
+  `TODO/BILLETTERIE-jauge-par-produit.md`) : une réservation de N billets déclenche N
+  diffusions. À mesurer ; si besoin, une seule diffusion par événement et par transaction.
 
 ## Comment (première idée, à discuter)
 - Un **environnement dédié** (jamais la base de dev ni la production) : 3 lieux, ~100
