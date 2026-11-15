@@ -108,7 +108,6 @@ class SmallAnonRateThrottle(UserRateThrottle):
 """
 
 
-@requires_csrf_token
 def _contexte_page_erreur(request):
     """
     Contexte pour les pages d'erreur 404/500 : celui de get_context, qui
@@ -170,6 +169,11 @@ def _contexte_page_erreur(request):
         return {"base_template": "pages/classic/shell.html", "main_nav": []}
 
 
+# @requires_csrf_token pose le cookie CSRF sur la RÉPONSE : il décore les handlers,
+# qui renvoient une réponse HTTP, jamais _contexte_page_erreur, qui renvoie un dict
+# (set_cookie sur un dict plante, et la page 500 plante à son tour).
+# / The decorator sets the CSRF cookie on the RESPONSE: it belongs on the handlers.
+@requires_csrf_token
 def handler404(request, exception=None):
     """
     404 personnalisée, consciente du skin et d'HTMX (actif quand DEBUG=0).
@@ -181,6 +185,7 @@ def handler404(request, exception=None):
     return render(request, '404.html', template_context, status=404)
 
 
+@requires_csrf_token
 def handler500(request, exception=None):
     """
     Custom 500 error handler that passes the exception to the template.

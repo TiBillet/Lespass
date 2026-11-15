@@ -4408,7 +4408,13 @@ class Paiement_stripe(models.Model):
 
 
 class LigneArticle(models.Model):
-    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
+    # editable=False est INDISPENSABLE à l'admin : les tableaux de lignes (fiches
+    # adhésion et vente) sont en lecture seule. Django n'y écrit l'identifiant caché
+    # de chaque ligne que si la clé n'est pas éditable. Sans lui, une fiche réaffichée
+    # après une erreur de saisie fabrique des lignes vides et plante.
+    # / editable=False is REQUIRED by the admin: read-only inlines only write each
+    # line's hidden id when the pk is not editable.
+    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4, editable=False)
     datetime = models.DateTimeField(auto_now_add=True, verbose_name=_("Date et heure"))
 
     # L'objet price sold. Contient l'id Stripe
