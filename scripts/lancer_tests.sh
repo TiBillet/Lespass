@@ -78,7 +78,11 @@ fi
 # / 3 bis. Human supervision: a Playwright browser server runs on the HOST; container
 # tests connect to it. Same version as in the container. Own process group via setsid.
 if [ "$SUITE" = "e2e-visible" ]; then
-    VERSION_DE_PLAYWRIGHT="1.60.0"
+    # Version du DRIVER embarque par le paquet Python, pas celle du paquet Python : les
+    # deux different parfois (Python 1.65.2 embarque le driver npm 1.65.1, et npm n'a pas
+    # de 1.65.2). Lire : playwright/driver/package/package.json dans le venv du conteneur.
+    # / The bundled DRIVER version, not the Python package version (they can differ).
+    VERSION_DE_PLAYWRIGHT="1.65.1"
     ADRESSE_DU_SERVEUR_DE_NAVIGATEUR="172.17.0.1"
     PORT_DU_SERVEUR_DE_NAVIGATEUR="3999"
     JOURNAL_DU_SERVEUR_DE_NAVIGATEUR="tests/e2e/artefacts/serveur_navigateur.log"

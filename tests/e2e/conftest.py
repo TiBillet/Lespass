@@ -1276,137 +1276,113 @@ def pos_page(browser, login_as_admin, django_shell, ensure_pos_data):
 # --- Fixture Stripe E2E / Stripe E2E fixture ---
 
 
+# Bouton « Pay » de Stripe Checkout, dans l'iframe du formulaire de paiement.
+# / Stripe Checkout "Pay" button, inside the payment form iframe.
+SELECTEUR_DU_BOUTON_PAYER_STRIPE = '[data-testid="payment-form-submit-button"]'
+
+
+def cadre_du_formulaire_de_paiement_stripe(page, delai_ms=30_000):
+    """Trouve l'iframe qui porte le formulaire de paiement de Stripe Checkout.
+    / Finds the iframe that holds the Stripe Checkout payment form.
+
+    LOCALISATION : tests/e2e/conftest.py
+
+    Sur checkout.stripe.com, la page principale n'affiche que le resume de la commande.
+    Tout le formulaire de paiement est dans un iframe de js.stripe.com : e-mail (Link),
+    moyens de paiement, champs de carte et bouton « Pay ». Un locator de la page
+    principale ne voit donc AUCUN de ces champs.
+    / The main page only shows the order summary; the whole payment form lives in a
+    js.stripe.com iframe that main-page locators cannot see.
+
+    On reconnait l'iframe a son bouton « Pay » (data-testid stable, independant de la
+    langue), pas au nom de son fichier : le nom (« elements-inner-habanero-… ») change
+    avec les versions de Stripe.js.
+    / The iframe is recognised by its "Pay" button, not by its file name (which changes).
+
+    Le formulaire est un rendu React : l'iframe existe avant son contenu. On interroge
+    donc les iframes toutes les demi-secondes jusqu'au delai.
+    / React render: the iframe exists before its content, so poll until the delay.
+
+    :param page: la page Playwright, arrivee sur checkout.stripe.com
+    :param delai_ms: temps maximum d'attente, en millisecondes
+    :return: le Frame Playwright du formulaire de paiement
+    """
+    nombre_de_tours = delai_ms // 500
+    for _tour in range(nombre_de_tours):
+        for cadre in page.frames:
+            if cadre == page.main_frame:
+                continue
+            try:
+                le_bouton_payer_est_dans_ce_cadre = (
+                    cadre.locator(SELECTEUR_DU_BOUTON_PAYER_STRIPE).count() > 0
+                )
+            except Exception:
+                # Un iframe peut disparaitre pendant qu'on l'interroge (Stripe en
+                # cree et en retire pendant le chargement).
+                # / An iframe may vanish while queried.
+                continue
+            if le_bouton_payer_est_dans_ce_cadre:
+                return cadre
+        page.wait_for_timeout(500)
+
+    pytest.fail(
+        "Formulaire de paiement Stripe introuvable : aucun iframe ne contient "
+        f"« {SELECTEUR_DU_BOUTON_PAYER_STRIPE} » ({page.url}). "
+        "Stripe a peut-etre change son Checkout : voir tests/PIEGES.md 12.19."
+    )
+
+
 @pytest.fixture(scope="session")
 def fill_stripe_card():
     """Factory : remplit le formulaire Stripe checkout (vrai checkout.stripe.com).
     / Factory: fills the Stripe checkout form (real checkout.stripe.com).
 
-    Converti depuis tests/playwright/tests/utils/stripe.ts.
     Carte test : 4242 4242 4242 4242, 12/42, 424, Douglas Adams.
+
+    Tous les champs sont dans l'iframe du formulaire de paiement
+    (voir cadre_du_formulaire_de_paiement_stripe, et tests/PIEGES.md 12.19).
+    / All fields live in the payment form iframe.
     """
 
     def _fill(page, email):
-        # Remplir l'email si visible / Fill email if visible
-        email_input = page.locator('input#email, input[name="email"]').first
-        if email_input.is_visible(timeout=3_000):
-            email_input.fill(email)
+        cadre = cadre_du_formulaire_de_paiement_stripe(page)
 
-        # Sélection du moyen de paiement "Carte".
-        # Quand plusieurs moyens sont actifs (ex: Carte + Prélèvement SEPA), Stripe
-        # Checkout affiche un accordéon : les champs carte ne sont révélés qu'après
-        # avoir déplié l'item "Carte". Le bouton porte un data-testid stable
-        # (indépendant de la langue). Sa zone de clic chevauche le radio (qui
-        # intercepte les events), d'où le clic forcé. Si la carte est le seul moyen,
-        # ce bouton n'existe pas : on ne fait rien (no-op).
-        # / Pick the "Card" payment method. With several methods (e.g. Card + SEPA),
-        # Stripe Checkout shows an accordion; the card fields only appear after
-        # expanding the "Card" item. The button has a stable data-testid; its click
-        # area overlaps the radio (which intercepts events), hence the forced click.
-        # No-op when card is the only method (button absent).
-        # Attendre que le formulaire de paiement Stripe soit monté (SPA React).
-        # Deux cas possibles :
-        #  - SEPA activé : un accordéon de moyens de paiement (Carte + SEPA) ;
-        #  - SEPA désactivé : les champs carte directement (carte seule).
-        # On attend donc l'un OU l'autre, pour ne pas tester trop tôt (le test
-        # arrive en "domcontentloaded", avant le rendu React).
-        # / Wait for Stripe's payment form to mount. Two cases: a methods accordion
-        # (Card + SEPA) or the card field directly (card only). Wait for either.
+        # L'e-mail est deja rempli quand Lespass envoie `customer_email` a Stripe.
+        # On ne le saisit que s'il est vide.
+        # / The e-mail is prefilled when Lespass sends customer_email; fill it only if empty.
+        champ_email = cadre.locator("#linkAuthentication-emailInput")
+        if champ_email.count() > 0 and champ_email.input_value() == "":
+            champ_email.fill(email)
+
+        # Quand plusieurs moyens de paiement sont actifs (Carte + Prelevement SEPA),
+        # Stripe affiche un accordeon : les champs de carte n'apparaissent qu'apres
+        # avoir ouvert l'element « Carte ». Avec la carte seule, les champs sont
+        # deja affiches et il n'y a rien a ouvrir.
+        # / With several methods (Card + SEPA) open the "Card" accordion item first.
+        champ_numero_de_carte = cadre.locator("#payment-numberInput")
+        if not champ_numero_de_carte.is_visible():
+            element_carte_de_l_accordeon = cadre.locator(
+                '[data-testid="payment-accordion-wrapper"] [role="button"]'
+            ).filter(has_text=re.compile(r"^\s*(card|carte)", re.I)).first
+            element_carte_de_l_accordeon.click()
+        champ_numero_de_carte.wait_for(state="visible", timeout=10_000)
+
+        champ_numero_de_carte.fill("4242424242424242")
+        cadre.locator("#payment-expiryInput").fill("12/42")
+        cadre.locator("#payment-cvcInput").fill("424")
+        # Le nom du porteur est OBLIGATOIRE sur les checkouts fabriques par Fedow : sans
+        # lui, Stripe refuse la soumission sans quitter la page. React le monte parfois
+        # apres les champs de carte : on l'attend donc un peu avant de le remplir.
+        # / Cardholder name is REQUIRED on Fedow-built checkouts and may mount late.
+        champ_nom_sur_la_carte = cadre.locator("#payment-nameInput")
         try:
-            page.locator(
-                '[data-testid="card-accordion-item-button"], input#cardNumber'
-            ).first.wait_for(state="visible", timeout=20_000)
+            champ_nom_sur_la_carte.wait_for(state="visible", timeout=5_000)
         except Exception:
-            pass
-
-        # Si l'accordéon "Carte" est présent (plusieurs moyens actifs), il faut le
-        # déplier pour révéler les champs carte. S'il est absent (carte seule), on
-        # ne fait rien : les champs sont déjà affichés.
-        # / If the "Card" accordion is present (several methods), expand it to
-        # reveal the card fields. If absent (card only), do nothing.
-        bouton_carte = page.locator('[data-testid="card-accordion-item-button"]').first
-        try:
-            if bouton_carte.count() > 0:
-                # On envoie directement l'événement DOM "click" : la zone de clic
-                # de Stripe chevauche le radio (interception) et déjoue un clic
-                # Playwright classique, alors qu'un dispatch_event déplie bien
-                # l'accordéon. / Dispatch the DOM click event directly: Stripe's
-                # overlapping click area defeats a regular Playwright click, while
-                # dispatch_event reliably expands the accordion.
-                bouton_carte.dispatch_event('click')
-                # Attendre l'apparition des champs carte (sinon on continue).
-                # / Wait for the card fields to appear (otherwise just continue).
-                try:
-                    page.locator('input#cardNumber').first.wait_for(
-                        state="visible", timeout=5_000
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # Stratégie 1 : sélecteurs par rôle (Stripe Checkout récent)
-        # / Strategy 1: role-based selectors (recent Stripe Checkout)
-        card_number = page.get_by_role("textbox", name=re.compile(r"card number", re.I)).first
-        try:
-            card_number.wait_for(state="visible", timeout=5_000)
-            card_number.fill("4242424242424242")
-            page.get_by_role("textbox", name=re.compile(r"expiration", re.I)).first.fill("12/42")
-            page.get_by_role("textbox", name=re.compile(r"cvc", re.I)).first.fill("424")
-            cardholder = page.get_by_role("textbox", name=re.compile(r"cardholder name", re.I)).first
-            if cardholder.is_visible(timeout=2_000):
-                cardholder.fill("Douglas Adams")
+            # Certains checkouts n'affichent pas ce champ : rien a remplir.
+            # / Some checkouts do not show this field: nothing to fill.
             return
-        except Exception:
-            pass
-
-        # Stratégie 2 : sélecteurs par ID (Stripe Checkout classique)
-        # / Strategy 2: ID-based selectors (classic Stripe Checkout)
-        card_by_id = page.locator("input#cardNumber").first
-        if card_by_id.is_visible(timeout=3_000):
-            card_by_id.fill("4242424242424242")
-            page.locator("input#cardExpiry").fill("12/42")
-            page.locator("input#cardCvc").fill("424")
-            billing_name = page.locator("input#billingName").first
-            if billing_name.is_visible(timeout=2_000):
-                billing_name.fill("Douglas Adams")
-            return
-
-        # Stratégie 3 : sélecteurs par attribut (fallback)
-        # / Strategy 3: attribute-based selectors (fallback)
-        fallback = page.locator('input[name="cardnumber"], input[placeholder*="1234"]').first
-        if fallback.is_visible(timeout=3_000):
-            fallback.fill("4242424242424242")
-            exp = page.locator('input[name="exp-date"], input[placeholder*="MM"]').first
-            if exp.is_visible():
-                exp.fill("12/42")
-            cvc = page.locator('input[name="cvc"], input[placeholder*="CVC"]').first
-            if cvc.is_visible():
-                cvc.fill("424")
-            return
-
-        # Stratégie 4 : iframes (Stripe Elements embedded)
-        # Stripe peut utiliser des iframes pour les champs de carte.
-        # Converti depuis tests/playwright/tests/utils/stripe.ts (stratégie 4).
-        # / Strategy 4: iframes (Stripe Elements embedded)
-        # Stripe may use iframes for card fields.
-        # Converted from tests/playwright/tests/utils/stripe.ts (strategy 4).
-        for frame in page.frames:
-            if frame == page.main_frame:
-                continue
-            number_input = frame.locator(
-                'input[name="cardnumber"], input[placeholder*="1234"]'
-            ).first
-            if number_input.count() > 0:
-                number_input.fill("4242424242424242")
-                frame.locator('input[name="exp-date"], input[placeholder*="MM"]').first.fill("12/42")
-                frame.locator('input[name="cvc"], input[placeholder*="CVC"]').first.fill("424")
-                return
-
-        # Aucune des strategies n'a trouve de champ de carte : Stripe a change son
-        # formulaire. On echoue ICI, plutot que de laisser le test cliquer « Payer »
-        # dans le vide pendant des minutes et accuser le mauvais endroit.
-        # / No strategy found a card field: fail HERE rather than click "Pay" in vain.
-        pytest.fail(f"Aucun champ de carte bancaire trouve sur la page Stripe ({page.url}).")
+        if champ_nom_sur_la_carte.input_value() == "":
+            champ_nom_sur_la_carte.fill("Douglas Adams")
 
     return _fill
 
@@ -1432,8 +1408,7 @@ def soumettre_paiement_stripe():
     the wrong place.
 
     La parade : réessayer en alternant `click()` et `dispatch_event('click')`
-    jusqu'à ce que la page quitte `checkout.stripe.com`. Même parade que pour
-    l'accordéon des moyens de paiement dans `fill_stripe_card` ci-dessus.
+    jusqu'à ce que la page quitte `checkout.stripe.com`.
 
     Un `dispatch_event` **seul** ne suffit pas : le premier `click()` et
     l'attente qui le suit sont nécessaires, le temps que le formulaire React
@@ -1442,16 +1417,17 @@ def soumettre_paiement_stripe():
     Mesuré sur `test_recharge_federee_par_carte_bancaire` : le fichier passe de
     ~2 min (quatre attentes vaines de 45 s) à ~47 s. Voir `PIEGES.md` 12.14.
 
-    ATTENTION AU SÉLECTEUR PAR DÉFAUT : son repli `button[type="submit"]` est très large.
-    Il n'est acceptable QUE parce que cette fonction refuse d'agir dès que la page a quitté
-    `checkout.stripe.com` — sans cette garde, il attrape le premier bouton de formulaire de
-    la page d'arrivée (souvent invisible) et fait échouer un paiement pourtant réussi.
-    / MIND THE DEFAULT SELECTOR: its `button[type="submit"]` fallback is very broad. It is
-      only acceptable because this function refuses to act once the page has left the
-      checkout — otherwise it grabs the destination page's first form button.
+    Le bouton « Pay » est dans l'iframe du formulaire de paiement, pas dans la page
+    principale (voir cadre_du_formulaire_de_paiement_stripe et tests/PIEGES.md 12.19).
+    / The "Pay" button lives in the payment form iframe, not in the main page.
+
+    GARDE : la fonction refuse d'agir des que la page a quitte `checkout.stripe.com`.
+    Un clic a ce moment-la viserait la page d'arrivee et ferait echouer un paiement
+    pourtant reussi.
+    / GUARD: no action once the page has left the checkout.
 
     :param page: la page Playwright, arrivée sur checkout.stripe.com
-    :param selecteur: le bouton à actionner. Par défaut celui du checkout hébergé.
+    :param selecteur: le bouton à actionner, dans l'iframe. Par défaut le bouton « Pay ».
     :param tentatives: nombre de couples (click, dispatch) avant d'abandonner.
     :return: True si la page a quitté Stripe, False sinon — l'appelant décide
         quoi en faire (la plupart enchaînent sur un `wait_for_url` qui portera
@@ -1484,21 +1460,16 @@ def soumettre_paiement_stripe():
 
     def _soumettre(
         page,
-        selecteur='[data-testid="hosted-payment-submit-button"], button[type="submit"]',
+        selecteur=SELECTEUR_DU_BOUTON_PAYER_STRIPE,
         tentatives=6,
     ):
         # GARDE D'ENTREE : si la page a deja quitte le checkout, il n'y a rien a soumettre.
-        # Sans elle, le selecteur est evalue sur la page d'ARRIVEE, ou son repli
-        # `button[type="submit"]` — tres large — attrape n'importe quel bouton de
-        # formulaire, souvent invisible. On attend alors 30 s sur un bouton sans rapport,
-        # et l'echec accuse le paiement alors qu'il a reussi.
         # / ENTRY GUARD: if the page already left the checkout there is nothing to submit.
-        #   Without it the selector is evaluated on the DESTINATION page, where the broad
-        #   `button[type="submit"]` fallback grabs an unrelated, often invisible button.
         if not _est_encore_sur_stripe(page):
             return True
 
-        bouton = page.locator(selecteur).first
+        cadre = cadre_du_formulaire_de_paiement_stripe(page)
+        bouton = cadre.locator(selecteur).first
         bouton.wait_for(state="visible", timeout=30_000)
 
         for _tentative in range(tentatives):
@@ -1510,14 +1481,26 @@ def soumettre_paiement_stripe():
             if not _est_encore_sur_stripe(page):
                 return True
 
-            bouton.click()
+            # Un clic peut echouer sans que le paiement echoue : pendant le traitement,
+            # Stripe desactive le bouton, et l'iframe disparait quand la page part vers
+            # l'URL de retour. On ignore donc l'erreur du clic, et c'est la sortie du
+            # checkout qui decide. Si rien ne part, le pytest.fail ci-dessous le dit.
+            # / A click may fail while the payment succeeds (button disabled while
+            # processing, iframe gone on redirect): the checkout exit decides.
+            try:
+                bouton.click(timeout=5_000)
+            except Exception:
+                pass
             if _attendre_la_sortie_du_checkout(page, 8_000):
                 return True
 
             if not _est_encore_sur_stripe(page):
                 return True
 
-            bouton.dispatch_event("click")
+            try:
+                bouton.dispatch_event("click", timeout=5_000)
+            except Exception:
+                pass
             if _attendre_la_sortie_du_checkout(page, 8_000):
                 return True
         # Le paiement n'est jamais parti : on echoue ICI, avec la vraie cause, plutot

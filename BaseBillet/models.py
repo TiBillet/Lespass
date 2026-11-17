@@ -2319,6 +2319,15 @@ class Event(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
                                    verbose_name=_("Created by"))
 
+    # Plus grande jauge que la base de donnees peut stocker.
+    # jauge_max est un PositiveSmallIntegerField : en PostgreSQL c'est un « smallint »,
+    # qui va de 0 a 32767. Au-dela, PostgreSQL refuse l'enregistrement et le
+    # visiteur voit une erreur 500. Chaque serializer qui recoit une jauge doit
+    # donc refuser une valeur plus grande AVANT d'enregistrer.
+    # / Largest gauge the DB can store (PostgreSQL smallint: 0..32767). Every
+    # serializer receiving a gauge must reject a bigger value before saving.
+    JAUGE_MAXIMALE_POSSIBLE = 32767
+
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
     show_gauge = models.BooleanField(default=False, verbose_name=_("Show gauge"))
 

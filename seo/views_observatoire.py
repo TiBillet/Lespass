@@ -93,7 +93,10 @@ def textes_de_la_page():
         "tuile_ca": _("CA sur 12 mois"),
         "tuile_ca_detail": _("billetterie, adhésions, caisse"),
         "tuile_recharges": _("Recharges sur 12 mois"),
-        "tuile_recharges_detail": _("{pourcentage} % en ligne"),
+        # Le « % » reste en fin de texte : suivi d'une lettre (« % en »), xgettext le prend
+        # pour une directive Python (%e) et la traduction anglaise casse compilemessages.
+        # / Keep "%" at the end: followed by a letter, xgettext sees a Python directive.
+        "tuile_recharges_detail": _("en ligne : {pourcentage} %"),
         "tuile_portemonnaies": _("Porte-monnaie actifs"),
         "tuile_portemonnaies_detail": _("meilleur mois : {mois}"),
         # Qualification / Qualification

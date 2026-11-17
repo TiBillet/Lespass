@@ -60,9 +60,9 @@ def _donnees_de_l_evenement(identifiant_de_la_ressource, avec_une_fin=True):
 @pytest.mark.django_db
 def test_l_api_cree_un_evenement_qui_bloque_la_ressource(tenant):
     """
-    blockedResource + endDate : l'événement créé pointe vers la ressource.
-    La réponse ne contient pas la ressource (champ interne).
-    / blockedResource + endDate: the event points to the resource; not in the response.
+    blockedResource + endDate : l'événement créé pointe vers la ressource,
+    et la réponse donne l'id de la ressource dans additionalProperty.
+    / blockedResource + endDate: the event points to the resource, shown in the response.
     """
     from api_v2.serializers import EventCreateSerializer, EventSchemaSerializer
     from booking.tests.test_booking_engine import _cleanup
@@ -79,7 +79,10 @@ def test_l_api_cree_un_evenement_qui_bloque_la_ressource(tenant):
             assert evenement_cree.ressource_bloquee_id == salle.pk
 
             reponse = EventSchemaSerializer(evenement_cree).data
-            assert "blockedResource" not in str(reponse)
+            proprietes_de_la_reponse = {}
+            for propriete in reponse["additionalProperty"]:
+                proprietes_de_la_reponse[propriete["name"]] = propriete["value"]
+            assert proprietes_de_la_reponse["blockedResource"] == salle.pk
         finally:
             if evenement_cree is not None:
                 evenement_cree.delete()

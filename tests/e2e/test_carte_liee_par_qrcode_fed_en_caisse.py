@@ -442,15 +442,9 @@ def _recharger_du_fed_en_ligne(
     champ_montant.wait_for(state="visible", timeout=30_000)
     champ_montant.fill(MONTANT_DE_LA_RECHARGE_EUROS)
 
+    # Le nom du porteur, OBLIGATOIRE sur ce checkout, est attendu et rempli par
+    # `fill_stripe_card`. / The required cardholder name is handled by fill_stripe_card.
     fill_stripe_card(page, email)
-
-    # Le nom du porteur est OBLIGATOIRE sur ce checkout, et React le monte parfois apres
-    # le passage de `fill_stripe_card` : on le garantit ici.
-    # / The cardholder name is REQUIRED here and may be mounted late.
-    champ_nom_du_porteur = page.locator("input#billingName")
-    champ_nom_du_porteur.wait_for(state="visible", timeout=30_000)
-    if not champ_nom_du_porteur.input_value():
-        champ_nom_du_porteur.fill("Douglas Adams")
 
     # La soumission demande de l'insistance sur ce checkout (PIEGES 12.14).
     # / Submitting takes persistence here (PIEGES 12.14).

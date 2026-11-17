@@ -955,6 +955,11 @@ UNFOLD = {
 
         # Force le theme clair pour le style de l'admin
         lambda request: static("js/reset_unfold_theme.js"),
+
+        # Refuse un fichier trop lourd pour nginx avant l'envoi (sinon : page 413
+        # de nginx et formulaire perdu).
+        # / Rejects a file too heavy for nginx before sending (otherwise: nginx 413).
+        lambda request: static("js/admin_limite_upload.js"),
     ],
 }
 

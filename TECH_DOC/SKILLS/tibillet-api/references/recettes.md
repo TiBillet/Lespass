@@ -15,7 +15,7 @@ K='Api-Key xxxx.yyyy'; H='lespass.tibillet.localhost'
 
 | Domaine | Endpoint | Perm. clé |
 |---|---|---|
-| Events | `GET/POST /api/v2/events/`, `GET .../{uuid}/`, `.../{uuid}/link-address/`, `.../{uuid}/link-product/` | `event` |
+| Events | `GET/POST /api/v2/events/`, `GET/PATCH/DELETE .../{uuid ou slug}/`, `.../{uuid}/link-address/`, `.../{uuid}/link-product/` | `event` |
 | Adresses | `GET/POST /api/v2/postal-addresses/` | `event` |
 | Products | `GET/POST /api/v2/products/`, `GET .../{uuid}/` | `product` |
 | Memberships | `GET/POST /api/v2/memberships/` | `membership` |
@@ -141,7 +141,27 @@ curl -sk -X POST "https://$H/api/v2/events/" -H "Authorization: $K" \
   }'
 ```
 Lier une adresse / un produit (tarif) à un event : `POST .../{uuid}/link-address/`,
-`POST .../{uuid}/link-product/` (voir OpenAPI).
+`POST .../{uuid}/link-product/` (voir OpenAPI). L'id d'une adresse est son
+`identifier` dans `GET /api/v2/postal-addresses/`. Sans adresse, l'event reçoit celle
+de la configuration du lieu.
+
+Créer avec image ET ressource bloquée en une requête : multipart, avec
+`additionalProperty[0].name=blockedResource` et `additionalProperty[0].value=<id>`.
+En multipart, `audience` et `offers` n'arrivent pas : les poser ensuite par un PATCH JSON.
+
+Modifier un event (seuls les champs envoyés changent ; `keywords` remplace tous les tags) :
+```bash
+curl -sk -X PATCH "https://$H/api/v2/events/<uuid-ou-slug>/" -H "Authorization: $K" \
+  -H "Content-Type: application/json" -d '{
+    "description":"<p>Nouveau texte</p>",
+    "audience":{"@type":"Audience","audienceType":"private"},
+    "additionalProperty":[{"name":"blockedResource","value":1}]
+  }'
+# Image : un second PATCH en multipart
+curl -sk -X PATCH "https://$H/api/v2/events/<uuid>/" -H "Authorization: $K" -F img=@affiche.jpg
+```
+Changer `name` ou `startDate` change le slug, donc l'URL publique. `@type` est ignoré au
+PATCH : la catégorie change par `additionalType` (libellé, ex. « Concert »).
 
 ## Products, Memberships, Reservations, Crowds, Wallet-refills
 

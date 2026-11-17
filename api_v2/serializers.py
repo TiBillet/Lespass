@@ -5,6 +5,8 @@ import string
 import uuid
 
 from rest_framework import serializers
+from rest_framework.fields import empty
+from rest_framework.utils import html
 from django.db import connection, transaction
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
@@ -99,6 +101,11 @@ EXTENSION_PAR_FORMAT_IMAGE_ACCEPTE = {
 # / Above this pixel count an image is refused: the stdimage variations decoded
 # during the request would use too much memory.
 NOMBRE_MAX_DE_PIXELS_PAR_IMAGE = 50_000_000
+
+# Plus grande valeur d'une colonne PositiveSmallIntegerField (« smallint » PostgreSQL).
+# Au-dela, PostgreSQL refuse l'enregistrement. Voir EventCreateSerializer.validate().
+# / Largest value of a positive smallint column; PostgreSQL rejects anything above.
+PLUS_GRANDE_VALEUR_D_UN_SMALLINT = 32767
 
 MESSAGE_IMAGE_TROP_GRANDE_EN_PIXELS = _("Image trop grande en pixels (50 mégapixels au maximum).")
 
@@ -241,6 +248,10 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
         # Map to schema.org/PostalAddress
         result: Dict[str, Any] = {
             "@type": "PostalAddress",
+            # L'id de l'adresse : celui qu'attendent /postal-addresses/{id}/ et
+            # le postalAddressId de /events/{uuid}/link-address/.
+            # / The address id expected by /postal-addresses/{id}/ and link-address.
+            "identifier": instance.pk,
             "name": data.get("name"),
             "streetAddress": data.get("street_address"),
             "addressLocality": data.get("address_locality"),
@@ -390,6 +401,15 @@ class EventSchemaSerializer(serializers.ModelSerializer):
                 "name": "customConfirmationMessage",
                 "value": instance.custom_confirmation_message,
             })
+        # La ressource bloquée par l'évènement (id de /booking/<id>/resource/).
+        # On lit ressource_bloquee_id, la colonne : aucune requête en plus dans une liste.
+        # / The resource blocked by the event. Reads the column: no extra query in a list.
+        if instance.ressource_bloquee_id:
+            props.append({
+                "@type": "PropertyValue",
+                "name": "blockedResource",
+                "value": instance.ressource_bloquee_id,
+            })
         return props
 
     def to_representation(self, instance: Event) -> Dict[str, Any]:
@@ -468,6 +488,105 @@ class EventSchemaSerializer(serializers.ModelSerializer):
         return clean_payload
 
 
+MESSAGE_RESSOURCE_A_BLOQUER_INTROUVABLE = _("Ressource à bloquer introuvable : %(identifiant)s.")
+MESSAGE_FIN_AVANT_LE_DEBUT = _("La fin de l'évènement doit être après son début.")
+MESSAGE_FIN_OBLIGATOIRE_POUR_BLOQUER = _("Une date de fin est obligatoire pour bloquer une ressource.")
+MESSAGE_NOM_ET_DATE_DEJA_PRIS = _("Un évènement porte déjà ce nom à cette date et cette heure.")
+
+
+def _trouver_la_ressource_a_bloquer(identifiant_de_la_ressource):
+    """
+    Cherche la ressource du module réservation à bloquer par un évènement.
+    / Finds the booking resource an event should block.
+
+    LOCALISATION : api_v2/serializers.py
+
+    L'identifiant est celui de l'URL /booking/<id>/resource/. Il peut arriver en
+    nombre (JSON) ou en texte (multipart) : int() accepte les deux.
+    Utilisée par EventCreateSerializer et EventPatchSerializer.
+
+    :param identifiant_de_la_ressource: l'id envoyé dans « blockedResource »
+    :return: la Resource, ou None si l'id ne correspond à aucune ressource
+    """
+    try:
+        return Resource.objects.get(pk=int(identifiant_de_la_ressource))
+    except (TypeError, ValueError, Resource.DoesNotExist):
+        return None
+
+
+def _valider_les_bornes_des_offres(offres):
+    """
+    Refuse les valeurs de « offers » qui ne tiennent pas dans leur colonne.
+    / Rejects "offers" values that do not fit in their column.
+
+    LOCALISATION : api_v2/serializers.py
+
+    Deux valeurs de « offers » vont dans des colonnes « smallint positif » :
+    - eligibleQuantity.maxValue -> Event.max_per_user ;
+    - returnPolicy.merchantReturnDays -> Event.refund_deadline.
+    Ces colonnes vont de 0 à 32767. Une valeur hors bornes ferait planter
+    l'enregistrement (erreur 500) : on la refuse ici, avec une erreur 400.
+    Utilisée par EventCreateSerializer et EventPatchSerializer.
+    / Two "offers" values go to positive smallint columns (0..32767).
+    Out of bounds would crash the insert (500): reject it here (400).
+
+    :param offres: le dictionnaire « offers » reçu
+    :raises serializers.ValidationError: sur la clé « offers »
+    """
+    valeurs_a_borner = [
+        ("eligibleQuantity", "maxValue"),
+        ("returnPolicy", "merchantReturnDays"),
+    ]
+    for nom_du_bloc, nom_de_la_valeur in valeurs_a_borner:
+        bloc = offres.get(nom_du_bloc)
+        if not isinstance(bloc, dict):
+            continue
+        valeur_recue = bloc.get(nom_de_la_valeur)
+        if valeur_recue is None:
+            continue
+
+        try:
+            valeur_entiere = int(valeur_recue)
+        except (TypeError, ValueError):
+            valeur_entiere = None
+
+        valeur_dans_les_bornes = (
+            valeur_entiere is not None
+            and 0 <= valeur_entiere <= PLUS_GRANDE_VALEUR_D_UN_SMALLINT
+        )
+        if not valeur_dans_les_bornes:
+            raise serializers.ValidationError({
+                "offers": _("%(champ)s doit être un nombre entier entre 0 et %(maximum)s.") % {
+                    "champ": f"{nom_du_bloc}.{nom_de_la_valeur}",
+                    "maximum": PLUS_GRANDE_VALEUR_D_UN_SMALLINT,
+                },
+            })
+
+
+def _le_nom_et_la_date_sont_deja_pris(nom, date_de_debut, evenement_a_ignorer=None):
+    """
+    Dit si un autre évènement porte déjà ce nom à cette date de début.
+    / Tells whether another event already has this name at this start date.
+
+    LOCALISATION : api_v2/serializers.py
+
+    Event impose unique_together = ('name', 'datetime'). Sans cette vérification,
+    PostgreSQL refuse l'enregistrement et l'API renvoie une erreur 500.
+
+    :param evenement_a_ignorer: l'évènement modifié par un PATCH (il ne compte pas)
+    :return: True si le couple est déjà pris
+    """
+    evenements_avec_ce_nom_et_cette_date = Event.objects.filter(
+        name=nom,
+        datetime=date_de_debut,
+    )
+    if evenement_a_ignorer is not None:
+        evenements_avec_ce_nom_et_cette_date = evenements_avec_ce_nom_et_cette_date.exclude(
+            pk=evenement_a_ignorer.pk,
+        )
+    return evenements_avec_ce_nom_et_cette_date.exists()
+
+
 class EventCreateSerializer(serializers.Serializer):
     """
     schema.org/Event input serializer for creation (semantic fields only) + semantic @type mapping and optional 'superEvent'.
@@ -493,7 +612,7 @@ class EventCreateSerializer(serializers.Serializer):
           {"name":"optionsRadio","value":["OptionName", ...]},
           {"name":"optionsCheckbox","value":["OptionName", ...]},
           {"name":"customConfirmationMessage","value":"..."},
-          {"name":"blockedResource","value":<booking Resource id>}  (endDate required, write-only)
+          {"name":"blockedResource","value":<booking Resource id>}  (endDate required)
         ]
     """
     # Core fields
@@ -506,7 +625,16 @@ class EventCreateSerializer(serializers.Serializer):
     # Simple mappings
     url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
     sameAs = serializers.URLField(required=False, allow_blank=True, allow_null=True)
-    maximumAttendeeCapacity = serializers.IntegerField(required=False, allow_null=True)
+    # Bornes de la colonne jauge_max (smallint positif) : voir Event.JAUGE_MAXIMALE_POSSIBLE.
+    # Sans elles, une valeur hors bornes passe la validation et PostgreSQL renvoie une 500.
+    # / Bounds of the jauge_max column (positive smallint). Without them: a 500 from PostgreSQL.
+    maximumAttendeeCapacity = serializers.IntegerField(
+        required=False, allow_null=True,
+        min_value=0, max_value=Event.JAUGE_MAXIMALE_POSSIBLE,
+        error_messages={
+            "max_value": _("La jauge ne peut pas dépasser {max_value} places."),
+        },
+    )
     disambiguatingDescription = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     eventStatus = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -537,7 +665,7 @@ class EventCreateSerializer(serializers.Serializer):
         date_de_fin = attrs.get("endDate")
         if date_de_debut and date_de_fin and date_de_fin < date_de_debut:
             raise serializers.ValidationError({
-                "endDate": _("La fin de l'évènement doit être après son début."),
+                "endDate": MESSAGE_FIN_AVANT_LE_DEBUT,
             })
 
         # additionalProperty "blockedResource" = l'id d'une ressource du module
@@ -545,33 +673,41 @@ class EventCreateSerializer(serializers.Serializer):
         # la ressource : ses créneaux qui chevauchent l'événement ne sont plus
         # réservables. Même règle que l'admin (EventForm.clean) : sans date de fin,
         # on ne sait pas jusqu'à quand bloquer.
-        # Champ interne : on l'accepte en entrée, il ne sort jamais dans la réponse.
         # / "blockedResource" = a booking Resource id. Same rule as the admin: end date
-        # required. Internal field: write-only, never in the response.
+        # required.
         attrs["ressource_a_bloquer"] = None
         for propriete in attrs.get("additionalProperty") or []:
             if str(propriete.get("name")).lower() != "blockedresource":
                 continue
 
             identifiant_de_la_ressource = propriete.get("value")
-            try:
-                ressource_a_bloquer = Resource.objects.get(pk=int(identifiant_de_la_ressource))
-            except (TypeError, ValueError, Resource.DoesNotExist):
+            ressource_a_bloquer = _trouver_la_ressource_a_bloquer(identifiant_de_la_ressource)
+            if ressource_a_bloquer is None:
                 raise serializers.ValidationError({
-                    "additionalProperty": _("Ressource à bloquer introuvable : %(identifiant)s.") % {
+                    "additionalProperty": MESSAGE_RESSOURCE_A_BLOQUER_INTROUVABLE % {
                         "identifiant": identifiant_de_la_ressource,
                     },
                 })
 
             if not date_de_fin:
                 raise serializers.ValidationError({
-                    "endDate": _("Une date de fin est obligatoire pour bloquer une ressource."),
+                    "endDate": MESSAGE_FIN_OBLIGATOIRE_POUR_BLOQUER,
                 })
 
             attrs["ressource_a_bloquer"] = ressource_a_bloquer
             break
 
+        _valider_les_bornes_des_offres(attrs.get("offers") or {})
+
         return attrs
+
+    def validate_description(self, value):
+        # Description longue affichée en HTML sur la page de l'évènement : on la
+        # nettoie comme l'admin (Administration/admin/site.py), contre le XSS.
+        # / Long description is rendered as HTML: sanitize it like the admin does.
+        if not value:
+            return value
+        return clean_html(value)
 
     def create(self, validated_data: Dict[str, Any]) -> Event:
         # Extract top-level fields
@@ -648,6 +784,15 @@ class EventCreateSerializer(serializers.Serializer):
                 parent_obj = Event.objects.get(uuid=super_event_uuid)
             except Event.DoesNotExist:
                 raise serializers.ValidationError({"superEvent": "Evènement parent introuvable."})
+
+        # Le couple nom + date de début est unique (Event.unique_together) : sans ce
+        # contrôle, PostgreSQL refuse l'insertion et l'API renvoie une 500. Il est fait
+        # ici et non dans validate() : validate() reste sans requête sur les évènements,
+        # ce qui permet de tester la validation seule, hors d'un lieu.
+        # / name + start date is unique. Checked here, not in validate(), so that
+        # validate() runs no event query and can be tested outside a tenant.
+        if _le_nom_et_la_date_sont_deja_pris(name, start):
+            raise serializers.ValidationError({"name": MESSAGE_NOM_ET_DATE_DEJA_PRIS})
 
         # Generate a unique slug from name to avoid unique constraint violations on repeated tests
         base_slug = slugify(name) or "event"
@@ -730,11 +875,342 @@ class EventCreateSerializer(serializers.Serializer):
                 val = p.get("value")
                 if isinstance(val, str) and val.strip():
                     event.custom_confirmation_message = val.strip()
-                    event.save(update_fields=["custom_confirmation_message"]) 
+                    event.save(update_fields=["custom_confirmation_message"])
                 break
 
         return event
 
+
+class ObjetImbriqueAbsentEnMultipart(serializers.DictField):
+    """
+    DictField qui reste ABSENT en multipart quand le client ne l'envoie pas.
+    / DictField that stays ABSENT in multipart when the client does not send it.
+
+    LOCALISATION : api_v2/serializers.py
+
+    INDISPENSABLE pour un PATCH : en multipart, DictField.get_value renvoie
+    toujours un dictionnaire vide, même si le champ n'est pas envoyé. Le PATCH
+    croirait alors recevoir « audience » ou « offers » vides. Ici, sans aucune
+    clé « <nom>.xxx » dans la requête, le champ vaut `empty` (absent).
+    S'il est envoyé en multipart, il arrive vide et le serializer le refuse.
+    / In multipart DictField.get_value always returns an empty dict. Without any
+    "<name>.xxx" key, this field is `empty` (absent) instead.
+    """
+
+    def get_value(self, dictionary):
+        if html.is_html_input(dictionary):
+            prefixe_du_champ = f"{self.field_name}."
+            for cle_recue in dictionary:
+                if cle_recue.startswith(prefixe_du_champ):
+                    return super().get_value(dictionary)
+            return empty
+        return super().get_value(dictionary)
+
+
+class EventPatchSerializer(serializers.Serializer):
+    """
+    Modifie une partie d'un évènement (PATCH /api/v2/events/{uuid ou slug}/).
+    / Partially updates an event.
+
+    LOCALISATION : api_v2/serializers.py
+    Appelé par : api_v2/views.py:EventViewSet.partial_update
+
+    RÈGLE : seuls les champs ENVOYÉS changent. Un champ absent garde sa valeur.
+
+    CHAMPS (vocabulaire schema.org -> champ du modèle Event) :
+    - name -> name ; startDate -> datetime ; endDate -> end_datetime (null = sans fin)
+    - maximumAttendeeCapacity -> jauge_max
+    - disambiguatingDescription -> short_description
+    - description -> long_description, nettoyée par clean_html (contre le XSS)
+    - eventStatus : EventScheduled = publié, EventCancelled = non publié
+    - audience.audienceType : « private » = non fédérable, « public » = fédérable
+    - keywords : REMPLACE tous les tags ([] les retire tous)
+    - offers.eligibleQuantity.maxValue -> max_per_user (null = sans limite)
+    - offers.returnPolicy.merchantReturnDays -> refund_deadline
+    - additionalType : le libellé d'une catégorie (« Concert », « Workcamp »…)
+    - additionalProperty :
+        blockedResource (id de ressource, null ou "" = libérer la ressource),
+        customConfirmationMessage ("" = retirer le message),
+        optionsRadio / optionsCheckbox (REMPLACENT la liste d'options)
+    - fichiers img et sticker_img (multipart)
+
+    `@type` n'est PAS lu : un client renvoie souvent « Event » par habitude, ce qui
+    changerait la catégorie sans le vouloir. La catégorie change par additionalType.
+    / `@type` is NOT read: the category changes through additionalType only.
+
+    Les règles de la création s'appliquent aux valeurs FINALES (existant + modif) :
+    la fin après le début, une date de fin si une ressource est bloquée, et un
+    couple nom + date de début libre.
+    / Creation rules apply to the FINAL values (existing + patch).
+
+    FORMAT : JSON pour tous les champs. En multipart, DRF reçoit les objets imbriqués
+    (audience, offers) VIDES : ils sont refusés par une erreur 400, jamais ignorés.
+    Envoyer les fichiers en multipart, et le reste en JSON.
+    / Multipart drops nested objects: they are rejected (400), never silently ignored.
+    """
+
+    name = serializers.CharField(max_length=200, required=False)
+    startDate = serializers.DateTimeField(required=False)
+    endDate = serializers.DateTimeField(required=False, allow_null=True)
+    maximumAttendeeCapacity = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=Event.JAUGE_MAXIMALE_POSSIBLE,
+    )
+    disambiguatingDescription = serializers.CharField(
+        max_length=250, required=False, allow_blank=True, allow_null=True,
+    )
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    eventStatus = serializers.CharField(required=False)
+    audience = ObjetImbriqueAbsentEnMultipart(required=False)
+    keywords = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+    offers = ObjetImbriqueAbsentEnMultipart(required=False)
+    additionalType = serializers.CharField(required=False)
+    additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
+
+    def validate_description(self, value):
+        # Même nettoyage qu'à la création et dans l'admin.
+        # / Same sanitizing as on creation and in the admin.
+        if not value:
+            return value
+        return clean_html(value)
+
+    def validate_eventStatus(self, value):
+        # Renvoie True (publié) ou False (non publié).
+        # / Returns True (published) or False (unpublished).
+        statut_en_minuscules = value.lower()
+        if "eventscheduled" in statut_en_minuscules:
+            return True
+        if "eventcancelled" in statut_en_minuscules:
+            return False
+        raise serializers.ValidationError(
+            _("eventStatus doit valoir https://schema.org/EventScheduled ou https://schema.org/EventCancelled.")
+        )
+
+    def validate_audience(self, value):
+        # Renvoie True (non fédérable) ou False (fédérable).
+        # Un dictionnaire vide arrive aussi quand audience est envoyé en multipart.
+        # / Returns True (non-federable) or False (federable).
+        type_de_public = value.get("audienceType")
+        if type_de_public not in ("private", "public"):
+            raise serializers.ValidationError(
+                _("audience.audienceType doit valoir « private » ou « public ». En multipart, envoyez audience en JSON.")
+            )
+        return type_de_public == "private"
+
+    def validate_offers(self, value):
+        # Un dictionnaire vide arrive aussi quand offers est envoyé en multipart.
+        # / An empty dict also arrives when offers is sent as multipart.
+        if not value:
+            raise serializers.ValidationError(
+                _("offers est vide. En multipart, envoyez offers en JSON.")
+            )
+        return value
+
+    def validate_additionalType(self, value):
+        # Renvoie le code interne de la catégorie (ex : « LIV » pour Concert).
+        # / Returns the internal category code.
+        code_de_la_categorie = DISPLAY_TO_CATEGORY.get(_display_norm(value))
+        if code_de_la_categorie is None:
+            libelles_acceptes = ", ".join(sorted(DISPLAY_TO_CATEGORY.keys()))
+            raise serializers.ValidationError(
+                _("Catégorie inconnue : %(libelle)s. Catégories possibles : %(liste)s.") % {
+                    "libelle": value,
+                    "liste": libelles_acceptes,
+                }
+            )
+        return code_de_la_categorie
+
+    def validate_additionalProperty(self, value):
+        """
+        Transforme la liste de PropertyValue en dictionnaire « champ du modèle -> valeur ».
+        Un nom de propriété inconnu est refusé, pour ne jamais ignorer une modification.
+        / Turns the PropertyValue list into a "model field -> value" dict.
+        """
+        proprietes_a_modifier = {}
+        for propriete in value:
+            nom_de_la_propriete = str(propriete.get("name") or "")
+            valeur_de_la_propriete = propriete.get("value")
+            nom_en_minuscules = nom_de_la_propriete.lower()
+
+            if nom_en_minuscules == "blockedresource":
+                # Vide ou null : l'évènement libère la ressource.
+                # / Empty or null: the event releases the resource.
+                if valeur_de_la_propriete in (None, ""):
+                    proprietes_a_modifier["ressource_bloquee"] = None
+                    continue
+                ressource_a_bloquer = _trouver_la_ressource_a_bloquer(valeur_de_la_propriete)
+                if ressource_a_bloquer is None:
+                    raise serializers.ValidationError(
+                        MESSAGE_RESSOURCE_A_BLOQUER_INTROUVABLE % {
+                            "identifiant": valeur_de_la_propriete,
+                        }
+                    )
+                proprietes_a_modifier["ressource_bloquee"] = ressource_a_bloquer
+
+            elif nom_en_minuscules == "customconfirmationmessage":
+                message_nettoye = str(valeur_de_la_propriete or "").strip()
+                proprietes_a_modifier["custom_confirmation_message"] = message_nettoye or None
+
+            elif nom_en_minuscules in ("optionsradio", "optionscheckbox"):
+                if not isinstance(valeur_de_la_propriete, list):
+                    raise serializers.ValidationError(
+                        _("%(nom)s doit être une liste de noms d'options.") % {
+                            "nom": nom_de_la_propriete,
+                        }
+                    )
+                noms_des_options = []
+                for nom_d_option in valeur_de_la_propriete:
+                    noms_des_options.append(str(nom_d_option))
+                if nom_en_minuscules == "optionsradio":
+                    proprietes_a_modifier["options_radio"] = noms_des_options
+                else:
+                    proprietes_a_modifier["options_checkbox"] = noms_des_options
+
+            else:
+                raise serializers.ValidationError(
+                    _("Propriété inconnue : %(nom)s. Propriétés possibles : blockedResource, "
+                      "customConfirmationMessage, optionsRadio, optionsCheckbox.") % {
+                        "nom": nom_de_la_propriete,
+                    }
+                )
+        return proprietes_a_modifier
+
+    def validate(self, attrs):
+        evenement = self.instance
+
+        # Les images envoyées en multipart : mêmes contrôles qu'à la création.
+        # / Multipart images: same checks as on creation.
+        requete = self.context.get("request")
+        if requete is not None:
+            for nom_du_fichier in ("img", "sticker_img"):
+                fichier_envoye = requete.FILES.get(nom_du_fichier)
+                if fichier_envoye:
+                    _validate_uploaded_image(fichier_envoye)
+
+        if "offers" in attrs:
+            _valider_les_bornes_des_offres(attrs["offers"])
+            # refund_deadline n'accepte pas null (max_per_user, si : null = sans limite).
+            # / refund_deadline is not nullable (max_per_user is: null = no limit).
+            politique_de_remboursement = attrs["offers"].get("returnPolicy")
+            if (
+                isinstance(politique_de_remboursement, dict)
+                and "merchantReturnDays" in politique_de_remboursement
+                and politique_de_remboursement["merchantReturnDays"] is None
+            ):
+                raise serializers.ValidationError({
+                    "offers": _("returnPolicy.merchantReturnDays ne peut pas être vide."),
+                })
+
+        # Les valeurs FINALES : celle envoyée si elle est là, sinon celle en base.
+        # / FINAL values: the one sent if present, otherwise the stored one.
+        date_de_debut_finale = attrs.get("startDate", evenement.datetime)
+        if "endDate" in attrs:
+            date_de_fin_finale = attrs["endDate"]
+        else:
+            date_de_fin_finale = evenement.end_datetime
+
+        if date_de_fin_finale and date_de_fin_finale < date_de_debut_finale:
+            raise serializers.ValidationError({"endDate": MESSAGE_FIN_AVANT_LE_DEBUT})
+
+        proprietes_a_modifier = attrs.get("additionalProperty") or {}
+        if "ressource_bloquee" in proprietes_a_modifier:
+            une_ressource_sera_bloquee = proprietes_a_modifier["ressource_bloquee"] is not None
+        else:
+            une_ressource_sera_bloquee = evenement.ressource_bloquee_id is not None
+        if une_ressource_sera_bloquee and not date_de_fin_finale:
+            raise serializers.ValidationError({"endDate": MESSAGE_FIN_OBLIGATOIRE_POUR_BLOQUER})
+
+        nom_final = attrs.get("name", evenement.name)
+        if _le_nom_et_la_date_sont_deja_pris(nom_final, date_de_debut_finale, evenement_a_ignorer=evenement):
+            raise serializers.ValidationError({"name": MESSAGE_NOM_ET_DATE_DEJA_PRIS})
+
+        # La catégorie « Volunteering » (ACTION) exige un évènement parent.
+        # / The ACTION category requires a parent event.
+        if attrs.get("additionalType") == Event.ACTION and evenement.parent_id is None:
+            raise serializers.ValidationError({
+                "additionalType": _("La catégorie bénévolat demande un évènement parent."),
+            })
+
+        return attrs
+
+    def update(self, evenement, validated_data):
+        """
+        Applique les champs reçus, puis enregistre une seule fois.
+        Les tags et les options (ManyToMany) sont posés après l'enregistrement.
+        / Applies the received fields, saves once, then sets the ManyToMany relations.
+        """
+        with transaction.atomic():
+            if "name" in validated_data:
+                evenement.name = validated_data["name"]
+            if "startDate" in validated_data:
+                evenement.datetime = validated_data["startDate"]
+            if "endDate" in validated_data:
+                evenement.end_datetime = validated_data["endDate"]
+            if "maximumAttendeeCapacity" in validated_data:
+                evenement.jauge_max = validated_data["maximumAttendeeCapacity"]
+            if "disambiguatingDescription" in validated_data:
+                evenement.short_description = validated_data["disambiguatingDescription"]
+            if "description" in validated_data:
+                evenement.long_description = validated_data["description"]
+            if "eventStatus" in validated_data:
+                evenement.published = validated_data["eventStatus"]
+            if "audience" in validated_data:
+                evenement.private = validated_data["audience"]
+            if "additionalType" in validated_data:
+                evenement.categorie = validated_data["additionalType"]
+
+            offres = validated_data.get("offers") or {}
+            quantite_eligible = offres.get("eligibleQuantity")
+            if isinstance(quantite_eligible, dict) and "maxValue" in quantite_eligible:
+                evenement.max_per_user = quantite_eligible["maxValue"]
+            politique_de_remboursement = offres.get("returnPolicy")
+            if isinstance(politique_de_remboursement, dict) and "merchantReturnDays" in politique_de_remboursement:
+                evenement.refund_deadline = politique_de_remboursement["merchantReturnDays"]
+
+            proprietes_a_modifier = validated_data.get("additionalProperty") or {}
+            if "ressource_bloquee" in proprietes_a_modifier:
+                evenement.ressource_bloquee = proprietes_a_modifier["ressource_bloquee"]
+            if "custom_confirmation_message" in proprietes_a_modifier:
+                evenement.custom_confirmation_message = proprietes_a_modifier["custom_confirmation_message"]
+
+            # Fichiers multipart, déjà contrôlés dans validate().
+            # / Multipart files, already checked in validate().
+            requete = self.context.get("request")
+            if requete is not None:
+                image_principale = requete.FILES.get("img")
+                if image_principale:
+                    evenement.img = image_principale
+                vignette = requete.FILES.get("sticker_img")
+                if vignette:
+                    evenement.sticker_img = vignette
+
+            # Event.save() recalcule le slug et l'URL à partir du nom et de la date.
+            # / Event.save() recomputes the slug and URL from the name and date.
+            evenement.save()
+
+            if "keywords" in validated_data:
+                tags_de_l_evenement = []
+                for nom_du_tag in validated_data["keywords"]:
+                    nom_du_tag_nettoye = str(nom_du_tag).strip()
+                    if not nom_du_tag_nettoye:
+                        continue
+                    tag, tag_cree = Tag.objects.get_or_create(name=nom_du_tag_nettoye)
+                    tags_de_l_evenement.append(tag)
+                evenement.tag.set(tags_de_l_evenement)
+
+            for nom_du_champ in ("options_radio", "options_checkbox"):
+                if nom_du_champ not in proprietes_a_modifier:
+                    continue
+                options_de_l_evenement = []
+                for nom_d_option in proprietes_a_modifier[nom_du_champ]:
+                    # Option créée si elle n'existe pas, comme à la création.
+                    # / Option created if missing, like on creation.
+                    option, option_creee = OptionGenerale.objects.get_or_create(name=nom_d_option)
+                    options_de_l_evenement.append(option)
+                getattr(evenement, nom_du_champ).set(options_de_l_evenement)
+
+        return evenement
 
 
 class PostalAddressCreateSerializer(serializers.Serializer):

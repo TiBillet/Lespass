@@ -1232,6 +1232,52 @@ de lignes inutiles dans le contexte.
 | Trouver un signal Django | `grep -r "post_save" .` | `rg "post_save" -t py` |
 | Chercher un ID HTML | `grep -r "bt-valider" .` | `rg "bt-valider" -t html` |
 
+### Outils IDE et graphe de code — seulement si les MCP sont disponibles
+
+Deux serveurs MCP vont plus loin que `rg`. Ils sont **optionnels** : tout le monde
+n'utilise pas PyCharm. Si l'outil n'est pas dans ta liste, continue avec `rg`.
+
+`rg` cherche du **texte**. Ces outils comprennent le **code** : qui appelle quoi,
+quel type a une variable, quelle reference pointe vers quel symbole.
+
+#### MCP `pycharm` (l'IDE ouvert du mainteneur)
+
+Passer toujours `projectPath` (racine du repo) : sinon l'appel peut viser un autre projet ouvert.
+
+| Besoin | Outil | A savoir |
+|---|---|---|
+| Verifier un fichier apres edition | `lint_files` (`min_severity: "error"`), ou `get_file_problems` | Les inspections reelles de l'IDE : imports, types, attributs inconnus, code mort. A faire sur chaque fichier touche, avant de dire « fini ». |
+| Decouvrir un projet neuf | `get_project_modules`, `get_project_dependencies`, `list_directory_tree` (`maxDepth` 2) | La carte du projet en 3 appels, avant de lire le moindre fichier. |
+| Trouver une classe ou une fonction | `search_symbol` | Recherche par symbole, pas par texte. `include_external: true` pour chercher dans Django ou DRF. |
+| Comprendre un symbole | `get_symbol_info` (fichier + ligne + colonne) | Signature, doc, declaration. Comme la Quick Doc. |
+| Mesurer l'impact d'un changement | `analyze_calls` (`INCOMING_CALLS` = qui m'appelle, `OUTGOING_CALLS` = ce que j'appelle) | Le vrai graphe d'appels de l'IDE. A faire AVANT de modifier une fonction partagee. Nom complet attendu : `search_symbol` d'abord. |
+| Renommer | `rename_refactoring`, avec `preview: true` d'abord | Met a jour aussi les references qu'un `sed` rate. Lire `applied` : c'est le seul signal de succes. |
+| Lancer un test ou un script | `get_run_configurations`, puis `execute_run_configuration` | Reutilise les configurations du mainteneur. Les regles de `tibillet-test` restent valables (ulimit, fichiers cibles). |
+| Lire la base de dev | `list_database_connections`, `execute_sql_query`, `preview_table_data` | **Lecture seule**, et **jamais sur une connexion de prod**. Penser au schema du tenant (`SET search_path`). |
+
+**Pieges :**
+- **`Unresolved reference 'django'` partout** : l'interpreteur PyCharm est casse, ces erreurs sont du bruit.
+  Le signaler au mainteneur. **Ne pas** lancer `configure_python_interpreter` soi-meme : un interpreteur local
+  pose sur le venv detruit l'environnement du conteneur. Le bon interpreteur est Docker Compose (service `lespass_django`).
+- **`optimize_imports`** supprime les imports « inutilises » : meme danger que `ruff check --fix`
+  (voir HARD RULE plus bas). Interdit sur `admin*.py`, `apps.py`, `signals.py`, `__init__.py`, `settings.py`.
+- **`reformat_file`** : meme interdiction que `ruff format` sur un fichier existant.
+- Le terminal de l'IDE (`execute_terminal_command`) ne remplace pas `docker exec lespass_django ...`.
+
+#### MCP `code-review-graph` (graphe du repo, sans IDE)
+
+Un graphe construit depuis le code (Tree-sitter) : appels, imports, tests. Il marche sans PyCharm.
+Il doit etre **construit une premiere fois** (`build_or_update_graph_tool`), puis mis a jour.
+Si `list_graph_stats_tool` repond `Files: 0`, le graphe est vide : le dire, ne pas conclure « aucun appelant ».
+
+| Besoin | Outil |
+|---|---|
+| Qui appelle X, qui importe le module X | `query_graph_tool` (`callers_of`, `importers_of`) |
+| Quels tests couvrent X | `query_graph_tool` (`tests_for`) |
+| Que casse un changement de X | `get_impact_radius_tool` |
+| Que touche le diff en cours | `detect_changes_tool`, `get_review_context_tool` |
+| Vue d'ensemble d'un projet neuf | `get_architecture_overview_tool`, `list_communities_tool` |
+
 ## CSS Extraction — Ordre de cascade
 
 Quand on extrait du CSS inline (`<style>` blocks) vers des fichiers `.css` externes charges via `<link>` dans le `<head>` :

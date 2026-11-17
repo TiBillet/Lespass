@@ -67,7 +67,7 @@ Linking an address to an Event
   - Response: updated Event (schema.org/Event) with `location.address` populated.
 
 Notes
-- For now the PostalAddress id (numeric) is not included in the schema.org representation. Use list filters or keep ids on client side if you need later deletion.
+- The PostalAddress representation carries its numeric id in `identifier`: it is the `{id}` of `/api/v2/postal-addresses/{id}/` and the `postalAddressId` of `link-address`.
 - Semantic output
   - Represent data using schema.org types/terms whenever possible (JSON-LD or schema.org-like JSON fields).
   - For `Event` use https://schema.org/Event (e.g., `@context`, `@type`, `name`, `description`, `startDate`, `endDate`, `location`, `offers`).
@@ -91,6 +91,9 @@ Schema.org mapping (Event)
     - `{ name: "optionsRadio", value: ["OptionName", ...] }` ↔︎ link `options_radio` by name
     - `{ name: "optionsCheckbox", value: ["OptionName", ...] }` ↔︎ link `options_checkbox` by name
     - `{ name: "customConfirmationMessage", value: "..." }` ↔︎ Event.custom_confirmation_message
+    - `{ name: "blockedResource", value: <id> }` ↔︎ Event.ressource_bloquee (id of `/booking/<id>/resource/`, endDate required). Returned when set.
+  - description is sanitized with `clean_html` (nh3) on create and on PATCH, like the admin does.
+  - name + startDate is unique (Event.unique_together): a duplicate returns 400 on `name`.
 
 Examples
 - Minimal create:
@@ -132,6 +135,13 @@ Usage notes
   - GET /api/v2/events/ → returns a list wrapped as `{ "results": [Event, ...] }` when not paginated.
   - GET /api/v2/events/{uuid}/ → retrieve a single event by its UUID.
   - POST /api/v2/events/ → create a new Event with a minimal schema.org/Event payload (see examples above). Response 201 with the schema.org/Event representation (including `identifier`).
+  - PATCH /api/v2/events/{uuid or slug}/ → partial update: only the sent fields change. Response 200 with the updated Event.
+    - Fields and rules: see `openapi-schema.yaml` (`patchEvent`) and `EventPatchSerializer`.
+    - `keywords`, `optionsRadio`, `optionsCheckbox` REPLACE the whole list. `blockedResource: null` releases the resource.
+    - `@type` is ignored: the category changes through `additionalType` (a client often sends "Event" by habit).
+    - Creation rules apply to the FINAL values (stored + patch): end after start, endDate required when a resource is blocked, name + start date free.
+    - Files (`img`, `sticker_img`) go in multipart; nested objects (`audience`, `offers`) go in JSON. In multipart, DRF receives them empty: they are rejected with 400, never silently ignored.
+    - Changing the name or the start date changes the slug, hence the public URL (Event.save recomputes it).
   - DELETE /api/v2/events/{uuid}/ → delete an Event by UUID. Response 204 on success.
 - Authentication
   - Send header: `Authorization: Api-Key <your_key>`
