@@ -584,14 +584,15 @@ class Configuration(SingletonModel):
     #     (TZ_REUNION, _('Indian/Reunion')),
     #     (TZ_PARIS, _('Europe/Paris')),
     # ]
-    # `available_timezones()` renvoie un SET : le tri est indispensable, sinon
-    # l'ordre de la liste deroulante changerait a chaque demarrage.
-    # / `available_timezones()` returns a SET: sorting is required, otherwise the
-    # dropdown order would change at every startup.
-    TZ_CHOICES = [(nom_du_fuseau, nom_du_fuseau) for nom_du_fuseau in sorted(zoneinfo.available_timezones())]
+    # PAS de `choices=` ici. La liste des fuseaux depend des fichiers installes
+    # sur la machine (paquets `tzdata`). Django recopie les `choices` dans la
+    # migration : sur une machine dont la liste differe, `migrate` signale un
+    # changement de modele. Le menu deroulant et la validation sont faits par
+    # ConfigurationAdmin.formfield_for_dbfield (Administration/admin_tenant.py).
+    # / NO choices here: the timezone list depends on the machine and would be
+    # copied into migrations. The admin form builds and validates the list.
     fuseau_horaire = models.CharField(default="Europe/Paris",
                                       max_length=50,
-                                      choices=TZ_CHOICES,
                                       verbose_name=_("Timezone"),
                                       )
 

@@ -70,6 +70,8 @@ from django.forms import ValidationError
 from django.http import HttpRequest
 
 
+import zoneinfo
+
 import requests
 import segno
 from django import forms
@@ -599,6 +601,40 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             "widget": WysiwygWidget,
         }
     }
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        """
+        Construit le menu deroulant des fuseaux horaires.
+        / Builds the timezone dropdown.
+
+        LOCALISATION : Administration/admin_tenant.py
+
+        INDISPENSABLE : le champ `Configuration.fuseau_horaire` n'a pas de
+        `choices` (voir BaseBillet/models.py). Sans cette methode, l'admin
+        afficherait un champ texte libre, et un nom de fuseau faux serait
+        enregistre. `Configuration.get_tzinfo()` planterait ensuite.
+
+        La liste est calculee a chaque affichage, depuis les fuseaux connus de
+        la machine. `available_timezones()` renvoie un SET : le tri garde le
+        meme ordre a chaque affichage.
+        / The model field has no choices: this method provides the dropdown and
+        the validation. The list is computed at display time, sorted.
+        """
+        if db_field.name == "fuseau_horaire":
+            fuseaux_connus_de_la_machine = sorted(zoneinfo.available_timezones())
+            choix_des_fuseaux = []
+            for nom_du_fuseau in fuseaux_connus_de_la_machine:
+                choix_des_fuseaux.append((nom_du_fuseau, nom_du_fuseau))
+
+            return forms.ChoiceField(
+                choices=choix_des_fuseaux,
+                initial=db_field.default,
+                label=db_field.verbose_name,
+                help_text=db_field.help_text,
+                widget=UnfoldAdminSelectWidget(),
+            )
+
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
     def get_urls(self):
         urls = super().get_urls()
