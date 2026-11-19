@@ -43,7 +43,9 @@ except ModuleNotFoundError:
     module_dotenv_vide.load_dotenv = lambda *arguments, **options: None
     sys.modules["dotenv"] = module_dotenv_vide
 
+import controllers.tibeer_controller as module_du_controleur  # noqa: E402
 from controllers.tibeer_controller import TibeerController  # noqa: E402
+from utils.exceptions import BackendError  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -60,15 +62,25 @@ class FauxLecteurNFC:
 
 
 class FausseVanne:
-    """Retient si la vanne est ouverte. / Remembers whether the valve is open."""
+    """
+    Retient si la vanne est ouverte, et le volume compté à sa fermeture.
+    / Remembers whether the valve is open, and the volume counted when it closed.
+    """
 
-    def __init__(self):
+    def __init__(self, debitmetre=None):
         self.est_ouverte = False
+        self.debitmetre = debitmetre
+        self.volume_ml_a_la_premiere_fermeture = None
 
     def open(self):
         self.est_ouverte = True
 
     def close(self):
+        premiere_fermeture_avec_debitmetre = (
+            self.debitmetre is not None and self.volume_ml_a_la_premiere_fermeture is None
+        )
+        if self.est_ouverte and premiere_fermeture_avec_debitmetre:
+            self.volume_ml_a_la_premiere_fermeture = self.debitmetre.volume_l() * 1000.0
         self.est_ouverte = False
 
 
@@ -97,20 +109,67 @@ class FauxDebitmetre:
 class FauxClientDuServeur:
     """
     Répond à authorize avec la réponse donnée au constructeur.
-    Retient les événements envoyés.
-    / Answers authorize with the given response. Records sent events.
+    Retient les événements envoyés. Les types listés dans
+    `evenements_en_erreur_reseau` lèvent BackendError, comme une 4G coupée.
+    / Answers authorize with the given response. Records sent events. Event
+    types listed in `evenements_en_erreur_reseau` raise BackendError.
     """
 
-    def __init__(self, reponse_a_authorize):
+    def __init__(self, reponse_a_authorize, evenements_en_erreur_reseau=()):
         self.reponse_a_authorize = reponse_a_authorize
+        self.evenements_en_erreur_reseau = evenements_en_erreur_reseau
         self.evenements_envoyes = []
 
     def authorize(self, uid):
         return self.reponse_a_authorize
 
     def send_event(self, event_type, uid, volume_ml=0):
+        if event_type in self.evenements_en_erreur_reseau:
+            raise BackendError(f"Erreur reseau simulee sur {event_type}")
         self.evenements_envoyes.append((event_type, uid, volume_ml))
         return {"status": "ok"}
+
+
+class FausseHorloge:
+    """
+    Remplace le module `time` du contrôleur. sleep() avance l'heure sans attendre.
+    / Replaces the controller's `time` module. sleep() moves time forward instantly.
+    """
+
+    def __init__(self):
+        self.heure_actuelle = 1000.0
+
+    def time(self):
+        return self.heure_actuelle
+
+    def sleep(self, secondes):
+        self.heure_actuelle += secondes
+
+
+class FauxLecteurQuiVerse:
+    """
+    Carte toujours posée. À chaque lecture, tant que la vanne est ouverte, le
+    débitmètre reçoit des impulsions (la bière coule). La boucle s'arrête après
+    `nombre_de_lectures` lectures.
+    / Card always present. On each read, while the valve is open, the flow meter
+    gets pulses. The loop stops after `nombre_de_lectures` reads.
+    """
+
+    def __init__(self, uid, vanne, debitmetre, impulsions_par_lecture, nombre_de_lectures):
+        self.uid = uid
+        self.vanne = vanne
+        self.debitmetre = debitmetre
+        self.impulsions_par_lecture = impulsions_par_lecture
+        self.lectures_restantes = nombre_de_lectures
+        self.controleur = None
+
+    def read_uid(self):
+        if self.vanne.est_ouverte:
+            self.debitmetre.total_pulses += self.impulsions_par_lecture
+        self.lectures_restantes -= 1
+        if self.lectures_restantes <= 0:
+            self.controleur.running = False
+        return self.uid
 
 
 def reponse_autorisee(**champs_en_plus):
@@ -175,3 +234,92 @@ class TestFacteurDeCalibrationRecuAuBadge:
         controleur._handle_new_session("CARTE01")
 
         assert debimetre.calibration_factor == 6.5
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Tests : erreurs réseau pendant le service
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestErreurReseauPendantLeService:
+    def test_pour_start_en_erreur_ne_fait_pas_planter_le_pi(self):
+        """
+        Une erreur réseau sur pour_start ne lève rien : le service continue.
+        / A network error on pour_start raises nothing: the pour goes on.
+
+        pour_start ne sert qu'à l'écran. Sans protection, l'erreur remontait
+        jusqu'à main.py, qui quittait : le Pi redémarrait, vanne ouverte.
+        / pour_start only feeds the screen; unprotected, the error killed the Pi.
+        """
+        debimetre = FauxDebitmetre(facteur_de_calibration=6.5)
+        vanne = FausseVanne()
+        client = FauxClientDuServeur(
+            reponse_autorisee(), evenements_en_erreur_reseau=("pour_start",)
+        )
+        controleur = TibeerController(FauxLecteurNFC(), vanne, debimetre, client)
+
+        controleur._handle_new_session("CARTE01")
+
+        assert vanne.est_ouverte is True
+        assert controleur.is_serving is True
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Tests : plafond de volume
+# ──────────────────────────────────────────────────────────────────────
+
+
+def lancer_un_service_jusqu_au_plafond(monkeypatch, client, debimetre):
+    """
+    Lance la vraie boucle run() avec une fausse horloge, carte posée, bière qui coule.
+    10 impulsions par tour de 0,1 s, au facteur 6,5 : environ 25,6 ml par tour.
+    / Runs the real run() loop with a fake clock, card present, beer flowing.
+    """
+    monkeypatch.setattr(module_du_controleur, "time", FausseHorloge())
+    vanne = FausseVanne(debitmetre=debimetre)
+    lecteur = FauxLecteurQuiVerse(
+        "CARTE01", vanne, debimetre, impulsions_par_lecture=10, nombre_de_lectures=40
+    )
+    controleur = TibeerController(lecteur, vanne, debimetre, client)
+    lecteur.controleur = controleur
+    controleur.run()
+    return vanne, controleur
+
+
+class TestPlafondDeVolume:
+    def test_la_vanne_se_ferme_des_que_le_plafond_est_atteint(self, monkeypatch):
+        """
+        Le plafond est contrôlé à chaque tour de boucle, pas une fois par seconde.
+        / The cap is checked on every loop turn, not once per second.
+
+        Plafond de 100 ml, environ 25,6 ml versés par tour de 0,1 s. La vanne doit
+        se fermer au premier tour qui dépasse 100 ml, donc avant 130 ml.
+        Contrôlé une fois par seconde, elle se fermait vers 256 ml : le surplus
+        n'est pas facturé, c'est une perte pour le lieu.
+        / 100 ml cap, ~25.6 ml per 0.1 s turn: the valve must close before 130 ml.
+        """
+        debimetre = FauxDebitmetre(facteur_de_calibration=6.5)
+        client = FauxClientDuServeur(reponse_autorisee(allowed_ml=100.0))
+
+        vanne, _controleur = lancer_un_service_jusqu_au_plafond(monkeypatch, client, debimetre)
+
+        assert vanne.volume_ml_a_la_premiere_fermeture is not None
+        assert 100.0 <= vanne.volume_ml_a_la_premiere_fermeture < 130.0
+        evenements_de_fin = [e for e in client.evenements_envoyes if e[0] == "pour_end"]
+        assert len(evenements_de_fin) == 1
+
+    def test_pour_end_en_erreur_au_plafond_ne_fait_pas_planter_le_pi(self, monkeypatch):
+        """
+        Au plafond, une erreur réseau sur pour_end ne lève rien. La vanne reste fermée.
+        Le serveur clôt la session au retrait de la carte, ou au badge suivant.
+        / At the cap, a network error on pour_end raises nothing; the valve stays closed.
+        """
+        debimetre = FauxDebitmetre(facteur_de_calibration=6.5)
+        client = FauxClientDuServeur(
+            reponse_autorisee(allowed_ml=100.0), evenements_en_erreur_reseau=("pour_end",)
+        )
+
+        vanne, controleur = lancer_un_service_jusqu_au_plafond(monkeypatch, client, debimetre)
+
+        assert vanne.volume_ml_a_la_premiere_fermeture is not None
+        assert vanne.est_ouverte is False

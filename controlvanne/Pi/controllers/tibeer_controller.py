@@ -82,6 +82,14 @@ class TibeerController:
                 # / Update flow meter every iteration
                 self.flow_meter.update()
 
+                # Plafond contrôlé à CHAQUE tour (toutes les 100 ms), carte présente
+                # ou pendant la période de grâce. Le débordement au-delà du plafond
+                # n'est pas facturé : c'est une perte pour le lieu.
+                # / Cap checked on EVERY turn, card present or during the grace period.
+                # Overflow beyond the cap is not billed: a loss for the venue.
+                if self.is_serving:
+                    self._fermer_si_plafond_atteint()
+
                 if uid:
                     # --- Carte presente ---
                     self.last_seen_ts = now
@@ -173,9 +181,15 @@ class TibeerController:
                 f"Solde {solde}cts. Max {self.allowed_ml:.0f}ml. Vanne ouverte."
             )
 
-            # Informer le serveur (pour le push WebSocket vers le kiosk)
-            # / Notify server (for WebSocket push to kiosk)
-            self.client.send_event("pour_start", uid, 0)
+            # Informer le serveur (pour le push WebSocket vers le kiosk).
+            # Une erreur réseau ici ne doit pas arrêter le service : pour_start ne
+            # sert qu'à l'écran, la vanne est déjà ouverte et le volume se mesure.
+            # / Notify server (kiosk WebSocket push). A network error must not stop
+            # the pour: pour_start only feeds the screen.
+            try:
+                self.client.send_event("pour_start", uid, 0)
+            except BackendError as e:
+                logger.warning(f"pour_start echoue (on continue): {e}")
             self.last_update_ts = time.time()
 
         else:
@@ -185,21 +199,40 @@ class TibeerController:
             self.is_serving = False
             self.session_id = None
 
+    def _fermer_si_plafond_atteint(self):
+        """Ferme la vanne et envoie pour_end si le volume autorisé est atteint.
+        / Closes the valve and sends pour_end if the allowed volume is reached.
+
+        Appelée à chaque tour de boucle pendant un service (voir run()).
+        La vanne est fermée AVANT l'appel au serveur : une erreur réseau sur
+        pour_end ne doit ni laisser couler la bière, ni arrêter le programme.
+        Sans pour_end, le serveur clôt la session au retrait de la carte
+        (card_removed) ou au badge suivant, avec le dernier volume reçu.
+        / Called on every loop turn while serving. The valve closes BEFORE the
+        server call: a network error on pour_end must not crash the program.
+        """
+        served_ml = (self.flow_meter.volume_l() * 1000.0) - self.session_start_vol
+        plafond_atteint = self.allowed_ml > 0 and served_ml >= self.allowed_ml
+        if not plafond_atteint:
+            return
+
+        logger.warning(f"Volume max atteint ({self.allowed_ml:.0f}ml). Fermeture vanne.")
+        self.valve.close()
+        self.is_serving = False
+        try:
+            self.client.send_event("pour_end", self.current_uid, served_ml)
+        except BackendError as e:
+            logger.error(f"pour_end au plafond echoue: {e}")
+
     def _handle_pouring_loop(self, now):
-        """Pendant le service : envoie les mises a jour de volume.
-        / During service: send volume updates."""
+        """Pendant le service : envoie le volume au serveur, au plus une fois par seconde.
+        Le plafond, lui, est contrôlé à chaque tour par _fermer_si_plafond_atteint().
+        / During service: sends the volume to the server, at most once per second.
+        The cap is checked on every turn by _fermer_si_plafond_atteint()."""
         if (now - self.last_update_ts) < UPDATE_INTERVAL_S:
             return
 
         served_ml = (self.flow_meter.volume_l() * 1000.0) - self.session_start_vol
-
-        # Verifier si le volume max est atteint / Check if max volume reached
-        if self.allowed_ml > 0 and served_ml >= self.allowed_ml:
-            logger.warning(f"Volume max atteint ({self.allowed_ml:.0f}ml). Fermeture vanne.")
-            self.valve.close()
-            self.client.send_event("pour_end", self.current_uid, served_ml)
-            self.is_serving = False
-            return
 
         # Envoyer pour_update (non bloquant en cas d'erreur)
         # / Send pour_update (non-blocking on error)

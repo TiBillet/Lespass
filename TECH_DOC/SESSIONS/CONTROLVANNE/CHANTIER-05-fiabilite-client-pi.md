@@ -1,11 +1,14 @@
 # CHANTIER 05 — Coupure de la vanne et fiabilité du client Pi
 
-**Statut :** EN COURS.
+**Statut :** EN COURS. Il ne reste que D3 (réponse de Mike) et la doc utilisateur (section 7).
 - D7 et D9 : faits par la PR #506 (fusionnée le 2026-11-19).
-- D1, D2 et D20 : faits le 2026-11-19, non commités. Voir
-  `CHANGELOG/2026-11-19-tireuse-retrait-facture-et-calibration-au-badge.md`.
-- D3 : en attente de Mike (référence du capteur).
-- D8 et D12 : acceptés en l'état (décision du 2026-11-19, voir leur fiche).
+- D1, D2, D4, D5, D6 et D20 : faits le 2026-11-19, non commités. Voir
+  `CHANGELOG/2026-11-19-tireuse-retrait-facture-et-calibration-au-badge.md` et
+  `CHANGELOG/2026-11-19-tireuse-plafond-et-erreurs-reseau.md`.
+- D8 et D12 : acceptés en l'état.
+- D11, D14, D16, D17, D18, D21 : abandonnés après tri (section 8).
+- D13, D15 : reportés (section 8).
+
 **Périmètre :** le client Raspberry Pi (`controlvanne/Pi/`) et les vues serveur qu'il appelle
 (`controlvanne/viewsets.py`, `controlvanne/billing.py`, `controlvanne/calibration_views.py`).
 **Méthode :** lecture complète du code, puis deux relectures indépendantes. Chaque défaut porte
@@ -137,7 +140,8 @@ carte de maintenance est supprimée. Déployer le serveur avant les Pi.*
 
 ### 5.2 Coupure en retard
 
-**D6 — Le plafond n'est contrôlé qu'une fois par seconde.** *Vérifié.*
+**D6 — Le plafond n'est contrôlé qu'une fois par seconde.** ✅ *Fait le 2026-11-19 :
+`_fermer_si_plafond_atteint()` à chaque tour de `run()`, aussi pendant la grâce.*
 - `_handle_pouring_loop` sort tout de suite si moins d'une seconde s'est écoulée depuis le
   dernier envoi (lignes 166-167). Le contrôle du plafond (ligne 172) est **après** cette sortie.
 - **Effet :** la vanne se coupe jusqu'à une seconde après le plafond, plus la durée d'un
@@ -149,26 +153,27 @@ carte de maintenance est supprimée. Déployer le serveur avant les Pi.*
 
 ### 5.3 Plantages
 
-**D4 — `pour_start` n'est pas dans un `try`.** *Vérifié.*
+**D4 — `pour_start` n'est pas dans un `try`.** ✅ *Fait le 2026-11-19.*
 - `tibeer_controller.py:152`. Une erreur réseau à ce moment remonte jusqu'à `main.py`, qui fait
   `sys.exit(1)`.
 - La vanne vient d'être ouverte (ligne 141). systemd relance le service (`Restart=always`,
   `RestartSec=2`), et chaque relance fait d'abord un `git pull` (D13, reporté).
 
-**D5 — `pour_end` au plafond n'est pas dans un `try`.** *Vérifié.*
+**D5 — `pour_end` au plafond n'est pas dans un `try`.** ✅ *Fait le 2026-11-19 : la vanne se ferme
+avant l'appel, l'appel est dans un `try`.*
 - `tibeer_controller.py:175`. Même effet que D4. C'est l'appel le plus lent (D11), donc le plus
   exposé à un délai dépassé.
 
-**À faire en premier :** chercher `Erreur fatale` dans `~/tibeer/logs/tibeer.log` du Pi du salon.
-Ces deux plantages expliquent peut-être une partie de ce qui a été vu.
+**À vérifier :** chercher `Erreur fatale` dans `~/tibeer/logs/tibeer.log` du Pi du salon. Ces deux
+plantages expliquent peut-être une partie de ce qui a été vu.
 
-**D17 — Une session orpheline qui plante bloque la tireuse.** *À confirmer.*
+**D17 — Une session orpheline qui plante bloque la tireuse.** ❌ *Abandonné (section 8).*
 - Au prochain `authorize`, le serveur ferme les sessions restées ouvertes
   (`viewsets.py:387` et suivantes). Si cette facturation lève une erreur, chaque `authorize`
   répond 500. La tireuse ne sert plus personne.
 - Risque en plus : l'ancien Fedow peut être débité à chaque essai.
 
-**D18 — Lecteur VMA405 : boucle lente et erreur non attrapée.** *À confirmer.*
+**D18 — Lecteur VMA405 : boucle lente et erreur non attrapée.** ❌ *Abandonné (section 8).*
 - `readline` avec `timeout=1` : chaque tour prend 1,1 s.
 - `RFIDReadError` n'est attrapée nulle part.
 
@@ -189,8 +194,7 @@ que le Pi.** *Vérifié.*
 - **Décision du 2026-11-19 : accepté en l'état.** Un ordre de grandeur de 9 s n'est pas un souci.
   Les délais de Fedow ne changent pas.
 
-**D11 — `pour_end` fait attendre le Pi pour un simple affichage.** *Vérifié pour la lecture du
-solde.*
+**D11 — `pour_end` fait attendre le Pi pour un simple affichage.** ❌ *Abandonné (section 8).*
 - Après la facture, le serveur relit le solde sur l'ancien Fedow, par le réseau, pour l'afficher
   (`_lire_le_solde_de_la_carte`, vers `viewsets.py:1101`).
 - Le Pi attend cette lecture avant de servir le client suivant.
@@ -219,18 +223,19 @@ solde.*
 - Depuis la PR #506, il faut un `authorize` de plus de 9,5 s côté serveur.
 - **Décision du 2026-11-19 : accepté en l'état**, comme D8.
 
-**D16 — Un 404 sur `pour_update` ne ferme pas la vanne.** *À confirmer.*
+**D16 — Un 404 sur `pour_update` ne ferme pas la vanne.** ❌ *Abandonné (section 8).*
 - Une réponse autre que 200 renvoie `None`, sans erreur. Si le serveur a déjà clos la session,
   le Pi continue de servir.
 - **Correctif :** sur 404, fermer la vanne et finir la session.
 
 ### 5.6 Code et tests
 
-**D14 — `pytest.ini` n'a pas de `testpaths`.** *Vérifié.*
+**D14 — `pytest.ini` n'a pas de `testpaths`.** ❌ *Abandonné (section 8).*
 - Un `pytest` lancé sans argument à la racine collecte `controlvanne/Pi/tests/test_*.py`. Ces
   fichiers font `exit(1)` à l'import.
 
-**D19 — `FlowMeter.update()` est du code mort, et sa formule est fausse.** *Vérifié.*
+**D19 — `FlowMeter.update()` est du code mort, et sa formule est fausse.** *Vérifié. Facultatif :
+à faire en passant, avec la doc.*
 - Le débit calculé est 60 fois trop grand (`flow_meter.py:78-80`). La formule est recopiée dans
   le README.
 - La boucle l'appelle à chaque tour (ligne 74) sans utiliser le résultat.
@@ -241,7 +246,7 @@ premiers tests dans `tests/pytest/test_controlvanne_pi_controleur.py`.*
   pas : les objets sont injectés par le constructeur. Ils chargent pourtant `pigpio` et `mfrc522`,
   ce qui empêche de tester le contrôleur sur une machine sans Pi.
 
-**D21 — Le simulateur ne se comporte pas comme le vrai Pi.** *À confirmer.*
+**D21 — Le simulateur ne se comporte pas comme le vrai Pi.** ❌ *Abandonné (section 8).*
 - `static/controlvanne/js/simu_pi.js` : grâce de 1 s au lieu de 3 s, plafond contrôlé à chaque
   tick, envois asynchrones. Les défauts D4, D5, D6 et D9 n'y apparaissent donc pas.
 
@@ -261,68 +266,40 @@ mousse, usure du relais, impulsions parasites sur le débitmètre.
 Écartée. Le gain est d'au plus 5 ml, alors que le capteur est précis à ±10 %. Elle ajoute un
 état partagé entre deux threads. Le contrôle à chaque tour de boucle (D6) suffit.
 
-**Un fil d'envoi séparé, avec une file d'attente (`queue.Queue`).**
-Reportée. Elle libérerait la boucle des appels réseau. Mais telle quelle, elle est dangereuse :
-un `pour_end` encore dans la file peut fermer la **nouvelle** session du même client. Si elle
-devient nécessaire, il faudra soit une file unique qui inclut `authorize`, soit un `session_id`
-dans chaque événement et une file vidée avant chaque `authorize`. À ne faire que si les mesures
-de l'étape 0 la justifient.
+**Deux boucles : une boucle locale et un fil d'envoi au serveur.**
+Option gardée sous condition (décision du 2026-11-19).
+- **Le principe :** une boucle lit la carte et le débitmètre et pilote la vanne, sans jamais
+  attendre le réseau. Une seconde boucle envoie les messages au serveur.
+- **Son seul gain réel :** `pour_update` bloque la boucle chaque seconde pendant le service, le
+  temps d'un aller-retour réseau (environ 0,3 à 0,5 s en 4G correcte, jusqu'à 2 s en 4G
+  faible). Pendant ce temps, la boucle ne voit pas le plafond. Les autres appels arrivent quand
+  la vanne est fermée, ou doivent rester dans l'ordre.
+- **Depuis D6**, le débordement au plafond se limite à un aller-retour réseau de débit. Il n'est
+  pas facturé.
+- **À faire seulement si** ce débordement reste gênant en 4G.
+- **Version réduite à faire dans ce cas :** seul `pour_update` part par la seconde boucle. La
+  boucle principale attend que la file soit vide avant chaque `pour_end`, `card_removed` et
+  `authorize`. Cette attente est indispensable : depuis D1, la clôture facture au moins le
+  dernier `pour_update` reçu. Un `pour_update` en retard qui tomberait sur la session suivante
+  du même client lui ferait facturer l'ancien volume.
 
 ---
 
-## 7. Plan
+## 7. Ce qui reste à faire
 
-Chaque correctif commence par un test, vu en échec avant le correctif.
+1. **D3 :** attendre la réponse de Mike sur la référence du débitmètre et l'origine du 6,5.
+2. **Doc utilisateur :**
+   - tutoriel d'installation, repris depuis `controlvanne/README.md:159-257` ;
+   - schéma de câblage complet : `Pi/asset/Cnx Pi.png` n'est référencé nulle part, et il ne
+     montre ni le débitmètre ni la vanne ;
+   - câblage de puissance : diode de roue libre sur la vanne, signal 5 V du débitmètre face aux
+     GPIO 3,3 V du Pi ;
+   - procédure de calibration : le facteur s'applique au badge suivant (D2) ;
+   - en passant, D19 : supprimer `FlowMeter.update()` et corriger la formule du README.
+3. **À vérifier une fois :** chercher `Erreur fatale` dans les journaux du Pi du salon.
 
-### Étape 0 — Mesurer
-
-1. Lire les journaux du salon : `Erreur fatale` dans `~/tibeer/logs/tibeer.log`.
-2. Ajouter des mesures horodatées dans les journaux du Pi :
-   - durée de chaque appel HTTP ;
-   - taux de lectures manquées du RC522 ;
-   - temps entre la dernière lecture et la fermeture de la vanne.
-
-### Étape 1 — Harnais de tests
-
-1. Retirer les imports inutiles des lignes 16-19 (D20).
-2. Écrire des faux objets : lecteur NFC, vanne, débitmètre, client serveur. Ils s'injectent par
-   le constructeur `TibeerController(rfid, valve, flow_meter, client)`.
-3. Extraire le corps de la boucle dans `un_tour_de_boucle(maintenant)`. Le test pilote ainsi le
-   temps, sans `sleep`.
-4. Ajouter `testpaths` dans `pytest.ini` (D14).
-
-### Étape 2 — Correctifs courts
-
-| Ordre | Défaut | Correctif | Test |
-|---|---|---|---|
-| 1 | D1 | `card_removed` facture `max(volume reçu, dernier_volume_ml)` | serveur : `pour_update` à 200 ml, puis `card_removed` à 0 → facture de 200 ml |
-| 2 | D2 | `authorize` renvoie `calibration_factor`, appliqué avant `session_start_vol` | Pi : facteur changé entre deux sessions → la 2ᵉ utilise le nouveau |
-| 3 | D4, D5 | `try` autour de `pour_start` et de `pour_end` au plafond | Pi : client qui lève `BackendError` → pas de plantage, vanne fermée au plafond |
-| 4 | D6 | plafond contrôlé à chaque tour | Pi : plafond atteint 0,2 s après un `pour_update` → vanne fermée au tour suivant |
-| 5 | D7 | `requests.Session` | lecture du code ; mesure de l'étape 0 avant et après |
-| 6 | D9 | retenter `authorize` après une erreur réseau | Pi : 1ᵉʳ `authorize` en erreur, 2ᵉ accepté → vanne ouverte |
-| 7 | D16 | 404 sur `pour_update` → fin de session | Pi : client qui renvoie 404 → vanne fermée |
-
-### Étape 3 — Côté serveur
-
-- D11 : ne plus faire attendre la réponse de `pour_end` pour la lecture du solde.
-- D17 : une orpheline qui plante ne doit pas bloquer les `authorize` suivants.
-- D21 : aligner `simu_pi.js` sur le vrai Pi.
-
-### Étape 4 — Selon les mesures de l'étape 0
-
-- Régler `CARD_GRACE_PERIOD_S` selon le taux réel de lectures manquées.
-- Décider du fil d'envoi séparé (section 6).
-
-### Étape 5 — Doc utilisateur
-
-- Tutoriel d'installation, repris depuis `controlvanne/README.md:159-257`.
-- Schéma de câblage complet. `Pi/asset/Cnx Pi.png` n'est référencé nulle part, et il ne montre
-  ni le débitmètre ni la vanne.
-- Câblage de puissance : diode de roue libre sur la vanne, signal 5 V du débitmètre face aux
-  GPIO 3,3 V du Pi.
-- Procédure de calibration, une fois D2 corrigé.
-- Corriger la formule de débit recopiée dans le README (D19).
+Les tests du contrôleur du Pi sont dans `tests/pytest/test_controlvanne_pi_controleur.py`. Ils
+utilisent de faux objets et une fausse horloge, et font tourner la vraie boucle `run()`.
 
 ---
 
@@ -340,24 +317,38 @@ Ces deux points ne posent pas de souci tout de suite.
 - `config/tibeer.service` : `ExecStartPre=git-update.sh`. En 4G faible, cela peut prendre
   jusqu'à 90 s. Avec D4 ou D5, chaque plantage coûte donc ce temps.
 
+### Abandonnés après tri (décision du 2026-11-19)
+
+Ces points sont théoriques ou sans effet sur le terrain. Les traiter serait de la
+sur-ingénierie.
+
+- **D11** : attendre la lecture de Fedow pour afficher le solde restant est voulu.
+- **D14** : pytest se lance toujours avec le chemin `tests/pytest/`.
+- **D16** : le serveur ne clôt pas une session pendant que le Pi sert, sauf action dans l'admin.
+- **D17** : jamais observé. S'il arrive, Sentry le montrera, et on corrigera la cause.
+- **D18** : le lecteur VMA405 n'est pas utilisé.
+- **D21** : `simu_pi.js` est un outil de démo.
+- **Ajouter des mesures horodatées dans le Pi** : Mike a déjà mesuré ce qui comptait (PR #506).
+- **Extraire `un_tour_de_boucle(maintenant)`** : la fausse horloge suffit pour tester `run()`.
+
 ### Exclus
 
-- Le passage au fil d'envoi séparé, tant que les mesures ne le justifient pas.
+- Les deux boucles, tant que le débordement au plafond ne gêne pas (section 6).
 - Tout changement du protocole entre le Pi et le serveur, hors `calibration_factor` dans la
   réponse d'`authorize`.
 
 ## 9. Questions ouvertes
 
 1. Quelle est la référence exacte du débitmètre, et d'où vient le facteur 6,5 ? (D3)
-2. Les journaux du Pi du salon sont-ils encore disponibles ? (étape 0)
-3. Le lecteur VMA405 est-il utilisé sur une vraie tireuse ? (D18)
-4. Le relais et la vanne ont-ils déjà une diode de roue libre ? Le signal du débitmètre passe-t-il
-   par un pont diviseur ? (étape 5)
+2. Les journaux du Pi du salon sont-ils encore disponibles ?
+3. Le relais et la vanne ont-ils déjà une diode de roue libre ? Le signal du débitmètre passe-t-il
+   par un pont diviseur ? (doc utilisateur)
 
 ## 10. Ce qui n'a pas été vérifié
 
-- Les défauts marqués *à confirmer* viennent des relectures. Ils n'ont pas été relus ligne à
-  ligne.
-- Aucun test n'a été lancé. Aucune mesure n'a été faite sur un vrai Pi.
+- Aucun correctif n'a été essayé sur un vrai Pi. Les tests à faire à la main sont dans les deux
+  fichiers `CHANGELOG/` du 2026-11-19.
+- Les correctifs sont couverts par des tests automatiques : serveur dans
+  `tests/pytest/test_controlvanne_api.py`, Pi dans `tests/pytest/test_controlvanne_pi_controleur.py`.
 - Le taux de lectures manquées du RC522 (« une sur deux ») est une estimation tirée du code, pas
   une mesure.
