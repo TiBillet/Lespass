@@ -2,7 +2,7 @@
 
 **Statut :** EN COURS. Il ne reste que D3 (réponse de Mike) et la doc utilisateur (section 7).
 - D7 et D9 : faits par la PR #506 (fusionnée le 2026-11-19).
-- D1, D2, D4, D5, D6 et D20 : faits le 2026-11-19, non commités. Voir
+- D1, D2, D4, D5, D6 et D20 : faits et commités le 2026-11-19 (`b1b474df`, `0636f911`). Voir
   `CHANGELOG/2026-11-19-tireuse-retrait-facture-et-calibration-au-badge.md` et
   `CHANGELOG/2026-11-19-tireuse-plafond-et-erreurs-reseau.md`.
 - D8 et D12 : acceptés en l'état.
@@ -151,6 +151,31 @@ carte de maintenance est supprimée. Déployer le serveur avant les Pi.*
 - **Correctif :** contrôler le plafond à **chaque tour de boucle**, avant de tester si la carte
   est présente ou absente. L'envoi de `pour_update` reste limité à une fois par seconde.
 
+**Débordement restant après D6 (relecture Opus et Fable du 2026-11-19).**
+- Pendant un appel réseau, la boucle est bloquée et le plafond n'est pas vérifié. L'appel qui
+  compte est `pour_update`, une fois par seconde pendant le service.
+- Ordre de grandeur, avec un débit supposé de 50 ml/s (non mesuré) :
+
+  | Réseau | Débordement |
+  |---|---|
+  | Boucle libre | 5 ml au plus |
+  | 4G correcte (0,3 à 0,5 s par appel) | 5 à 10 ml en moyenne, 25 ml au pire : sous l'erreur du capteur |
+  | 4G faible (environ 2 s par appel) | environ 50 ml en moyenne, 100 ml au pire : 0,35 à 0,80 € |
+
+- Le plafond n'est atteint que quand le solde s'épuise pendant le service : au plus une fois par
+  carte.
+- Un trou plus rare existe au début du service : `pour_start` part juste après `valve.open()`,
+  avec un délai de 3 s pour la connexion puis 3 s pour la réponse. Il ne compte que pour un petit
+  solde sur un réseau lent. Le client met aussi environ 1 s à ouvrir le robinet.
+- **Décision : ne rien faire de plus pour l'instant, et mesurer.** Le serveur journalise déjà
+  chaque débordement : `Débordement non facturé … servi X ml, autorisé Y ml`
+  (`controlvanne/billing.py`, dans `facturer_tirage`). Relever ces lignes après le prochain salon.
+- **Parade de secours, si les journaux montrent une vraie perte :** ne plus envoyer
+  `pour_update` dans les ~150 derniers ml avant le plafond (2 à 3 lignes dans
+  `_handle_pouring_loop`). Aucun appel réseau ne bloque alors la boucle près du plafond, et D6
+  suffit. Prix : l'écran reste figé environ 3 s avant la fin. Si le `pour_end` final se perd,
+  jusqu'à 150 ml ne sont pas facturés.
+
 ### 5.3 Plantages
 
 **D4 — `pour_start` n'est pas dans un `try`.** ✅ *Fait le 2026-11-19.*
@@ -262,9 +287,18 @@ coupure automatique gênerait surtout un client lent à se servir.
 Écartée. Avec un RC522 qui rate une lecture sur deux, la vanne battrait à environ 5 Hz :
 mousse, usure du relais, impulsions parasites sur le débitmètre.
 
-**Contrôler le plafond dans le callback pigpio.**
-Écartée. Le gain est d'au plus 5 ml, alors que le capteur est précis à ±10 %. Elle ajoute un
-état partagé entre deux threads. Le contrôle à chaque tour de boucle (D6) suffit.
+**Fermer la vanne depuis le callback pigpio du débitmètre, à chaque impulsion.**
+Écartée le 2026-11-19, après relecture par Opus et Fable.
+- L'idée marche techniquement : dans pigpio 1.78, le callback tourne dans son propre thread
+  (`_callback_thread`). Il continue pendant qu'un appel réseau bloque la boucle.
+- **Mais une erreur dans le callback arrête le comptage, sans rien signaler.** La boucle `run()`
+  de `_callback_thread` appelle `cb.func(...)` sans aucun `try`. Aujourd'hui, `_callback` ne fait
+  que deux additions et ne peut pas planter. Avec `valve.close()` dedans, une erreur (pigpiod
+  coupé, journal) tuerait le thread : plus aucune impulsion comptée jusqu'au redémarrage, donc
+  plus de plafond ni de facture. La seule parade serait un `try` qui avale l'erreur.
+- Autres pièges : un seuil resté armé couperait la session suivante dès sa première impulsion.
+  Et le vrai callback ne se teste pas hors du Pi, car `flow_meter.py` importe pigpio.
+- Le gain ne le justifie pas : voir « Débordement restant après D6 » dans la fiche D6.
 
 **Deux boucles : une boucle locale et un fil d'envoi au serveur.**
 Option gardée sous condition (décision du 2026-11-19).
@@ -276,7 +310,8 @@ Option gardée sous condition (décision du 2026-11-19).
   la vanne est fermée, ou doivent rester dans l'ordre.
 - **Depuis D6**, le débordement au plafond se limite à un aller-retour réseau de débit. Il n'est
   pas facturé.
-- **À faire seulement si** ce débordement reste gênant en 4G.
+- **À faire seulement si** ce débordement reste gênant en 4G, et si la parade de secours de D6
+  (pas de `pour_update` près du plafond) ne suffit pas.
 - **Version réduite à faire dans ce cas :** seul `pour_update` part par la seconde boucle. La
   boucle principale attend que la file soit vide avant chaque `pour_end`, `card_removed` et
   `authorize`. Cette attente est indispensable : depuis D1, la clôture facture au moins le
@@ -297,6 +332,8 @@ Option gardée sous condition (décision du 2026-11-19).
    - procédure de calibration : le facteur s'applique au badge suivant (D2) ;
    - en passant, D19 : supprimer `FlowMeter.update()` et corriger la formule du README.
 3. **À vérifier une fois :** chercher `Erreur fatale` dans les journaux du Pi du salon.
+4. **Après le prochain salon :** relever `Débordement non facturé` dans les journaux du serveur.
+   Si la perte est réelle, appliquer la parade de secours de D6.
 
 Les tests du contrôleur du Pi sont dans `tests/pytest/test_controlvanne_pi_controleur.py`. Ils
 utilisent de faux objets et une fausse horloge, et font tourner la vraie boucle `run()`.
