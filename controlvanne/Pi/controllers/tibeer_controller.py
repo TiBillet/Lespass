@@ -28,6 +28,14 @@ CARD_GRACE_PERIOD_S = 3.0
 # / Frequency of pour_update events (seconds)
 UPDATE_INTERVAL_S = 1.0
 
+# Pause avant un nouvel essai de authorize() apres une erreur reseau (secondes).
+# 2,5 s => au plus ~21 essais/min, sous le plafond serveur de 30 authorize/min
+# par cle (AuthorizeTireuseThrottle) : au-dela, le serveur repondrait 429 et
+# la carte resterait bloquee.
+# / Pause before retrying authorize() after a network error (seconds).
+# 2.5 s => at most ~21 tries/min, below the server cap of 30 authorize/min.
+AUTHORIZE_RETRY_DELAY_S = 2.5
+
 
 class TibeerController:
     """
@@ -50,6 +58,12 @@ class TibeerController:
         self.allowed_ml = 0.0
         self.last_update_ts = 0
         self.running = True
+
+        # Vrai quand le dernier authorize a échoué sur une erreur réseau.
+        # La carte reste la carte courante (current_uid) : son retrait envoie
+        # donc bien card_removed. Tant que c'est vrai, la boucle relance authorize.
+        # / True when the last authorize failed on a network error: the loop retries it.
+        self.authorize_a_refaire = False
 
         # Flag : la derniere session etait-elle une session maintenance ?
         # Si oui, on pinge le serveur apres le retrait de la carte pour
@@ -77,9 +91,10 @@ class TibeerController:
                     # --- Carte presente ---
                     self.last_seen_ts = now
 
-                    if uid != self.current_uid:
-                        # Nouvelle carte (ou retour apres micro-coupure)
-                        # / New card (or return after micro-dropout)
+                    if uid != self.current_uid or self.authorize_a_refaire:
+                        # Nouvelle carte, retour après une micro-coupure,
+                        # ou nouvel essai d'un authorize en erreur réseau.
+                        # / New card, return after a micro-dropout, or authorize retry.
                         logger.info(f"Nouveau badge detecte: {uid}")
                         if self.is_serving:
                             self._end_session_actions()
@@ -114,12 +129,23 @@ class TibeerController:
     def _handle_new_session(self, uid):
         """Badge detecte → demande autorisation au serveur.
         / Badge detected → request authorization from server."""
+        self.authorize_a_refaire = False
         try:
             auth = self.client.authorize(uid)
         except BackendError as e:
-            logger.error(f"Erreur backend authorize: {e}")
+            logger.error(f"Erreur backend authorize: {e} — nouvel essai a la prochaine lecture.")
             self.is_serving = False
             self.session_id = None
+            # La carte reste la carte courante. Si elle est retirée, card_removed
+            # part et l'écran revient à « En attente ». Si elle reste posée, la
+            # boucle relance authorize à la lecture suivante. Le serveur clôt
+            # lui-même la session orpheline au prochain authorize.
+            # La pause garde les essais sous la limite du serveur
+            # (voir AUTHORIZE_RETRY_DELAY_S).
+            # / The card stays current: its removal sends card_removed; while it stays,
+            # the loop retries authorize after a pause.
+            self.authorize_a_refaire = True
+            time.sleep(AUTHORIZE_RETRY_DELAY_S)
             return
 
         if auth.get("authorized") is True:
@@ -209,6 +235,7 @@ class TibeerController:
         self.session_id = None
         self.allowed_ml = 0.0
         self.last_session_was_maintenance = False
+        self.authorize_a_refaire = False
 
         # Apres une session maintenance : pinger le serveur pour recuperer
         # immediatement le nouveau facteur de calibration si l'admin vient
