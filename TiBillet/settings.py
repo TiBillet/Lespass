@@ -677,7 +677,16 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [('redis', 6379)],
+            # socket_timeout est OBLIGATOIRE et doit rester plus grand que 5.
+            # channels_redis attend les messages avec BZPOPMIN : Redis garde la
+            # demande ouverte 5 s (brpop_timeout), puis repond « rien ».
+            # Depuis redis-py 8, le client abandonne aussi la lecture apres 5 s par
+            # defaut. Il abandonne avant la reponse de Redis : le consumer plante et
+            # chaque websocket inactif (caisse, imprimante, kiosque) se coupe.
+            # 15 s laisse Redis repondre, et borne quand meme une connexion morte.
+            # / Must stay above channels_redis brpop_timeout (5 s): redis-py 8
+            # defaults socket_timeout to 5 s, which kills idle websockets.
+            "hosts": [{"host": "redis", "port": 6379, "socket_timeout": 15}],
         },
     },
 }
