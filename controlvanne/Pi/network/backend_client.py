@@ -11,10 +11,29 @@ Endpoints appeles :
 - POST /controlvanne/auth-kiosk/             → token API → cookie session
 """
 
+import time
+from http.cookiejar import DefaultCookiePolicy
+
 import requests
 from config.settings import SERVER_URL, API_KEY, TIREUSE_UUID, SSL_VERIFY
 from utils.logger import logger
 from utils.exceptions import BackendError
+
+# Delais de authorize : (connexion, attente de la reponse), en secondes.
+# L'ancien 2.0 etait deja frole (1,6 a 2,0 s mesures sur Raff le 2026-11-18).
+# / authorize timeouts: (connect, read), in seconds. The former 2.0 was already
+# nearly reached (1.6 to 2.0 s measured on Raff).
+AUTHORIZE_TIMEOUT_S = (3.0, 4.0)
+
+# Au-dela de cette inactivite (secondes), authorize repart d'une connexion neuve.
+# Une connexion inactive peut etre coupee en silence en chemin (box, reseau 4G) :
+# la reutiliser ferait attendre tout le delai de reponse avant de reconnecter.
+# Pire cas = comportement sans connexion reutilisee (~2 s). Valeur a ajuster
+# par la mesure sur le reseau reel.
+# / Beyond this idle time (seconds), authorize starts from a fresh connection.
+# An idle connection can be silently dropped on the way (router, 4G network):
+# reusing it would wait for the full read timeout before reconnecting.
+IDLE_RECONNECT_S = 60.0
 
 
 class BackendClient:
@@ -32,6 +51,25 @@ class BackendClient:
             "Content-Type": "application/json",
             "Authorization": f"Api-Key {API_KEY}",
         }
+        # Connexion HTTP reutilisee d'un appel a l'autre (keep-alive) : la connexion
+        # TCP + la poignee de main TLS (~1,1 s mesure sur Raff le 2026-11-18) ne sont
+        # payees qu'une fois, pas a chaque badge.
+        # / HTTP connection reused across calls (keep-alive): TCP connect + TLS
+        # handshake (~1.1 s measured on Raff) are paid once, not on every badge.
+        self.http = requests.Session()
+        # Aucun cookie conserve : l'API tireuse s'authentifie par cle seule, sans
+        # etat. Sans ce blocage, le cookie de session pose par auth-kiosk serait
+        # renvoye a chaque appel (comportement absent avant la Session).
+        # / No cookie kept: the tap API authenticates by key only, statelessly.
+        self.http.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
+        self.last_request_ts = 0.0
+
+    def _post(self, url, payload, timeout):
+        """POST via la connexion reutilisee ; memorise l'heure du dernier appel abouti.
+        / POST through the reused connection; records the last successful call time."""
+        response = self.http.post(url, json=payload, headers=self.headers, timeout=timeout, verify=SSL_VERIFY)
+        self.last_request_ts = time.monotonic()
+        return response
 
     def ping(self):
         """
@@ -46,7 +84,7 @@ class BackendClient:
         payload = {"tireuse_uuid": self.tireuse_uuid}
 
         try:
-            response = requests.post(url, json=payload, headers=self.headers, timeout=5.0, verify=SSL_VERIFY)
+            response = self._post(url, payload, 5.0)
             if response.status_code == 200:
                 return response.json()
             else:
@@ -72,8 +110,14 @@ class BackendClient:
             "uid": uid,
         }
 
+        # Connexion inactive depuis trop longtemps : on la ferme pour en ouvrir une neuve
+        # plutot que risquer une connexion morte (cf. IDLE_RECONNECT_S).
+        # / Idle for too long: close it and open a fresh one (see IDLE_RECONNECT_S).
+        if time.monotonic() - self.last_request_ts > IDLE_RECONNECT_S:
+            self.http.close()
+
         try:
-            response = requests.post(url, json=payload, headers=self.headers, timeout=2.0, verify=SSL_VERIFY)
+            response = self._post(url, payload, AUTHORIZE_TIMEOUT_S)
             data = response.json()
 
             if response.status_code == 200:
@@ -111,7 +155,7 @@ class BackendClient:
         timeout = 1.0 if event_type == "pour_update" else 3.0
 
         try:
-            response = requests.post(url, json=payload, headers=self.headers, timeout=timeout, verify=SSL_VERIFY)
+            response = self._post(url, payload, timeout)
             if response.status_code == 200:
                 return response.json()
             else:
@@ -137,7 +181,7 @@ class BackendClient:
         url = f"{self.server_url}/controlvanne/auth-kiosk/"
 
         try:
-            response = requests.post(url, json={}, headers=self.headers, timeout=5.0, verify=SSL_VERIFY)
+            response = self._post(url, {}, 5.0)
             if response.status_code == 200:
                 data = response.json()
                 session_key = data.get("session_key", "")

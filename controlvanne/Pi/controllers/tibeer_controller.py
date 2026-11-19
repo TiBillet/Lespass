@@ -28,6 +28,14 @@ CARD_GRACE_PERIOD_S = 3.0
 # / Frequency of pour_update events (seconds)
 UPDATE_INTERVAL_S = 1.0
 
+# Pause avant un nouvel essai de authorize() apres une erreur reseau (secondes).
+# 2,5 s => au plus ~21 essais/min, sous le plafond serveur de 30 authorize/min
+# par cle (AuthorizeTireuseThrottle) : au-dela, le serveur repondrait 429 et
+# la carte resterait bloquee.
+# / Pause before retrying authorize() after a network error (seconds).
+# 2.5 s => at most ~21 tries/min, below the server cap of 30 authorize/min.
+AUTHORIZE_RETRY_DELAY_S = 2.5
+
 
 class TibeerController:
     """
@@ -117,9 +125,18 @@ class TibeerController:
         try:
             auth = self.client.authorize(uid)
         except BackendError as e:
-            logger.error(f"Erreur backend authorize: {e}")
+            logger.error(f"Erreur backend authorize: {e} — nouvel essai a la prochaine lecture.")
             self.is_serving = False
             self.session_id = None
+            # Oublier la carte pour que la lecture suivante relance authorize().
+            # Sans cela, meme carte + pas de service = la boucle ne fait plus rien
+            # tant que la carte reste posee (ecran « autorise », vanne fermee).
+            # Le serveur cloture lui-meme une session orpheline au prochain authorize.
+            # / Forget the card so the next read retries authorize(). Otherwise,
+            # same card + not serving = the loop does nothing while the card stays.
+            # The server closes any orphan session on the next authorize.
+            self.current_uid = None
+            time.sleep(AUTHORIZE_RETRY_DELAY_S)
             return
 
         if auth.get("authorized") is True:
