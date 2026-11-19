@@ -672,7 +672,7 @@ volume_ajoute_ml = (debit_litres_par_minute / 60) * delta_temps * 1000
 volume_litres = total_impulsions / (facteur_calibration * 60)
 ```
 
-Le facteur de calibration peut etre mis a jour en temps reel par le serveur Django (recu dans la reponse `ping`). La page de calibration admin permet d'affiner ce facteur en comparant le volume mesure par Django avec le volume reel verse dans un verre gradue.
+Le facteur de calibration vient du serveur Django : il est recu au demarrage (reponse `ping`), puis a chaque badge (reponse `authorize`). Une calibration appliquee dans l'admin compte donc des le badge suivant. La page de calibration admin permet d'affiner ce facteur en comparant le volume mesure par Django avec le volume reel verse dans un verre gradue.
 
 #### Electrovanne — `hardware/valve.py`
 

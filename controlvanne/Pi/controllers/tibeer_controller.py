@@ -13,10 +13,13 @@ Machine a etats :
 """
 
 import time
-from hardware.rfid_reader import RFIDReader
-from hardware.valve import Valve
-from hardware.flow_meter import FlowMeter
-from network.backend_client import BackendClient
+
+# Le lecteur NFC, la vanne, le débitmètre et le client du serveur ne sont PAS
+# importés ici : main.py les crée et les passe au constructeur. Les importer
+# chargerait pigpio et mfrc522, et le contrôleur ne pourrait plus être testé
+# sans Raspberry Pi (voir tests/pytest/test_controlvanne_pi_controleur.py).
+# / Hardware and client are NOT imported here: main.py builds them and passes
+# them to the constructor. Importing them would load pigpio and mfrc522.
 from utils.logger import logger
 from utils.exceptions import BackendError
 
@@ -64,14 +67,6 @@ class TibeerController:
         # donc bien card_removed. Tant que c'est vrai, la boucle relance authorize.
         # / True when the last authorize failed on a network error: the loop retries it.
         self.authorize_a_refaire = False
-
-        # Flag : la derniere session etait-elle une session maintenance ?
-        # Si oui, on pinge le serveur apres le retrait de la carte pour
-        # recuperer immediatement le nouveau facteur de calibration.
-        # / Flag: was the last session a maintenance session?
-        # If yes, we ping the server after card removal to immediately
-        # retrieve the new calibration factor.
-        self.last_session_was_maintenance = False
 
     def run(self):
         """Boucle principale — tourne toutes les 100ms.
@@ -153,11 +148,16 @@ class TibeerController:
             self.session_id = auth.get("session_id")
             self.allowed_ml = float(auth.get("allowed_ml", 0))
 
-            # Memoriser si c'est une session maintenance
-            # / Remember if this is a maintenance session
-            self.last_session_was_maintenance = auth.get("is_maintenance", False)
-            if self.last_session_was_maintenance:
-                logger.info("Session maintenance detectee — un ping sera effectue au retrait de la carte.")
+            # Appliquer le facteur de calibration envoyé par le serveur.
+            # Une calibration faite dans l'admin compte ainsi dès ce badge.
+            # À faire AVANT la photo du volume de départ (juste en dessous) :
+            # volume_l() recalcule tout le compteur avec le facteur courant.
+            # Changer le facteur après la photo fausserait le volume servi.
+            # / Apply the calibration factor sent by the server, BEFORE the start
+            # snapshot below: volume_l() recomputes the whole counter with it.
+            facteur_de_calibration = auth.get("calibration_factor")
+            if facteur_de_calibration:
+                self.flow_meter.set_calibration_factor(facteur_de_calibration)
 
             # Reset debitmetre (snapshot du volume actuel)
             # / Reset flow meter (snapshot of current volume)
@@ -184,7 +184,6 @@ class TibeerController:
             logger.warning(f"Badge {uid} refuse: {message}")
             self.is_serving = False
             self.session_id = None
-            self.last_session_was_maintenance = False
 
     def _handle_pouring_loop(self, now):
         """Pendant le service : envoie les mises a jour de volume.
@@ -214,10 +213,6 @@ class TibeerController:
     def _handle_card_removal(self):
         """Carte retiree → fermer la vanne, envoyer les events de fin.
         / Card removed → close valve, send end events."""
-        # Capturer le flag avant de le reinitialiser
-        # / Capture the flag before resetting it
-        session_etait_maintenance = self.last_session_was_maintenance
-
         if self.is_serving:
             self._end_session_actions()
 
@@ -234,17 +229,7 @@ class TibeerController:
         self.current_uid = None
         self.session_id = None
         self.allowed_ml = 0.0
-        self.last_session_was_maintenance = False
         self.authorize_a_refaire = False
-
-        # Apres une session maintenance : pinger le serveur pour recuperer
-        # immediatement le nouveau facteur de calibration si l'admin vient
-        # de l'appliquer via la page de calibration.
-        # / After a maintenance session: ping the server to immediately retrieve
-        # the new calibration factor if the admin just applied it via the
-        # calibration page.
-        if session_etait_maintenance:
-            self._rafraichir_calibration()
 
     def _end_session_actions(self):
         """Ferme la vanne et envoie le bilan final.
@@ -266,33 +251,6 @@ class TibeerController:
                 logger.error(f"pour_end echoue: {e}")
 
         self.is_serving = False
-
-    def _rafraichir_calibration(self):
-        """
-        Appele apres une session maintenance : pinge le serveur et applique
-        immediatement le facteur de calibration retourne.
-        Permet a l'admin d'appliquer un nouveau facteur via la page de calibration
-        et de le voir pris en compte des le prochain versement sans redemarrer le Pi.
-        / Called after a maintenance session: pings the server and immediately
-        applies the returned calibration factor.
-        Lets the admin apply a new factor via the calibration page and have it
-        take effect on the very next pour without restarting the Pi.
-        """
-        logger.info("Session maintenance terminee — recuperation du facteur de calibration...")
-        try:
-            ping_result = self.client.ping()
-            if ping_result.get("status") == "pong":
-                tireuse_config = ping_result.get("tireuse", {})
-                calibration = tireuse_config.get("calibration_factor")
-                if calibration:
-                    self.flow_meter.set_calibration_factor(calibration)
-                    logger.info(f"Facteur de calibration mis a jour apres maintenance: {calibration}")
-                else:
-                    logger.warning("Ping OK mais pas de calibration_factor dans la reponse.")
-            else:
-                logger.warning(f"Ping apres maintenance: {ping_result.get('message', 'reponse inattendue')}")
-        except BackendError as e:
-            logger.warning(f"Ping apres maintenance echoue (facteur inchange): {e}")
 
     def cleanup(self):
         """Arret propre : clore la session en cours cote serveur, puis fermer la vanne.

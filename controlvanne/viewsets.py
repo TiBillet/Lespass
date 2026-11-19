@@ -313,6 +313,19 @@ def _cloturer_session_et_facturer(tireuse, session, volume_ml, ip="0.0.0.0"):
             return None, None
         session = session_verrouillee
 
+        # On facture au moins le dernier volume reçu par pour_update.
+        # Le Pi envoie toujours card_removed avec 0 ml : si son pour_end s'est
+        # perdu en chemin, c'est card_removed qui clôt la session. Sans ce
+        # plancher, la bière déjà servie ne serait jamais facturée.
+        # Le volume d'une session ne fait que monter : le plus grand des deux
+        # est toujours le bon.
+        # / Bill at least the last volume received by pour_update. The Pi always
+        # sends card_removed with 0 ml: if its pour_end got lost, card_removed
+        # closes the session. A session volume only grows: the larger is right.
+        dernier_volume_recu_ml = session.dernier_volume_ml or Decimal("0")
+        if dernier_volume_recu_ml > volume_ml:
+            volume_ml = dernier_volume_recu_ml
+
         session.close_with_volume(float(volume_ml))
 
         # Décrémenter le réservoir, directement en SQL :
@@ -616,7 +629,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Chercher la tireuse / Find the tap
         try:
-            tireuse = TireuseBec.objects.select_related("terminal", "fut_actif").get(
+            tireuse = TireuseBec.objects.select_related("terminal", "fut_actif", "debimetre").get(
                 uuid=tireuse_uuid
             )
         except TireuseBec.DoesNotExist:
@@ -761,6 +774,13 @@ class TireuseViewSet(viewsets.ViewSet):
                     "is_maintenance": True,
                     "allowed_ml": float(session.allowed_ml_session),
                     "liquid_label": tireuse.liquid_label,
+                    # Le Pi applique ce facteur avant de mesurer la session
+                    # / The Pi applies this factor before measuring the session
+                    "calibration_factor": (
+                        tireuse.debimetre.flow_calibration_factor
+                        if tireuse.debimetre
+                        else None
+                    ),
                     "message": "Maintenance mode",
                 }
             )
@@ -907,6 +927,15 @@ class TireuseViewSet(viewsets.ViewSet):
                 "allowed_ml": float(allowed_ml),
                 "liquid_label": tireuse.liquid_label,
                 "solde_centimes": solde_centimes,
+                # Le Pi applique ce facteur avant de mesurer la session : une
+                # calibration faite dans l'admin compte dès le badge suivant.
+                # / The Pi applies this factor before measuring the session: an
+                # admin calibration counts from the next badge.
+                "calibration_factor": (
+                    tireuse.debimetre.flow_calibration_factor
+                    if tireuse.debimetre
+                    else None
+                ),
                 "message": "OK",
             }
         )

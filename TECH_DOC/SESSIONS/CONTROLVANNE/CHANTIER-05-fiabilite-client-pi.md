@@ -1,6 +1,11 @@
 # CHANTIER 05 — Coupure de la vanne et fiabilité du client Pi
 
-**Statut :** PROPOSÉ le 2026-11-19. Rien n'est codé.
+**Statut :** EN COURS.
+- D7 et D9 : faits par la PR #506 (fusionnée le 2026-11-19).
+- D1, D2 et D20 : faits le 2026-11-19, non commités. Voir
+  `CHANGELOG/2026-11-19-tireuse-retrait-facture-et-calibration-au-badge.md`.
+- D3 : en attente de Mike (référence du capteur).
+- D8 et D12 : acceptés en l'état (décision du 2026-11-19, voir leur fiche).
 **Périmètre :** le client Raspberry Pi (`controlvanne/Pi/`) et les vues serveur qu'il appelle
 (`controlvanne/viewsets.py`, `controlvanne/billing.py`, `controlvanne/calibration_views.py`).
 **Méthode :** lecture complète du code, puis deux relectures indépendantes. Chaque défaut porte
@@ -53,7 +58,7 @@ est retardé, pas la **mesure**.
 
 | Événement | Quand | Délai d'attente | Fichier |
 |---|---|---|---|
-| `authorize` | nouvelle carte | 2 s | `Pi/network/backend_client.py:76` |
+| `authorize` | nouvelle carte | 3 s connexion, 4 s réponse (PR #506) | `Pi/network/backend_client.py` (`AUTHORIZE_TIMEOUT_S`) |
 | `pour_start` | juste après l'ouverture de la vanne | 3 s | `backend_client.py:111-114` |
 | `pour_update` | au plus une fois par seconde | 1 s | `backend_client.py:111-114` |
 | `pour_end` | plafond atteint ou fin de session | 3 s | `backend_client.py:111-114` |
@@ -98,7 +103,8 @@ plus longtemps que le chiffre écrit.
 
 ### 5.1 Argent et bière gratuite
 
-**D1 — `card_removed` à 0 ml peut rendre un tirage gratuit.** *Vérifié.*
+**D1 — `card_removed` à 0 ml peut rendre un tirage gratuit.** ✅ *Fait le 2026-11-19 : plancher au
+`dernier_volume_ml` dans `_cloturer_session_et_facturer`, pour toutes les clôtures.*
 - Le Pi envoie toujours `card_removed` avec un volume de 0 (`tibeer_controller.py:204`).
 - Le serveur traite `card_removed` comme `pour_end`, avec le volume reçu (`viewsets.py:1011-1016`).
 - Il ne facture que si `volume_ml > 0` (`viewsets.py:328` et `347`).
@@ -108,7 +114,9 @@ plus longtemps que le chiffre écrit.
   `max(volume reçu, session.dernier_volume_ml)`. Le serveur connaît déjà ce dernier volume
   (`viewsets.py:998`). Ce correctif protège aussi les Pi déjà installés, sans mise à jour.
 
-**D2 — Une nouvelle calibration n'est pas appliquée par le Pi.** *Vérifié.*
+**D2 — Une nouvelle calibration n'est pas appliquée par le Pi.** ✅ *Fait le 2026-11-19 : facteur
+dans les deux réponses d'`authorize`, appliqué avant `session_start_vol`. La relecture après une
+carte de maintenance est supprimée. Déployer le serveur avant les Pi.*
 - « Appliquer » enregistre le facteur en base seulement (`calibration_views.py:353-356`).
 - Le Pi lit le facteur au démarrage (`Pi/main.py:74-77`) et au retrait d'une carte de
   maintenance (`tibeer_controller.py:219-220`). Nulle part ailleurs.
@@ -121,23 +129,11 @@ plus longtemps que le chiffre écrit.
   `session_start_vol` (ligne 138). Sinon, le volume servi ferait un saut, car `volume_l()`
   recalcule tout le compteur avec le nouveau facteur.
 
-**D3 — Le facteur par défaut est 6,5.** *À confirmer.*
+**D3 — Le facteur par défaut est 6,5.** *À confirmer. En attente de Mike (décision du 2026-11-19).*
 - `Pi/hardware/flow_meter.py:21-23` : 6,5 par défaut.
 - La fiche courante du YF-S201 donne 7,5. Sans calibration, l'écart serait d'environ 15 % sur
   chaque tirage.
 - **À faire :** confirmer la référence exacte du capteur utilisé et sa fiche technique.
-
-**D10 — Débitmètre muet : la vanne reste ouverte sans limite.** *À confirmer.*
-- Si le débitmètre est débranché ou en panne, il n'y a aucune impulsion. Le plafond n'est jamais
-  atteint. La bière coule gratuitement tant que la carte reste posée.
-- Même cas, sans fraude : une carte oubliée sur le lecteur garde la session ouverte et bloque le
-  client suivant.
-- **Correctif :** si la vanne est ouverte et qu'aucune impulsion n'arrive pendant N secondes, la
-  session se ferme. N reste à choisir (voir la section 9).
-
-**D15 — Aucun volume minimal à l'`authorize`.** *À confirmer.*
-- Une carte avec 1 centime ouvre la vanne au moins une seconde.
-- **Correctif :** refuser si `allowed_ml` est sous un seuil.
 
 ### 5.2 Coupure en retard
 
@@ -157,7 +153,7 @@ plus longtemps que le chiffre écrit.
 - `tibeer_controller.py:152`. Une erreur réseau à ce moment remonte jusqu'à `main.py`, qui fait
   `sys.exit(1)`.
 - La vanne vient d'être ouverte (ligne 141). systemd relance le service (`Restart=always`,
-  `RestartSec=2`), et chaque relance fait d'abord un `git pull` (D13).
+  `RestartSec=2`), et chaque relance fait d'abord un `git pull` (D13, reporté).
 
 **D5 — `pour_end` au plafond n'est pas dans un `try`.** *Vérifié.*
 - `tibeer_controller.py:175`. Même effet que D4. C'est l'appel le plus lent (D11), donc le plus
@@ -178,11 +174,20 @@ Ces deux plantages expliquent peut-être une partie de ce qui a été vu.
 
 ### 5.4 Lenteur réseau
 
-**D7 — Pas de `requests.Session`.** *Vérifié.*
+**D7 — Pas de `requests.Session`.** ✅ *Fait par la PR #506.*
 - Chaque appel refait DNS, TCP et TLS : 4 à 5 allers-retours 4G au lieu d'un seul.
 - **Correctif :** une `requests.Session` créée une fois dans `BackendClient.__init__`.
 
-**D8 — Les délais d'attente ne bornent pas l'appel entier.** *Vérifié.* Voir 2.3.
+**D8 — Les délais d'attente ne bornent pas l'appel entier, et le serveur attend plus longtemps
+que le Pi.** *Vérifié.*
+- Côté Pi : voir 2.3. Le délai vaut pour chaque phase (connexion, puis réponse).
+- Côté serveur : les appels à l'ancien Fedow ont un délai de **30 s** par défaut
+  (`fedow_connect/fedow_api.py:117`, `130` et `781`). `authorize` peut en faire jusqu'à deux :
+  rapatrier une carte inconnue, puis lire le solde.
+- **Effet :** le Pi abandonne au bout de 4 s, mais le serveur continue. Il peut créer la session
+  et pousser « autorisé » bien après. C'est la cause de D12, et du risque résiduel de D17.
+- **Décision du 2026-11-19 : accepté en l'état.** Un ordre de grandeur de 9 s n'est pas un souci.
+  Les délais de Fedow ne changent pas.
 
 **D11 — `pour_end` fait attendre le Pi pour un simple affichage.** *Vérifié pour la lecture du
 solde.*
@@ -192,25 +197,27 @@ solde.*
 - **Correctif :** ne plus faire attendre la réponse au Pi pour cette lecture. Le moyen reste à
   choisir : solde calculé en local, ou envoi par WebSocket après la réponse.
 
-**D13 — `git pull` à chaque redémarrage du service.** *Vérifié.*
-- `config/tibeer.service` : `ExecStartPre=git-update.sh`. En 4G faible, cela peut prendre
-  jusqu'à 90 s. Avec D4 ou D5, chaque plantage coûte donc ce temps.
-
 ### 5.5 États bloqués
 
-**D9 — Après un `authorize` raté, la carte est « morte » et l'écran ment.** *Vérifié pour la
-carte morte.*
+**D9 — Après un `authorize` raté, la carte est « morte » et l'écran ment.** ✅ *Fait par la PR
+#506 : nouvel essai toutes les 2,5 s sur erreur réseau seulement, `card_removed` conservé.*
 - `current_uid` est posé **avant** l'appel (ligne 86). Si l'appel échoue (lignes 119-123), la
   carte reste enregistrée comme « en cours ». La même carte est ignorée tant qu'elle n'a pas été
   retirée plus de 3 s.
 - Côté serveur, la session est créée et le WebSocket est poussé **avant** la réponse. Si le Pi a
   abandonné l'attente, l'écran affiche « autorisé » alors que la vanne reste fermée.
-- **Correctif :** après une erreur réseau, remettre `current_uid` à `None` pour retenter au tour
-  suivant, avec une courte pause. La session fantôme sera close comme orpheline au prochain
-  `authorize`.
+- **Correctif (PR #506) :** après une erreur réseau, l'indicateur `authorize_a_refaire` relance
+  `authorize` à la lecture suivante, après 2,5 s de pause. La carte reste la carte courante : son
+  retrait envoie `card_removed`. Une réponse du serveur, même une page 500, n'est jamais réessayée.
 
-**D12 — `card_removed` pendant un `authorize` lent.** *À confirmer.*
-- La session peut être créée après coup, et l'écran reste figé sur « autorisé ».
+**D12 — `card_removed` pendant un `authorize` lent.** *Vérifié dans le code, pas reproduit.*
+- Le Pi abandonne `authorize` (4 s), attend 2,5 s, puis 3 s de grâce, et envoie `card_removed`.
+- Si le serveur est encore dans `authorize` (Fedow lent, voir D8), `card_removed` ne trouve aucune
+  session : l'écran revient à « En attente ».
+- Puis `authorize` se termine, crée la session et pousse « autorisé ». L'écran reste figé
+  jusqu'au badge suivant. Côté argent, rien : la session est close à 0 ml au badge suivant.
+- Depuis la PR #506, il faut un `authorize` de plus de 9,5 s côté serveur.
+- **Décision du 2026-11-19 : accepté en l'état**, comme D8.
 
 **D16 — Un 404 sur `pour_update` ne ferme pas la vanne.** *À confirmer.*
 - Une réponse autre que 200 renvoie `None`, sans erreur. Si le serveur a déjà clos la session,
@@ -228,7 +235,8 @@ carte morte.*
   le README.
 - La boucle l'appelle à chaque tour (ligne 74) sans utiliser le résultat.
 
-**D20 — Le contrôleur ne s'importe pas sans le matériel.** *Vérifié.*
+**D20 — Le contrôleur ne s'importe pas sans le matériel.** ✅ *Fait le 2026-11-19 : imports retirés,
+premiers tests dans `tests/pytest/test_controlvanne_pi_controleur.py`.*
 - Les imports des lignes 16-19 (`RFIDReader`, `Valve`, `FlowMeter`, `BackendClient`) ne servent
   pas : les objets sont injectés par le constructeur. Ils chargent pourtant `pigpio` et `mfrc522`,
   ce qui empêche de tester le contrôleur sur une machine sans Pi.
@@ -240,6 +248,10 @@ carte morte.*
 ---
 
 ## 6. Solutions écartées
+
+**Fermer la session quand le débitmètre ne compte plus rien pendant N secondes.**
+Écartée le 2026-11-19. Sur le terrain, une vanne ouverte sans débit se voit tout de suite. Une
+coupure automatique gênerait surtout un client lent à se servir.
 
 **Fermer la vanne à la première lecture manquée, en gardant la session.**
 Écartée. Avec un RC522 qui rate une lecture sur deux, la vanne battrait à environ 5 Hz :
@@ -289,14 +301,12 @@ Chaque correctif commence par un test, vu en échec avant le correctif.
 | 4 | D6 | plafond contrôlé à chaque tour | Pi : plafond atteint 0,2 s après un `pour_update` → vanne fermée au tour suivant |
 | 5 | D7 | `requests.Session` | lecture du code ; mesure de l'étape 0 avant et après |
 | 6 | D9 | retenter `authorize` après une erreur réseau | Pi : 1ᵉʳ `authorize` en erreur, 2ᵉ accepté → vanne ouverte |
-| 7 | D10 | fin de session si aucune impulsion pendant N s | Pi : vanne ouverte, 0 impulsion pendant N s → vanne fermée |
-| 8 | D16 | 404 sur `pour_update` → fin de session | Pi : client qui renvoie 404 → vanne fermée |
+| 7 | D16 | 404 sur `pour_update` → fin de session | Pi : client qui renvoie 404 → vanne fermée |
 
 ### Étape 3 — Côté serveur
 
 - D11 : ne plus faire attendre la réponse de `pour_end` pour la lecture du solde.
 - D17 : une orpheline qui plante ne doit pas bloquer les `authorize` suivants.
-- D15 : volume minimal à l'`authorize`.
 - D21 : aligner `simu_pi.js` sur le vrai Pi.
 
 ### Étape 4 — Selon les mesures de l'étape 0
@@ -318,6 +328,20 @@ Chaque correctif commence par un test, vu en échec avant le correctif.
 
 ## 8. Hors périmètre
 
+### Reportés, à revoir plus tard (décision du 2026-11-19)
+
+Ces deux points ne posent pas de souci tout de suite.
+
+**D15 — Aucun volume minimal à l'`authorize`.** *À confirmer.*
+- Une carte avec 1 centime ouvre la vanne au moins une seconde.
+- **Correctif :** refuser si `allowed_ml` est sous un seuil.
+
+**D13 — `git pull` à chaque redémarrage du service.** *Vérifié.*
+- `config/tibeer.service` : `ExecStartPre=git-update.sh`. En 4G faible, cela peut prendre
+  jusqu'à 90 s. Avec D4 ou D5, chaque plantage coûte donc ce temps.
+
+### Exclus
+
 - Le passage au fil d'envoi séparé, tant que les mesures ne le justifient pas.
 - Tout changement du protocole entre le Pi et le serveur, hors `calibration_factor` dans la
   réponse d'`authorize`.
@@ -327,10 +351,7 @@ Chaque correctif commence par un test, vu en échec avant le correctif.
 1. Quelle est la référence exacte du débitmètre, et d'où vient le facteur 6,5 ? (D3)
 2. Les journaux du Pi du salon sont-ils encore disponibles ? (étape 0)
 3. Le lecteur VMA405 est-il utilisé sur une vraie tireuse ? (D18)
-4. Quel délai sans impulsion avant de fermer la vanne ? (D10) Il dépend du temps qu'un client
-   met à ouvrir le robinet.
-5. Quel volume minimal pour accepter une carte ? (D15)
-6. Le relais et la vanne ont-ils déjà une diode de roue libre ? Le signal du débitmètre passe-t-il
+4. Le relais et la vanne ont-ils déjà une diode de roue libre ? Le signal du débitmètre passe-t-il
    par un pont diviseur ? (étape 5)
 
 ## 10. Ce qui n'a pas été vérifié
