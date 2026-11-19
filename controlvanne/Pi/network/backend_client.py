@@ -19,20 +19,19 @@ from config.settings import SERVER_URL, API_KEY, TIREUSE_UUID, SSL_VERIFY
 from utils.logger import logger
 from utils.exceptions import BackendError
 
-# Delais de authorize : (connexion, attente de la reponse), en secondes.
-# L'ancien 2.0 etait deja frole (1,6 a 2,0 s mesures sur Raff le 2026-11-18).
-# / authorize timeouts: (connect, read), in seconds. The former 2.0 was already
-# nearly reached (1.6 to 2.0 s measured on Raff).
+# Délais de authorize, en secondes : (connexion, attente de la réponse).
+# Sur un Pi en 4G, la réponse peut dépasser 1,5 s. Un délai trop court fait
+# abandonner le Pi alors que le serveur a déjà autorisé la carte.
+# / authorize timeouts in seconds: (connect, read). On 4G the answer can exceed 1.5 s.
 AUTHORIZE_TIMEOUT_S = (3.0, 4.0)
 
-# Au-dela de cette inactivite (secondes), authorize repart d'une connexion neuve.
-# Une connexion inactive peut etre coupee en silence en chemin (box, reseau 4G) :
-# la reutiliser ferait attendre tout le delai de reponse avant de reconnecter.
-# Pire cas = comportement sans connexion reutilisee (~2 s). Valeur a ajuster
-# par la mesure sur le reseau reel.
-# / Beyond this idle time (seconds), authorize starts from a fresh connection.
-# An idle connection can be silently dropped on the way (router, 4G network):
-# reusing it would wait for the full read timeout before reconnecting.
+# Au-delà de cette inactivité (en secondes), authorize repart d'une connexion neuve.
+# Une connexion inactive peut être coupée en silence en chemin (box, réseau 4G).
+# La réutiliser ferait attendre tout le délai de réponse avant de reconnecter.
+# / Beyond this idle time (seconds), authorize opens a fresh connection.
+# TODO : régler cette valeur d'après la durée de vie réelle d'une connexion
+# inactive en 4G.
+# / Tune this value from the real idle lifetime of a 4G connection.
 IDLE_RECONNECT_S = 60.0
 
 
@@ -51,15 +50,15 @@ class BackendClient:
             "Content-Type": "application/json",
             "Authorization": f"Api-Key {API_KEY}",
         }
-        # Connexion HTTP reutilisee d'un appel a l'autre (keep-alive) : la connexion
-        # TCP + la poignee de main TLS (~1,1 s mesure sur Raff le 2026-11-18) ne sont
-        # payees qu'une fois, pas a chaque badge.
-        # / HTTP connection reused across calls (keep-alive): TCP connect + TLS
-        # handshake (~1.1 s measured on Raff) are paid once, not on every badge.
+        # Connexion HTTP réutilisée d'un appel à l'autre (keep-alive).
+        # Ouvrir une connexion (TCP puis poignée de main TLS) coûte plus d'une
+        # seconde sur un Pi en 4G. Elle n'est payée qu'une fois, pas à chaque badge.
+        # / HTTP connection reused across calls (keep-alive): the TCP + TLS opening
+        # cost is paid once, not on every badge.
         self.http = requests.Session()
-        # Aucun cookie conserve : l'API tireuse s'authentifie par cle seule, sans
-        # etat. Sans ce blocage, le cookie de session pose par auth-kiosk serait
-        # renvoye a chaque appel (comportement absent avant la Session).
+        # Aucun cookie n'est gardé. L'API de la tireuse s'authentifie par la clé
+        # seule, sans état. Sans ce blocage, le cookie de session posé par
+        # auth-kiosk serait renvoyé à chaque appel.
         # / No cookie kept: the tap API authenticates by key only, statelessly.
         self.http.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
         self.last_request_ts = 0.0
@@ -102,7 +101,9 @@ class BackendClient:
 
         :param uid: str — UID hex de la carte NFC (ex: "741ECC2A")
         :return: dict avec authorized, session_id, allowed_ml, solde_centimes, etc.
-        :raises BackendError: si le serveur est injoignable
+                 Une réponse illisible (page d'erreur HTML) devient un refus.
+        :raises BackendError: seulement sur une erreur réseau (serveur injoignable,
+                 délai dépassé)
         """
         url = f"{self.server_url}/controlvanne/api/tireuse/authorize/"
         payload = {
@@ -116,20 +117,33 @@ class BackendClient:
         if time.monotonic() - self.last_request_ts > IDLE_RECONNECT_S:
             self.http.close()
 
+        # Seule une erreur RÉSEAU lève BackendError : le contrôleur réessaie alors.
+        # Si le serveur a répondu, même en erreur, il n'y a pas de nouvel essai.
+        # Un nouvel essai relancerait la clôture d'une session orpheline côté
+        # serveur, donc sa facturation.
+        # / Only a NETWORK error raises BackendError (the controller retries).
+        # A server answer, even an error, is never retried.
         try:
             response = self._post(url, payload, AUTHORIZE_TIMEOUT_S)
-            data = response.json()
+        except requests.exceptions.RequestException as erreur_reseau:
+            logger.error(f"Authorize impossible: {erreur_reseau}")
+            raise BackendError(f"Erreur reseau authorize: {erreur_reseau}") from erreur_reseau
 
-            if response.status_code == 200:
-                return data
-            else:
-                # 403, 404, etc. — le serveur a repondu, on retourne les infos
-                # / Server responded, return the info
-                return data
+        # Le serveur a répondu. Une page d'erreur HTML (par exemple HTTP 500)
+        # n'est pas du JSON : elle est traitée comme un refus.
+        # / The server answered. A non-JSON error page (e.g. HTTP 500) is a refusal.
+        try:
+            reponse_du_serveur = response.json()
+        except ValueError:
+            logger.error(f"Authorize : reponse illisible du serveur (HTTP {response.status_code})")
+            return {
+                "authorized": False,
+                "message": f"Reponse illisible du serveur (HTTP {response.status_code})",
+            }
 
-        except Exception as e:
-            logger.error(f"Authorize impossible: {e}")
-            raise BackendError(f"Erreur reseau authorize: {e}") from e
+        # 200 (carte autorisée ou refusée), 403, 404... : on renvoie ce que dit le serveur.
+        # / 200 (authorized or refused), 403, 404...: return the server's answer.
+        return reponse_du_serveur
 
     def send_event(self, event_type, uid, volume_ml=0):
         """
