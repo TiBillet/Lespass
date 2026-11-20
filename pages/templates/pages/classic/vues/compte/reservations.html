@@ -76,7 +76,7 @@
                         <button
                             class="btn btn-outline-danger btn-sm"
                             hx-post="/my_account/{{ resa.uuid }}/cancel_reservation/"
-                            hx-confirm="{% if resa.total_paid > 0 %}{{ resa.cancel_text }}{% else %}J'annule ma reservation{% endif %}"
+                            hx-confirm="{% if resa.contient_des_billets_de_pass %}{% translate "Cette réservation contient un pass : les billets du pass sur ses autres événements seront annulés aussi." %} {% endif %}{% if resa.total_paid > 0 %}{{ resa.cancel_text }}{% else %}J'annule ma reservation{% endif %}"
                             hx-target="closest .reservation-card"
                             hx-swap="delete"
                             data-testid="reservation-cancel-{{ resa.uuid }}">

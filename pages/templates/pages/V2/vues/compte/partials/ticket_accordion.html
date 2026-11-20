@@ -90,7 +90,7 @@
                         type="button"
                         class="btn btn--outline btn--sm"
                         hx-post="/my_account/{{ ticket.uuid }}/cancel_ticket/"
-                        hx-confirm="{% if ticket.reservation.total_paid > 0 %}{{ ticket.reservation.cancel_text }}{% else %}J'annule ce billet{% endif %}"
+                        hx-confirm="{% if ticket.pass_vendu %}{% translate "Ce billet fait partie d'un pass : les billets du pass sur tous ses événements seront annulés." %} {% endif %}{% if ticket.reservation.total_paid > 0 %}{{ ticket.reservation.cancel_text }}{% else %}J'annule ce billet{% endif %}"
                         hx-target="closest .accordion-item"
                         hx-swap="delete"
                         data-testid="ticket-cancel-{{ ticket.uuid }}">

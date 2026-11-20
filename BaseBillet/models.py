@@ -3352,6 +3352,21 @@ class PriceSold(models.Model):
 #     if not self.id_price_stripe :
 #         logger.info(f"PriceSold : {self.price.name} - Stripe : {self.get_id_price_stripe()}")
 
+def verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_du_pass):
+    """
+    Refuse d'annuler un pass dont un billet est scanné : le pass est indivisible.
+    À appeler avant tout remboursement.
+    / Refuses to cancel a pass with a scanned ticket. Call before any refund.
+
+    LOCALISATION : BaseBillet/models.py
+    """
+    for billet_du_pass in billets_du_pass:
+        if billet_du_pass.status == Ticket.SCANNED:
+            raise Exception(
+                _("Un billet de ce pass a déjà été scanné : le pass ne peut plus être annulé.")
+            )
+
+
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     datetime = models.DateTimeField(auto_now=True, verbose_name=_("Date et heure"))
@@ -3471,6 +3486,15 @@ class Reservation(models.Model):
         for ligne_article in self.articles_paid():
             total_paid += ligne_article.total_ttc
         return dround(total_paid)
+
+    def contient_des_billets_de_pass(self):
+        """
+        Vrai si la réservation a un billet de pass actif (avertissement d'annulation).
+        / True if the reservation holds an active pass ticket.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        return self.tickets.filter(pass_vendu__isnull=False).exclude(status=Ticket.CANCELED).exists()
 
     def can_refund(self):
         return timezone.localtime() < (self.event.datetime - timedelta(days=self.event.refund_deadline))
@@ -3621,7 +3645,46 @@ class Reservation(models.Model):
     @atomic
     def cancel_and_refund_resa(self, annulation_par_l_admin=False, moyen_rembourse=None):
         """
-        Annule toute la réservation et rembourse ce qui reste à rembourser.
+        Annule la réservation, puis les billets du même pass sur les autres réservations
+        (le pass est indivisible). Rien n'est annulé si l'un d'eux est scanné.
+        / Cancels the reservation, then the same-pass tickets of other reservations.
+
+        LOCALISATION : BaseBillet/models.py
+
+        Appelée par BaseBillet/views.py (cancel_reservation) et les actions admin.
+        Paramètres et message : ceux de _annuler_et_rembourser_la_reservation_seule.
+        """
+        identifiants_des_passes_de_la_reservation = (
+            self.tickets.filter(pass_vendu__isnull=False)
+            .exclude(status=Ticket.CANCELED)
+            .values("pass_vendu")
+        )
+        billets_de_pass_des_autres_reservations = list(
+            Ticket.objects.filter(pass_vendu__in=identifiants_des_passes_de_la_reservation)
+            .exclude(reservation_id=self.pk)
+            .exclude(status=Ticket.CANCELED)
+            .select_related("reservation")
+            .order_by("reservation_id", "uuid")
+        )
+        verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_de_pass_des_autres_reservations)
+
+        message_pour_la_personne = self._annuler_et_rembourser_la_reservation_seule(
+            annulation_par_l_admin=annulation_par_l_admin,
+            moyen_rembourse=moyen_rembourse,
+        )
+        for billet_lie in billets_de_pass_des_autres_reservations:
+            billet_lie.reservation._annuler_et_rembourser_un_seul_billet(
+                billet_lie,
+                annulation_par_l_admin=annulation_par_l_admin,
+                moyen_rembourse=moyen_rembourse,
+            )
+        return message_pour_la_personne
+
+    @atomic
+    def _annuler_et_rembourser_la_reservation_seule(self, annulation_par_l_admin=False, moyen_rembourse=None):
+        """
+        Annule toute la réservation et rembourse ce qui reste à rembourser, sans toucher
+        aux billets de pass des autres réservations (voir cancel_and_refund_resa).
         / Cancels the whole reservation and refunds what is left to refund.
 
         LOCALISATION : BaseBillet/models.py
@@ -3644,9 +3707,8 @@ class Reservation(models.Model):
            payé par Stripe.
         4. La réservation et tous ses billets passent CANCELED.
 
-        Appelée par : BaseBillet/views.py (cancel_reservation, l'utilisateur : valeurs
-        par défaut) et les actions admin d'annulation (`annulation_par_l_admin=True`).
-        / Called by: the user view (defaults) and the admin cancel actions.
+        Appelée par : cancel_and_refund_resa.
+        / Called by cancel_and_refund_resa.
 
         :param annulation_par_l_admin: True quand l'admin annule
         :param moyen_rembourse: `PaymentMethod` de l'argent hors Stripe rendu par
@@ -3815,7 +3877,54 @@ class Reservation(models.Model):
     @atomic
     def cancel_and_refund_ticket(self, ticket, annulation_par_l_admin=False, moyen_rembourse=None):
         """
-        Annule et rembourse UN billet de cette réservation.
+        Annule et rembourse un billet. Un billet de pass annule tout le pass, chaque billet
+        sur sa réservation, au prix de sa ligne. Rien n'est annulé si un billet est scanné.
+        / Cancels a ticket; a pass ticket cancels the whole pass.
+
+        LOCALISATION : BaseBillet/models.py
+
+        Les billets sont traités dans l'ordre des réservations : deux annulations
+        simultanées verrouillent dans le même ordre et ne se bloquent pas.
+        Appelée par BaseBillet/views.py (cancel_ticket) et l'action admin « Cancel and refund ».
+        Paramètres et message : ceux de _annuler_et_rembourser_un_seul_billet.
+        """
+        billet_hors_pass = ticket.pass_vendu is None
+        if billet_hors_pass:
+            return self._annuler_et_rembourser_un_seul_billet(
+                ticket,
+                annulation_par_l_admin=annulation_par_l_admin,
+                moyen_rembourse=moyen_rembourse,
+            )
+
+        if ticket.reservation_id != self.pk:
+            raise Exception(_("Ticket does not belong to this reservation."))
+        if ticket.status == Ticket.CANCELED:
+            raise Exception(_("This ticket has already been canceled."))
+
+        billets_du_pass_encore_actifs = list(
+            Ticket.objects.filter(pass_vendu=ticket.pass_vendu)
+            .exclude(status=Ticket.CANCELED)
+            .select_related("reservation")
+            .order_by("reservation_id", "uuid")
+        )
+        verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_du_pass_encore_actifs)
+
+        message_pour_la_personne = None
+        for billet_du_pass in billets_du_pass_encore_actifs:
+            message_du_billet = billet_du_pass.reservation._annuler_et_rembourser_un_seul_billet(
+                billet_du_pass,
+                annulation_par_l_admin=annulation_par_l_admin,
+                moyen_rembourse=moyen_rembourse,
+            )
+            if billet_du_pass.pk == ticket.pk:
+                message_pour_la_personne = message_du_billet
+        return message_pour_la_personne
+
+    @atomic
+    def _annuler_et_rembourser_un_seul_billet(self, ticket, annulation_par_l_admin=False, moyen_rembourse=None):
+        """
+        Annule et rembourse UN billet de cette réservation, sans toucher aux autres
+        billets d'un pass (voir cancel_and_refund_ticket).
         / Cancels and refunds ONE ticket of this reservation.
 
         LOCALISATION : BaseBillet/models.py
@@ -3837,9 +3946,8 @@ class Reservation(models.Model):
         4. Le billet passe CANCELED.
         5. S'il ne reste aucun billet non annulé, la réservation passe CANCELED.
 
-        Appelée par : BaseBillet/views.py (cancel_ticket, l'utilisateur : valeurs par
-        défaut) et l'action admin « Cancel and refund » (`annulation_par_l_admin=True`).
-        / Called by: the user view (defaults) and the admin action "Cancel and refund".
+        Appelée par : cancel_and_refund_ticket et cancel_and_refund_resa.
+        / Called by cancel_and_refund_ticket and cancel_and_refund_resa.
 
         :param ticket: le `Ticket` à annuler
         :param annulation_par_l_admin: True quand l'admin annule
