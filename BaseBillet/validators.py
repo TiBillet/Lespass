@@ -182,7 +182,8 @@ class TicketCreator():
                  create_checkout: bool = True,
                  paid_externally: bool = False, external_payment_method: str = None,
                  vente=None,
-                 encaisser_la_vente_gratuite: bool = True):
+                 encaisser_la_vente_gratuite: bool = True,
+                 identifiants_des_passes: dict = None):
 
         self.products_dict = products_dict
         self.reservation = reservation
@@ -230,6 +231,11 @@ class TicketCreator():
         # / 0 € reservation: the sale is settled at 0 after the LAST line. False when the
         # caller still writes lines into this sale after TicketCreator: it settles itself.
         self.encaisser_la_vente_gratuite = encaisser_la_vente_gratuite
+
+        # Pass : {uuid du tarif pass: [un UUID par pass acheté]}, donné par l'appelant
+        # (services_pass.deplier_le_pass) et identique pour chaque événement du pass.
+        # / Pass: {pass price uuid: [one UUID per pass]}, the same for every pass event.
+        self.identifiants_des_passes = identifiants_des_passes or {}
 
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
@@ -336,6 +342,42 @@ class TicketCreator():
         if self.encaisser_la_vente_gratuite and self.vente is not None:
             encaisser_vente(self.vente)
 
+    def _identifiants_des_passes_pour_ce_tarif(self, price, qty):
+        """
+        L'identifiant de pass de chaque billet : None pour un tarif normal, ceux de
+        l'appelant pour un pass. Un pass sans ses identifiants est refusé : il ne
+        fabriquerait qu'un billet sur plusieurs.
+        / Each ticket's pass id: None for a normal price, the caller's ids for a pass.
+
+        LOCALISATION : BaseBillet/validators.py
+        """
+        if not price.product.est_un_pass:
+            identifiants_vides = []
+            for _numero_du_billet in range(int(qty)):
+                identifiants_vides.append(None)
+            return identifiants_vides
+
+        identifiants_des_passes = self.identifiants_des_passes.get(price.uuid)
+        if identifiants_des_passes is None or len(identifiants_des_passes) != int(qty):
+            raise serializers.ValidationError(
+                _("Un pass se vend pour tous ses événements à la fois.")
+            )
+        return identifiants_des_passes
+
+    def _prix_de_cet_evenement_dans_le_pass(self, price, event):
+        """
+        Le prix de la ligne du pass pour cet événement. Refuse un événement hors du pass.
+        / The pass line price for this event; refuses an event outside the pass.
+
+        LOCALISATION : BaseBillet/validators.py
+        """
+        ligne_du_pass = price.product.evenements_du_pass.filter(evenement=event).first()
+        if ligne_du_pass is None:
+            raise serializers.ValidationError(
+                _("Cet événement ne fait pas partie du pass.")
+            )
+        return ligne_du_pass.prix
+
     # Methode ACTION
     def method_A(self, prices_dict=None):
         reservation: Reservation = self.reservation
@@ -371,6 +413,8 @@ class TicketCreator():
                 price=price,
             )
 
+            identifiants_des_passes = self._identifiants_des_passes_pour_ce_tarif(price, qty)
+
             # Fabrication d'un ticket par qty
             # Dans la méthode reservation gratuite, le ticket est créé non pas en non payé mais en non actif
             # Il sera actif une fois le mail de l'user vérifié
@@ -381,6 +425,7 @@ class TicketCreator():
                     status=Ticket.NOT_ACTIV,
                     reservation=reservation,
                     pricesold=pricesold,
+                    pass_vendu=identifiants_des_passes[i],
                     # first_name=customer.get('first_name'),
                     # last_name=customer.get('last_name'),
                 )
@@ -416,13 +461,22 @@ class TicketCreator():
             if self.promo_code and self.promo_code.product_id == price_generique.product_id:
                 code_promo_de_ce_tarif = self.promo_code
 
+            montant_du_billet = self.custom_amounts.get(price_generique.uuid)
+
+            # Pass : le billet coûte le prix de sa ligne, sans code promo.
+            # / Pass: the ticket costs its line price, no promo code.
+            if price_generique.product.est_un_pass:
+                montant_du_billet = self._prix_de_cet_evenement_dans_le_pass(price_generique, event)
+                code_promo_de_ce_tarif = None
+            identifiants_des_passes = self._identifiants_des_passes_pour_ce_tarif(price_generique, qty)
+
             # Création de l'objet article à vendre, avec la liaison event.
             # On passe de prix générique (ex : Billet a 10€ a l'objet Billet pour evenement a 10€)
             pricesold: PriceSold = get_or_create_price_sold(
                 price_generique,
                 event=event,
                 promo_code=code_promo_de_ce_tarif,
-                custom_amount=self.custom_amounts.get(price_generique.uuid))
+                custom_amount=montant_du_billet)
 
             # Cas du billet déjà payé ailleurs (ex : en caisse LaBoutik).
             # Le client a payé au comptoir : espèce ou carte bancaire.
@@ -464,11 +518,12 @@ class TicketCreator():
 
                 # Le billet est payé : il est directement valide, prêt à être scanné.
                 # / Ticket is paid: directly valid, ready to be scanned.
-                for _i in range(int(qty)):
+                for numero_du_billet in range(int(qty)):
                     ticket = Ticket.objects.create(
                         status=Ticket.NOT_SCANNED,
                         reservation=reservation,
                         pricesold=pricesold,
+                        pass_vendu=identifiants_des_passes[numero_du_billet],
                     )
                     tickets.append(ticket)
                 continue
@@ -525,6 +580,7 @@ class TicketCreator():
                     status=Ticket.CREATED,  # not yet paid
                     reservation=reservation,
                     pricesold=pricesold,
+                    pass_vendu=identifiants_des_passes[i],
                     # first_name=customer.get('first_name'),
                     # last_name=customer.get('last_name'),
                 )

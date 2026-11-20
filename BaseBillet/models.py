@@ -1394,6 +1394,18 @@ class Product(models.Model):
         help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited.")
     )
 
+    # Les événements du pass et leur prix sont dans EvenementDuPass.
+    # Un pass n'a qu'un tarif, dont le prix est la somme de ces prix.
+    # / Pass events and prices live in EvenementDuPass; its single price is their sum.
+    est_un_pass = models.BooleanField(
+        default=False,
+        verbose_name=_("Ceci est un pass"),
+        help_text=_(
+            "Un pass couvre plusieurs événements. "
+            "L'acheteur reçoit un billet pour chaque événement du pass."
+        ),
+    )
+
     def tarifs_non_archives(self):
         """
         Les tarifs du produit qui ne sont pas archivés (« supprimés »).
@@ -1403,6 +1415,61 @@ class Product(models.Model):
         LOCALISATION : BaseBillet/models.py
         """
         return self.prices.filter(archived=False)
+
+    def lignes_du_pass(self):
+        """
+        Les événements du pass et leur prix, du premier au dernier.
+        / The pass events and their price, first event first.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        return self.evenements_du_pass.select_related("evenement").order_by("evenement__datetime")
+
+    def prix_total_du_pass(self):
+        """
+        Le prix du pass : la somme des prix de chaque événement du pass.
+        / The pass price: the sum of each event's price in the pass.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        prix_total = Decimal("0.00")
+        for ligne_du_pass in self.lignes_du_pass():
+            prix_total += ligne_du_pass.prix
+        return prix_total
+
+    def pass_est_vendable(self, quantite_demandee=1, vente_au_comptoir=False):
+        """
+        Vrai si on peut encore vendre `quantite_demandee` passes : au moins un événement,
+        aucun archivé ni complet, et
+        - en ligne : le premier événement n'a pas commencé ;
+        - au comptoir (`vente_au_comptoir=True`) : aucun événement n'est terminé.
+        Le stock de passes est vérifié à part, par Price.out_of_stock().
+        / True if passes can still be sold (online: before the first event; register: until one ends).
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        lignes_du_pass = list(self.lignes_du_pass())
+        if not lignes_du_pass:
+            return False
+
+        if vente_au_comptoir:
+            for ligne_du_pass in lignes_du_pass:
+                if ligne_du_pass.evenement.est_termine():
+                    return False
+        else:
+            # Les lignes sont triées par date. / Lines are sorted by date.
+            premier_evenement_du_pass = lignes_du_pass[0].evenement
+            if premier_evenement_du_pass.datetime <= timezone.now():
+                return False
+
+        for ligne_du_pass in lignes_du_pass:
+            evenement = ligne_du_pass.evenement
+            if evenement.archived:
+                return False
+            if evenement.places_restantes() < quantite_demandee:
+                return False
+
+        return True
 
     def max_per_user_reached(self, user, event=None, adhesions_deja_au_panier=0) -> bool:
         if not self.max_per_user:
@@ -2088,6 +2155,23 @@ class Price(models.Model):
                 status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
             ).distinct().count()
             return adhesions_qui_occupent_le_stock + quantite_demandee > self.stock
+
+        # Pass : un pass vendu fait un billet par événement. On compte donc les
+        # identifiants `pass_vendu` différents. `event` ne sert pas.
+        # / Pass: count distinct `pass_vendu` ids, not tickets.
+        if self.product.est_un_pass:
+            passes_vendus = Ticket.objects.filter(
+                pricesold__price__pk=self.pk,
+                pass_vendu__isnull=False,
+                status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+            ).values("pass_vendu").distinct().count()
+            passes_en_cours_de_paiement = Ticket.objects.filter(
+                pricesold__price__pk=self.pk,
+                pass_vendu__isnull=False,
+                status__in=[Ticket.CREATED, Ticket.NOT_ACTIV],
+                reservation__datetime__gt=debut_des_paiements_en_cours,
+            ).values("pass_vendu").distinct().count()
+            return passes_vendus + passes_en_cours_de_paiement + quantite_demandee > self.stock
 
         if self.product.categorie_article in [Product.FREERES, Product.BILLET]:
             billets_vendus = Ticket.objects.filter(
@@ -2989,6 +3073,48 @@ class Event(models.Model):
         ordering = ('datetime',)
         verbose_name = _('Event')
         verbose_name_plural = _('Events')
+
+
+class EvenementDuPass(models.Model):
+    """
+    Un événement couvert par un pass, avec sa part du prix du pass.
+    À l'achat, l'événement reçoit son billet et sa ligne de vente à ce prix.
+    / An event covered by a pass, with its share of the pass price.
+
+    LOCALISATION : BaseBillet/models.py
+    """
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+
+    produit = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="evenements_du_pass",
+        verbose_name=_("Pass"),
+    )
+
+    # PROTECT : supprimer l'événement changerait le prix du pass sans prévenir.
+    # / PROTECT: deleting the event would silently change the pass price.
+    evenement = models.ForeignKey(
+        Event,
+        on_delete=models.PROTECT,
+        related_name="lignes_de_pass",
+        verbose_name=_("Événement"),
+    )
+
+    prix = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        verbose_name=_("Prix dans le pass"),
+        help_text=_("La part du prix du pass qui revient à cet événement."),
+    )
+
+    def __str__(self):
+        return f"{self.produit.name} - {self.evenement}"
+
+    class Meta:
+        unique_together = ('produit', 'evenement')
+        verbose_name = _("Événement du pass")
+        verbose_name_plural = _("Événements du pass")
 
 
 """
@@ -3965,6 +4091,17 @@ class Ticket(models.Model):
 
     scanned_by = models.ForeignKey(ScanApp, on_delete=models.PROTECT, blank=True, null=True, )
     metadata = models.JSONField(null=True, blank=True, verbose_name=_('Metadata'), help_text=_('Custom metadata'))
+
+    # Identifiant commun aux billets d'un même pass vendu, vide pour un billet normal.
+    # Annuler un de ces billets annule tous les autres.
+    # / Shared id of one sold pass's tickets; empty for a normal ticket.
+    pass_vendu = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        db_index=True,
+        verbose_name=_("Pass vendu"),
+    )
 
     def paid(self):
         # Billet offert = 0€
