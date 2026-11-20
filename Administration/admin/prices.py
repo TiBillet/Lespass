@@ -64,8 +64,9 @@ class PromotionalCodeAdmin(ModelAdmin):
         if (
                 db_field.name == "product"
         ):  # Replace 'user_field' with your actual field name
+            # Pas de code promo sur un pass. / No promo code on a pass.
             kwargs["queryset"] = Product.objects.filter(
-                archive=False, categorie_article=Product.BILLET
+                archive=False, categorie_article=Product.BILLET, est_un_pass=False
             )
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 

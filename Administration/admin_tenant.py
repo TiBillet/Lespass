@@ -4270,7 +4270,7 @@ class EventArchiveFilter(admin.SimpleListFilter):
         value = self.value()
         # Filtrage par défaut
         if value is None:
-            return queryset.exclude(archived=True)
+            return exclure_les_evenements_archives(queryset)
         if value == "archived":
             return queryset.filter(archived=True)
         return queryset
@@ -4326,6 +4326,29 @@ class EventResource(resources.ModelResource):
         # Show a diff of changes before import
         report_skipped = True
 
+def evenements_affiches_par_defaut(queryset):
+    """
+    Les événements que la liste admin affiche par défaut : non archivés, à venir ou en
+    cours. Sert aussi au choix d'un événement du pass (EventAdmin.get_search_results).
+    / Default admin event list: not archived, upcoming or ongoing. Also used for pass events.
+
+    LOCALISATION : Administration/admin_tenant.py
+    """
+    return exclure_les_evenements_archives(filtrer_les_evenements_a_venir_ou_en_cours(queryset))
+
+
+def filtrer_les_evenements_a_venir_ou_en_cours(queryset):
+    """Événements qui commencent ou finissent après maintenant.
+    / Events starting or ending after now."""
+    now = datetime.datetime.now()
+    return queryset.filter(Q(datetime__gte=now) | Q(end_datetime__gte=now))
+
+
+def exclure_les_evenements_archives(queryset):
+    """Retire les événements archivés. / Removes archived events."""
+    return queryset.exclude(archived=True)
+
+
 class EventDateFilter(admin.SimpleListFilter):
     """
     Filter sidebar unfold pour filter les évènement comparé à la date actuelle
@@ -4350,7 +4373,7 @@ class EventDateFilter(admin.SimpleListFilter):
         now = datetime.datetime.now()
         value = self.value()
         if value is None: # Le filtre futur est par défaut, donc égale à None
-            return queryset.filter(Q(datetime__gte=now) | Q(end_datetime__gte=now) )
+            return filtrer_les_evenements_a_venir_ou_en_cours(queryset)
         if self.value() == "passe":
             return queryset.filter(Q(datetime__lte=now) & (Q(end_datetime__isnull=True) | Q(end_datetime__lte=now)))
         if self.value() == "tous":
@@ -4514,6 +4537,35 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
             "widget": WysiwygWidget,
         }
     }
+
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Recherche d'événements, aussi utilisée par l'autocomplétion. Pour un événement de
+        pass (Django envoie le modèle et le champ dans l'URL) : les événements de la liste
+        par défaut, moins ceux déjà choisis dans le pass.
+        / Event search; for a pass event: default list events, minus those already chosen.
+        """
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        demande_par_un_evenement_du_pass = (
+            "admin/autocomplete" in request.path
+            and request.GET.get("model_name") == "evenementdupass"
+            and request.GET.get("field_name") == "evenement"
+        )
+        if demande_par_un_evenement_du_pass:
+            queryset = evenements_affiches_par_defaut(queryset)
+
+            # `deja_choisis` : uuids séparés par des virgules, envoyés par
+            # admin/product/evenements_du_pass_before.html. Un uuid illisible est ignoré.
+            # / Comma-separated uuids sent by the template; unreadable ones are ignored.
+            evenements_deja_choisis = []
+            for identifiant_recu in request.GET.get("deja_choisis", "").split(","):
+                try:
+                    evenements_deja_choisis.append(UUID(identifiant_recu.strip()))
+                except ValueError:
+                    continue
+            if evenements_deja_choisis:
+                queryset = queryset.exclude(pk__in=evenements_deja_choisis)
+        return queryset, use_distinct
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)

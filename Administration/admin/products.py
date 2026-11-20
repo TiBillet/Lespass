@@ -60,6 +60,9 @@ from BaseBillet.models import (
     ProductFormField,
     Tva,
     ResourceProduct,
+    EvenementDuPass,
+    Event,
+    Ticket,
 )
 
 logger = logging.getLogger(__name__)
@@ -1740,12 +1743,86 @@ class ProductAdmin(ModelAdmin):
 # ---------------------------------------------------------------------------
 
 
+class EvenementDuPassInline(TabularInline):
+    """
+    Les événements d'un pass et leur prix. Le gabarit template_before y déplace la case
+    « Ceci est un pass » et n'affiche la liste que si elle est cochée.
+    / The pass events and their price; the checkbox shows or hides the list.
+
+    LOCALISATION : Administration/admin/products.py
+    """
+
+    model = EvenementDuPass
+    template_before = "admin/product/evenements_du_pass_before.html"
+    fk_name = "produit"
+    extra = 0
+    fields = ("evenement", "prix")
+    autocomplete_fields = ["evenement"]
+    verbose_name = _("Événement du pass")
+    verbose_name_plural = _("Événements du pass")
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+def synchroniser_le_produit_pass(produit_pass):
+    """
+    Aligne un pass enregistré sur ses événements : le tarif prend la somme des prix (sans
+    prix libre), et le produit n'est rattaché qu'aux événements du pass.
+    / Aligns a saved pass: price = sum, attached to its events only.
+
+    LOCALISATION : Administration/admin/products.py
+
+    Hors de la classe admin : Unfold enveloppe les méthodes d'un ModelAdmin.
+    / Module-level: Unfold wraps ModelAdmin methods.
+
+    :return: dict avec "prix_du_pass", "evenements_ajoutes", "evenements_retires"
+    """
+    prix_du_pass = produit_pass.prix_total_du_pass()
+
+    # update() : écrit le prix sans repasser par la validation du formulaire de tarif.
+    # / update(): writes the price without the price form validation.
+    produit_pass.prices.filter(archived=False).update(prix=prix_du_pass, free_price=False)
+
+    evenements_du_pass = []
+    for ligne_du_pass in produit_pass.lignes_du_pass():
+        evenements_du_pass.append(ligne_du_pass.evenement)
+
+    evenements_ajoutes = []
+    for evenement in evenements_du_pass:
+        if not evenement.products.filter(pk=produit_pass.pk).exists():
+            evenement.products.add(produit_pass)
+            evenements_ajoutes.append(evenement)
+
+    evenements_retires = []
+    for evenement in Event.objects.filter(products=produit_pass):
+        if evenement not in evenements_du_pass:
+            evenement.products.remove(produit_pass)
+            evenements_retires.append(evenement)
+
+    return {
+        "prix_du_pass": prix_du_pass,
+        "evenements_ajoutes": evenements_ajoutes,
+        "evenements_retires": evenements_retires,
+    }
+
+
 class TicketProductForm(ProductAdminCustomForm):
     """Formulaire produit restreint aux types billetterie.
     Product form restricted to ticket types."""
 
     class Meta(ProductAdminCustomForm.Meta):
         model = TicketProduct
+        fields = ProductAdminCustomForm.Meta.fields + ("est_un_pass",)
 
     categorie_article = forms.ChoiceField(
         choices=[
@@ -1755,6 +1832,58 @@ class TicketProductForm(ProductAdminCustomForm):
         widget=UnfoldAdminSelectWidget(),
         label=_("Product type"),
     )
+
+    def clean(self):
+        """
+        Règles du pass : pas de bascule après une vente (les billets vendus perdraient leur
+        sens), un seul tarif, sans prix libre, et au moins 2 événements avec leur prix.
+        / Pass rules: no switch after a sale, one fixed price, at least 2 events.
+        """
+        resultat_du_formulaire_de_base = super().clean()
+        est_un_pass = self.cleaned_data.get("est_un_pass", False)
+
+        produit_deja_enregistre = self.instance.pk is not None
+        if produit_deja_enregistre and est_un_pass != self.instance.est_un_pass:
+            produit_deja_vendu = Ticket.objects.filter(
+                pricesold__price__product=self.instance
+            ).exists()
+            if produit_deja_vendu:
+                raise forms.ValidationError(
+                    _("Ce produit a déjà été vendu : on ne peut plus changer la case « Ceci est un pass ».")
+                )
+
+        if est_un_pass:
+            nombre_de_tarifs_du_pass = 0
+            nombre_de_formulaires_de_tarif = int(self.data.get("prices-TOTAL_FORMS", 0))
+            for numero_du_tarif in range(nombre_de_formulaires_de_tarif):
+                nom_du_tarif = self.data.get(f"prices-{numero_du_tarif}-name", "")
+                tarif_a_supprimer = self.data.get(f"prices-{numero_du_tarif}-DELETE") == "on"
+                if nom_du_tarif and not tarif_a_supprimer:
+                    nombre_de_tarifs_du_pass += 1
+                    if self.data.get(f"prices-{numero_du_tarif}-free_price") == "on":
+                        raise forms.ValidationError(_("Un pass ne peut pas être à prix libre."))
+            if nombre_de_tarifs_du_pass > 1:
+                raise forms.ValidationError(
+                    _("Un pass n'a qu'un seul tarif : son prix est la somme des prix par événement.")
+                )
+
+            # On lit l'inline envoyé, pas la base : il contient les lignes ajoutées ou
+            # supprimées dans ce même enregistrement.
+            # / Read the submitted inline, not the DB: it holds this save's changes.
+            nombre_d_evenements_du_pass = 0
+            nombre_de_formulaires_d_evenement = int(self.data.get("evenements_du_pass-TOTAL_FORMS", 0))
+            for numero_de_la_ligne in range(nombre_de_formulaires_d_evenement):
+                evenement_de_la_ligne = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-evenement", "")
+                prix_de_la_ligne = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-prix", "")
+                ligne_a_supprimer = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-DELETE") == "on"
+                if evenement_de_la_ligne and prix_de_la_ligne != "" and not ligne_a_supprimer:
+                    nombre_d_evenements_du_pass += 1
+            if nombre_d_evenements_du_pass < 2:
+                raise forms.ValidationError(
+                    _("Un pass doit couvrir au moins 2 événements, chacun avec son prix dans le pass.")
+                )
+
+        return resultat_du_formulaire_de_base
 
 
 class MembershipProductForm(ProductAdminCustomForm):
@@ -1803,9 +1932,51 @@ class TicketProductAdmin(ProductAdmin):
     Filtered admin view: only ticket products (Ticket booking, Free booking)."""
 
     form = TicketProductForm
-    inlines = [TicketPriceInline, ProductFormFieldInline]
 
     list_filter = ["publish", ProductArchiveFilter]  # categorie_article inutile, deja filtre
+
+    # Repli sans JavaScript : sinon le script de EvenementDuPassInline déplace la case.
+    # / No-JS fallback: otherwise the EvenementDuPassInline script moves the checkbox.
+    fieldsets = ProductAdmin.fieldsets + (
+        (
+            _("Pass multi-événements"),
+            {
+                "fields": ("est_un_pass",),
+            },
+        ),
+    )
+
+    # EvenementDuPassInline est toujours là : la case l'affiche sans enregistrer.
+    # / Always present: the checkbox shows it without saving.
+    inlines = [TicketPriceInline, EvenementDuPassInline, ProductFormFieldInline]
+
+    def save_related(self, request, form, formsets, change):
+        """
+        Aligne le pass (synchroniser_le_produit_pass) APRÈS super() : Django réécrit les
+        M2M et les inlines pendant super().save_related().
+        / Align the pass AFTER super(): Django rewrites M2M and inlines there.
+        """
+        super().save_related(request, form, formsets, change)
+        produit = form.instance
+        if not produit.est_un_pass:
+            return
+
+        resultat = synchroniser_le_produit_pass(produit)
+        messages.info(
+            request,
+            _("Prix du pass : %(prix)s € (somme des prix par événement).")
+            % {"prix": resultat["prix_du_pass"]},
+        )
+        for evenement in resultat["evenements_ajoutes"]:
+            messages.info(
+                request,
+                _("Le pass est maintenant proposé sur « %(evenement)s ».") % {"evenement": evenement},
+            )
+        for evenement in resultat["evenements_retires"]:
+            messages.warning(
+                request,
+                _("Le pass n'est plus proposé sur « %(evenement)s ».") % {"evenement": evenement},
+            )
 
 
 @admin.register(MembershipProduct, site=staff_admin_site)
