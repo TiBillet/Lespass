@@ -6847,6 +6847,15 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         if produit.methode_caisse == Product.RETOUR_CONSIGNE:
             prix_en_centimes = _prix_de_la_consigne_remboursee_en_centimes(produit)
 
+        # Pass : un article par événement, au prix de sa ligne. La vente a donc une ligne
+        # et une réservation par événement.
+        # / Pass: one article per event, at its line price.
+        if est_billet and produit.est_un_pass:
+            articles_panier.extend(
+                _deplier_l_article_pass(produit, prix_obj, quantite, event_billet)
+            )
+            continue
+
         articles_panier.append(
             {
                 "product": produit,
@@ -6861,6 +6870,57 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         )
 
     return articles_panier
+
+
+def _deplier_l_article_pass(produit_pass, tarif_pass, quantite, evenement_de_la_tuile):
+    """
+    Transforme l'article « pass » de la caisse en un article billet par événement, avec
+    les mêmes identifiants de pass. Refuse (ValueError) si l'événement de la tuile n'est
+    pas dans le pass, si le pass n'est plus vendable au comptoir, ou si le stock est épuisé.
+    Au comptoir, le pass se vend encore le premier jour, après le début de l'événement.
+    / Turns the register "pass" article into one ticket article per event.
+
+    LOCALISATION : laboutik/views.py
+    """
+    from BaseBillet.services_pass import deplier_le_pass
+
+    pass_deplie = deplier_le_pass(produit_pass, quantite)
+    evenements_du_pass = []
+    for ligne_du_pass in pass_deplie["lignes_du_pass"]:
+        evenements_du_pass.append(ligne_du_pass.evenement)
+
+    if evenement_de_la_tuile not in evenements_du_pass:
+        raise ValueError(_("Cet événement ne fait pas partie du pass."))
+    if not produit_pass.pass_est_vendable(quantite_demandee=quantite, vente_au_comptoir=True):
+        raise ValueError(
+            _("Le pass « %(pass)s » n'est plus disponible.") % {"pass": produit_pass.name}
+        )
+
+    # Vérifié ici pour un message clair au caissier : l'erreur levée plus tard, sous
+    # verrou, par _creer_billets_depuis_panier n'est pas rattrapée par la vue.
+    # / Checked here for a clear message: the later check under lock is not caught.
+    if tarif_pass.out_of_stock(quantite_demandee=quantite):
+        raise ValueError(
+            _("Plus de pass « %(pass)s » disponible.") % {"pass": produit_pass.name}
+        )
+
+    articles_du_pass = []
+    for ligne_du_pass in pass_deplie["lignes_du_pass"]:
+        articles_du_pass.append(
+            {
+                "product": produit_pass,
+                "price": tarif_pass,
+                "quantite": quantite,
+                "prix_centimes": int(round(ligne_du_pass.prix * 100)),
+                "custom_amount_centimes": None,
+                "weight_amount": None,
+                "est_billet": True,
+                "event": ligne_du_pass.evenement,
+                "prix_dans_le_pass": ligne_du_pass.prix,
+                "identifiants_des_passes": pass_deplie["identifiants_des_passes"],
+            }
+        )
+    return articles_du_pass
 
 
 def _calculer_total_panier_centimes(articles_panier):
@@ -8738,13 +8798,14 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
             }
         articles_par_event[event_uuid]["articles"].append(article)
 
-    # --- Construire un index LigneArticle par product_uuid pour le rattachement ---
-    # / Build a LigneArticle index by product_uuid for linking
+    # --- Index des LigneArticle par product_uuid, pour le rattachement ---
+    # Une LISTE par produit : un pass a une ligne par événement.
+    # / A LIST per product: a pass has one line per event.
     lignes_par_product = {}
     if lignes_articles:
         for ligne in lignes_articles:
             product_uuid = str(ligne.pricesold.productsold.product.uuid)
-            lignes_par_product[product_uuid] = ligne
+            lignes_par_product.setdefault(product_uuid, []).append(ligne)
 
     reservations_creees = []
 
@@ -8816,22 +8877,33 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
             # PriceSold : photo du prix catalogue, cherchee par (produit vendu, tarif, prix),
             # doublons possibles (une photo par montant vendu en ligne, code promo).
             # / PriceSold: catalogue price snapshot; duplicates are allowed.
+            # Billet de pass : photo au prix de sa ligne, pour que Ticket.paid() rende la part
+            # de cet événement et pas le pass entier.
+            # / Pass ticket: snapshot at its line price, so Ticket.paid() returns its share.
+            prix_du_billet = article.get("prix_dans_le_pass", price.prix)
             price_sold = PriceSold.objects.filter(
                 productsold=product_sold,
                 price=price,
-                prix=price.prix,
+                prix=prix_du_billet,
             ).first()
             if price_sold is None:
                 price_sold = PriceSold.objects.create(
                     productsold=product_sold,
                     price=price,
-                    prix=price.prix,
+                    prix=prix_du_billet,
                 )
 
-            for _i in range(quantite):
+            identifiants_des_passes = article.get("identifiants_des_passes")
+            if identifiants_des_passes is None:
+                identifiants_des_passes = []
+                for _numero_du_billet in range(quantite):
+                    identifiants_des_passes.append(None)
+
+            for numero_du_billet in range(quantite):
                 ticket = Ticket.objects.create(
                     reservation=reservation,
                     pricesold=price_sold,
+                    pass_vendu=identifiants_des_passes[numero_du_billet],
                     status=Ticket.NOT_SCANNED,
                     first_name=prenom or user_billet.first_name or "",
                     last_name=nom or user_billet.last_name or "",
@@ -8845,9 +8917,20 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
 
             # Rattacher la LigneArticle a la reservation
             # / Link the LigneArticle to the reservation
+            # Première ligne libre du produit au prix unitaire de l'article, sinon la
+            # première ligne libre.
+            # / First free line of the product at the article's unit price, else the first.
             product_uuid = str(product.uuid)
-            ligne_correspondante = lignes_par_product.get(product_uuid)
+            lignes_libres_du_produit = lignes_par_product.get(product_uuid, [])
+            ligne_correspondante = None
+            for ligne_libre in lignes_libres_du_produit:
+                if ligne_libre.amount == article["prix_centimes"]:
+                    ligne_correspondante = ligne_libre
+                    break
+            if ligne_correspondante is None and lignes_libres_du_produit:
+                ligne_correspondante = lignes_libres_du_produit[0]
             if ligne_correspondante:
+                lignes_libres_du_produit.remove(ligne_correspondante)
                 ligne_correspondante.reservation = reservation
                 ligne_correspondante.save(update_fields=["reservation"])
 
