@@ -15,6 +15,17 @@
             </div>
         {% endif %}
         <div class="flex-grow-1">
+        {% if detail.evenements_du_pass %}
+            <div class="fw-semibold" data-testid="panier-item-pass">{{ detail.product.name }}</div>
+            <small class="text-muted">
+                {{ detail.price.name }} &middot; {{ detail.prix_du_pass }} €
+            </small>
+            <ul class="list-unstyled small text-muted mb-0" aria-label="{% translate 'Événements du pass' %}" data-testid="panier-item-pass-evenements">
+                {% for evenement_du_pass in detail.evenements_du_pass %}
+                    <li>{{ evenement_du_pass.name }} &middot; {{ evenement_du_pass.datetime|date:"DATETIME_FORMAT" }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
             <div class="fw-semibold">{{ detail.event.name }}</div>
             <small class="text-muted">
                 {{ detail.event.datetime|date:"DATETIME_FORMAT" }}
@@ -39,6 +50,7 @@
                     &middot; {{ detail.price.prix }} €
                 {% endif %}
             </small>
+        {% endif %}
         </div>
         {# --- Affichage qty (lecture seule, billet uniquement) --- #}
         {# La modification de quantite n'est pas supportee dans le panier : #}

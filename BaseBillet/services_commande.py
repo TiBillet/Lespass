@@ -265,10 +265,34 @@ class CommandeService:
             # -- Phase 2 : Reservations groupées par event_uuid --
             # -- Phase 2: Reservations grouped by event_uuid --
             from BaseBillet.models import Event
+            from BaseBillet.services_pass import deplier_le_pass
             tickets_par_event = {}
             for item in panier.items():
                 if item['type'] != 'ticket':
                     continue
+
+                # Pass : un item par événement, avec les mêmes identifiants de pass, créés
+                # une seule fois ici. Formulaire et options restent sur l'événement où le
+                # pass a été ajouté.
+                # / Pass: one item per event, sharing pass ids created once here.
+                price_de_l_item = Price.objects.get(uuid=item['price_uuid'])
+                if price_de_l_item.product.est_un_pass:
+                    pass_deplie = deplier_le_pass(price_de_l_item.product, int(item['qty']))
+                    for ligne_du_pass in pass_deplie["lignes_du_pass"]:
+                        uuid_de_l_evenement = str(ligne_du_pass.evenement.uuid)
+                        item_du_pass_pour_cet_evenement = dict(item)
+                        item_du_pass_pour_cet_evenement['event_uuid'] = uuid_de_l_evenement
+                        item_du_pass_pour_cet_evenement['identifiants_des_passes'] = (
+                            pass_deplie["identifiants_des_passes"]
+                        )
+                        if uuid_de_l_evenement != item['event_uuid']:
+                            item_du_pass_pour_cet_evenement['custom_form'] = {}
+                            item_du_pass_pour_cet_evenement['options'] = []
+                        tickets_par_event.setdefault(uuid_de_l_evenement, []).append(
+                            item_du_pass_pour_cet_evenement
+                        )
+                    continue
+
                 tickets_par_event.setdefault(item['event_uuid'], []).append(item)
 
             for event_uuid, items_event in tickets_par_event.items():
@@ -285,8 +309,12 @@ class CommandeService:
                 # is still a free price.
                 products_dict_par_code_promo = {}
                 items_a_prix_libre = []
+                items_de_pass = []
                 for it in items_event:
                     price = Price.objects.get(uuid=it['price_uuid'])
+                    if it.get('identifiants_des_passes'):
+                        items_de_pass.append(it)
+                        continue
                     if it.get('custom_amount') and price.free_price:
                         items_a_prix_libre.append(it)
                         continue
@@ -300,9 +328,16 @@ class CommandeService:
                 # (une seule soumission de booking_form.html par event).
                 # / All items from this event share options + custom_form
                 # (single submission of booking_form.html per event).
-                first_item = items_event[0]
-                custom_form = first_item.get('custom_form') or None
-                options_uuids = first_item.get('options') or []
+                # Premier item avec un formulaire ou des options (un item de pass venu d'un
+                # autre événement n'en a pas).
+                # / First item carrying a form or options.
+                custom_form = None
+                options_uuids = []
+                for it in items_event:
+                    if it.get('custom_form') or it.get('options'):
+                        custom_form = it.get('custom_form') or None
+                        options_uuids = it.get('options') or []
+                        break
 
                 reservation = Reservation.objects.create(
                     user_commande=user,
@@ -344,6 +379,24 @@ class CommandeService:
                 # / A free-price item keeps ITS amount: it gets its own TicketCreator, on the
                 # same reservation. Merging it with another item of the same price would bill
                 # both at the last amount typed.
+                # Un item de pass a son propre TicketCreator, avec ses identifiants de pass.
+                # / A pass item gets its own TicketCreator with its pass ids.
+                for item_de_pass in items_de_pass:
+                    price = Price.objects.get(uuid=item_de_pass['price_uuid'])
+                    creator = TicketCreator(
+                        reservation=reservation,
+                        products_dict={price.product: {price: int(item_de_pass['qty'])}},
+                        sale_origin=SaleOrigin.LESPASS,
+                        create_checkout=False,
+                        vente=vente,
+                        identifiants_des_passes={
+                            price.uuid: item_de_pass['identifiants_des_passes'],
+                        },
+                    )
+                    for line in creator.list_line_article_sold:
+                        all_lines.append(line)
+                        total_centimes += line.total_catalogue
+
                 for item_a_prix_libre in items_a_prix_libre:
                     price = Price.objects.get(uuid=item_a_prix_libre['price_uuid'])
                     montant_saisi = Decimal(str(item_a_prix_libre['custom_amount']))

@@ -875,6 +875,16 @@ class ReservationValidator(serializers.Serializer):
             if not products_dict or len(products_dict) < 1:
                 raise serializers.ValidationError(_("Choisissez au moins un billet."))
 
+        # Un pass fait une réservation par événement, dans une commande. Ce validateur
+        # (réservation directe, API v2) n'en crée qu'une : le pass passe par le panier.
+        # / A pass needs one reservation per event: it is bought via the cart.
+        for product in products_dict:
+            if product.est_un_pass:
+                raise serializers.ValidationError(
+                    _("Le pass « %(produit)s » s'achète par le panier : ajoutez-le au panier.")
+                    % {'produit': product.name}
+                )
+
         # Validate promotional code is linked to a selected product
         if hasattr(self, 'promo_code'):
             promo_code = self.promo_code

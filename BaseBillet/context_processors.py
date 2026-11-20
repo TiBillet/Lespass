@@ -147,6 +147,15 @@ def _build_items_with_details(panier):
             except Event.DoesNotExist:
                 continue
 
+            # Pass : ses événements, et le prix facturé (la somme des prix par événement).
+            # / Pass: its events and the billed price.
+            if product.est_un_pass:
+                evenements_du_pass = []
+                for ligne_du_pass in product.lignes_du_pass():
+                    evenements_du_pass.append(ligne_du_pass.evenement)
+                detail['evenements_du_pass'] = evenements_du_pass
+                detail['prix_du_pass'] = product.prix_total_du_pass()
+
             # Code promo : le panier affiche le prix avant remise, le prix remisé et le code,
             # calculés comme au paiement (PanierSession.code_promo_du_billet,
             # montant_apres_remise).

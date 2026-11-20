@@ -81,23 +81,44 @@ def montant_apres_remise(montant, code_promo):
     return dround(montant - (montant * code_promo.discount_rate / 100))
 
 
+def _item_billet_couvre_l_evenement(item, event_uuid):
+    """
+    Vrai si cet item billet du panier occupe une place sur cet événement. Un pass est
+    rangé sous l'événement où il a été ajouté, mais occupe une place sur chacun des siens.
+    / True if this cart ticket item takes a seat on this event (every event for a pass).
+
+    LOCALISATION : BaseBillet/services_panier.py
+    """
+    from BaseBillet.models import EvenementDuPass
+
+    if item.get('type') != 'ticket':
+        return False
+    if item.get('event_uuid') == str(event_uuid):
+        return True
+    return EvenementDuPass.objects.filter(
+        produit__prices__uuid=item.get('price_uuid'),
+        produit__est_un_pass=True,
+        evenement__uuid=event_uuid,
+    ).exists()
+
+
 def _cart_qty_for_event(cart_items, event_uuid):
-    """Somme des qty des items ticket du panier pour cet event.
-    / Sum of ticket item qty in cart for this event."""
-    return sum(
-        int(i.get('qty', 0))
-        for i in cart_items
-        if i.get('type') == 'ticket' and i.get('event_uuid') == str(event_uuid)
-    )
+    """Somme des qty des items ticket du panier qui occupent une place sur cet event.
+    / Sum of ticket item qty in cart taking a seat on this event (a pass counts on each)."""
+    total = 0
+    for item in cart_items:
+        if _item_billet_couvre_l_evenement(item, event_uuid):
+            total += int(item.get('qty', 0))
+    return total
 
 
 def _cart_qty_for_product(cart_items, event_uuid, product_uuid):
-    """Somme des qty des items ticket pour ce product dans cet event.
-    / Sum of ticket item qty for this product in this event."""
+    """Somme des qty des items ticket pour ce product sur cet event.
+    / Sum of ticket item qty for this product on this event (a pass counts on each)."""
     from BaseBillet.models import Price
     total = 0
     for i in cart_items:
-        if i.get('type') != 'ticket' or i.get('event_uuid') != str(event_uuid):
+        if not _item_billet_couvre_l_evenement(i, event_uuid):
             continue
         try:
             p = Price.objects.get(uuid=i['price_uuid'])
@@ -544,6 +565,21 @@ class PanierSession:
         if price.product not in event.products.all():
             raise InvalidItemError(_("This rate is not available for this event."))
 
+        # Validation 4bis : pass. L'événement de la page fait partie du pass, le pass est
+        # encore vendable, pas de code promo. Les autres événements : 5ter.
+        # / Validation 4bis: pass in this event, still on sale, no promo code.
+        produit_est_un_pass = price.product.est_un_pass
+        evenements_du_pass = []
+        if produit_est_un_pass:
+            for ligne_du_pass in price.product.lignes_du_pass():
+                evenements_du_pass.append(ligne_du_pass.evenement)
+            if event not in evenements_du_pass:
+                raise InvalidItemError(_("Cet événement ne fait pas partie du pass."))
+            if not price.product.pass_est_vendable(quantite_demandee=int(qty)):
+                raise InvalidItemError(_("Ce pass n'est plus disponible."))
+            if promotional_code_name:
+                raise InvalidItemError(_("Un pass n'accepte pas de code promo."))
+
         # Validation 5bis : limites cart-aware (event/product/price.max_per_user
         # + jauge_max). Verifie que l'ajout, combine avec ce qui est deja en DB
         # pour ce user + ce qui est deja dans le panier + qty_to_add, ne depasse
@@ -563,15 +599,38 @@ class PanierSession:
             quantites_de_la_demande=quantites_de_la_demande,
         )
 
+        # Validation 5ter : pass. Limites des autres événements du pass. Sur eux, la
+        # demande n'est que le pass : les autres tarifs de l'envoi sont pour cette page.
+        # / Validation 5ter: limits of the other pass events (the request is the pass only).
+        for autre_evenement_du_pass in evenements_du_pass:
+            if autre_evenement_du_pass == event:
+                continue
+            validate_ticket_cart_limits(
+                user=self.request.user,
+                event=autre_evenement_du_pass,
+                product=price.product,
+                price=price,
+                qty_to_add=int(qty),
+                cart_items=self._data.get('items', []),
+                items_du_panier_avant_la_demande=items_du_panier_avant_la_demande,
+                quantites_de_la_demande={price: int(qty)},
+            )
+
         # Validation 6 : le stock du tarif doit accueillir la quantité demandée ET ce que le
         # panier contient déjà pour ce tarif et cet événement (voir Price.out_of_stock).
         # / Validation 6: the price stock must fit the requested quantity plus the same
         # price already in the cart for this event.
+        # Le stock d'un pass est commun à ses événements : même tarif, tout événement.
+        # / A pass stock is shared by its events.
         quantite_deja_au_panier = 0
         for item_du_panier in self._data.get('items', []):
+            meme_evenement_ou_pass = (
+                produit_est_un_pass
+                or item_du_panier.get('event_uuid') == str(event.uuid)
+            )
             meme_tarif_meme_evenement = (
                 item_du_panier.get('type') == 'ticket'
-                and item_du_panier.get('event_uuid') == str(event.uuid)
+                and meme_evenement_ou_pass
                 and item_du_panier.get('price_uuid') == str(price.uuid)
             )
             if meme_tarif_meme_evenement:
@@ -1262,6 +1321,11 @@ class PanierSession:
                 amount_eur = Decimal(str(item['custom_amount']))
             else:
                 amount_eur = price.prix or Decimal("0.00")
+
+            # Pass : le paiement facture la somme des prix par événement.
+            # / Pass: the checkout bills the sum of the per-event prices.
+            if item.get('type') == 'ticket' and price.product.est_un_pass:
+                amount_eur = price.product.prix_total_du_pass()
 
             # Billet avec code promo : même remise qu'au paiement.
             # / Ticket with a promo code: same discount as at checkout.
