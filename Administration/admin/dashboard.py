@@ -83,7 +83,15 @@ def event_proposals_badge_callback(request):
         return memorise
 
     from BaseBillet.models import Event
-    count = Event.objects.filter(is_proposal=True, published=False).count()
+    # Une proposition archivée, ou dont la date est passée, n'attend plus de
+    # modération : elle sort du compteur.
+    # / An archived or past proposal no longer awaits moderation: it leaves the count.
+    count = Event.objects.filter(
+        is_proposal=True,
+        published=False,
+        archived=False,
+        datetime__gte=timezone.now(),
+    ).count()
     badge = f"+ {count}" if count else None
 
     try:
