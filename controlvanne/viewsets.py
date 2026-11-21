@@ -590,11 +590,7 @@ class TireuseViewSet(viewsets.ViewSet):
                     "prix_litre": str(tireuse.prix_litre),
                     "reservoir_ml": float(tireuse.reservoir_ml),
                     "reservoir_max_ml": tireuse.reservoir_max_ml,
-                    "calibration_factor": (
-                        tireuse.debimetre.flow_calibration_factor
-                        if tireuse.debimetre
-                        else None
-                    ),
+                    "calibration_factor": tireuse.flow_calibration_factor,
                 },
             }
         )
@@ -629,7 +625,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Chercher la tireuse / Find the tap
         try:
-            tireuse = TireuseBec.objects.select_related("terminal", "fut_actif", "debimetre").get(
+            tireuse = TireuseBec.objects.select_related("terminal", "fut_actif").get(
                 uuid=tireuse_uuid
             )
         except TireuseBec.DoesNotExist:
@@ -776,11 +772,7 @@ class TireuseViewSet(viewsets.ViewSet):
                     "liquid_label": tireuse.liquid_label,
                     # Le Pi applique ce facteur avant de mesurer la session
                     # / The Pi applies this factor before measuring the session
-                    "calibration_factor": (
-                        tireuse.debimetre.flow_calibration_factor
-                        if tireuse.debimetre
-                        else None
-                    ),
+                    "calibration_factor": tireuse.flow_calibration_factor,
                     "message": "Maintenance mode",
                 }
             )
@@ -931,11 +923,7 @@ class TireuseViewSet(viewsets.ViewSet):
                 # calibration faite dans l'admin compte dès le badge suivant.
                 # / The Pi applies this factor before measuring the session: an
                 # admin calibration counts from the next badge.
-                "calibration_factor": (
-                    tireuse.debimetre.flow_calibration_factor
-                    if tireuse.debimetre
-                    else None
-                ),
+                "calibration_factor": tireuse.flow_calibration_factor,
                 "message": "OK",
             }
         )

@@ -780,14 +780,6 @@ def _construire_sections_modules(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Flow meters"),
-                        "icon": "speed",
-                        "link": _safe_rev(
-                            "staff_admin:controlvanne_debimetre_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
-                    {
                         "title": _("Maintenance cards"),
                         "icon": "build",
                         "link": _safe_rev(
@@ -1494,7 +1486,6 @@ DESCRIPTION_DES_PAGES = {
     "controlvanne.tireusebec": _("Vos becs et ce qu'ils servent."),
     "controlvanne.cartemaintenance": _("Les cartes qui ouvrent les vannes."),
     "BaseBillet.futproduct": _("Ce qui est en fût."),
-    "controlvanne.debimetre": _("Les compteurs de volume."),
     "controlvanne.configurationtireuse": _("Les réglages du serveur de tirage."),
     "controlvanne.sessioncalibration": _("L'étalonnage des débitmètres."),
     "controlvanne.rfidsession": _("Les sessions de tirage."),
@@ -1568,7 +1559,6 @@ CATEGORIE_DES_PAGES = {
     "controlvanne.tireusebec": "gerer",
     "controlvanne.cartemaintenance": "gerer",
     "BaseBillet.futproduct": "configurer",
-    "controlvanne.debimetre": "configurer",
     "controlvanne.configurationtireuse": "configurer",
     "controlvanne.sessioncalibration": "configurer",
     "controlvanne.rfidsession": "analyser",

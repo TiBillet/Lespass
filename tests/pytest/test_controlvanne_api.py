@@ -89,16 +89,8 @@ def test_tireuse(tenant, test_asset_tlf_api):
     """Crée une TireuseBec de test avec un débitmètre et un fut actif.
     / Creates a test TireuseBec with a flow meter and active keg."""
     with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseBec, Debimetre
+        from controlvanne.models import TireuseBec
         from BaseBillet.models import Product, Price
-
-        # get_or_create avec first() pour éviter les doublons de runs précédents
-        # / get_or_create with first() to avoid duplicates from previous runs
-        debimetre = Debimetre.objects.filter(name="Test YF-S201").first()
-        if not debimetre:
-            debimetre = Debimetre.objects.create(
-                name="Test YF-S201", flow_calibration_factor=6.5
-            )
 
         # Fut avec prix au litre / Keg with per-liter price
         fut, _ = Product.objects.get_or_create(
@@ -115,7 +107,8 @@ def test_tireuse(tenant, test_asset_tlf_api):
             nom_tireuse="Test Tap Phase2",
             defaults={
                 "enabled": True,
-                "debimetre": debimetre,
+                "flow_meter_model": "Test YF-S201",
+                "flow_calibration_factor": 6.5,
                 "fut_actif": fut,
                 "reservoir_ml": Decimal("5000.00"),
             },
@@ -591,7 +584,7 @@ class TestTireuseViewSet:
         )
         data = response.json()
         assert data["authorized"] is True
-        assert data["calibration_factor"] == test_tireuse.debimetre.flow_calibration_factor
+        assert data["calibration_factor"] == test_tireuse.flow_calibration_factor
 
 
 # ──────────────────────────────────────────────────────────────────────

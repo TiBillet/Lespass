@@ -121,10 +121,10 @@ def carte_avec_solde(tenant, asset_tlf):
 
 @pytest.fixture(scope="session")
 def tireuse_billing(tenant):
-    """TireuseBec avec Debimetre, Product(FUT), Price(5EUR/L, poids_mesure=True).
-    / TireuseBec with Debimetre, Product(FUT), Price(5EUR/L, poids_mesure=True)."""
+    """TireuseBec avec débitmètre (facteur 6,5), Product(FUT), Price(5EUR/L, poids_mesure=True).
+    / TireuseBec with flow meter (factor 6.5), Product(FUT), Price(5EUR/L, poids_mesure=True)."""
     with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseBec, Debimetre
+        from controlvanne.models import TireuseBec
         from BaseBillet.models import Product, Price
         from laboutik.models import PointDeVente, Terminal
 
@@ -139,7 +139,6 @@ def tireuse_billing(tenant):
         # (no rollback between pytest runs), deleting the TireuseBec does not delete
         # this PointDeVente (FK is on TireuseBec, not the reverse) — it stays
         # orphaned and blocks recreation via the unique "name" constraint.
-        Debimetre.objects.filter(name="Test billing debimetre").delete()
         TireuseBec.objects.filter(nom_tireuse="Tireuse billing test").delete()
         PointDeVente.objects.filter(name="Tireuse billing test").delete()
         # Le meme signal cree aussi un Terminal, qui porte lui aussi une
@@ -149,11 +148,6 @@ def tireuse_billing(tenant):
         # / The same signal also creates a Terminal, unique on "name" too, and
         # not deleted with the TireuseBec: the next run fails on UniqueViolation.
         Terminal.objects.filter(name="Tireuse billing test").delete()
-
-        debimetre = Debimetre.objects.create(
-            name="Test billing debimetre",
-            flow_calibration_factor=6.5,
-        )
 
         produit_fut, _ = Product.objects.get_or_create(
             name="Fut test billing",
@@ -175,7 +169,8 @@ def tireuse_billing(tenant):
             defaults={
                 "enabled": True,
                 "fut_actif": produit_fut,
-                "debimetre": debimetre,
+                "flow_meter_model": "Test billing debimetre",
+                "flow_calibration_factor": 6.5,
                 "reservoir_ml": Decimal("30000.00"),
             },
         )

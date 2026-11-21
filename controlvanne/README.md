@@ -26,9 +26,8 @@ Le module reutilise les modeles existants de Lespass :
 | Modele | Role |
 |--------|------|
 | `ConfigurationTireuse` | Singleton django-solo, config du module tireuse |
-| `Debimetre` | Modele de capteur de debit + facteur de calibration |
 | `CarteMaintenance` | Carte NFC dediee au rincage (OneToOne `CarteCashless`) |
-| `TireuseBec` | Une tireuse physique (fut actif, debimetre, POS, pairing Pi) |
+| `TireuseBec` | Une tireuse physique (fut actif, debitmetre : modele et facteur de calibration, POS, pairing Pi) |
 | `RfidSession` | Session de service (pose a depose de la carte NFC) |
 | `TireuseAPIKey` | Cle API dediee aux Raspberry Pi des tireuses |
 | 4 proxy `RfidSession` | `SessionCalibration`, `HistoriqueMaintenance`, `HistoriqueTireuse`, `HistoriqueCarte` |
@@ -164,16 +163,7 @@ compte pour qu'il se reconnecte.
 - Un asset TLF (monnaie locale) est actif sur le tenant
 - Le materiel est pret et cablé (Pi, lecteur RFID, electrovanne, debitmetre)
 
-### Etape 1 : creer un debitmetre
-
-**Admin → Tireuses → Debitmetres → Ajouter**
-
-| Champ | Valeur |
-|-------|--------|
-| Model | `YF-S201` (ou le modele de votre capteur) |
-| Facteur de calibration | `6.5` (defaut YF-S201, affiner avec la calibration) |
-
-### Etape 2 : creer un produit fut
+### Etape 1 : creer un produit fut
 
 **Admin → Tireuses → Keg products → Ajouter**
 
@@ -194,21 +184,22 @@ Puis ajouter un **Price** sur ce produit :
 | Prix | `5.00` (prix au litre en EUR) |
 | Vente au poids/volume | **cocher** (obligatoire pour la tireuse) |
 
-### Etape 3 : creer la tireuse
+### Etape 2 : creer la tireuse
 
 **Admin → Tireuses → Taps → Ajouter**
 
 | Champ | Valeur |
 |-------|--------|
 | Nom tireuse (Tap name) | `Biere` (affiche sur le kiosk) |
-| Fut actif (Active keg) | `Blonde Pression` (le produit FUT cree a l'etape 2) |
-| Debitmetre (Flow meter) | `YF-S201` (cree a l'etape 1) |
+| Fut actif (Active keg) | `Blonde Pression` (le produit FUT cree a l'etape 1) |
+| Debitmetre (Flow meter) | `YF-S201` (le modele du capteur de cette tireuse) |
+| Facteur de calibration (Calibration factor) | `6.5` par defaut, a affiner avec la calibration (chaque capteur a son propre ecart) |
 | En service | cocher |
 | Reservoir illimite (Unlimited reservoir) | cocher (aucun suivi de volume) — ou decocher pour suivre le niveau du fut (`reservoir_ml`, rempli a l'activation) |
 
 A la sauvegarde, un code PIN d'appairage et un `PointDeVente` de type TIREUSE sont crees automatiquement par signal.
 
-### Etape 4 : installer le Pi
+### Etape 3 : installer le Pi
 
 **Admin → Tireuses** — **ouvrir** la tireuse et noter son code PIN (il est dans la fiche, pas dans la liste : il ne sert qu'au moment ou l'on installe le Pi).
 
@@ -235,7 +226,7 @@ Selectionnez une `CarteCashless` existante. Quand cette carte est badgee sur la 
 
 #### Calibrer le debitmetre
 
-**Admin → Tireuses → Calibration sessions**
+**Admin → Tireuses → ouvrir la tireuse → bouton « Calibrer le debitmetre »**
 
 Ou directement : `/controlvanne/calibration/<uuid-tireuse>/`
 
@@ -370,6 +361,8 @@ SYSTEMD_NOTIFY=True
 GIT_REPO=https://github.com/TiBillet/Lespass.git
 GIT_BRANCH=main
 ```
+
+`FLOW_CALIBRATION_FACTOR` ne sert qu'avant le premier contact avec le serveur. Ensuite, le Pi prend le facteur de la fiche de la tireuse (au demarrage et a chaque badge) : c'est la qu'il se regle, avec la page de calibration.
 
 **Changer l'adresse du serveur ou du tenant** : editer ces deux lignes dans le
 `.env` puis `sudo systemctl restart tibeer kiosk`. Le Makefile reprend aussi

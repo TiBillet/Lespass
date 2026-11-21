@@ -91,35 +91,14 @@ des réponses 422 (htmx 2 : événement htmx:beforeSwap).
     {# Débitmètre + état maintenance / Flow meter + maintenance state #}
     <div class="card mb-4" data-testid="calibration-debitmetre">
       <div class="card-body">
-        {% if tireuse.debimetre %}
-          <p class="mb-1"><strong>{% translate "Débitmètre :" %}</strong> {{ tireuse.debimetre.name }}</p>
-          <p class="mb-0">
-            <strong>{% translate "Facteur actuel :" %}</strong>
-            <span class="badge bg-secondary fs-6">{{ tireuse.debimetre.flow_calibration_factor }}</span>
-            <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹</span>
-          </p>
-          {# Débitmètre partagé : le facteur changera pour toutes ces tireuses #}
-          {# / Shared flow meter: the factor will change for all these taps #}
-          {% if autres_tireuses_du_debimetre %}
-            <div class="alert alert-warning mt-2 mb-0" data-testid="calibration-debitmetre-partage">
-              <span aria-hidden="true">⚠️</span>
-              {% blocktranslate count nombre=autres_tireuses_du_debimetre|length trimmed %}
-                Ce débitmètre est aussi utilisé par une autre tireuse : le nouveau facteur s'appliquera aussi à elle.
-              {% plural %}
-                Ce débitmètre est aussi utilisé par {{ nombre }} autres tireuses : le nouveau facteur s'appliquera aussi à elles.
-              {% endblocktranslate %}
-              <ul class="mb-0 mt-1">
-                {% for autre_tireuse in autres_tireuses_du_debimetre %}
-                  <li>{{ autre_tireuse.nom_tireuse }}</li>
-                {% endfor %}
-              </ul>
-            </div>
-          {% endif %}
-        {% else %}
-          <div class="alert alert-warning mb-0" role="alert">
-            {% translate "Aucun débitmètre associé. Affectez-en un dans l'admin avant de calibrer." %}
-          </div>
+        {% if tireuse.flow_meter_model %}
+          <p class="mb-1"><strong>{% translate "Débitmètre :" %}</strong> {{ tireuse.flow_meter_model }}</p>
         {% endif %}
+        <p class="mb-0">
+          <strong>{% translate "Facteur actuel :" %}</strong>
+          <span class="badge bg-secondary fs-6">{{ tireuse.flow_calibration_factor }}</span>
+          <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹</span>
+        </p>
 
         {% if not tireuse.enabled %}
           <span class="badge bg-warning text-dark mt-2">
