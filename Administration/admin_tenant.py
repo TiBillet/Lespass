@@ -4340,7 +4340,7 @@ def evenements_affiches_par_defaut(queryset):
 def filtrer_les_evenements_a_venir_ou_en_cours(queryset):
     """Événements qui commencent ou finissent après maintenant.
     / Events starting or ending after now."""
-    now = datetime.datetime.now()
+    now = timezone.now()
     return queryset.filter(Q(datetime__gte=now) | Q(end_datetime__gte=now))
 
 
