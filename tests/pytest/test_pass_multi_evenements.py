@@ -13,6 +13,9 @@ Un pass (`Product.est_un_pass`) couvre au moins 2 événements, chacun avec son 
 - Admin : un seul tarif sans prix libre, synchronisé avec les événements du pass.
 - Annulation : le pass est indivisible, et refusé si un de ses billets est scanné.
 / Pass sale, admin and cancellation rules (online).
+
+Ces tests ne laissent rien en base de dev : chaque test est annulé à la fin (`django_db`).
+/ These tests leave nothing in the dev database.
 """
 
 import uuid
@@ -22,6 +25,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from django.test import Client
 from django.utils import timezone
 from django_tenants.utils import tenant_context
 from rest_framework import serializers
@@ -63,6 +67,23 @@ def _langue_par_defaut_apres_chaque_test():
 
     yield
     translation.deactivate()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _inject_cli_env():
+    """Remplace la fixture du conftest, qui crée en base une clé API et un superutilisateur
+    à chaque lancement. Aucun test de ce fichier n'appelle l'API.
+    / Overrides the conftest fixture, which creates an API key and a superuser per run."""
+
+
+@pytest.fixture
+def admin_client(admin_user):
+    """Remplace la fixture de session du conftest : ici, la session de connexion est écrite
+    dans la transaction du test, donc annulée à la fin (tests/PIEGES.md, 13.10).
+    / The login session is written inside the test transaction, hence rolled back."""
+    client_http_admin = Client(HTTP_HOST="lespass.tibillet.localhost")
+    client_http_admin.force_login(admin_user)
+    return client_http_admin
 
 
 @pytest.fixture

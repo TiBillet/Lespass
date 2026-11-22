@@ -32,10 +32,18 @@ django.setup()
 from datetime import timedelta
 from decimal import Decimal
 
+import pytest
 from django.utils import timezone
 from django_tenants.test.cases import FastTenantTestCase
 
 from test_billetterie_pos import TEST_PREFIX, DonneesBilletterieMixin
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _inject_cli_env():
+    """Remplace la fixture du conftest, qui crée en base une clé API et un superutilisateur
+    à chaque lancement. Aucun test de ce fichier n'appelle l'API.
+    / Overrides the conftest fixture, which creates an API key and a superuser per run."""
 
 
 class TestPassVenduEnCaisse(DonneesBilletterieMixin, FastTenantTestCase):
