@@ -558,6 +558,12 @@
         {# / Server errors land here only (HX-Retarget): filled fields are kept. #}
         <div id="reservation-erreurs" aria-live="assertive" data-testid="booking-server-errors"></div>
 
+        {% if event.annulation_par_le_client_desactivee %}
+            <p class="small mb-3" data-testid="booking-no-cancellation">
+                <i class="bi bi-info-circle me-1" aria-hidden="true"></i>{{ event.MENTION_ANNULATION_REFUSEE }}
+            </p>
+        {% endif %}
+
         {# Un seul champ « Code promo » pour tout l'événement : le serveur lit UN code par envoi #}
         {# et ne l'applique qu'au produit auquel il est lié (BaseBillet/validators.py, method_B). #}
         {# / One promo field for the whole event: the server reads ONE code and applies it to its product. #}

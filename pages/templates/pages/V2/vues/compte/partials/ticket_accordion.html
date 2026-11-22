@@ -86,6 +86,9 @@
                         {% translate "Display ticket" %}
                     </button>
                     {% if ticket.status == ticket.NOT_SCANNED %}
+                    {% if ticket.annulation_par_le_client_refusee %}
+                    <p class="text-muted mb-0" data-testid="ticket-cancel-refused-{{ ticket.uuid }}">{% translate "Annulation en ligne impossible : contactez l'organisateur." %}</p>
+                    {% else %}
                     <button
                         type="button"
                         class="btn btn--outline btn--sm"
@@ -96,6 +99,7 @@
                         data-testid="ticket-cancel-{{ ticket.uuid }}">
                         {% translate "Cancel this ticket" %}
                     </button>
+                    {% endif %}
                     {% endif %}
                     </div>
                     {% comment %}

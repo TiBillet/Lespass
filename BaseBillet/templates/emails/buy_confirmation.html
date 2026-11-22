@@ -72,6 +72,11 @@ url_de_mon_espace, url_de_l_evenement.
     {% include "emails/composants/message.html" with ton="info" titre=titre_du_message texte=texte_du_message %}
     {% endif %}
 
+    {% if reservation.annulation_par_le_client_refusee %}
+    {% translate "Conditions d'annulation" as titre_du_message %}
+    {% include "emails/composants/message.html" with ton="info" titre=titre_du_message texte=event.MENTION_ANNULATION_REFUSEE %}
+    {% endif %}
+
     {% translate "Voir mes réservations" as texte_du_bouton %}
     {% include "emails/composants/bouton.html" with url=url_de_mon_espace texte=texte_du_bouton %}
     <tr>

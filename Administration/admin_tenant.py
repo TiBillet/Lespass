@@ -4463,6 +4463,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
                 'reservation_button_name',
                 'custom_confirmation_message',
                 'refund_deadline',
+                'annulation_par_le_client_desactivee',
             ),
         }),
         (_('Publish'), {

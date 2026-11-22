@@ -69,6 +69,9 @@ A CONSERVER : la classe .reservation-card (cible HTMX), #ticketPanel,
                         </span>
                         <span class="event-card__price">{{ resa.total_paid }} €</span>
                         <span class="badge badge--neutral">{{ resa.get_status_display }}</span>
+                        {% if resa.annulation_par_le_client_refusee %}
+                        <span class="text-muted" data-testid="reservation-cancel-refused-{{ resa.uuid }}">{% translate "Annulation en ligne impossible : contactez l'organisateur." %}</span>
+                        {% else %}
                         <button
                             type="button"
                             class="btn btn--outline btn--sm"
@@ -79,6 +82,7 @@ A CONSERVER : la classe .reservation-card (cible HTMX), #ticketPanel,
                             data-testid="reservation-cancel-{{ resa.uuid }}">
                             J'annule ma reservation
                         </button>
+                        {% endif %}
                     </div>
 
                     {% if resa.options.all|length > 0 %}

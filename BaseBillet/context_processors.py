@@ -147,12 +147,18 @@ def _build_items_with_details(panier):
             except Event.DoesNotExist:
                 continue
 
+            detail['annulation_par_le_client_refusee'] = event.annulation_par_le_client_desactivee
+
             # Pass : ses événements, et le prix facturé (la somme des prix par événement).
             # / Pass: its events and the billed price.
             if product.est_un_pass:
                 evenements_du_pass = []
                 for ligne_du_pass in product.lignes_du_pass():
                     evenements_du_pass.append(ligne_du_pass.evenement)
+                    # Le pass est indivisible : un seul événement qui refuse suffit.
+                    # / The pass is indivisible: one refusing event is enough.
+                    if ligne_du_pass.evenement.annulation_par_le_client_desactivee:
+                        detail['annulation_par_le_client_refusee'] = True
                 detail['evenements_du_pass'] = evenements_du_pass
                 detail['prix_du_pass'] = product.prix_total_du_pass()
 

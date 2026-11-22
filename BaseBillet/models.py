@@ -2684,6 +2684,26 @@ class Event(models.Model):
                                                        help_text=_(
                                                            "Number of days before the event to obtain a refund."))
 
+    # Lu avant tout remboursement par Reservation.cancel_and_refund_resa et
+    # cancel_and_refund_ticket. L'administration n'est jamais bloquée.
+    # / Read before any refund by the cancellation methods. The admin is never blocked.
+    annulation_par_le_client_desactivee = models.BooleanField(
+        default=False,
+        verbose_name=_("Refuser l'annulation par le client"),
+        help_text=_(
+            "Le client ne peut pas annuler depuis son compte, et il en est informé avant l'achat. "
+            "L'annulation reste possible depuis l'administration. "
+            "S'applique aussi aux réservations déjà faites."
+        ),
+    )
+
+    # Affichée dans le formulaire de réservation, le panier et le mail de confirmation.
+    # / Shown in the booking form, the cart and the confirmation email.
+    MENTION_ANNULATION_REFUSEE = _(
+        "Billet daté, non échangeable et non remboursable "
+        "(sauf annulation ou report de l'événement par l'organisateur)."
+    )
+
     easy_reservation = models.BooleanField(default=False, verbose_name=_("Quick booking"),
                                            help_text=_("One-click booking for logged-in user."))
 
@@ -3496,6 +3516,31 @@ class Reservation(models.Model):
         """
         return self.tickets.filter(pass_vendu__isnull=False).exclude(status=Ticket.CANCELED).exists()
 
+    def annulation_par_le_client_refusee(self):
+        """
+        Vrai si le client ne peut pas annuler cette réservation : son événement le refuse,
+        ou l'un des événements de ses passes (le pass est indivisible).
+        / True if the customer cannot cancel: its event, or an event of its passes, refuses.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        if self.event.annulation_par_le_client_desactivee:
+            return True
+
+        identifiants_des_passes_de_la_reservation = (
+            self.tickets.filter(pass_vendu__isnull=False)
+            .exclude(status=Ticket.CANCELED)
+            .values("pass_vendu")
+        )
+        return (
+            Ticket.objects.filter(
+                pass_vendu__in=identifiants_des_passes_de_la_reservation,
+                reservation__event__annulation_par_le_client_desactivee=True,
+            )
+            .exclude(status=Ticket.CANCELED)
+            .exists()
+        )
+
     def can_refund(self):
         return timezone.localtime() < (self.event.datetime - timedelta(days=self.event.refund_deadline))
 
@@ -3654,6 +3699,9 @@ class Reservation(models.Model):
         Appelée par BaseBillet/views.py (cancel_reservation) et les actions admin.
         Paramètres et message : ceux de _annuler_et_rembourser_la_reservation_seule.
         """
+        if not annulation_par_l_admin and self.annulation_par_le_client_refusee():
+            raise Exception(_("Annulation en ligne impossible : contactez l'organisateur."))
+
         identifiants_des_passes_de_la_reservation = (
             self.tickets.filter(pass_vendu__isnull=False)
             .exclude(status=Ticket.CANCELED)
@@ -3888,6 +3936,9 @@ class Reservation(models.Model):
         Appelée par BaseBillet/views.py (cancel_ticket) et l'action admin « Cancel and refund ».
         Paramètres et message : ceux de _annuler_et_rembourser_un_seul_billet.
         """
+        if not annulation_par_l_admin and ticket.annulation_par_le_client_refusee():
+            raise Exception(_("Annulation en ligne impossible : contactez l'organisateur."))
+
         billet_hors_pass = ticket.pass_vendu is None
         if billet_hors_pass:
             return self._annuler_et_rembourser_un_seul_billet(
@@ -4210,6 +4261,27 @@ class Ticket(models.Model):
         db_index=True,
         verbose_name=_("Pass vendu"),
     )
+
+    def annulation_par_le_client_refusee(self):
+        """
+        Vrai si le client ne peut pas annuler ce billet. Pour un billet de pass, un seul
+        événement du pass qui refuse suffit (le pass est indivisible).
+        / True if the customer cannot cancel this ticket; a pass counts all its events.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        billet_hors_pass = self.pass_vendu is None
+        if billet_hors_pass:
+            return self.reservation.event.annulation_par_le_client_desactivee
+
+        return (
+            Ticket.objects.filter(
+                pass_vendu=self.pass_vendu,
+                reservation__event__annulation_par_le_client_desactivee=True,
+            )
+            .exclude(status=Ticket.CANCELED)
+            .exists()
+        )
 
     def paid(self):
         # Billet offert = 0€

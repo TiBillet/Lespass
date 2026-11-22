@@ -51,6 +51,9 @@
                 {% endif %}
             </small>
         {% endif %}
+        {% if detail.annulation_par_le_client_refusee %}
+            <p class="small text-muted mb-0" data-testid="panier-item-no-cancellation">{{ detail.event.MENTION_ANNULATION_REFUSEE }}</p>
+        {% endif %}
         </div>
         {# --- Affichage qty (lecture seule, billet uniquement) --- #}
         {# La modification de quantite n'est pas supportee dans le panier : #}
