@@ -43,6 +43,10 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
+from booking.montants import (
+    minimum_horaire_d_un_creneau,
+    montant_de_la_reservation,
+)
 from BaseBillet.models import Configuration, Paiement_stripe, LigneArticle, SaleOrigin, PaymentMethod, PromotionalCode
 from root_billet.models import RootConfiguration
 from BaseBillet.models_vente import Vente
@@ -703,12 +707,15 @@ def validate_new_booking(resource,
             price_to_compute = Decimal(str(custom_amount))
         except Exception:
             return False, str(_("Invalid amount.")), None
-        if price_to_compute < price.prix:
+        if price_to_compute < minimum_horaire_d_un_creneau(price.prix, slot_duration_minutes):
             return False, str(_("The amount must be greater than or equal to the minimum.")), None
         if price_to_compute > Decimal("999999.99"):
             return False, str(_("The amount is too high.")), None
 
-    amount = Decimal(slot_duration_minutes) / Decimal(60) * Decimal(slot_count) * Decimal(price_to_compute)
+    # N fois le montant arrondi d'un créneau : le réservant paie ce qu'il a lu
+    # (booking/montants.py, le seul calcul, partagé avec le panier).
+    # / N times the rounded amount of one slot (booking/montants.py, shared with the cart).
+    amount = montant_de_la_reservation(price_to_compute, slot_duration_minutes, slot_count)
 
     # Sans panier, ce créneau est payé seul : Stripe refuse un paiement entre 0,01 € et
     # 0,49 €. Au panier (create_checkout=False), la Commande contrôle son total.

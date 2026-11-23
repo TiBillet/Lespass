@@ -82,10 +82,11 @@ DEPENDENCIES :
                 {# « forloop.first and forloop.last » est vrai quand la ressource n'a qu'un tarif publié : #}
                 {# ce tarif est alors coché d'office. #}
                 {# / True when the resource has a single published price: it is pre-checked. #}
-                {% for price in resource.published_prices %}
+                {% for price in tarifs_du_formulaire %}
                     <div class="p-3" data-testid="booking-price-{{ price.uuid }}">
-                        {# Le nom et le prix du tarif sont dans le label du bouton radio, plus bas. #}
-                        {# / The price name and amount live in the radio button label, below. #}
+                        {# Le libellé par créneau (nom et montant) est fabriqué par la vue : #}
+                        {# booking/views.py, tarifs_du_formulaire. Il est dans le label du bouton radio. #}
+                        {# / The per-slot label is built by the view (tarifs_du_formulaire). #}
                         {# Ni limite par personne ni stock ici : ces règles portent sur un #}
                         {# événement, pas sur une ressource. Le serveur refuse ce qu'il faut #}
                         {# refuser (booking_engine.validate_new_booking). #}
@@ -113,11 +114,7 @@ DEPENDENCIES :
                                                data-testid="membership-price-{{ price.uuid }}">
                                         <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                                for="price-{{ price.uuid }}">
-                                            {% if price.free_price %}
-                                                {{ price.name }}
-                                            {% else %}
-                                                {{ price.name }} - {{ price.prix }}€ /h
-                                            {% endif %}
+                                            {{ price.libelle_par_creneau }}
                                             {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
                                         </label>
                                     </div>
@@ -150,11 +147,7 @@ DEPENDENCIES :
                                                data-testid="membership-price-{{ price.uuid }}">
                                         <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                                for="price-{{ price.uuid }}">
-                                            {% if price.free_price %}
-                                                {{ price.name }}
-                                            {% else %}
-                                                {{ price.name }} - {{ price.prix }}€ /h
-                                            {% endif %}
+                                            {{ price.libelle_par_creneau }}
                                             {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
                                         </label>
                                     </div>
@@ -174,11 +167,7 @@ DEPENDENCIES :
                                        data-testid="membership-price-{{ price.uuid }}">
                                 <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
                                        for="price-{{ price.uuid }}">
-                                    {% if price.free_price %}
-                                        {{ price.name }}
-                                    {% else %}
-                                        {{ price.name }} - {{ price.prix }}€ /h
-                                    {% endif %}
+                                    {{ price.libelle_par_creneau }}
                                     {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
                                 </label>
                             </div>
@@ -195,17 +184,17 @@ DEPENDENCIES :
                                        name="custom_amount_{{ price.uuid }}"
                                         {# unlocalize : en locale FR, min="5,00" (virgule) est invalide en HTML #}
                                         {# / unlocalize: in FR locale, min="5,00" (comma) is invalid HTML #}
-                                       min="{{ price.prix|unlocalize }}"
+                                       min="{{ price.minimum_par_creneau|unlocalize }}"
                                        max="999999.99"
-                                       step="0.10"
-                                       placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                       step="0.01"
+                                       placeholder="{{ price.texte_indicatif_du_montant }}"
                                        aria-describedby="custom-amount-help-{{ price.uuid }}"
                                        data-testid="booking-custom-amount-{{ price.uuid }}">
                                 <div class="invalid-feedback"
                                      id="custom-amount-error-{{ price.uuid }}"
                                      data-testid="booking-custom-amount-error-{{ price.uuid }}"></div>
                                 <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
-                                    {% trans "Enter the desired amount per hour" %}
+                                    {{ price.texte_indicatif_du_montant }}
                                 </small>
                             </div>
                         {% endif %}

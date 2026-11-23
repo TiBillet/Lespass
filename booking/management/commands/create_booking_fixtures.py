@@ -10,10 +10,12 @@ Données créées :
 - Planning hebdomadaire "Salles de répét' weekend" (sam–dim, 3 créneaux × 180 min).
 - Planning hebdomadaire "Résidence et concert" (tous les jours, 10h–18h et 18h–minuit).
 - Produits communs : Coworking, Imprimante 3D, Petite salle, Grande salle,
-  Salle de résidence et concert.
+  Salle de résidence et concert, Atelier de réparation.
 - Ressources liées à ces produits : Coworking (capacité 3), Imprimante 3D (capacité 1),
   Petite salle, Grande salle et Salle de résidence et concert (groupe "Salle de répét'",
-  capacité 1 chacune).
+  capacité 1 chacune), Atelier de réparation (capacité 1, tarif à prix libre).
+- L'Atelier de réparation montre un tarif à prix libre sur des créneaux de 3 heures :
+  minimum 5 €/h, affiché « prix libre dès 15 € / créneau ».
 - La Salle de résidence et concert est bloquée par tous les événements du lieu
   (Event.ressource_bloquee), sauf ceux des tests.
 - Bénévolat (spec TECH_DOC/SESSIONS/TODO/BENEVOLAT-planning-besoins.md) :
@@ -308,6 +310,19 @@ class Command(BaseCommand):
                 "price_name": "Journée ou soirée",
                 "price": 60.00,
             },
+            {
+                "name": "Atelier de réparation",
+                "short_description": "Atelier vélo et petit électroménager, à prix libre.",
+                "long_description": (
+                    "Établis, outillage et pièces de récupération. "
+                    "Chacun donne ce qu'il peut, à partir de 15 € les 3 heures."
+                ),
+                "price_name": "Participation libre",
+                # Tarif à prix libre : `price` est le minimum horaire.
+                # / Pay-what-you-want price: `price` is the hourly minimum.
+                "price": 5.00,
+                "free_price": True,
+            },
         ]
 
         products_by_name = {}
@@ -327,6 +342,7 @@ class Command(BaseCommand):
                 name=data["price_name"],
                 defaults={
                     "prix": data["price"],
+                    "free_price": data.get("free_price", False),
                     "publish": True,
                 },
             )
@@ -369,6 +385,8 @@ class Command(BaseCommand):
         - Salle de résidence et concert (capacité 1) — tous les jours, journée
           et soirée. Horizon de 90 jours : les événements de démo sont tirés
           entre +7 et +90 jours (demo_data_v2), leurs blocages doivent être visibles.
+        - Atelier de réparation (capacité 1, groupe "Ressource") — planning week-end,
+          créneaux de 3 heures, tarif à prix libre.
         """
         groupe_repet, _created = ResourceGroup.objects.get_or_create(
             name="Salle de répét'",
@@ -431,6 +449,16 @@ class Command(BaseCommand):
                 "group": groupe_repet,
                 "booking_horizon_days": 90,
                 "image_file": "event-05.jpg",
+            },
+            {
+                "name": "Atelier de réparation",
+                "description": "Un atelier partagé pour réparer plutôt que jeter.",
+                "product_name": "Atelier de réparation",
+                "calendar": calendrier,
+                "weekly_opening": repet_opening,
+                "capacity": 1,
+                "group": groupe_ressource,
+                "image_file": "event-06.jpg",
             },
         ]
 

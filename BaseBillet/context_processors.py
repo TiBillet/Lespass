@@ -12,6 +12,7 @@ from decimal import Decimal
 from django.utils.functional import SimpleLazyObject
 
 from booking.models import Resource
+from booking.montants import montant_d_un_creneau
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,18 @@ def _build_items_with_details(panier):
                 detail['slot_count'] = item.get("slot_count")
                 detail['total_estimation'] = item.get("total_estimation")
                 detail['hours'] = item.get("hours")
+
+                # Montant d'un créneau, par le même calcul que le total (booking/montants.py) :
+                # la ligne du panier se lit « N × montant d'un créneau = total », et tombe juste.
+                # Un montant libre est rangé en heure : le calcul le ramène au créneau.
+                # / One slot's amount, by the same computation as the total: the cart line
+                # reads "N × slot amount = total" and adds up.
+                prix_horaire_du_tarif = price.prix
+                if price.free_price:
+                    prix_horaire_du_tarif = item.get("custom_amount")
+                detail['montant_par_creneau'] = montant_d_un_creneau(
+                    prix_horaire_du_tarif, item.get("slot_duration_minutes")
+                )
 
             except (Resource.DoesNotExist, ValueError, TypeError):
                 continue
