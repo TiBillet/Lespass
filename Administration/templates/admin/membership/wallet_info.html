@@ -163,6 +163,9 @@
                             {% translate "Action" %}
                         </th>
                         <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Lieu" %}
+                        </th>
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
                             {% translate "Date" %}
                         </th>
                     </tr>
@@ -185,9 +188,23 @@
                                 {{ tr.action|get_choice_string:actions_choices }}
                             </td>
 
+                            {# Lieu = l'autre partie de la transaction, nom envoye par Fedow (aucun appel en plus). #}
+                            {# Si le wallet de la fiche recoit, c'est l'expediteur ; sinon le destinataire. #}
+                            {# / Venue = the other party, name sent by Fedow (no extra call). #}
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="{% translate 'Lieu' %}">
+                                {% if tr.action != "FUS" %}
+                                    {% if tr.receiver == wallet_uuid_de_la_fiche %}
+                                        {{ tr.serialized_sender.get_name }}
+                                    {% else %}
+                                        {{ tr.serialized_receiver.get_name }}
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+
                             <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
                                 data-label="{% translate 'Date' %}">
-                                {{ tr.datetime|naturaltime }}
+                                {{ tr.datetime|date:"d/m/Y H:i" }} ({{ tr.datetime|naturaltime }})
                             </td>
 
                         </tr>

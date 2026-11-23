@@ -1411,6 +1411,10 @@ class Command(BaseCommand):
                     continue
 
                 if carte_client.user:
+                    # Le rattachement au lieu est rejoue meme si la carte est deja liee :
+                    # une base creee avant cette regle a des users sans client_achat.
+                    # / The venue link is replayed even when the card is already linked.
+                    carte_client.user.client_achat.add(tenant_client)
                     self.stdout.write(f"  Carte {tag_id_client} deja liee a {carte_client.user.email}")
                     continue
 
@@ -1430,6 +1434,12 @@ class Command(BaseCommand):
                     self.stdout.write(f"  User cree : {email_lower}")
                 else:
                     self.stdout.write(f"  User existant : {email_lower}")
+
+                # Rattache le user au lieu (client_achat). Sans ce lien, l'admin
+                # « Utilisateurs » ne le montre pas : HumanUserManager ne garde que les
+                # users dont client_achat contient le lieu courant. add() ne double rien.
+                # / Link the user to the venue: without it, the admin user list hides it.
+                user_client.client_achat.add(tenant_client)
 
                 # Creer le wallet si inexistant
                 if not hasattr(user_client, 'wallet') or not user_client.wallet:

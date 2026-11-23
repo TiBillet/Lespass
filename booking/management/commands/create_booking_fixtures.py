@@ -521,12 +521,12 @@ class Command(BaseCommand):
         :return: liste de comptes
         """
         personnes = [
-            ("arthur.dent@h2g2.org", "Arthur", "Dent"),
-            ("ford.prefect@h2g2.org", "Ford", "Prefect"),
-            ("trillian@h2g2.org", "Trillian", "Astra"),
-            ("zaphod@h2g2.org", "Zaphod", "Beeblebrox"),
-            ("marvin@h2g2.org", "Marvin", "Android"),
-            ("slartibartfast@h2g2.org", "Slartibartfast", "Magrathea"),
+            ("arthur.dent@example.org", "Arthur", "Dent"),
+            ("ford.prefect@example.org", "Ford", "Prefect"),
+            ("trillian@example.org", "Trillian", "Astra"),
+            ("zaphod@example.org", "Zaphod", "Beeblebrox"),
+            ("marvin@example.org", "Marvin", "Android"),
+            ("slartibartfast@example.org", "Slartibartfast", "Magrathea"),
         ]
         benevoles = []
         for email, prenom, nom in personnes:

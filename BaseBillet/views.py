@@ -1651,6 +1651,11 @@ class MyAccount(viewsets.ViewSet):
             'transactions': transactions_recentes,
             'actions_choices': TransactionSimpleValidator.TYPE_ACTION,
             'user_pk': pk,
+            # Le wallet de l'user de la fiche (pas celui de l'admin connecte) : le gabarit
+            # en deduit l'autre partie de chaque transaction (le lieu).
+            # / The profile user's wallet (not the logged-in admin's): the template uses it
+            #   to find the other party of each transaction (the venue).
+            'wallet_uuid_de_la_fiche': user.wallet.uuid if user.wallet else None,
         }
         return render(request, "admin/membership/wallet_info.html", context=context)
 
