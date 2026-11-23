@@ -594,6 +594,11 @@ TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')
 
 FORMAT_MODULE_PATH = ["TiBillet.formats"]
 
+LANGUAGES = (
+    ("fr", "Français"),
+    ("en", "English"),
+)
+
 USE_I18N = True
 USE_L10N = True
 USE_TZ = True
@@ -750,6 +755,7 @@ UNFOLD = {
     "ENVIRONMENT": "Administration.admin_tenant.environment_callback",  # environment name in header
     "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
     "SHOW_HISTORY": False,  # show/hide "History" button, default: True
+    "SHOW_LANGUAGES": True,
     "SITE_TITLE": "TiBillet",
     "THEME": "light",  # Force theme disable theme switcher
     # En haut du rail : le nom du lieu, puis une ligne de contexte.
