@@ -147,6 +147,41 @@ class TestEventProposalsBadge:
             )
             assert event_proposals_badge_callback(None) is None
 
+    def test_callback_ignore_propositions_archivees(self, tenant, cleanup_proposals):
+        from BaseBillet.models import Event
+        from Administration.admin.dashboard import event_proposals_badge_callback
+        with tenant_context(tenant):
+            # On supprime toute proposition pending residuelle.
+            # / Remove any residual pending proposal.
+            Event.objects.filter(is_proposal=True, published=False).delete()
+            # Une proposition archivee n'attend plus de moderation : pas de badge.
+            # / An archived proposal no longer awaits moderation: no badge.
+            Event.objects.create(
+                name=f"ProposalTest archivee {uuid.uuid4().hex[:6]}",
+                datetime=timezone.now() + timezone.timedelta(days=1),
+                is_proposal=True,
+                published=False,
+                archived=True,
+            )
+            assert event_proposals_badge_callback(None) is None
+
+    def test_callback_ignore_propositions_passees(self, tenant, cleanup_proposals):
+        from BaseBillet.models import Event
+        from Administration.admin.dashboard import event_proposals_badge_callback
+        with tenant_context(tenant):
+            # On supprime toute proposition pending residuelle.
+            # / Remove any residual pending proposal.
+            Event.objects.filter(is_proposal=True, published=False).delete()
+            # Une proposition dont la date est passee n'attend plus de moderation.
+            # / A proposal whose date is past no longer awaits moderation.
+            Event.objects.create(
+                name=f"ProposalTest passee {uuid.uuid4().hex[:6]}",
+                datetime=timezone.now() - timezone.timedelta(days=1),
+                is_proposal=True,
+                published=False,
+            )
+            assert event_proposals_badge_callback(None) is None
+
 
 # ----------------------------------------------------------------------------
 # Tests : action de ligne "approuver_proposition" (menu « ... » de la liste)

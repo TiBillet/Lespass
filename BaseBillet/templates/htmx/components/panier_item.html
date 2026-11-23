@@ -72,28 +72,21 @@
             </div>
             <small class="text-muted">
                 {% trans "Resource" %} &middot; {{ detail.price.name }}
-                {# Même règle que pour un billet : un tarif horaire de 0 € s'affiche comme #}
-                {# les autres. / Same rule as for a ticket: a 0 € hourly price is displayed. #}
-                {% if detail.price.free_price %}
-                    &middot; {{ detail.custom_amount }}
-                    €/{% translate 'heure' %}
-                {% else %}
-                    &middot; {{ detail.price.prix }}
-                    €/{% translate 'heure' %}
-                {% endif %}
-
+                {# Le montant d'un créneau, comme dans le formulaire de réservation. Il vient #}
+                {# du même calcul que le total (context_processors.py, booking/montants.py) : #}
+                {# « N × montant d'un créneau = total » tombe toujours juste. #}
+                {# Même règle que pour un billet : un tarif de 0 € s'affiche comme les autres. #}
+                {# / One slot's amount, as in the booking form, from the same computation as #}
+                {# the total: "N × slot amount = total" always adds up. A 0 € price is shown. #}
                 &middot;
-                {{ detail.slot_count }} slot de {{ detail.slot_duration_minutes }}min
+                {% blocktrans with montant=detail.montant_par_creneau|floatformat:"-2" %}{{ montant }} € / créneau{% endblocktrans %}
                 &middot;
-                {% if detail.price.free_price %}
-                    {{ detail.hours|floatformat:"-2" }}h * {{ detail.custom_amount }}€/h = {{ detail.total_estimation }}€
-                {% else %}
-                    {{ detail.hours|floatformat:"-2" }}h * {{ detail.price.prix }}€/h = {{ detail.total_estimation }}€
-                {% endif %}
-
-
-
-
+                {# `slot_count` est rangé en texte dans la session : `add:0` le rend entier, #}
+                {# pour que `count` choisisse le singulier ou le pluriel. #}
+                {# / `slot_count` is stored as text: `add:0` makes it an int for `count`. #}
+                {% blocktrans count nombre=detail.slot_count|add:0 with duree=detail.slot_duration_minutes %}{{ nombre }} créneau de {{ duree }} min{% plural %}{{ nombre }} créneaux de {{ duree }} min{% endblocktrans %}
+                &middot;
+                {{ detail.slot_count }} × {{ detail.montant_par_creneau|floatformat:"-2" }} € = {{ detail.total_estimation|floatformat:"-2" }} €
             </small>
         </div>
 

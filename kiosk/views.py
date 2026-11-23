@@ -54,6 +54,8 @@ from kiosk.validators import RecapitulatifSerializer, RefillWisePoseValidator
 from QrcodeCashless.models import CarteCashless
 from QrcodeCashless.services import CarteDUnLieuNonMigre
 
+from TiBillet.identifiants_pour_les_logs import carte_courte
+
 logger = logging.getLogger(__name__)
 
 
@@ -441,7 +443,7 @@ class KioskViewSet(viewsets.ViewSet):
         # str() : request.data peut venir d'un POST JSON (valeur non-string).
         # / str(): request.data can come from a JSON POST (non-string value).
         tag_id = str(request.data.get('tag_id') or '').strip().upper()
-        logger.info(f"--> tag_id = {tag_id}")
+        logger.info(f"--> tag_id = {carte_courte(tag_id)}")
 
         if not tag_id:
             context = {"error_message": _("Aucune carte reçue. Merci de scanner à nouveau.")}
@@ -456,7 +458,7 @@ class KioskViewSet(viewsets.ViewSet):
             context = {"error_message": refus_de_la_carte.message_pour_l_ecran}
             return render(request, "kiosk/partial/etape_poser_carte.html", context)
         except Exception as e:
-            logger.error(f"check_request_card : erreur Fedow pour {tag_id} : {e}")
+            logger.error(f"check_request_card : erreur Fedow pour {carte_courte(tag_id)} : {e}")
             context = {"error_message": _("La carte n'a pas pu être lue. Merci de réessayer.")}
             return render(request, "kiosk/partial/etape_poser_carte.html", context)
 
@@ -843,7 +845,7 @@ class KioskViewSet(viewsets.ViewSet):
             ).exists()
 
         if not c_est_une_carte_primaire:
-            logger.info(f"acces_admin : refus pour la carte {tag_id}")
+            logger.info(f"acces_admin : refus pour la carte {carte_courte(tag_id)}")
             return render(request, "kiosk/partial/modale_admin_etat.html", {"etat": "erreur"})
 
         # On range l'heure d'ouverture : la configuration expire seule.

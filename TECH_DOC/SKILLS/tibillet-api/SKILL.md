@@ -141,6 +141,10 @@ puis écrire `![légende](galerie:N)` (N = `galerieReference` de la réponse).
   (4) `POST /api/v2/volunteer-signups/` pour inscrire quelqu'un (rejouer renvoie 200, sans
   doublon). Pas de répétition par l'API : un besoin = un POST. Adhésions requises et
   calendrier de fermetures : dans l'admin seulement (lecture seule ici).
+- **Events** : `POST` pour créer, `PATCH /api/v2/events/{uuid ou slug}/` pour corriger
+  (seuls les champs envoyés changent). Fichiers en multipart, objets imbriqués
+  (`audience`, `offers`) en JSON : en multipart, ils sont refusés (400). Recette dans
+  `references/recettes.md`.
 - **Autres domaines** (events, products, memberships, crowds, wallet-refills) : consulter
   la section correspondante de l'OpenAPI. Les recettes curl canoniques sont dans
   `references/recettes.md`.

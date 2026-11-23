@@ -24,6 +24,8 @@ from QrcodeCashless.models import CarteCashless, Detail
 from fedow_connect.fedow_api import CarteInconnueDeFedow, NFCcardFedow
 from fedow_connect.models import FedowConfig
 
+from TiBillet.identifiants_pour_les_logs import carte_courte, uuid_court
+
 logger = logging.getLogger(__name__)
 
 # Un tag NFC : exactement 8 caractères hexadécimaux, en majuscules.
@@ -123,7 +125,7 @@ def trouver_ou_rapatrier_la_carte(tag_id):
     fedow_config = FedowConfig.get_solo()
     if not fedow_config.can_fedow():
         raise CarteCashless.DoesNotExist(
-            f"Carte {tag_id_propre} inconnue, lieu non relié à Fedow"
+            f"Carte {carte_courte(tag_id_propre)} inconnue, lieu non relié à Fedow"
         )
 
     # 4. Lecture chez l'ancien Fedow.
@@ -132,11 +134,11 @@ def trouver_ou_rapatrier_la_carte(tag_id):
         fiche_fedow = NFCcardFedow(fedow_config).retrieve(tag_id_propre)
     except CarteInconnueDeFedow:
         raise CarteCashless.DoesNotExist(
-            f"Carte {tag_id_propre} inconnue, ici et chez Fedow"
+            f"Carte {carte_courte(tag_id_propre)} inconnue, ici et chez Fedow"
         )
     except Exception as erreur_de_fedow:
         logger.error(
-            f"Rapatriement de la carte {tag_id_propre} : Fedow injoignable : {erreur_de_fedow}"
+            f"Rapatriement de la carte {carte_courte(tag_id_propre)} : Fedow injoignable : {erreur_de_fedow}"
         )
         raise FedowInjoignable(str(erreur_de_fedow))
 
@@ -234,11 +236,11 @@ def fabriquer_le_miroir_de_la_carte(fiche_fedow, fedow_config):
         # / The number or uuid already belongs to ANOTHER local card.
         logger.error(
             f"Rapatriement impossible : collision d'identifiant pour la carte "
-            f"tag={tag_id_propre} number={fiche_fedow['number_printed']} "
+            f"tag={carte_courte(tag_id_propre)} number={carte_courte(fiche_fedow['number_printed'])} "
             f"uuid={fiche_fedow['qrcode_uuid']}"
         )
         raise CarteCashless.DoesNotExist(
-            f"Carte {tag_id_propre} : collision d'identifiant en local"
+            f"Carte {carte_courte(tag_id_propre)} : collision d'identifiant en local"
         )
 
     # 3. Le Wallet miroir, créé sans origine par le CardValidator, reçoit celle du
@@ -256,12 +258,12 @@ def fabriquer_le_miroir_de_la_carte(fiche_fedow, fedow_config):
     # / Fedow says primary for this venue: no CartePrimaire is created.
     if fiche_fedow.get("is_primary"):
         logger.info(
-            f"Carte {tag_id_propre} rapatriée : carte primaire chez Fedow, "
+            f"Carte {carte_courte(tag_id_propre)} rapatriée : carte primaire chez Fedow, "
             f"à déclarer dans l'admin des cartes primaires."
         )
 
     logger.info(
-        f"Carte {tag_id_propre} rapatriée depuis Fedow (lieu d'origine : {lieu_d_origine})."
+        f"Carte {carte_courte(tag_id_propre)} rapatriée depuis Fedow (lieu d'origine : {lieu_d_origine})."
     )
     return carte_rapatriee
 
@@ -314,8 +316,8 @@ def relier_la_copie_locale_de_la_carte(fiche_fedow, utilisateur, ip="0.0.0.0"):
         )
         ancien_porteur = carte_locale.user
         logger.warning(
-            f"Carte {carte_locale.number} à {utilisateur.email} chez Fedow, encore à "
-            f"{ancien_porteur.email} en local : détachée de cet ancien porteur."
+            f"Carte {carte_courte(carte_locale.number)} à {uuid_court(utilisateur.pk)} chez Fedow, encore à "
+            f"{uuid_court(ancien_porteur.pk)} en local : détachée de cet ancien porteur."
         )
         carte_detachee = CarteService.declarer_perdue(
             user=ancien_porteur, number_printed=carte_locale.number,
@@ -327,7 +329,7 @@ def relier_la_copie_locale_de_la_carte(fiche_fedow, utilisateur, ip="0.0.0.0"):
 
     if lieu_en_moteur_legacy():
         logger.info(
-            f"Carte {fiche_fedow['first_tag_id']} liée chez Fedow, lieu legacy : "
+            f"Carte {carte_courte(fiche_fedow['first_tag_id'])} liée chez Fedow, lieu legacy : "
             f"pas de copie locale."
         )
         return None
@@ -336,7 +338,7 @@ def relier_la_copie_locale_de_la_carte(fiche_fedow, utilisateur, ip="0.0.0.0"):
         return fabriquer_le_miroir_de_la_carte(fiche_fedow, FedowConfig.get_solo())
     except CarteDUnLieuNonMigre:
         logger.info(
-            f"Carte {fiche_fedow['first_tag_id']} liée chez Fedow, d'un lieu legacy ou "
+            f"Carte {carte_courte(fiche_fedow['first_tag_id'])} liée chez Fedow, d'un lieu legacy ou "
             f"inconnu : pas de copie locale."
         )
         return None
@@ -374,12 +376,12 @@ def retirer_la_carte_des_cartes_primaires(carte):
                 ).delete()
             if nombre_supprime:
                 logger.info(
-                    f"Carte {carte.number} retirée des cartes primaires de caissier du "
+                    f"Carte {carte_courte(carte.number)} retirée des cartes primaires de caissier du "
                     f"lieu {lieu.schema_name}."
                 )
         except Exception as erreur_carte_primaire:
             logger.error(
-                f"Impossible de retirer la carte primaire {carte.number} du lieu "
+                f"Impossible de retirer la carte primaire {carte_courte(carte.number)} du lieu "
                 f"{lieu.schema_name} ({erreur_carte_primaire}). Elle ouvre peut-être encore "
                 f"la caisse de ce lieu."
             )
@@ -435,8 +437,8 @@ def aligner_les_cartes_locales_sur_fedow(utilisateur, cartes_chez_fedow, ip="0.0
         )
         retirer_la_carte_des_cartes_primaires(carte_detachee)
         logger.warning(
-            f"Carte {carte_locale.number} détachée chez Fedow mais encore liée en local à "
-            f"{utilisateur.email} : détachée en local."
+            f"Carte {carte_courte(carte_locale.number)} détachée chez Fedow mais encore liée en local à "
+            f"{uuid_court(utilisateur.pk)} : détachée en local."
         )
 
     for fiche_fedow in cartes_chez_fedow:
@@ -484,18 +486,18 @@ def _trouver_le_lieu_d_origine(fiche_fedow, fedow_config, tag_id):
 
     if domaine_du_lieu_d_origine is None:
         logger.info(
-            f"Carte {tag_id} refusée : lieu d'origine introuvable "
+            f"Carte {carte_courte(tag_id)} refusée : lieu d'origine introuvable "
             f"(place {place_fedow.get('name')}, domaine {lespass_domain!r})."
         )
-        raise CarteDUnLieuNonMigre(f"Carte {tag_id} : lieu d'origine introuvable")
+        raise CarteDUnLieuNonMigre(f"Carte {carte_courte(tag_id)} : lieu d'origine introuvable")
 
     lieu_d_origine = domaine_du_lieu_d_origine.tenant
     lieu_d_origine_en_v2 = lieu_d_origine.moteur_monnaie == Client.MOTEUR_V2
     if not lieu_d_origine_en_v2:
         logger.info(
-            f"Carte {tag_id} refusée : son lieu d'origine {lieu_d_origine} est legacy."
+            f"Carte {carte_courte(tag_id)} refusée : son lieu d'origine {lieu_d_origine} est legacy."
         )
-        raise CarteDUnLieuNonMigre(f"Carte {tag_id} : lieu d'origine legacy")
+        raise CarteDUnLieuNonMigre(f"Carte {carte_courte(tag_id)} : lieu d'origine legacy")
 
     return lieu_d_origine
 

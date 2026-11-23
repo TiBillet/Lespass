@@ -584,14 +584,15 @@ class Configuration(SingletonModel):
     #     (TZ_REUNION, _('Indian/Reunion')),
     #     (TZ_PARIS, _('Europe/Paris')),
     # ]
-    # `available_timezones()` renvoie un SET : le tri est indispensable, sinon
-    # l'ordre de la liste deroulante changerait a chaque demarrage.
-    # / `available_timezones()` returns a SET: sorting is required, otherwise the
-    # dropdown order would change at every startup.
-    TZ_CHOICES = [(nom_du_fuseau, nom_du_fuseau) for nom_du_fuseau in sorted(zoneinfo.available_timezones())]
+    # PAS de `choices=` ici. La liste des fuseaux depend des fichiers installes
+    # sur la machine (paquets `tzdata`). Django recopie les `choices` dans la
+    # migration : sur une machine dont la liste differe, `migrate` signale un
+    # changement de modele. Le menu deroulant et la validation sont faits par
+    # ConfigurationAdmin.formfield_for_dbfield (Administration/admin_tenant.py).
+    # / NO choices here: the timezone list depends on the machine and would be
+    # copied into migrations. The admin form builds and validates the list.
     fuseau_horaire = models.CharField(default="Europe/Paris",
                                       max_length=50,
-                                      choices=TZ_CHOICES,
                                       verbose_name=_("Timezone"),
                                       )
 
@@ -2318,6 +2319,15 @@ class Event(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True, verbose_name=_("Créé le"))
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
                                    verbose_name=_("Created by"))
+
+    # Plus grande jauge que la base de donnees peut stocker.
+    # jauge_max est un PositiveSmallIntegerField : en PostgreSQL c'est un « smallint »,
+    # qui va de 0 a 32767. Au-dela, PostgreSQL refuse l'enregistrement et le
+    # visiteur voit une erreur 500. Chaque serializer qui recoit une jauge doit
+    # donc refuser une valeur plus grande AVANT d'enregistrer.
+    # / Largest gauge the DB can store (PostgreSQL smallint: 0..32767). Every
+    # serializer receiving a gauge must reject a bigger value before saving.
+    JAUGE_MAXIMALE_POSSIBLE = 32767
 
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
     show_gauge = models.BooleanField(default=False, verbose_name=_("Show gauge"))
@@ -4408,7 +4418,13 @@ class Paiement_stripe(models.Model):
 
 
 class LigneArticle(models.Model):
-    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
+    # editable=False est INDISPENSABLE à l'admin : les tableaux de lignes (fiches
+    # adhésion et vente) sont en lecture seule. Django n'y écrit l'identifiant caché
+    # de chaque ligne que si la clé n'est pas éditable. Sans lui, une fiche réaffichée
+    # après une erreur de saisie fabrique des lignes vides et plante.
+    # / editable=False is REQUIRED by the admin: read-only inlines only write each
+    # line's hidden id when the pk is not editable.
+    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4, editable=False)
     datetime = models.DateTimeField(auto_now_add=True, verbose_name=_("Date et heure"))
 
     # L'objet price sold. Contient l'id Stripe

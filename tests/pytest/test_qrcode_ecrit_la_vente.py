@@ -534,6 +534,78 @@ class TestPaiementQrCodeEcritLaVente(FastTenantTestCase):
 
         verifier_egalites(vente)
 
+    def _lignes_d_evenement_paiement_nfc(self, logs_captures):
+        """Les lignes « evenement=paiement_nfc » parmi les logs captures.
+        / The "evenement=paiement_nfc" lines among the captured logs."""
+        lignes_d_evenement = []
+        for ligne in logs_captures.output:
+            if "evenement=paiement_nfc" in ligne:
+                lignes_d_evenement.append(ligne)
+        return lignes_d_evenement
+
+    def test_nfc_refus_solde_ecrit_une_ligne_d_evenement_sans_tag_ni_email(self):
+        """
+        Une carte au solde trop bas : le refus ecrit UNE ligne d'evenement, avec la
+        raison, le solde, le debut du tag et l'uuid court du payeur. Ni le tag entier
+        ni l'e-mail n'y figurent.
+        / A card with a too-low balance: one event line, no full tag, no email.
+        """
+        demande = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur("nfc-log-refus", avec_wallet=True)
+        faux_fedow = self._fedow_de_la_carte(
+            payeur, transactions_du_debit=[], categories_par_monnaie={}
+        )
+        faux_fedow.wallet.get_total_fiducial_and_all_federated_token.return_value = 222
+        tag_de_la_carte = "89EEE11A"
+
+        with self.assertLogs("BaseBillet.views", level="INFO") as logs_captures:
+            reponse = self._lire_la_carte(tag_de_la_carte, demande, faux_fedow)
+
+        assert reponse.status_code == 400
+        lignes_d_evenement = self._lignes_d_evenement_paiement_nfc(logs_captures)
+        assert len(lignes_d_evenement) == 1
+        ligne = lignes_d_evenement[0]
+        assert "resultat=refuse raison=solde_insuffisant" in ligne
+        assert "carte=89EE…" in ligne
+        assert f"user={str(payeur.pk)[:8]}" in ligne
+        assert f"montant_centimes={MONTANT_DEMANDE_EN_CENTIMES}" in ligne
+        assert "solde_centimes=222" in ligne
+        assert tag_de_la_carte not in ligne
+        assert payeur.email not in ligne
+
+    def test_nfc_accepte_ecrit_une_ligne_d_evenement_sans_tag_ni_email(self):
+        """
+        Une carte payee : UNE ligne d'evenement « accepte », avec le montant debite.
+        Ni le tag entier ni l'e-mail n'y figurent.
+        / A paid card: one "accepte" event line, no full tag, no email.
+        """
+        demande = self._generer_un_qrcode()
+        payeur = self._creer_utilisateur("nfc-log-accepte", avec_wallet=True)
+        uuid_de_la_monnaie_locale = uuid.uuid4()
+        transaction_locale = _transaction_de_l_ancien_fedow(
+            uuid_de_la_monnaie_locale, MONTANT_DEMANDE_EN_CENTIMES
+        )
+        faux_fedow = self._fedow_de_la_carte(
+            payeur,
+            transactions_du_debit=[transaction_locale],
+            categories_par_monnaie={uuid_de_la_monnaie_locale: "TLF"},
+        )
+        tag_de_la_carte = "52BE6543"
+
+        with self.assertLogs("BaseBillet.views", level="INFO") as logs_captures:
+            reponse = self._lire_la_carte(tag_de_la_carte, demande, faux_fedow)
+
+        assert reponse.status_code == 202, reponse.content.decode()[:400]
+        lignes_d_evenement = self._lignes_d_evenement_paiement_nfc(logs_captures)
+        assert len(lignes_d_evenement) == 1
+        ligne = lignes_d_evenement[0]
+        assert "resultat=accepte" in ligne
+        assert "carte=52BE…" in ligne
+        assert f"user={str(payeur.pk)[:8]}" in ligne
+        assert f"debite_centimes={MONTANT_DEMANDE_EN_CENTIMES}" in ligne
+        assert tag_de_la_carte not in ligne
+        assert payeur.email not in ligne
+
     def test_nfc_vente_porte_la_carte_et_le_client(self):
         """
         La carte lue existe dans la base locale (`CarteCashless`, même tag). La vente

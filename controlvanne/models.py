@@ -6,9 +6,8 @@ LOCALISATION : controlvanne/models.py
 
 Modeles definis ici :
 - Configuration : singleton de configuration du module tireuse (django-solo)
-- Debimetre : modele et facteur de calibration du capteur de debit
 - CarteMaintenance : carte NFC dediee aux operations de maintenance (OneToOne CarteCashless)
-- TireuseBec : une tireuse physique avec son fut, son debimetre, son point de vente
+- TireuseBec : une tireuse physique avec son fut, son debitmetre (modele et facteur), son point de vente
 - RfidSession : session de service d'un liquide (de la pose a la depose de la carte NFC)
 - SessionCalibration : proxy RfidSession pour les sessions de calibration
 - HistoriqueMaintenance : proxy RfidSession pour les sessions de maintenance
@@ -106,39 +105,6 @@ class TireuseAPIKey(AbstractAPIKey):
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Debimetre — capteur de debit
-# ──────────────────────────────────────────────────────────────────────
-
-
-class Debimetre(models.Model):
-    """
-    Modele de debitmetre utilise sur les tireuses.
-    Le facteur de calibration convertit les impulsions du capteur en volume.
-    / Flow meter model used on taps.
-    The calibration factor converts sensor pulses to volume.
-    LOCALISATION : controlvanne/models.py
-    """
-
-    name = models.CharField(
-        max_length=100,
-        verbose_name=_("Model"),
-        help_text=_("Flow meter model (e.g. YF-S201, FS300A)"),
-    )
-    flow_calibration_factor = models.FloatField(
-        default=6.5,
-        verbose_name=_("Calibration factor"),
-        help_text=_("Calibration factor (Hz per L/min) — 1 L = factor × 60 pulses"),
-    )
-
-    class Meta:
-        verbose_name = _("Flow meter")
-        verbose_name_plural = _("Flow meters")
-
-    def __str__(self):
-        return f"{self.name} (factor={self.flow_calibration_factor})"
-
-
-# ──────────────────────────────────────────────────────────────────────
 # CarteMaintenance — carte NFC de maintenance (OneToOne CarteCashless)
 # ──────────────────────────────────────────────────────────────────────
 
@@ -190,7 +156,7 @@ class CarteMaintenance(models.Model):
 
 class TireuseBec(models.Model):
     """
-    Une tireuse physique (un bec) avec son fut actif, son debimetre, et son POS.
+    Une tireuse physique (un bec) avec son fut actif, son debitmetre, et son POS.
     / A physical tap (one spout) with its active keg, flow meter, and POS.
     LOCALISATION : controlvanne/models.py
     """
@@ -236,14 +202,22 @@ class TireuseBec(models.Model):
         help_text=_("Product of type FUT currently on this tap."),
     )
 
-    debimetre = models.ForeignKey(
-        "controlvanne.Debimetre",
-        null=True,
+    # --- Débitmètre de la tireuse ---
+    # Chaque tireuse a son propre capteur, avec son propre écart : le facteur de
+    # calibration est donc rangé sur la tireuse. Le Pi le reçoit au démarrage
+    # (ping) et à chaque badge (authorize). La page de calibration le corrige.
+    # / Each tap has its own sensor and its own error: the calibration factor
+    # lives on the tap. The Pi gets it on ping and on every authorize.
+    flow_meter_model = models.CharField(
+        max_length=100,
         blank=True,
-        on_delete=models.SET_NULL,
-        related_name="tireuses",
         verbose_name=_("Flow meter"),
-        help_text=_("Associated flow meter (determines calibration factor)."),
+        help_text=_("Flow meter model (e.g. YF-S201, FS300A)"),
+    )
+    flow_calibration_factor = models.FloatField(
+        default=6.5,
+        verbose_name=_("Calibration factor"),
+        help_text=_("Calibration factor (Hz per L/min) — 1 L = factor × 60 pulses"),
     )
 
     # Le Raspberry Pi qui pilote cette tireuse.

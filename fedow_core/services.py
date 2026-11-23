@@ -37,6 +37,8 @@ from fedow_core.models import Asset, Federation, Token, Transaction
 from AuthBillet.models import Wallet
 from QrcodeCashless.models import CarteCashless
 
+from TiBillet.identifiants_pour_les_logs import carte_courte
+
 logger = logging.getLogger(__name__)
 
 
@@ -1566,6 +1568,6 @@ class CarteService:
         carte.save(update_fields=["user", "wallet_ephemere"])
 
         logger.info(
-            f"Carte {number_printed} declaree perdue par user {user.email}"
+            f"Carte {carte_courte(number_printed)} declaree perdue par user {user.email}"
         )
         return carte

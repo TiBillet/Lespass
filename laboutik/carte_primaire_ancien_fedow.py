@@ -32,6 +32,8 @@ import logging
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 
+from TiBillet.identifiants_pour_les_logs import carte_courte
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +62,7 @@ def declarer_la_carte_primaire_a_l_ancien_fedow(carte):
     client_de_l_ancien_fedow = FedowAPI()
     client_de_l_ancien_fedow.NFCcard.retrieve(carte.tag_id)
     client_de_l_ancien_fedow.NFCcard.set_primary(carte.tag_id, delete=False)
-    logger.info(f"Carte primaire {carte.tag_id} déclarée à l'ancien Fedow.")
+    logger.info(f"Carte primaire {carte_courte(carte.tag_id)} déclarée à l'ancien Fedow.")
     return True
 
 
@@ -83,5 +85,5 @@ def retirer_la_carte_primaire_de_l_ancien_fedow(carte):
 
     client_de_l_ancien_fedow = FedowAPI()
     client_de_l_ancien_fedow.NFCcard.set_primary(carte.tag_id, delete=True)
-    logger.info(f"Carte primaire {carte.tag_id} retirée de l'ancien Fedow.")
+    logger.info(f"Carte primaire {carte_courte(carte.tag_id)} retirée de l'ancien Fedow.")
     return True

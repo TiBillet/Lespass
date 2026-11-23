@@ -160,7 +160,7 @@ def tireuse_calibration(tenant):
     / Disabled tap with a 6.5 flow meter and one pending 500 ml pour.
     """
     with tenant_context(tenant):
-        from controlvanne.models import Debimetre, RfidSession, TireuseBec
+        from controlvanne.models import RfidSession, TireuseBec
         from django.utils import timezone
         from laboutik.models import PointDeVente, Terminal
 
@@ -170,16 +170,12 @@ def tireuse_calibration(tenant):
         TireuseBec.objects.filter(nom_tireuse=NOM_TIREUSE_CALIBRATION).delete()
         PointDeVente.objects.filter(name=NOM_TIREUSE_CALIBRATION).delete()
         Terminal.objects.filter(name=NOM_TIREUSE_CALIBRATION).delete()
-        Debimetre.objects.filter(name="Débitmètre calibration test").delete()
 
-        debimetre = Debimetre.objects.create(
-            name="Débitmètre calibration test",
-            flow_calibration_factor=6.5,
-        )
         tireuse = TireuseBec.objects.create(
             nom_tireuse=NOM_TIREUSE_CALIBRATION,
             enabled=False,
-            debimetre=debimetre,
+            flow_meter_model="Débitmètre calibration test",
+            flow_calibration_factor=6.5,
         )
         maintenant = timezone.now()
         versement = RfidSession.objects.create(
@@ -192,14 +188,13 @@ def tireuse_calibration(tenant):
             volume_delta_ml=Decimal("500.00"),
         )
 
-    yield SimpleNamespace(tireuse=tireuse, debimetre=debimetre, versement=versement)
+    yield SimpleNamespace(tireuse=tireuse, versement=versement)
 
     with tenant_context(tenant):
         RfidSession.objects.filter(tireuse_bec=tireuse).delete()
         TireuseBec.objects.filter(pk=tireuse.pk).delete()
         PointDeVente.objects.filter(name=NOM_TIREUSE_CALIBRATION).delete()
         Terminal.objects.filter(name=NOM_TIREUSE_CALIBRATION).delete()
-        Debimetre.objects.filter(pk=debimetre.pk).delete()
 
 
 class TestCalibration:
@@ -248,8 +243,8 @@ class TestCalibration:
         assert 'data-testid="calibration-erreur"' in reponse.content.decode()
 
         with schema_context(tenant.schema_name):
-            tireuse_calibration.debimetre.refresh_from_db()
-            assert tireuse_calibration.debimetre.flow_calibration_factor == 6.5
+            tireuse_calibration.tireuse.refresh_from_db()
+            assert tireuse_calibration.tireuse.flow_calibration_factor == 6.5
 
     def test_12_aucun_volume_saisi_renvoie_422(self, admin_client, tireuse_calibration):
         """Formulaire vide → 422 « Saisissez au moins un volume »."""
@@ -287,8 +282,8 @@ class TestCalibration:
         assert 'data-testid="calibration-serie-result"' in reponse.content.decode()
 
         with schema_context(tenant.schema_name):
-            tireuse_calibration.debimetre.refresh_from_db()
-            assert tireuse_calibration.debimetre.flow_calibration_factor == 6.7708
+            tireuse_calibration.tireuse.refresh_from_db()
+            assert tireuse_calibration.tireuse.flow_calibration_factor == 6.7708
             versement.refresh_from_db()
             assert versement.volume_reel_ml == Decimal("480.00")
 
@@ -344,37 +339,6 @@ class TestAccesCalibration:
             data={f"vol_{versement.pk}": "480", "depuis": ""},
         )
         assert reponse_envoi.status_code == 403
-
-    def test_21_debitmetre_partage_est_signale(
-        self, admin_client, tireuse_calibration, tenant
-    ):
-        """Si une autre tireuse utilise le même débitmètre, la page le signale."""
-        from laboutik.models import PointDeVente, Terminal
-
-        from controlvanne.models import TireuseBec
-
-        nom_autre_tireuse = "Tireuse meme debitmetre test"
-        with tenant_context(tenant):
-            TireuseBec.objects.filter(nom_tireuse=nom_autre_tireuse).delete()
-            PointDeVente.objects.filter(name=nom_autre_tireuse).delete()
-            Terminal.objects.filter(name=nom_autre_tireuse).delete()
-            autre_tireuse = TireuseBec.objects.create(
-                nom_tireuse=nom_autre_tireuse,
-                enabled=False,
-                debimetre=tireuse_calibration.debimetre,
-            )
-        try:
-            reponse = admin_client.get(
-                f"/controlvanne/calibration/{tireuse_calibration.tireuse.uuid}/"
-            )
-            contenu = reponse.content.decode()
-            assert 'data-testid="calibration-debitmetre-partage"' in contenu
-            assert nom_autre_tireuse in contenu
-        finally:
-            with tenant_context(tenant):
-                TireuseBec.objects.filter(pk=autre_tireuse.pk).delete()
-                PointDeVente.objects.filter(name=nom_autre_tireuse).delete()
-                Terminal.objects.filter(name=nom_autre_tireuse).delete()
 
 
 # ─────────────────────────────────────────────────────────────────────

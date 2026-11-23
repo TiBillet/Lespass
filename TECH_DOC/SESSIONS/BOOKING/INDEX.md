@@ -12,6 +12,7 @@ paiement, cas de test, présentation).
 | # | Chantier | Statut | Spec |
 |---|---|---|---|
 | 01 | Réservation à validation manuelle (demande → admin → paiement) | Fiche A commitée ; B à E faites (non commitées) | [SPEC.md](SPEC.md) |
+| 02 | Tarifs affichés et payés par créneau (PR #492, arrondi au centime) | Fait (non commité) | [CHANTIER-02-prix-par-creneau.md](CHANTIER-02-prix-par-creneau.md) |
 
 ## Ajouter un chantier
 

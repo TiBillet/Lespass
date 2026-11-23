@@ -169,15 +169,15 @@ make e2e-visible LENTEUR=1500 ARGS="-k adhesion"        # plus lent (ms par acti
 ✔ PASSED (30 s)
 ```
 
-Comment : le script lance sur l'hôte `npx playwright@1.60.0 run-server` (même version que le
+Comment : le script lance sur l'hôte `npx playwright@1.65.1 run-server` (même version que le
 conteneur), à l'écoute de l'adresse Docker de l'hôte seulement (`172.17.0.1:3999`), et
 l'arrête à la fin. La fixture `browser` (`tests/e2e/conftest.py`) s'y connecte au lieu de
 lancer un Chromium headless. Premier lancement, sur l'hôte :
 
 ```bash
-npx -y playwright@1.60.0 install chromium
+npx -y playwright@1.65.1 install chromium
 # Ubuntu 26.04, pas encore reconnu par Playwright (le script pose la même variable) :
-PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx -y playwright@1.60.0 install chromium
+PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx -y playwright@1.65.1 install chromium
 ```
 
 Seule la page de la fixture `page` est journalisée : un test qui ouvre lui-même un autre

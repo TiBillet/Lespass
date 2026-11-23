@@ -509,21 +509,11 @@ def _recharger_en_monnaie_federee_par_carte_bancaire(
     champ_montant.wait_for(state='visible', timeout=30_000)
     champ_montant.fill(MONTANT_DE_LA_RECHARGE_EUROS)
 
+    # Le nom du porteur, OBLIGATOIRE sur ce checkout fabrique par Fedow, est
+    # attendu et rempli par `fill_stripe_card`.
+    # / The cardholder name, REQUIRED on this Fedow-built checkout, is handled
+    # by fill_stripe_card.
     fill_stripe_card(page, adresse)
-
-    # Le nom du porteur est OBLIGATOIRE sur ce checkout : sans lui, Stripe
-    # refuse la soumission SANS quitter la page (le clic sur « payer » ne
-    # produit rien de visible). Or `fill_stripe_card` ne le remplit que si le
-    # champ est deja monte a son passage — sur ce checkout fabrique par Fedow,
-    # React le monte parfois apres. On le garantit donc ici, explicitement.
-    # / The cardholder name is REQUIRED on this checkout: without it, Stripe
-    # rejects the submission WITHOUT leaving the page. fill_stripe_card only
-    # fills it if the field is already mounted when it runs — on this
-    # Fedow-built checkout, React sometimes mounts it later. Guarantee it here.
-    champ_nom_du_porteur = page.locator('input#billingName')
-    champ_nom_du_porteur.wait_for(state='visible', timeout=30_000)
-    if not champ_nom_du_porteur.input_value():
-        champ_nom_du_porteur.fill('Douglas Adams')
 
     # `fill_stripe_card` REMPLIT la carte, elle ne soumet pas : la soumission
     # reste a la charge de l'appelant.

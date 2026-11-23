@@ -3642,6 +3642,34 @@ c'est ce que fait `montants_rembourses_chez_stripe()`.
 
 Ces tests portent le marqueur `stripe_reel` : ils tournent à chaque `make test`.
 
+**12.19 — Stripe Checkout : tout le formulaire de paiement est dans un iframe.**
+
+Sur `checkout.stripe.com`, la page principale n'affiche que le résumé de la commande (et le
+champ du montant libre, `input#customUnitAmount`). L'e-mail Link, l'accordéon des moyens de
+paiement, les champs de carte et le bouton « Pay » sont dans un iframe de `js.stripe.com`.
+Un locator de la page (`page.locator("input#cardNumber")`) ne trouve rien, sans erreur claire.
+
+Constaté le 2026-11-16 : les sélecteurs de la page principale (`input#cardNumber`,
+`input#billingName`, `hosted-payment-submit-button`, `card-accordion-item-button`) avaient
+tous disparu, et 18 E2E échouaient sur « Aucun champ de carte bancaire ».
+
+Dans l'iframe :
+
+| Élément | Sélecteur |
+|---|---|
+| E-mail (prérempli par `customer_email`) | `#linkAuthentication-emailInput` |
+| Numéro, expiration, CVC, nom | `#payment-numberInput`, `#payment-expiryInput`, `#payment-cvcInput`, `#payment-nameInput` |
+| Accordéon Carte / SEPA | `[data-testid="payment-accordion-wrapper"] [role="button"]`, texte « Card » |
+| Bouton « Pay » | `[data-testid="payment-form-submit-button"]` |
+
+**La parade** : toujours passer par `fill_stripe_card` et `soumettre_paiement_stripe`
+(conftest E2E). Elles trouvent l'iframe avec `cadre_du_formulaire_de_paiement_stripe`, qui le
+reconnaît à son bouton « Pay » et non à son nom de fichier
+(`elements-inner-habanero-…`, qui change avec Stripe.js). Ne jamais écrire de sélecteur
+Stripe dans un test : si Stripe change encore, une seule fonction est à corriger.
+
+Pour regarder la page soi-même : `make e2e-visible ARGS="tests/e2e/test_stripe_smoke.py"`.
+
 ### Panier : tests et parité avec / sans panier (2026-09-21)
 
 Chantier : `TECH_DOC/SESSIONS/PANIER/SPEC.md`. Fabriques : `tests/pytest/fabriques_panier.py`.

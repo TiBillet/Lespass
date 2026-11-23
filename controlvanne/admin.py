@@ -5,7 +5,6 @@ Admin du module tireuse connectee (controlvanne).
 LOCALISATION : controlvanne/admin.py
 
 Admins enregistres sur staff_admin_site :
-- DebitmetreAdmin
 - CarteMaintenanceAdmin
 - TireuseBecAdmin
 - RfidSessionAdmin
@@ -40,7 +39,6 @@ from QrcodeCashless.models import CarteCashless
 from .models import (
     CarteMaintenance,
     ConfigurationTireuse,
-    Debimetre,
     HistoriqueCarte,
     HistoriqueMaintenance,
     HistoriqueTireuse,
@@ -104,37 +102,6 @@ class DateRangeFilter(SimpleListFilter):
         except ValueError:
             pass
         return queryset
-
-
-# ──────────────────────────────────────────────────────────────────────
-# DebitmetreAdmin — gestion des capteurs de debit
-# / DebitmetreAdmin — flow meter management
-# ──────────────────────────────────────────────────────────────────────
-
-
-@admin.register(Debimetre, site=staff_admin_site)
-class DebitmetreAdmin(ModelAdmin):
-    """
-    Admin pour les debitmetres (capteurs de debit).
-    La colonne flow_calibration_factor est editable directement dans la liste.
-    / Admin for flow meters (flow sensors).
-    The flow_calibration_factor column is editable directly in the list.
-    """
-
-    list_display = ("name", "flow_calibration_factor")
-    list_editable = ("flow_calibration_factor",)
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_delete_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -226,10 +193,10 @@ class CarteMaintenanceAdmin(ModelAdmin):
 class TireuseBecAdmin(ModelAdmin):
     """
     Admin principal pour les tireuses physiques.
-    list_editable sur fut_actif, debimetre, enabled pour modifier rapidement depuis la liste.
+    list_editable sur fut_actif, enabled pour modifier rapidement depuis la liste.
     Le change_form_before_template affiche un lien vers la vue kiosk de la tireuse.
     / Main admin for physical taps.
-    list_editable on fut_actif, debimetre, enabled for quick updates from the list.
+    list_editable on fut_actif, enabled for quick updates from the list.
     The change_form_before_template shows a link to the tap's kiosk view.
     """
 
@@ -261,7 +228,11 @@ class TireuseBecAdmin(ModelAdmin):
         "enabled",
         "reservoir_illimite",
         "notes",
-        "debimetre",
+        # Débitmètre de cette tireuse : modèle du capteur et facteur.
+        # Le facteur s'affine avec le bouton « Calibrer le débitmètre ».
+        # / This tap's flow meter: sensor model and factor.
+        "flow_meter_model",
+        "flow_calibration_factor",
     )
 
     @display(description=_("Raspberry Pi appairé"), boolean=True)

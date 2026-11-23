@@ -89,16 +89,8 @@ def test_tireuse(tenant, test_asset_tlf_api):
     """Crée une TireuseBec de test avec un débitmètre et un fut actif.
     / Creates a test TireuseBec with a flow meter and active keg."""
     with schema_context(tenant.schema_name):
-        from controlvanne.models import TireuseBec, Debimetre
+        from controlvanne.models import TireuseBec
         from BaseBillet.models import Product, Price
-
-        # get_or_create avec first() pour éviter les doublons de runs précédents
-        # / get_or_create with first() to avoid duplicates from previous runs
-        debimetre = Debimetre.objects.filter(name="Test YF-S201").first()
-        if not debimetre:
-            debimetre = Debimetre.objects.create(
-                name="Test YF-S201", flow_calibration_factor=6.5
-            )
 
         # Fut avec prix au litre / Keg with per-liter price
         fut, _ = Product.objects.get_or_create(
@@ -115,7 +107,8 @@ def test_tireuse(tenant, test_asset_tlf_api):
             nom_tireuse="Test Tap Phase2",
             defaults={
                 "enabled": True,
-                "debimetre": debimetre,
+                "flow_meter_model": "Test YF-S201",
+                "flow_calibration_factor": 6.5,
                 "fut_actif": fut,
                 "reservoir_ml": Decimal("5000.00"),
             },
@@ -492,6 +485,106 @@ class TestTireuseViewSet:
             )
             assert session.ended_at is not None
             assert session.volume_delta_ml == Decimal("250.00")
+
+    def test_11b_card_removed_sans_pour_end_facture_le_dernier_volume(
+        self, tireuse_client, tireuse_headers, test_tireuse, test_carte, tenant
+    ):
+        """card_removed à 0 ml, sans pour_end avant : le dernier volume reçu est facturé.
+        / card_removed at 0 ml with no pour_end before: the last received volume is billed.
+
+        Le Pi envoie toujours card_removed avec un volume de 0. Si son pour_end s'est
+        perdu en chemin (4G coupée, délai dépassé), c'est card_removed qui clôt la
+        session. Le serveur doit alors facturer le dernier volume reçu par pour_update.
+        / The Pi always sends card_removed with 0 ml. If its pour_end got lost,
+        card_removed closes the session: the last pour_update volume must be billed.
+        """
+        # 1. Badge : ouvre une session / Badge: opens a session
+        tireuse_client.post(
+            "/controlvanne/api/tireuse/authorize/",
+            content_type="application/json",
+            data=json.dumps(
+                {
+                    "tireuse_uuid": str(test_tireuse.uuid),
+                    "uid": test_carte.tag_id,
+                }
+            ),
+            **tireuse_headers,
+        )
+
+        # 2. Le Pi signale 200 ml servis / The Pi reports 200 ml served
+        tireuse_client.post(
+            "/controlvanne/api/tireuse/event/",
+            content_type="application/json",
+            data=json.dumps(
+                {
+                    "tireuse_uuid": str(test_tireuse.uuid),
+                    "uid": test_carte.tag_id,
+                    "event_type": "pour_update",
+                    "volume_ml": "200.00",
+                }
+            ),
+            **tireuse_headers,
+        )
+
+        # 3. Le pour_end est perdu. Le retrait arrive seul, à 0 ml.
+        # / The pour_end is lost. The removal arrives alone, at 0 ml.
+        response = tireuse_client.post(
+            "/controlvanne/api/tireuse/event/",
+            content_type="application/json",
+            data=json.dumps(
+                {
+                    "tireuse_uuid": str(test_tireuse.uuid),
+                    "uid": test_carte.tag_id,
+                    "event_type": "card_removed",
+                    "volume_ml": "0.00",
+                }
+            ),
+            **tireuse_headers,
+        )
+        data = response.json()
+        assert data["status"] == "ok"
+
+        # 200 ml à 5 €/L = 100 centimes / 200 ml at 5 €/L = 100 cents
+        assert data["montant_centimes"] == 100
+
+        with schema_context(tenant.schema_name):
+            from controlvanne.models import RfidSession
+
+            session = (
+                RfidSession.objects.filter(
+                    tireuse_bec=test_tireuse, uid=test_carte.tag_id
+                )
+                .order_by("-started_at")
+                .first()
+            )
+            assert session.ended_at is not None
+            assert session.volume_delta_ml == Decimal("200.00")
+
+    def test_10b_authorize_renvoie_le_facteur_de_calibration(
+        self, tireuse_client, tireuse_headers, test_tireuse, test_carte
+    ):
+        """Authorize renvoie le facteur de calibration du débitmètre.
+        / Authorize returns the flow meter calibration factor.
+
+        Le Pi applique ce facteur à chaque badge. Une calibration faite dans
+        l'admin compte donc dès le client suivant.
+        / The Pi applies this factor on every badge: a new calibration counts
+        from the next customer.
+        """
+        response = tireuse_client.post(
+            "/controlvanne/api/tireuse/authorize/",
+            content_type="application/json",
+            data=json.dumps(
+                {
+                    "tireuse_uuid": str(test_tireuse.uuid),
+                    "uid": test_carte.tag_id,
+                }
+            ),
+            **tireuse_headers,
+        )
+        data = response.json()
+        assert data["authorized"] is True
+        assert data["calibration_factor"] == test_tireuse.flow_calibration_factor
 
 
 # ──────────────────────────────────────────────────────────────────────

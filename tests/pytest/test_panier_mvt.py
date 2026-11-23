@@ -196,9 +196,10 @@ def test_la_page_du_panier_affiche_une_duree_lisible(lieu):
 
 
 def test_la_page_du_panier_affiche_le_calcul_d_une_ressource_gratuite(lieu):
-    """Ressource à tarif fixe gratuit (0 €/h) : la ligne du panier montre son tarif horaire et
-    son calcul, comme une ressource payante. Le montant 0 est un montant comme un autre.
-    / Resource with a fixed 0 €/h price: the cart line shows its hourly price and its
+    """Ressource à tarif fixe gratuit (0 €/h) : la ligne du panier montre son montant par
+    créneau et son calcul, comme une ressource payante. Le montant 0 est un montant comme un
+    autre.
+    / Resource with a fixed 0 €/h price: the cart line shows its per-slot amount and its
     computation, like a paid one."""
     from BaseBillet.services_panier import PanierSession
 
@@ -220,7 +221,38 @@ def test_la_page_du_panier_affiche_le_calcul_d_une_ressource_gratuite(lieu):
     page = client.get("/panier/").content.decode()
 
     ligne_de_l_article = page.split('id="panier-item-0"')[1].split("</li>")[0]
-    assert "€/h = " in ligne_de_l_article
+    assert "1 × 0 € = 0 €" in " ".join(ligne_de_l_article.split())
+
+
+def test_la_ligne_du_panier_d_une_ressource_tombe_juste_par_creneau(lieu):
+    """Trois créneaux de 40 minutes à 10 €/h : un créneau vaut 6,67 €, le total 20,01 €. La
+    ligne du panier se lit « 3 × 6,67 € = 20,01 € », une multiplication qui tombe juste.
+    / Three 40-minute slots at 10 €/h: the cart line reads "3 × 6.67 € = 20.01 €"."""
+    from BaseBillet.services_panier import PanierSession
+
+    acheteur = creer_utilisateur()
+    client = client_connecte(acheteur)
+    client.defaults["HTTP_ACCEPT_LANGUAGE"] = "fr"
+    location = creer_ressource_avec_tarif(prix="10.00", duree_du_creneau_en_minutes=40)
+    panier = PanierSession(requete_avec_session(acheteur))
+    panier.add_resource(
+        price_uuid=location.tarif.uuid,
+        resource_uuid=location.ressource.pk,
+        start_datetime=str(location.debut_du_creneau),
+        slot_duration_minutes="40",
+        slot_count="3",
+    )
+    session_du_client = client.session
+    session_du_client["panier"] = panier.data
+    session_du_client.save()
+
+    page = client.get("/panier/").content.decode()
+
+    ligne_de_l_article = page.split('id="panier-item-0"')[1].split("</li>")[0]
+    texte_de_la_ligne = " ".join(ligne_de_l_article.split())
+    assert "6,67 € / créneau" in texte_de_la_ligne
+    assert "3 créneaux de 40 min" in texte_de_la_ligne
+    assert "3 × 6,67 € = 20,01 €" in texte_de_la_ligne
 
 
 def test_une_reservation_gratuite_en_attente_d_activation_apparait_dans_mes_reservations(lieu):

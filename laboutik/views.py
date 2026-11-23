@@ -177,6 +177,7 @@ from laboutik.integrity import (
     calculer_total_ht,
     vente_couverte_par_cloture,
 )
+from TiBillet.identifiants_pour_les_logs import carte_courte, uuid_court
 
 
 # --------------------------------------------------------------------------- #
@@ -1242,7 +1243,7 @@ def _verifier_carte_primaire_aupres_de_l_ancien_fedow(carte_primaire_obj):
     lieu_relie_a_l_ancien_fedow = FedowConfig.get_solo().can_fedow()
     if not lieu_relie_a_l_ancien_fedow:
         logger.error(
-            f"carte_primaire : ouverture refusée pour la carte {tag_id_de_la_carte}, "
+            f"carte_primaire : ouverture refusée pour la carte {carte_courte(tag_id_de_la_carte)}, "
             f"le lieu n'est pas relié à l'ancien Fedow."
         )
         return _("Ce lieu n'est pas relié à Fedow : prévenez un responsable.")
@@ -1261,14 +1262,14 @@ def _verifier_carte_primaire_aupres_de_l_ancien_fedow(carte_primaire_obj):
     # / Separate branch for a clearer log: the manager reads "unknown card".
     except CarteInconnueDeFedow as erreur_carte_inconnue:
         logger.error(
-            f"carte_primaire : ouverture refusée, carte {tag_id_de_la_carte} "
+            f"carte_primaire : ouverture refusée, carte {carte_courte(tag_id_de_la_carte)} "
             f"inconnue de l'ancien Fedow : {erreur_carte_inconnue}"
         )
         return message_verification_impossible
     except Exception as erreur_de_l_ancien_fedow:
         logger.error(
             f"carte_primaire : ouverture refusée, lecture de la carte "
-            f"{tag_id_de_la_carte} sur l'ancien Fedow en échec : "
+            f"{carte_courte(tag_id_de_la_carte)} sur l'ancien Fedow en échec : "
             f"{type(erreur_de_l_ancien_fedow).__name__} {erreur_de_l_ancien_fedow}"
         )
         return message_verification_impossible
@@ -1276,7 +1277,7 @@ def _verifier_carte_primaire_aupres_de_l_ancien_fedow(carte_primaire_obj):
     carte_encore_primaire = fiche_de_la_carte["is_primary"]
     if not carte_encore_primaire:
         logger.warning(
-            f"carte_primaire : la carte {tag_id_de_la_carte} n'est plus primaire pour "
+            f"carte_primaire : la carte {carte_courte(tag_id_de_la_carte)} n'est plus primaire pour "
             f"ce lieu sur l'ancien Fedow. Carte primaire locale supprimée."
         )
         carte_primaire_obj.delete()
@@ -1369,7 +1370,7 @@ def obtenir_wallet_carte_depuis_fedow(carte):
         # PAS de wallet local, sinon on creerait un doublon deconnecte de Fedow.
         # / Fedow doesn't know the card / is down: do NOT create a local wallet.
         logger.warning(
-            f"obtenir_wallet_carte_depuis_fedow : carte {carte.tag_id} inconnue de Fedow"
+            f"obtenir_wallet_carte_depuis_fedow : carte {carte_courte(carte.tag_id)} inconnue de Fedow"
         )
         return None
 
@@ -1426,7 +1427,7 @@ def _obtenir_ou_creer_wallet(carte):
     wallet = obtenir_wallet_carte_depuis_fedow(carte)
     if wallet is None:
         raise Exception(
-            f"Carte {carte.tag_id} inconnue de Fedow (ou Fedow indisponible). "
+            f"Carte {carte_courte(carte.tag_id)} inconnue de Fedow (ou Fedow indisponible). "
             f"Elle doit etre provisionnee dans Fedow avant usage."
         )
     return wallet
@@ -1972,7 +1973,7 @@ def _debiter_legacy(carte, tag_id_carte_primaire, montant_centimes, uuid_transac
     jeton_fed = _jeton_fed_de_la_fiche(fiche_de_la_carte)
     if jeton_fed is None or jeton_fed["value"] < montant_centimes:
         raise Exception(
-            f"Débit legacy : FED insuffisant sur la carte {carte.tag_id} "
+            f"Débit legacy : FED insuffisant sur la carte {carte_courte(carte.tag_id)} "
             f"pour {montant_centimes} centimes"
         )
 
@@ -2123,12 +2124,12 @@ def _vider_la_carte_sur_l_ancien_fedow(carte_client, tag_id_carte_primaire, vide
             uuids_des_transactions.append(str(transaction_rendue["uuid"]))
         logger.error(
             f"INCIDENT ancien Fedow vidé, catégories illisibles — "
-            f"carte={carte_client.tag_id} "
+            f"carte={carte_courte(carte_client.tag_id)} "
             f"transactions_ancien_fedow={', '.join(uuids_des_transactions)} : "
             f"régularisation manuelle requise. ({erreur_de_lecture})"
         )
         raise CarteVideeSurLAncienFedowReponseIllisible(
-            f"Carte {carte_client.tag_id} vidée sur l'ancien Fedow, réponse illisible."
+            f"Carte {carte_courte(carte_client.tag_id)} vidée sur l'ancien Fedow, réponse illisible."
         ) from erreur_de_lecture
 
     return transactions_de_l_ancien_fedow
@@ -2378,7 +2379,7 @@ def _lire_la_carte_sur_l_ancien_fedow(carte_client):
     except Exception as erreur_de_lecture:
         logger.warning(
             f"Aperçu du vidage : ancien Fedow injoignable pour la carte "
-            f"{carte_client.tag_id} : {erreur_de_lecture}"
+            f"{carte_courte(carte_client.tag_id)} : {erreur_de_lecture}"
         )
         return SimpleNamespace(statut="injoignable", jetons=[])
 
@@ -2446,7 +2447,7 @@ def _lire_les_soldes_restants_sur_l_ancien_fedow(carte_client):
     except Exception as erreur_de_lecture:
         logger.warning(
             f"Nouveau solde après vidage : ancien Fedow injoignable pour la carte "
-            f"{carte_client.tag_id} : {erreur_de_lecture}"
+            f"{carte_courte(carte_client.tag_id)} : {erreur_de_lecture}"
         )
         return SimpleNamespace(statut="injoignable", lignes=[])
 
@@ -2574,7 +2575,7 @@ def _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv):
     pv_autorise = carte_primaire_obj.points_de_vente.filter(uuid=uuid_pv).exists()
     if not pv_autorise:
         logger.warning(
-            f"Carte primaire {tag_id_carte_manager} n'a pas accès au PV {uuid_pv}"
+            f"Carte primaire {carte_courte(tag_id_carte_manager)} n'a pas accès au PV {uuid_pv}"
         )
         raise PermissionDenied(_("Accès non autorisé à ce point de vente"))
 
@@ -3466,7 +3467,7 @@ class CaisseViewSet(viewsets.ViewSet):
             )
 
         tag_id_carte_manager = serializer.validated_data["tag_id"]
-        logger.debug(f"carte_primaire: tag_id reçu = {tag_id_carte_manager}")
+        logger.debug(f"carte_primaire: tag_id reçu = {carte_courte(tag_id_carte_manager)}")
 
         # TODO: à faire valider par le "serializer" ?
         # "cordova" / "pi" / "desktop"
@@ -3858,7 +3859,7 @@ class CaisseViewSet(viewsets.ViewSet):
             )
             if not carte_en_mode_gerant:
                 logger.warning(
-                    f"Cloture refusee : la carte {tag_id_carte_manager} "
+                    f"Cloture refusee : la carte {carte_courte(tag_id_carte_manager)} "
                     f"n'est pas une carte primaire en mode gerant."
                 )
                 if erreur_de_carte is not None:
@@ -8111,7 +8112,7 @@ def _fedow_a_deja_lie_la_carte(carte, user):
         carte_chez_fedow = FedowAPI().NFCcard.card_tag_id_retrieve(carte.tag_id)
     except Exception as erreur_lecture:
         logger.warning(
-            f"Verification post-echec impossible pour la carte {carte.tag_id} : "
+            f"Verification post-echec impossible pour la carte {carte_courte(carte.tag_id)} : "
             f"{erreur_lecture}"
         )
         return False
@@ -8169,7 +8170,7 @@ def _identifier_adherent(request, articles_panier, tag_id_de_la_carte=None):
             user_adhesion = carte_client.user
         except (CarteCashless.DoesNotExist, FedowInjoignable, CarteDUnLieuNonMigre) as carte_non_trouvee:
             logger.warning(
-                f"Carte NFC {tag_id_client} introuvable pour adhesion : {carte_non_trouvee}"
+                f"Carte NFC {carte_courte(tag_id_client)} introuvable pour adhesion : {carte_non_trouvee}"
             )
 
     # --- Identification 2 : l'email saisi au comptoir ---
@@ -8258,7 +8259,7 @@ def _declarer_adherent_au_reseau(user_adhesion, carte_client, ip_du_client):
         )
     except Exception as erreur_declaration:
         logger.error(
-            f"Adhesion POS : declaration de {user_adhesion.email} a Fedow impossible : "
+            f"Adhesion POS : declaration de {uuid_court(user_adhesion.pk)} a Fedow impossible : "
             f"{erreur_declaration}"
         )
         raise ValueError(_(
@@ -8288,7 +8289,7 @@ def _declarer_adherent_au_reseau(user_adhesion, carte_client, ip_du_client):
                 #   under another owner. Merge nothing locally, but the membership is still
                 #   owed and needs no wallet. The card's balance stays untouched.
                 logger.warning(
-                    f"Adhesion POS : liaison de la carte {carte_a_lier.tag_id} refusee "
+                    f"Adhesion POS : liaison de la carte {carte_courte(carte_a_lier.tag_id)} refusee "
                     f"par le reseau : {erreur_liaison}"
                 )
                 avertissements.append(_(
@@ -8301,8 +8302,8 @@ def _declarer_adherent_au_reseau(user_adhesion, carte_client, ip_du_client):
                 # caisse) : le refus est un faux negatif, la fusion locale doit avoir lieu.
                 # / The network had ALREADY linked it to this member: false negative.
                 logger.info(
-                    f"Adhesion POS : carte {carte_a_lier.tag_id} deja liee a "
-                    f"{user_adhesion.email} sur le reseau, on poursuit la fusion locale."
+                    f"Adhesion POS : carte {carte_courte(carte_a_lier.tag_id)} deja liee a "
+                    f"{uuid_court(user_adhesion.pk)} sur le reseau, on poursuit la fusion locale."
                 )
 
     return {
@@ -8415,7 +8416,7 @@ def _rattacher_la_carte_a_l_adherent(adherent, ip_du_client):
     ) as erreur_liaison:
         logger.warning(
             f"Adhesion POS complement : fusion locale de la carte "
-            f"{carte_de_l_adherent.tag_id} impossible : {erreur_liaison}"
+            f"{carte_courte(carte_de_l_adherent.tag_id)} impossible : {erreur_liaison}"
         )
         adherent["avertissements"].append(_(
             "La carte n'a pas pu etre rattachee au membre. L'adhesion "
@@ -8522,7 +8523,7 @@ def _creer_adhesions_depuis_panier(
             # / Race between two tills, or a balance moving under our feet. No merge, but
             #   the membership is still owed: create it and warn the cashier.
             logger.warning(
-                f"Adhesion POS : fusion locale de la carte {carte_client.tag_id} "
+                f"Adhesion POS : fusion locale de la carte {carte_courte(carte_client.tag_id)} "
                 f"impossible : {erreur_liaison}"
             )
             adherent["avertissements"].append(_(
@@ -8705,7 +8706,7 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
             carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
             user_billet = carte_client.user
         except CarteCashless.DoesNotExist:
-            logger.warning(f"Carte NFC {tag_id_client} introuvable pour billetterie")
+            logger.warning(f"Carte NFC {carte_courte(tag_id_client)} introuvable pour billetterie")
 
     email_client = request.POST.get("email_adhesion", "").strip().lower()
     if email_client and user_billet is None:
@@ -11114,7 +11115,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 uuids_des_transactions_legacy.append(str(transaction_legacy[3]))
             message_d_incident_legacy = (
                 f"INCIDENT legacy débité sans LigneArticle — "
-                f"uuid_transaction={uuid_transaction} carte={carte_client.tag_id} "
+                f"uuid_transaction={uuid_transaction} carte={carte_courte(carte_client.tag_id)} "
                 f"montant_legacy={montant_legacy} "
                 f"transactions_legacy={', '.join(uuids_des_transactions_legacy)} : "
                 f"régularisation manuelle requise."
@@ -11388,7 +11389,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         ) as erreur_liaison:
                             logger.warning(
                                 f"Adhesion POS NFC : fusion locale de la carte "
-                                f"{carte_client.tag_id} impossible : {erreur_liaison}"
+                                f"{carte_courte(carte_client.tag_id)} impossible : {erreur_liaison}"
                             )
                             adherent["avertissements"].append(_(
                                 "La carte n'a pas pu etre rattachee au membre. L'adhesion "
@@ -11487,7 +11488,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 )
             logger.error(
                 f"Vente NFC refusée (égalité rompue) — uuid_transaction={uuid_transaction} "
-                f"carte={carte_client.tag_id} : {erreur_d_egalite}"
+                f"carte={carte_courte(carte_client.tag_id)} : {erreur_d_egalite}"
             )
             context_erreur = {
                 "action": "initUrlAddition();",
@@ -12525,7 +12526,7 @@ class PaiementViewSet(viewsets.ViewSet):
             if lignes_legacy:
                 message_d_incident_legacy = (
                     f"INCIDENT legacy débité sans LigneArticle (complément, atomic échoué) — "
-                    f"uuid_transaction={uuid_transaction} carte={carte1.tag_id} "
+                    f"uuid_transaction={uuid_transaction} carte={carte_courte(carte1.tag_id)} "
                     f"montant_legacy={montant_legacy} "
                     f"transactions_legacy={', '.join(uuids_des_transactions_legacy)} : "
                     f"régularisation manuelle requise."
@@ -12816,7 +12817,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     logger.error(message_d_incident_legacy)
                 logger.error(
                     f"Vente complément refusée (égalité rompue) — "
-                    f"uuid_transaction={uuid_transaction} carte={carte1.tag_id} : "
+                    f"uuid_transaction={uuid_transaction} carte={carte_courte(carte1.tag_id)} : "
                     f"{erreur_d_egalite}"
                 )
                 context_erreur = {
@@ -12848,7 +12849,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 if lignes_legacy:
                     logger.error(
                         f"INCIDENT : débit legacy orphelin (complément, exception atomic) — "
-                        f"carte={carte1.tag_id} montant_legacy_centimes={montant_legacy} "
+                        f"carte={carte_courte(carte1.tag_id)} montant_legacy_centimes={montant_legacy} "
                         f"transactions_legacy={', '.join(uuids_des_transactions_legacy)} "
                         f"uuid_transaction={uuid_transaction} exception={e}"
                     )
@@ -13284,7 +13285,7 @@ class PaiementViewSet(viewsets.ViewSet):
                             f"INCIDENT legacy débité sans LigneArticle (2ème carte, "
                             f"débit legacy de la carte 1 échoué) — "
                             f"uuid_transaction={uuid_transaction} "
-                            f"carte2={carte2.tag_id} "
+                            f"carte2={carte_courte(carte2.tag_id)} "
                             f"montant_legacy={montant_legacy_c2} "
                             f"transactions_legacy="
                             f"{', '.join(uuids_des_transactions_legacy_c2)} : "
@@ -13328,12 +13329,12 @@ class PaiementViewSet(viewsets.ViewSet):
             debits_legacy_a_journaliser = []
             if transactions_legacy_c1:
                 debits_legacy_a_journaliser.append(
-                    f"carte1={carte1.tag_id} montant_legacy={montant_legacy_c1} "
+                    f"carte1={carte_courte(carte1.tag_id)} montant_legacy={montant_legacy_c1} "
                     f"transactions_legacy={', '.join(uuids_des_transactions_legacy_c1)}"
                 )
             if transactions_legacy_c2:
                 debits_legacy_a_journaliser.append(
-                    f"carte2={carte2.tag_id} montant_legacy={montant_legacy_c2} "
+                    f"carte2={carte_courte(carte2.tag_id)} montant_legacy={montant_legacy_c2} "
                     f"transactions_legacy={', '.join(uuids_des_transactions_legacy_c2)}"
                 )
             message_d_incident_legacy = ""
@@ -13693,8 +13694,8 @@ class PaiementViewSet(viewsets.ViewSet):
                     logger.error(message_d_incident_legacy)
                 logger.error(
                     f"Vente 2ème carte refusée (égalité rompue) — "
-                    f"uuid_transaction={uuid_transaction} carte1={carte1.tag_id} "
-                    f"carte2={carte2.tag_id} : {erreur_d_egalite}"
+                    f"uuid_transaction={uuid_transaction} carte1={carte_courte(carte1.tag_id)} "
+                    f"carte2={carte_courte(carte2.tag_id)} : {erreur_d_egalite}"
                 )
                 context_erreur = {
                     "action": "initUrlAddition();",
@@ -14276,7 +14277,7 @@ class PaiementViewSet(viewsets.ViewSet):
             )
         except Exception as erreur_ancien_fedow:
             logger.warning(
-                f"Vidage de la carte {carte_client.tag_id} sur l'ancien Fedow échoué, "
+                f"Vidage de la carte {carte_courte(carte_client.tag_id)} sur l'ancien Fedow échoué, "
                 f"rien n'est fait : {erreur_ancien_fedow}"
             )
             return _render_erreur_toast(
@@ -14315,7 +14316,7 @@ class PaiementViewSet(viewsets.ViewSet):
         if carte_videe_sur_l_ancien_fedow:
             message_d_incident_ancien_fedow = (
                 f"INCIDENT ancien Fedow vidé sans vidage local (atomic local échoué) — "
-                f"carte={carte_client.tag_id} "
+                f"carte={carte_courte(carte_client.tag_id)} "
                 f"montant_argent={total_tlf_ancien_fedow + total_fed_ancien_fedow} "
                 f"transactions_ancien_fedow="
                 f"{', '.join(uuids_des_transactions_de_l_ancien_fedow)} : "

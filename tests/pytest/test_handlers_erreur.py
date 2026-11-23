@@ -147,6 +147,38 @@ def test_handler404_sans_attribut_htmx_rend_quand_meme_la_page(django_assert_num
     assert "<!doctype html>" in reponse.content.decode().lower()
 
 
+def test_handlers_rendent_la_page_quand_le_cookie_csrf_doit_etre_pose(tenant):
+    """
+    La 404 et la 500 se rendent quand la requête a déjà demandé un jeton CSRF.
+    / The 404 and the 500 render when the request already asked for a CSRF token.
+
+    Une page qui affiche un formulaire (`{% csrf_token %}`) appelle `get_token()`.
+    Si elle plante ensuite, le handler reçoit une requête qui doit poser le cookie
+    `csrftoken`. Le décorateur `@requires_csrf_token` pose ce cookie sur la RÉPONSE :
+    il doit donc décorer les handlers, qui renvoient une réponse HTTP, et jamais une
+    fonction qui renvoie un dictionnaire.
+    / A page with a form calls get_token(). If it then crashes, the handler must set
+    the csrftoken cookie on its RESPONSE: the decorator belongs on the handlers.
+    """
+    from django.middleware.csrf import get_token
+
+    from BaseBillet.views import handler404, handler500
+
+    requete_pour_la_404 = _fabriquer_requete("/page-inexistante/")
+    get_token(requete_pour_la_404)
+    requete_pour_la_500 = _fabriquer_requete("/")
+    get_token(requete_pour_la_500)
+
+    with tenant_context(tenant):
+        reponse_404 = handler404(requete_pour_la_404)
+        reponse_500 = handler500(requete_pour_la_500, exception=RuntimeError("explosion de test"))
+
+    assert reponse_404.status_code == 404
+    assert "csrftoken" in reponse_404.cookies
+    assert reponse_500.status_code == 500
+    assert "csrftoken" in reponse_500.cookies
+
+
 def test_handler500_rend_le_shell_avec_l_exception(tenant):
     """La 500 rend le shell du skin et transmet le type d'exception au gabarit."""
     from BaseBillet.views import handler500

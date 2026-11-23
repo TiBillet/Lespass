@@ -414,10 +414,11 @@ def facturer_tirage(
 
     LE VOLUME FACTURÉ (Q-H13) : le plus petit du volume servi et du volume autorisé au
     badge (`session.allowed_ml_session`, calculé depuis le solde et arrondi vers le bas
-    au millilitre par `calculer_volume_autorise_ml`). Le Raspberry Pi ne contrôle le
-    plafond qu'une fois par seconde : le débordement au-delà du volume autorisé n'est
-    pas facturé. Le poids pour le stock (`weight_quantity`) et le décrément du stock
-    gardent le volume RÉELLEMENT servi : l'inventaire reste juste.
+    au millilitre par `calculer_volume_autorise_ml`). Le Raspberry Pi contrôle le
+    plafond à chaque tour de sa boucle (100 ms), mais pas pendant un appel réseau en
+    cours : la vanne peut couler un peu au-delà. Ce débordement n'est pas facturé.
+    Le poids pour le stock (`weight_quantity`) et le décrément du stock gardent le
+    volume RÉELLEMENT servi : l'inventaire reste juste.
     / Billed volume: the smaller of the served volume and the volume authorised at the
     badge (rounded down to the ml); the overflow is not billed. The stock keeps the
     really served volume.

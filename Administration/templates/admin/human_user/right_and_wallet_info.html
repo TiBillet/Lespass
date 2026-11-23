@@ -158,9 +158,19 @@
             <div class="form-row field-row group/row last">
                 <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
                     <div class="grow relative">
-                        <button class="border font-medium px-3 py-2 rounded-default text-center whitespace-normal bg-primary-600 border-transparent text-white"
-                                hx-get="/my_account/{{ object_id }}/admin_my_cards/" hx-swap="outerHTML">
+                        {# Pendant le chargement (plusieurs appels Fedow possibles) : le bouton est #}
+                        {# désactivé (pas de double clic) et la roue tourne. La roue porte la classe #}
+                        {# htmx-indicator : htmx l'affiche seul quand le bouton a la classe htmx-request. #}
+                        {# / While loading: the button is disabled and the spinner shows (htmx-indicator). #}
+                        <button type="button"
+                                class="border font-medium px-3 py-2 rounded-default text-center whitespace-normal bg-primary-600 border-transparent text-white inline-flex items-center gap-2"
+                                hx-get="/my_account/{{ object_id }}/admin_my_cards/" hx-swap="outerHTML"
+                                hx-disabled-elt="this"
+                                data-testid="fiche-user-bouton-tirelire">
                             {% translate "Get cards and wallet information" %}
+                            <span class="htmx-indicator material-symbols-outlined animate-spin"
+                                  style="font-size: 18px;" aria-hidden="true"
+                                  data-testid="fiche-user-tirelire-chargement">progress_activity</span>
                         </button>
                     </div>
                 </div>

@@ -147,6 +147,7 @@ from test_caracterisation_caisse import (
     statuts_des_articles_de_la_commande,
 )
 from test_caracterisation_en_ligne import creer_un_administrateur_du_lieu
+from TiBillet.identifiants_pour_les_logs import carte_courte
 
 pytestmark = pytest.mark.django_db
 
@@ -2244,7 +2245,8 @@ def test_egalite_rompue_apres_debit_legacy_journalisee(lieu, caplog):
         f"Attendu : un incident journalisé, trouvé : {messages_d_incident}"
     )
     assert re.search(r"\b850\b", messages_d_incident[0])
-    assert carte_du_membre.tag_id in messages_d_incident[0]
+    assert carte_courte(carte_du_membre.tag_id) in messages_d_incident[0]
+    assert carte_du_membre.tag_id not in messages_d_incident[0]
     assert transaction_en_fed["uuid"] in messages_d_incident[0]
 
     # Rien n'est écrit.
@@ -2318,7 +2320,8 @@ def test_exception_imprevue_apres_debit_legacy_journalisee(lieu, caplog):
         f"Attendu : un incident journalisé, trouvé : {messages_d_incident}"
     )
     assert re.search(r"\b850\b", messages_d_incident[0])
-    assert carte_du_membre.tag_id in messages_d_incident[0]
+    assert carte_courte(carte_du_membre.tag_id) in messages_d_incident[0]
+    assert carte_du_membre.tag_id not in messages_d_incident[0]
     assert transaction_en_fed["uuid"] in messages_d_incident[0]
 
     # Rien n'est écrit.
@@ -2398,7 +2401,8 @@ def test_declaration_adherent_refusee_apres_debit_legacy_journalisee(lieu, caplo
         f"Attendu : un incident journalisé, trouvé : {messages_d_incident}"
     )
     assert re.search(r"\b500\b", messages_d_incident[0])
-    assert carte_du_membre.tag_id in messages_d_incident[0]
+    assert carte_courte(carte_du_membre.tag_id) in messages_d_incident[0]
+    assert carte_du_membre.tag_id not in messages_d_incident[0]
     assert transaction_en_fed["uuid"] in messages_d_incident[0]
 
     # Rien n'est écrit.
@@ -3208,7 +3212,8 @@ def test_egalite_rompue_apres_debit_legacy_journalisee_complement(lieu, caplog):
         f"Attendu : un incident journalisé, trouvé : {messages_d_incident}"
     )
     assert re.search(r"\b500\b", messages_d_incident[0])
-    assert carte_du_membre.tag_id in messages_d_incident[0]
+    assert carte_courte(carte_du_membre.tag_id) in messages_d_incident[0]
+    assert carte_du_membre.tag_id not in messages_d_incident[0]
     assert transaction_en_fed["uuid"] in messages_d_incident[0]
 
     # Rien n'est écrit.
@@ -3763,8 +3768,10 @@ def test_egalite_rompue_apres_debit_legacy_journalisee_deuxieme_carte(lieu, capl
     message_d_incident = messages_d_incident[0]
     assert re.search(r"\b300\b", message_d_incident)
     assert re.search(r"\b550\b", message_d_incident)
-    assert carte_1.tag_id in message_d_incident
-    assert carte_2.tag_id in message_d_incident
+    assert carte_courte(carte_1.tag_id) in message_d_incident
+    assert carte_1.tag_id not in message_d_incident
+    assert carte_courte(carte_2.tag_id) in message_d_incident
+    assert carte_2.tag_id not in message_d_incident
     assert transaction_fed_de_la_carte_1["uuid"] in message_d_incident
     assert transaction_fed_de_la_carte_2["uuid"] in message_d_incident
 
@@ -3860,7 +3867,8 @@ def test_deuxieme_carte_debit_reseau_carte1_echoue_incident_carte2_journalise(
     )
     message_d_incident = messages_d_incident[0]
     assert re.search(r"\b550\b", message_d_incident)
-    assert carte_2.tag_id in message_d_incident
+    assert carte_courte(carte_2.tag_id) in message_d_incident
+    assert carte_2.tag_id not in message_d_incident
     assert transaction_fed_de_la_carte_2["uuid"] in message_d_incident
 
     # Rien n'est écrit.
@@ -3949,8 +3957,10 @@ def test_deuxieme_carte_exception_imprevue_journalise_les_deux_cartes(lieu, capl
     message_d_incident = messages_d_incident[0]
     assert re.search(r"\b300\b", message_d_incident)
     assert re.search(r"\b550\b", message_d_incident)
-    assert carte_1.tag_id in message_d_incident
-    assert carte_2.tag_id in message_d_incident
+    assert carte_courte(carte_1.tag_id) in message_d_incident
+    assert carte_1.tag_id not in message_d_incident
+    assert carte_courte(carte_2.tag_id) in message_d_incident
+    assert carte_2.tag_id not in message_d_incident
     assert transaction_fed_de_la_carte_1["uuid"] in message_d_incident
     assert transaction_fed_de_la_carte_2["uuid"] in message_d_incident
 

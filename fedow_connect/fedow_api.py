@@ -24,6 +24,8 @@ from fedow_connect.validators import WalletValidator, AssetValidator, Transactio
     PaginatedTransactionValidator, CardValidator, QrCardValidator, validate_hex8
 from fedow_public.models import AssetFedowPublic
 
+from TiBillet.identifiants_pour_les_logs import carte_courte
+
 logger = logging.getLogger(__name__)
 
 
@@ -127,7 +129,10 @@ def _get(fedow_config: FedowConfig = None,
          user: TibilletUser = None,
          path: str = None,
          apikey: str = None,
-         timeout: int = 30):
+         timeout: int = 30,
+         params: dict = None):
+    # params : parametres de l'URL (?page=2&page_size=100), ajoutes par requests.
+    # / params: URL query parameters, added by requests.
     fedow_domain = fedow_config.fedow_domain()
     now = f"{datetime.now().isoformat()}"
 
@@ -166,6 +171,7 @@ def _get(fedow_config: FedowConfig = None,
     request_fedow = session.get(
         f"https://{fedow_domain}/{path}/",
         headers=headers,
+        params=params,
         verify=bool(not settings.DEBUG),
         timeout=timeout,
     )
@@ -769,7 +775,7 @@ class NFCcardFedow():
         # (voir BaseBillet.views.declarer_la_carte_perdue).
         # / warning, not error: the caller decides how serious it is.
         if response_lost_my_card.status_code == 404:
-            logger.warning(f"lost_my_card_by_signature : carte {number_printed} non liee a ce porteur (404)")
+            logger.warning(f"lost_my_card_by_signature : carte {carte_courte(number_printed)} non liee a ce porteur (404)")
             raise CarteNonLieeAuPorteurChezFedow(
                 f"lost_my_card_by_signature : carte {number_printed} non liee a ce porteur (404)"
             )
@@ -812,7 +818,7 @@ class NFCcardFedow():
             type_de_la_reponse = response_card.headers.get("Content-Type", "")
             reponse_json_de_fedow = type_de_la_reponse.startswith("application/json")
             if reponse_json_de_fedow:
-                raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {tag_id}")
+                raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {carte_courte(tag_id)}")
             logger.error(
                 f"NFCcardFedow.retrieve : 404 sans JSON ({type_de_la_reponse}), "
                 f"Fedow injoignable derrière le proxy ?"
@@ -965,7 +971,7 @@ class NFCcardFedow():
             )
 
         logger.info(
-            f"NFCcardFedow.set_primary {tag_id} (retrait : {delete}) : "
+            f"NFCcardFedow.set_primary {carte_courte(tag_id)} (retrait : {delete}) : "
             f"{reponse_de_la_declaration.status_code}"
         )
 
@@ -1224,11 +1230,21 @@ class TransactionFedow():
             logger.error(response_hash.json())
             return response_hash.status_code
 
-    def paginated_list_by_wallet_signature(self, user):
+    def paginated_list_by_wallet_signature(self, user, page: int = None, page_size: int = None):
+        # Sans page ni page_size : la premiere page de Fedow (10 transactions, les plus recentes).
+        # page_size : 100 au maximum cote Fedow.
+        # / Without page/page_size: Fedow's first page (10 most recent). page_size max is 100.
+        parametres_de_l_url = {}
+        if page:
+            parametres_de_l_url['page'] = page
+        if page_size:
+            parametres_de_l_url['page_size'] = page_size
+
         response_link = _get(
             self.fedow_config,
             user=user,
-            path=f'transaction/paginated_list_by_wallet_signature'
+            path=f'transaction/paginated_list_by_wallet_signature',
+            params=parametres_de_l_url,
         )
 
         if not response_link.status_code == 200:

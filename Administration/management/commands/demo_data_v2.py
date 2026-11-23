@@ -1844,10 +1844,10 @@ class Command(BaseCommand):
                         "direct_debit": False,
                         "tags": ["Crowdfunding"],
                         "budget_items" : [
-                            {"contributor": "douglas.adams@h2g2.org", "description": "Frais d'auto-stop", "amount" : 15},
+                            {"contributor": "douglas.adams@example.org", "description": "Frais d'auto-stop", "amount" : 15},
                             {"contributor": "thor@dirkgently.org", "description": "Scénario", "amount" : 800},
-                            {"contributor": "fondation@h2g2.org", "description": "Script", "amount" : 600},
-                            {"contributor": "fondation@h2g2.org", "description": "Tournage", "amount" : 1500},
+                            {"contributor": "fondation@example.org", "description": "Script", "amount" : 600},
+                            {"contributor": "fondation@example.org", "description": "Tournage", "amount" : 1500},
                         ],
                         "contributions": [
                             {"amount_eur": 1200, "name": "Fondation H2G2"},
@@ -1872,9 +1872,9 @@ class Command(BaseCommand):
                         "direct_debit": False,
                         "tags": ["Difficultée : Intermédiaire"],
                         "budget_items": [
-                            {"contributor": "zaphod@h2g2.org", "description": "Aménagement du garage pour le coeur en or", "amount": 10000},
-                            {"contributor": "douglas.adams@h2g2.org", "description": "Fyord", "amount": 600},
-                            {"contributor": "souris@h2g2.org", "description": "Charpente", "amount": 4000},
+                            {"contributor": "zaphod@example.org", "description": "Aménagement du garage pour le coeur en or", "amount": 10000},
+                            {"contributor": "douglas.adams@example.org", "description": "Fyord", "amount": 600},
+                            {"contributor": "souris@example.org", "description": "Charpente", "amount": 4000},
                         ],
                         "contributions": [
                             {"amount_eur": 1000, "name": "Collecte en ligne"},
@@ -1882,11 +1882,11 @@ class Command(BaseCommand):
                             {"amount_eur": 25000, "name": "Mécénat"}
                         ],
                         "participations": [
-                            {"user_email": f"arthur.dent@h2g2.org", "requested_value": 100, "description": f"Frais de pressing pour robe de chambre", "state": "APPROVED_ADMIN"},
-                            {"user_email": f"zaphod@h2g2.org", "requested_value": 1000, "description": f"Décoration : Portrait du président de la galaxie", "state": "REQUESTED"},
-                            {"user_email": f"souris@h2g2.org", "requested_value": 4200, "description": f"Construction de Compute-1", "state": "APPROVED_ADMIN"},
-                            {"user_email": f"dauphins@h2g2.org", "requested_value": 420, "description": f"Salut, et merci pour le poisson !", "state": "APPROVED_ADMIN"},
-                            {"user_email": f"ford@h2g2.org", "requested_value": 200, "description": f"Impression du guide sur papier", "state": "REQUESTED"},
+                            {"user_email": f"arthur.dent@example.org", "requested_value": 100, "description": f"Frais de pressing pour robe de chambre", "state": "APPROVED_ADMIN"},
+                            {"user_email": f"zaphod@example.org", "requested_value": 1000, "description": f"Décoration : Portrait du président de la galaxie", "state": "REQUESTED"},
+                            {"user_email": f"souris@example.org", "requested_value": 4200, "description": f"Construction de Compute-1", "state": "APPROVED_ADMIN"},
+                            {"user_email": f"dauphins@example.org", "requested_value": 420, "description": f"Salut, et merci pour le poisson !", "state": "APPROVED_ADMIN"},
+                            {"user_email": f"ford@example.org", "requested_value": 200, "description": f"Impression du guide sur papier", "state": "REQUESTED"},
                         ]
                     },
                     {
@@ -1902,15 +1902,15 @@ class Command(BaseCommand):
                         "direct_debit": False,
                         "tags": ["Idée : Votez !", "Difficultée : Facile", "Communauté", "Rigolo"],
                         "budget_items": [
-                            {"contributor": "arthur.dent@h2g2.org", "description": "La méthode : Louper le sol en une trilogie de 5 volumes", "amount": 10000},
+                            {"contributor": "arthur.dent@example.org", "description": "La méthode : Louper le sol en une trilogie de 5 volumes", "amount": 10000},
                         ],
                         "votes":[
-                            {"user_email": "arthur.dent@h2g2.org"},
-                            {"user_email": "fenchurch@h2g2.org"},
-                            {"user_email": "dauphins@h2g2.org"},
-                            {"user_email": "marvin@h2g2.org"},
-                            {"user_email": "alea.dent@h2g2.org"},
-                            {"user_email": "tricia@h2g2.org"},
+                            {"user_email": "arthur.dent@example.org"},
+                            {"user_email": "fenchurch@example.org"},
+                            {"user_email": "dauphins@example.org"},
+                            {"user_email": "marvin@example.org"},
+                            {"user_email": "alea.dent@example.org"},
+                            {"user_email": "tricia@example.org"},
                         ]
                     },
                 ],

@@ -684,7 +684,16 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [('redis', 6379)],
+            # socket_timeout est OBLIGATOIRE et doit rester plus grand que 5.
+            # channels_redis attend les messages avec BZPOPMIN : Redis garde la
+            # demande ouverte 5 s (brpop_timeout), puis repond « rien ».
+            # Depuis redis-py 8, le client abandonne aussi la lecture apres 5 s par
+            # defaut. Il abandonne avant la reponse de Redis : le consumer plante et
+            # chaque websocket inactif (caisse, imprimante, kiosque) se coupe.
+            # 15 s laisse Redis repondre, et borne quand meme une connexion morte.
+            # / Must stay above channels_redis brpop_timeout (5 s): redis-py 8
+            # defaults socket_timeout to 5 s, which kills idle websockets.
+            "hosts": [{"host": "redis", "port": 6379, "socket_timeout": 15}],
         },
     },
 }
@@ -705,11 +714,23 @@ LOGGING = {
         'tenant_context': {
             '()': 'django_tenants.log.TenantContextFilter'
         },
+        # Retire les lignes de routine des taches Celery lancees en boucle.
+        # / Drops routine lines of looping Celery tasks.
+        'sans_routine_celery': {
+            '()': 'TiBillet.logging_filters.RetireLesLogsDeRoutineDesTachesCelery'
+        },
     },
     'formatters': {
         'simple': {
             'format': '%(levelname)s %(message)s',
             'datefmt': '%y %b %d, %H:%M:%S',
+        },
+        # Format de la console, lue par la supervision (OpenObserve).
+        # Pas d'heure : Docker et la supervision horodatent deja chaque ligne.
+        # Le schema dit de quel lieu vient la ligne, le nom dit quel module l'ecrit.
+        # / Console format read by the monitoring. No time: Docker already stamps lines.
+        'console': {
+            'format': '%(levelname)s [%(schema_name)s] %(name)s : %(message)s',
         },
         'tenant_context': {
             'format': '[%(schema_name)s:%(domain_url)s] '
@@ -720,8 +741,8 @@ LOGGING = {
         'console': {
             'level': LOGGING_LVL,
             'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-            'filters': ['tenant_context'],
+            'formatter': 'console',
+            'filters': ['tenant_context', 'sans_routine_celery'],
         },
         'logfile': {
             'level': LOGGING_LVL,
@@ -743,6 +764,20 @@ LOGGING = {
     "import_export": {
         "handlers": ["console", "logfile"],
         "level": "INFO",
+    },
+    'loggers': {
+        # weasyprint ecrit un avertissement pour chaque regle CSS qu'il ne connait
+        # pas (des milliers par jour, a chaque PDF). Seules ses erreurs comptent.
+        # Le handler est OBLIGATOIRE : a l'import, weasyprint remet son niveau a
+        # WARNING si son logger n'a aucun handler (weasyprint/logger.py).
+        # propagate False : sinon la ligne sortirait deux fois (ici et par root).
+        # / weasyprint warns on every unknown CSS rule. The handler is REQUIRED:
+        #   without one, weasyprint resets its level to WARNING on import.
+        'weasyprint': {
+            'level': 'ERROR',
+            'handlers': ['console'],
+            'propagate': False,
+        },
     },
     'root': {
         'level': 'INFO',
@@ -963,6 +998,11 @@ UNFOLD = {
 
         # Force le theme clair pour le style de l'admin
         lambda request: static("js/reset_unfold_theme.js"),
+
+        # Refuse un fichier trop lourd pour nginx avant l'envoi (sinon : page 413
+        # de nginx et formulaire perdu).
+        # / Rejects a file too heavy for nginx before sending (otherwise: nginx 413).
+        lambda request: static("js/admin_limite_upload.js"),
     ],
 }
 

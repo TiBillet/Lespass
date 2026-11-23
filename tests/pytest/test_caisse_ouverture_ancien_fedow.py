@@ -79,6 +79,7 @@ from fedow_connect.models import FedowConfig
 from laboutik.models import CartePrimaire, PointDeVente
 from QrcodeCashless.models import CarteCashless
 from test_caracterisation_en_ligne import creer_un_administrateur_du_lieu
+from TiBillet.identifiants_pour_les_logs import carte_courte
 
 pytestmark = pytest.mark.django_db
 
@@ -407,7 +408,7 @@ def test_ouverture_carte_plus_primaire_pour_l_ancien_fedow_la_supprime_en_local(
 
     avertissements_sur_la_carte = []
     for message_journalise in messages_journalises(caplog, logging.WARNING):
-        if tag_de_la_carte in message_journalise:
+        if carte_courte(tag_de_la_carte) in message_journalise:
             avertissements_sur_la_carte.append(message_journalise)
     assert avertissements_sur_la_carte, (
         f"Aucun avertissement journalisé sur la carte {tag_de_la_carte}."
@@ -457,7 +458,7 @@ def test_ouverture_ancien_fedow_en_echec_refuse_sans_rien_supprimer(
     erreurs_avec_la_cause = []
     for message_journalise in messages_journalises(caplog, logging.ERROR):
         if (
-            tag_de_la_carte in message_journalise
+            carte_courte(tag_de_la_carte) in message_journalise
             and cause_de_l_echec in message_journalise
         ):
             erreurs_avec_la_cause.append(message_journalise)
@@ -485,7 +486,7 @@ def test_ouverture_carte_inconnue_de_l_ancien_fedow_refuse_sans_rien_supprimer(
     caisse = preparer_la_caisse(lieu)
     tag_de_la_carte = caisse.carte_du_caissier.tag_id
     carte_inconnue = CarteInconnueDeFedow(
-        f"Carte inconnue de Fedow : {tag_de_la_carte}"
+        f"Carte inconnue de Fedow : {carte_courte(tag_de_la_carte)}"
     )
 
     with ancien_fedow_simule(erreur=carte_inconnue) as faux_ancien_fedow:
@@ -500,7 +501,7 @@ def test_ouverture_carte_inconnue_de_l_ancien_fedow_refuse_sans_rien_supprimer(
 
     erreurs_sur_la_carte = []
     for message_journalise in messages_journalises(caplog, logging.ERROR):
-        if tag_de_la_carte in message_journalise and "inconnue" in message_journalise:
+        if carte_courte(tag_de_la_carte) in message_journalise and "inconnue" in message_journalise:
             erreurs_sur_la_carte.append(message_journalise)
     assert erreurs_sur_la_carte, (
         f"Aucune erreur journalisée sur la carte inconnue {tag_de_la_carte}."
@@ -636,7 +637,7 @@ def test_ouverture_lieu_non_relie_a_l_ancien_fedow_refuse_sans_rien_supprimer(
 
     erreurs_sur_la_carte = []
     for message_journalise in messages_journalises(caplog, logging.ERROR):
-        if tag_de_la_carte in message_journalise:
+        if carte_courte(tag_de_la_carte) in message_journalise:
             erreurs_sur_la_carte.append(message_journalise)
     assert erreurs_sur_la_carte, (
         f"Aucune erreur journalisée sur la carte {tag_de_la_carte}."

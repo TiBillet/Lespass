@@ -117,6 +117,7 @@ from laboutik.printing.sunmi_inner import ticket_data_to_json_commands
 from QrcodeCashless.models import CarteCashless
 from test_caracterisation_caisse import creer_un_point_de_vente
 from test_caracterisation_en_ligne import creer_un_administrateur_du_lieu
+from TiBillet.identifiants_pour_les_logs import carte_courte
 
 pytestmark = pytest.mark.django_db
 
@@ -1138,7 +1139,8 @@ def test_vider_carte_local_en_echec_apres_ancien_fedow_incident_journalise(
         f"Attendu : un incident journalisé, trouvé : {incidents}"
     )
     assert "500" in incidents[0]
-    assert carte_du_client.tag_id in incidents[0]
+    assert carte_courte(carte_du_client.tag_id) in incidents[0]
+    assert carte_du_client.tag_id not in incidents[0]
     for transaction_distante in transactions_distantes:
         assert str(transaction_distante["uuid"]) in incidents[0]
 
@@ -1222,7 +1224,8 @@ def test_vider_carte_ancien_fedow_vide_puis_categories_illisibles_ecran_dit_la_v
     assert len(incidents) == 1, (
         f"Attendu : un incident journalisé, trouvé : {incidents}"
     )
-    assert carte_du_client.tag_id in incidents[0]
+    assert carte_courte(carte_du_client.tag_id) in incidents[0]
+    assert carte_du_client.tag_id not in incidents[0]
     for transaction_distante in transactions_distantes:
         assert str(transaction_distante["uuid"]) in incidents[0]
 

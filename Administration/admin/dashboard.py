@@ -83,7 +83,15 @@ def event_proposals_badge_callback(request):
         return memorise
 
     from BaseBillet.models import Event
-    count = Event.objects.filter(is_proposal=True, published=False).count()
+    # Une proposition archivée, ou dont la date est passée, n'attend plus de
+    # modération : elle sort du compteur.
+    # / An archived or past proposal no longer awaits moderation: it leaves the count.
+    count = Event.objects.filter(
+        is_proposal=True,
+        published=False,
+        archived=False,
+        datetime__gte=timezone.now(),
+    ).count()
     badge = f"+ {count}" if count else None
 
     try:
@@ -776,14 +784,6 @@ def _construire_sections_modules(request):
                         "icon": "sports_bar",
                         "link": _safe_rev(
                             "staff_admin:BaseBillet_futproduct_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Flow meters"),
-                        "icon": "speed",
-                        "link": _safe_rev(
-                            "staff_admin:controlvanne_debimetre_changelist"
                         ),
                         "permission": admin_permission,
                     },
@@ -1494,7 +1494,6 @@ DESCRIPTION_DES_PAGES = {
     "controlvanne.tireusebec": _("Vos becs et ce qu'ils servent."),
     "controlvanne.cartemaintenance": _("Les cartes qui ouvrent les vannes."),
     "BaseBillet.futproduct": _("Ce qui est en fût."),
-    "controlvanne.debimetre": _("Les compteurs de volume."),
     "controlvanne.configurationtireuse": _("Les réglages du serveur de tirage."),
     "controlvanne.sessioncalibration": _("L'étalonnage des débitmètres."),
     "controlvanne.rfidsession": _("Les sessions de tirage."),
@@ -1568,7 +1567,6 @@ CATEGORIE_DES_PAGES = {
     "controlvanne.tireusebec": "gerer",
     "controlvanne.cartemaintenance": "gerer",
     "BaseBillet.futproduct": "configurer",
-    "controlvanne.debimetre": "configurer",
     "controlvanne.configurationtireuse": "configurer",
     "controlvanne.sessioncalibration": "configurer",
     "controlvanne.rfidsession": "analyser",

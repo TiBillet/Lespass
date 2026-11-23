@@ -30,7 +30,12 @@ Markdown = "^3.5.1"
 Pygments = "^2.17"
 djangorestframework-simplejwt = "^5"
 celery = "^5.3.6"
-redis = "^5"
+# redis suit la fourchette que demande kombu (le transport Redis de Celery).
+# kombu le verifie au demarrage du worker, pas a l'installation : une version hors
+# fourchette s'installe sans erreur, puis Celery s'arrete (VersionMismatch).
+# Fourchette lue dans l'extra `redis` de kombu, dans poetry.lock.
+# / redis follows kombu's range; kombu only checks it when the worker starts.
+redis = ">=6.4,<9"
 tenant-schemas-celery = "^2"
 segno = "^1.5.3"
 python-barcode = "^0.15.1"
@@ -108,6 +113,16 @@ skip_empty = true
 # ---------------------------------------------------------------------------
 # ruff
 # ---------------------------------------------------------------------------
+[tool.ruff.lint]
+# Regles par defaut de ruff, ecrites en clair. Sans cette ligne, l'integration Ruff
+# de PyCharm active bien plus de regles (style typing, except larges, tri d'imports...)
+# et noie les vraies erreurs sous des centaines d'alertes jaunes.
+# E4/E7/E9 = erreurs de syntaxe et d'instructions ; F = pyflakes (noms inconnus, imports...).
+#
+# / ruff's default rules, written explicitly. Without this line, PyCharm's Ruff
+# integration enables many more rules and buries real errors under hundreds of warnings.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.ruff.lint.per-file-ignores]
 # F401 = "import inutilise". NE JAMAIS l'activer sur les fichiers ci-dessous.
 #

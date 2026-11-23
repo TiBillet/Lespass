@@ -7,6 +7,8 @@ from django.db import connection, transaction
 from AuthBillet.models import TibilletUser
 from BaseBillet.tasks import connexion_celery_mailer
 
+from TiBillet.identifiants_pour_les_logs import uuid_court
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,7 +75,11 @@ def sender_mail_connect(email, subject_mail=None, next_url=None):
         base_url = "lespass.tibillet.localhost"
 
     try:
-        logger.info(f"sender_mail_connect : {email} - {base_url}")
+        # Jamais l'adresse entiere dans les logs : seul le domaine sert au diagnostic
+        # (un fournisseur de mail qui bloque, par exemple).
+        # / Never the full address in logs: only the domain helps diagnose.
+        domaine_de_l_email = email.split("@")[-1]
+        logger.info(f"sender_mail_connect : adresse @{domaine_de_l_email} - {base_url}")
         # On attend le COMMIT avant d'envoyer la tache Celery.
         # Sinon, quand l'user est cree dans une transaction (ex: creation
         # via l'admin Django, dont les vues changeform sont atomic), le
@@ -90,7 +96,7 @@ def sender_mail_connect(email, subject_mail=None, next_url=None):
             )
         )
     except Exception as e:
-        logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
+        logger.error(f"validate_email_and_return_user erreur pour récuperer config : {base_url} : {e}")
 
 
 def get_or_create_user(email: str,
@@ -135,7 +141,7 @@ def get_or_create_user(email: str,
         user.save()
 
         if bool(send_mail):
-            logger.info(f"created & bool(send_mail) == {send_mail}, -> sender_mail_connect({user.email})")
+            logger.info(f"created & bool(send_mail) == {send_mail}, -> sender_mail_connect({uuid_court(user.pk)})")
             sender_mail_connect(user.email, next_url=next_url)
 
 

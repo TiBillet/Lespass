@@ -18,7 +18,7 @@ Flux :
    Valide, marque les sessions, calcule le facteur moyen, l'applique.
    Retourne partial_serie_result.html qui remplace #sessions-poll (outerHTML).
    Le remplacement outerHTML supprime le polling.
-   En cas d'erreur (aucun volume, volume invalide, pas de débitmètre) :
+   En cas d'erreur (aucun volume, volume invalide) :
    statut 422 + formulaire avec le message. La page accepte le 422 grâce
    au listener htmx:beforeSwap (calibration/page.html).
 
@@ -193,22 +193,9 @@ def calibration_page(request, uuid):
 
     depuis_str = request.GET.get("depuis", "")
 
-    # Le débitmètre peut être partagé par plusieurs tireuses (clé étrangère) :
-    # le nouveau facteur s'appliquera à toutes. On les liste pour prévenir.
-    # / The flow meter may be shared by several taps: the new factor applies
-    # to all of them. List them to warn the admin.
-    autres_tireuses_du_debimetre = []
-    if tireuse.debimetre:
-        autres_tireuses_du_debimetre = list(
-            TireuseBec.objects.filter(debimetre=tireuse.debimetre)
-            .exclude(pk=tireuse.pk)
-            .order_by("nom_tireuse")
-        )
-
     ctx = {
         "tireuse": tireuse,
         "depuis": depuis_str,
-        "autres_tireuses_du_debimetre": autres_tireuses_du_debimetre,
     }
     return render(request, "calibration/page.html", ctx)
 
@@ -262,18 +249,7 @@ def calibration_serie(request, uuid):
     depuis = _parse_depuis_str(depuis_str)
     sessions_en_attente = list(_sessions_en_attente(tireuse, depuis))
 
-    # Aucun debitmetre → erreur immediate
-    # / No flow meter → immediate error
-    if not tireuse.debimetre:
-        return _formulaire_avec_erreurs(
-            request,
-            tireuse,
-            depuis_str,
-            sessions_en_attente,
-            [_("Aucun débitmètre associé à cette tireuse.")],
-        )
-
-    facteur_actuel = float(tireuse.debimetre.flow_calibration_factor)
+    facteur_actuel = float(tireuse.flow_calibration_factor)
 
     # 1. Lire et valider chaque volume saisi
     # / 1. Read and validate each entered volume
@@ -354,9 +330,9 @@ def calibration_serie(request, uuid):
         # Facteur moyen appliqué au débitmètre
         # / Average factor applied to the flow meter
         facteur_moyen = round(sum(facteurs) / len(facteurs), 4)
-        facteur_ancien = tireuse.debimetre.flow_calibration_factor
-        tireuse.debimetre.flow_calibration_factor = facteur_moyen
-        tireuse.debimetre.save(update_fields=["flow_calibration_factor"])
+        facteur_ancien = tireuse.flow_calibration_factor
+        tireuse.flow_calibration_factor = facteur_moyen
+        tireuse.save(update_fields=["flow_calibration_factor"])
 
     ctx = {
         "tireuse": tireuse,

@@ -46,6 +46,8 @@ from fedow_connect.fedow_api import CarteInconnueDeFedow, FedowAPI
 from fedow_connect.models import FedowConfig
 from QrcodeCashless.models import CarteCashless, Detail
 
+from TiBillet.identifiants_pour_les_logs import carte_courte
+
 logger = logging.getLogger(__name__)
 
 
@@ -248,7 +250,7 @@ def _creer_ou_recuperer_la_carte_chez_fedow(tag_id, numero_imprime, uuid_du_qrco
         carte_chez_fedow = None
 
     except Exception as erreur_de_lecture:
-        logger.error(f"Lecture de la carte {tag_id} chez Fedow : {erreur_de_lecture}")
+        logger.error(f"Lecture de la carte {carte_courte(tag_id)} chez Fedow : {erreur_de_lecture}")
         raise forms.ValidationError(
             _("Fedow est injoignable, la carte n'a pas été créée. Détail : %(detail)s"),
             params={"detail": str(erreur_de_lecture)},
@@ -258,7 +260,7 @@ def _creer_ou_recuperer_la_carte_chez_fedow(tag_id, numero_imprime, uuid_du_qrco
     if carte_chez_fedow:
         # RECONCILIATION : Fedow est maitre, on adopte ses valeurs.
         # / RECONCILIATION: Fedow is master, adopt its values.
-        logger.info(f"Carte {tag_id} deja connue de Fedow : reconciliation locale.")
+        logger.info(f"Carte {carte_courte(tag_id)} deja connue de Fedow : reconciliation locale.")
         from QrcodeCashless.services import proprietaire_d_apres_la_fiche_fedow
 
         return (
@@ -287,7 +289,7 @@ def _creer_ou_recuperer_la_carte_chez_fedow(tag_id, numero_imprime, uuid_du_qrco
         api_fedow.NFCcard.create_cards(cartes_a_creer)
 
     except Exception as erreur_de_creation:
-        logger.error(f"Creation de la carte {tag_id} chez Fedow : {erreur_de_creation}")
+        logger.error(f"Creation de la carte {carte_courte(tag_id)} chez Fedow : {erreur_de_creation}")
         raise forms.ValidationError(
             _("Fedow a refusé la création de la carte. Détail : %(detail)s"),
             params={"detail": str(erreur_de_creation)},

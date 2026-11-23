@@ -144,7 +144,9 @@ Contexte attendu :
                     <label for="wizard-event-jauge" class="form-label small">
                         {% translate "Jauge max (optionnel)" %}
                     </label>
-                    <input id="wizard-event-jauge" type="number" name="jauge_max" min="1"
+                    {# max="32767" = Event.JAUGE_MAXIMALE_POSSIBLE (limite de la base). #}
+                    {# / max="32767" = Event.JAUGE_MAXIMALE_POSSIBLE (DB limit). #}
+                    <input id="wizard-event-jauge" type="number" name="jauge_max" min="1" max="32767"
                            value="{{ initial.jauge_max|default:'' }}"
                            class="form-control{% if errors.jauge_max %} is-invalid{% endif %}"
                            data-testid="wizard-event-jauge">

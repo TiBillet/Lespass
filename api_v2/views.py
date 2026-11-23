@@ -35,6 +35,7 @@ from .serializers import (
     EcritureComptableSerializer,
     EventSchemaSerializer,
     EventCreateSerializer,
+    EventPatchSerializer,
     PostalAddressAsSchemaSerializer,
     PostalAddressCreateSerializer, SemanticProductFromSaleLineSerializer,
     ProductCreateSerializer,
@@ -321,7 +322,7 @@ class CrowdInitiativeViewSet(viewsets.ViewSet):
 
 class EventViewSet(viewsets.ViewSet):
     """
-    Semantic Event API (list + retrieve + create + delete) implemented with classic ViewSet.
+    Semantic Event API (list + retrieve + create + partial update + delete) implemented with classic ViewSet.
 
     Header: Authorization: Api-Key <key>
     Response: JSON-LD compliant with https://schema.org/Event
@@ -456,6 +457,30 @@ class EventViewSet(viewsets.ViewSet):
                 event.save(update_fields=updated_fields)
         output_serializer = EventSchemaSerializer(event)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, uuid=None):
+        """
+        Modifie une partie d'un évènement : seuls les champs envoyés changent.
+        / Partially updates an event: only the sent fields change.
+
+        PATCH /api/v2/events/{uuid ou slug}/ — JSON pour les champs, multipart pour
+        les fichiers img et sticker_img. Les champs acceptés et les règles sont
+        dans EventPatchSerializer (api_v2/serializers.py).
+
+        ATTENTION : changer le nom ou la date change le slug, donc l'URL publique
+        de l'évènement (Event.save le recalcule).
+        / Changing the name or date changes the slug, hence the public URL.
+        """
+        event = get_event_par_identifiant_ou_404(uuid)
+        input_serializer = EventPatchSerializer(
+            instance=event,
+            data=request.data,
+            context={"request": request},
+        )
+        input_serializer.is_valid(raise_exception=True)
+        event = input_serializer.save()
+        output_serializer = EventSchemaSerializer(event)
+        return Response(output_serializer.data)
 
     def destroy(self, request, uuid=None):
         event = get_objet_par_uuid_ou_404(Event, uuid)

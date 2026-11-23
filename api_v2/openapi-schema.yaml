@@ -128,6 +128,8 @@ paths:
                   format: date-time
                 maximumAttendeeCapacity:
                   type: integer
+                  minimum: 0
+                  maximum: 32767
                 disambiguatingDescription:
                   type: string
                 description:
@@ -187,6 +189,110 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    patch:
+      operationId: patchEvent
+      summary: Partially update an Event (by UUID or front slug)
+      description: |
+        FR : Modifie une partie d'un évènement. Seuls les champs ENVOYÉS changent ;
+        un champ absent garde sa valeur. L'évènement se désigne par son uuid ou son slug,
+        comme au GET. Requiert le droit `event`.
+
+        Champs : name, startDate, endDate (null = sans fin), maximumAttendeeCapacity,
+        disambiguatingDescription, description (HTML nettoyé côté serveur),
+        eventStatus (EventScheduled = publié, EventCancelled = non publié),
+        audience.audienceType (`private` = non fédérable, `public` = fédérable),
+        keywords (REMPLACE tous les tags ; `[]` les retire),
+        offers.eligibleQuantity.maxValue (null = sans limite),
+        offers.returnPolicy.merchantReturnDays, additionalType (libellé de catégorie),
+        additionalProperty : blockedResource (id ; null ou "" = libérer la ressource),
+        customConfirmationMessage ("" = retirer), optionsRadio / optionsCheckbox
+        (REMPLACENT la liste). Fichiers `img` et `sticker_img` en multipart.
+        `@type` n'est pas lu : la catégorie change par `additionalType`.
+        Une propriété ou une catégorie inconnue renvoie 400.
+
+        Les règles de la création s'appliquent aux valeurs FINALES (base + PATCH) :
+        fin après le début, date de fin obligatoire si une ressource est bloquée,
+        couple nom + date de début libre (sinon 400).
+        Changer le nom ou la date change le slug, donc l'URL publique.
+        En multipart, les objets imbriqués (audience, offers) sont refusés (400) :
+        envoyer les fichiers en multipart et le reste en JSON.
+
+        EN: Partially updates an event; only sent fields change. Creation rules apply
+        to the final values. `@type` is ignored (use `additionalType`). Nested objects
+        (audience, offers) must be sent as JSON: in multipart they are rejected (400).
+        Changing the name or start date changes the slug, hence the public URL.
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          description: Event UUID or front-end slug.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventPatch'
+            examples:
+              fixDescription:
+                summary: Fix the descriptions and make the event non-federable
+                value:
+                  disambiguatingDescription: "Fabriquez votre terrarium !"
+                  description: "<p>Atelier jardinage d’1h30.</p>"
+                  audience:
+                    "@type": "Audience"
+                    audienceType: "private"
+              blockResource:
+                summary: Block a booking resource (the event must have an endDate)
+                value:
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "blockedResource"
+                      value: 1
+              releaseResource:
+                summary: Release the blocked resource
+                value:
+                  additionalProperty:
+                    - name: "blockedResource"
+                      value: null
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                img:
+                  type: string
+                  format: binary
+                sticker_img:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "200":
+          description: The updated Event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        "400":
+          description: >
+            Invalid value, end before start, resource blocked without end date,
+            name + start date already taken, unknown property or category, or a
+            nested object sent as multipart.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "403":
+          description: Key without the `event` right
+        "404":
+          description: Not Found — no Event matches this UUID/slug
     delete:
       operationId: deleteEvent
       summary: Delete an Event by UUID
@@ -2457,6 +2563,13 @@ components:
         '@type':
           type: string
           example: PostalAddress
+        identifier:
+          type: integer
+          readOnly: true
+          description: >
+            Address id (read-only): the {id} of /api/v2/postal-addresses/{id}/ and the
+            `postalAddressId` of /api/v2/events/{uuid}/link-address/.
+          example: 1
         name:
           type: string
         streetAddress:
@@ -2545,6 +2658,8 @@ components:
                   type: string
         maximumAttendeeCapacity:
           type: integer
+          minimum: 0
+          maximum: 32767
         disambiguatingDescription:
           type: string
         eventStatus:
@@ -2580,6 +2695,8 @@ components:
                   example: QuantitativeValue
                 maxValue:
                   type: integer
+                  minimum: 0
+                  maximum: 32767
             returnPolicy:
               type: object
               properties:
@@ -2588,14 +2705,17 @@ components:
                   example: MerchantReturnPolicy
                 merchantReturnDays:
                   type: integer
+                  minimum: 0
+                  maximum: 32767
         additionalProperty:
           type: array
           description: |
             Names: optionsRadio, optionsCheckbox, customConfirmationMessage, blockedResource.
-            `blockedResource` (create only, write-only: never returned) = id of a booking
-            Resource (the <id> of /booking/<id>/resource/). The event occupies it: the
+            `blockedResource` = id of a booking Resource (the <id> of
+            /booking/<id>/resource/), returned when set. The event occupies it: the
             resource's slots overlapping the event can no longer be booked. Requires
-            endDate (400 otherwise); an unknown id returns 400.
+            endDate (400 otherwise); an unknown id returns 400. Set it on create or
+            with PATCH (null or "" releases the resource).
           items:
             type: object
             properties:
@@ -2612,6 +2732,80 @@ components:
                       type: string
                   - type: string
                   - type: integer
+    EventPatch:
+      type: object
+      description: >
+        schema.org/Event fields for PATCH. Every field is optional; only the sent
+        fields change. See PATCH /api/v2/events/{uuid}/ for the rules.
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+          nullable: true
+        maximumAttendeeCapacity:
+          type: integer
+          minimum: 0
+          maximum: 32767
+        disambiguatingDescription:
+          type: string
+          maxLength: 250
+          nullable: true
+        description:
+          type: string
+          nullable: true
+          description: HTML, sanitized by the server (nh3).
+        eventStatus:
+          type: string
+          enum: ["https://schema.org/EventScheduled", "https://schema.org/EventCancelled"]
+        audience:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Audience
+            audienceType:
+              type: string
+              enum: [private, public]
+        keywords:
+          type: array
+          description: Replaces ALL the tags. An empty list removes them.
+          items:
+            type: string
+        offers:
+          type: object
+          properties:
+            eligibleQuantity:
+              type: object
+              properties:
+                maxValue:
+                  type: integer
+                  nullable: true
+            returnPolicy:
+              type: object
+              properties:
+                merchantReturnDays:
+                  type: integer
+        additionalType:
+          type: string
+          description: Human-readable category label (e.g. Concert). Unknown label -> 400.
+        additionalProperty:
+          type: array
+          description: |
+            Names: blockedResource (id, or null / "" to release), customConfirmationMessage
+            ("" removes it), optionsRadio and optionsCheckbox (replace the list).
+            Any other name -> 400.
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value: {}
     ProductCreate:
       type: object
       description: schema.org/Product input for creation (with offers and form fields)
