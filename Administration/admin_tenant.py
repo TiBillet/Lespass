@@ -206,6 +206,8 @@ from comptabilite.rapport import nom_du_moyen_de_paiement, unite_d_une_vente_au_
 
 # from simple_history.admin import SimpleHistoryAdmin
 
+from TiBillet.identifiants_pour_les_logs import carte_courte, uuid_court
+
 logger = logging.getLogger(__name__)
 
 
@@ -1609,7 +1611,7 @@ def lier_la_carte_a_l_adherent_chez_fedow(fedow_api, utilisateur, numero_carte):
         try:
             carte_chez_fedow = fedow_api.NFCcard.card_number_retrieve(numero_carte)
         except Exception as erreur_lecture:
-            logger.warning(f"Adhesion admin : lecture de la carte {numero_carte} impossible : {erreur_lecture}")
+            logger.warning(f"Adhesion admin : lecture de la carte {carte_courte(numero_carte)} impossible : {erreur_lecture}")
 
         wallet_de_l_adherent = utilisateur.wallet
         carte_deja_sur_le_wallet_de_l_adherent = (
@@ -1619,14 +1621,14 @@ def lier_la_carte_a_l_adherent_chez_fedow(fedow_api, utilisateur, numero_carte):
         )
         if carte_deja_sur_le_wallet_de_l_adherent:
             logger.warning(
-                f"Adhesion admin : carte {numero_carte} deja liee a {utilisateur.email} "
+                f"Adhesion admin : carte {carte_courte(numero_carte)} deja liee a {uuid_court(utilisateur.pk)} "
                 f"(double envoi du formulaire) : {erreur_liaison}"
             )
             return
 
         logger.error(
-            f"Adhesion admin enregistree, mais carte {numero_carte} NON liee chez Fedow "
-            f"pour {utilisateur.email} : {erreur_liaison}"
+            f"Adhesion admin enregistree, mais carte {carte_courte(numero_carte)} NON liee chez Fedow "
+            f"pour {uuid_court(utilisateur.pk)} : {erreur_liaison}"
         )
         return
 
@@ -1639,8 +1641,8 @@ def lier_la_carte_a_l_adherent_chez_fedow(fedow_api, utilisateur, numero_carte):
         # proprietaire, et la caisse lit la version LOCALE. A traiter a la main.
         # / Fedow linked the card, the local base refuses: they diverge. Manual fix.
         logger.error(
-            f"Adhesion admin : carte {numero_carte} liee chez Fedow pour "
-            f"{utilisateur.email}, copie locale non mise d'accord : {erreur_liaison_locale}"
+            f"Adhesion admin : carte {carte_courte(numero_carte)} liee chez Fedow pour "
+            f"{uuid_court(utilisateur.pk)}, copie locale non mise d'accord : {erreur_liaison_locale}"
         )
 
 

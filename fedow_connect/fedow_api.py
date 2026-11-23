@@ -24,6 +24,8 @@ from fedow_connect.validators import WalletValidator, AssetValidator, Transactio
     PaginatedTransactionValidator, CardValidator, QrCardValidator, validate_hex8
 from fedow_public.models import AssetFedowPublic
 
+from TiBillet.identifiants_pour_les_logs import carte_courte
+
 logger = logging.getLogger(__name__)
 
 
@@ -773,7 +775,7 @@ class NFCcardFedow():
         # (voir BaseBillet.views.declarer_la_carte_perdue).
         # / warning, not error: the caller decides how serious it is.
         if response_lost_my_card.status_code == 404:
-            logger.warning(f"lost_my_card_by_signature : carte {number_printed} non liee a ce porteur (404)")
+            logger.warning(f"lost_my_card_by_signature : carte {carte_courte(number_printed)} non liee a ce porteur (404)")
             raise CarteNonLieeAuPorteurChezFedow(
                 f"lost_my_card_by_signature : carte {number_printed} non liee a ce porteur (404)"
             )
@@ -816,7 +818,7 @@ class NFCcardFedow():
             type_de_la_reponse = response_card.headers.get("Content-Type", "")
             reponse_json_de_fedow = type_de_la_reponse.startswith("application/json")
             if reponse_json_de_fedow:
-                raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {tag_id}")
+                raise CarteInconnueDeFedow(f"Carte inconnue de Fedow : {carte_courte(tag_id)}")
             logger.error(
                 f"NFCcardFedow.retrieve : 404 sans JSON ({type_de_la_reponse}), "
                 f"Fedow injoignable derrière le proxy ?"
@@ -969,7 +971,7 @@ class NFCcardFedow():
             )
 
         logger.info(
-            f"NFCcardFedow.set_primary {tag_id} (retrait : {delete}) : "
+            f"NFCcardFedow.set_primary {carte_courte(tag_id)} (retrait : {delete}) : "
             f"{reponse_de_la_declaration.status_code}"
         )
 

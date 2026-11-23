@@ -34,6 +34,8 @@ import logging
 from django.db import connection, transaction
 from django.utils import timezone
 
+from TiBillet.identifiants_pour_les_logs import carte_courte
+
 logger = logging.getLogger(__name__)
 
 
@@ -157,7 +159,7 @@ def crediter_la_carte_du_paiement(payment_intent_pk):
             paiement_verrouille.save(update_fields=["carte_creditee_le"])
 
         logger.info(
-            f"crediter_la_carte_du_paiement : carte {carte.tag_id} creditee de "
+            f"crediter_la_carte_du_paiement : carte {carte_courte(carte.tag_id)} creditee de "
             f"{paiement.amount} centimes (paiement {paiement.pk})"
         )
         return True

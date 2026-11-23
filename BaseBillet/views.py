@@ -99,6 +99,8 @@ from pages.models import ConfigurationSite
 from root_billet.models import RootConfiguration
 from django.utils.dateparse import parse_datetime
 
+from TiBillet.identifiants_pour_les_logs import carte_courte, uuid_court
+
 logger = logging.getLogger(__name__)
 
 """
@@ -678,12 +680,12 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
 
             if not serialized_qrcode_card:
-                logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
+                logger.warning(f"serialized_qrcode_card {carte_courte(qrcode_uuid)} non valide")
                 raise Http404()
 
             # La carte n'a pas d'user, on redirige vers la page de renseignement d'user
             if serialized_qrcode_card['is_wallet_ephemere']:
-                logger.info("Wallet ephemere, on demande le mail")
+                logger.info(f"evenement=carte_scannee_sans_compte qrcode={carte_courte(qrcode_uuid)}")
                 template_context = get_context(request)
                 template_context['qrcode_uuid'] = qrcode_uuid
                 template_context['base_template'] = 'fonctionnel/blank_base.html'
@@ -803,7 +805,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             )
         except Exception as erreur_alignement:
             logger.error(
-                f"Divergence Fedow/Lespass sur les cartes de {user.email} : "
+                f"Divergence Fedow/Lespass sur les cartes de {uuid_court(user.pk)} : "
                 f"alignement local impossible ({erreur_alignement})."
             )
 
@@ -832,8 +834,8 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             # / INCONSISTENCY: Fedow accepted the link, the local database refuses it. The
             #   two bases disagree on who owns the card, and the POS reads the LOCAL one.
             logger.error(
-                f"Divergence Fedow/Lespass sur la carte {qrcode_uuid} : liee cote Fedow "
-                f"pour {user.email}, refusee cote Lespass ({erreur_liaison_locale}). "
+                f"Divergence Fedow/Lespass sur la carte {carte_courte(qrcode_uuid)} : liee cote Fedow "
+                f"pour {uuid_court(user.pk)}, refusee cote Lespass ({erreur_liaison_locale}). "
                 f"Le point de vente utilisera le proprietaire LOCAL."
             )
 
@@ -1252,14 +1254,14 @@ def declarer_la_carte_perdue(porteur, numero_carte, declarant):
         issue_de_la_declaration = CARTE_DETACHEE
     except CarteNonLieeAuPorteurChezFedow:
         logger.warning(
-            f"Carte perdue : carte {numero_carte} deja detachee de {porteur.email} chez Fedow "
-            f"(demande par {declarant.email}). On aligne la base Lespass."
+            f"Carte perdue : carte {carte_courte(numero_carte)} deja detachee de {uuid_court(porteur.pk)} chez Fedow "
+            f"(demande par {uuid_court(declarant.pk)}). On aligne la base Lespass."
         )
         issue_de_la_declaration = CARTE_DEJA_DETACHEE_CHEZ_FEDOW
     except Exception as erreur_fedow:
         logger.error(
-            f"Carte perdue : Fedow refuse de detacher la carte {numero_carte} de "
-            f"{porteur.email} (demande par {declarant.email}) : {erreur_fedow}"
+            f"Carte perdue : Fedow refuse de detacher la carte {carte_courte(numero_carte)} de "
+            f"{uuid_court(porteur.pk)} (demande par {uuid_court(declarant.pk)}) : {erreur_fedow}"
         )
         return CARTE_REFUSEE_PAR_FEDOW
 
@@ -1280,24 +1282,24 @@ def declarer_la_carte_perdue(porteur, numero_carte, declarant):
             # le portefeuille de cette autre personne. A traiter a la main.
             # / INCONSISTENCY: Lespass links the card to someone else. Fix by hand.
             logger.error(
-                f"Divergence Fedow/Lespass sur la carte {numero_carte} : perte declaree pour "
-                f"{porteur.email}, mais la carte est liee a un AUTRE usager dans Lespass."
+                f"Divergence Fedow/Lespass sur la carte {carte_courte(numero_carte)} : perte declaree pour "
+                f"{uuid_court(porteur.pk)}, mais la carte est liee a un AUTRE usager dans Lespass."
             )
         else:
             # ATTENDU : la carte n'est pas dans cette base (lieu V1), ou n'y est deja plus
             # liee. Rien a reparer.
             # / EXPECTED: the card is not here (V1 venue) or already unlinked.
             logger.warning(
-                f"Carte perdue : carte {numero_carte} absente ou deja libre dans la base "
-                f"Lespass pour {porteur.email}."
+                f"Carte perdue : carte {carte_courte(numero_carte)} absente ou deja libre dans la base "
+                f"Lespass pour {uuid_court(porteur.pk)}."
             )
     except Exception as erreur_detachement_local:
         # INCOHERENCE : Fedow a detache la carte, Lespass n'y arrive pas. La caisse V2
         # ouvrira encore le portefeuille de l'ancien porteur.
         # / INCONSISTENCY: Fedow detached it, Lespass could not.
         logger.error(
-            f"Divergence Fedow/Lespass sur la carte {numero_carte} : detachee chez Fedow "
-            f"pour {porteur.email}, TOUJOURS liee dans Lespass ({erreur_detachement_local}). "
+            f"Divergence Fedow/Lespass sur la carte {carte_courte(numero_carte)} : detachee chez Fedow "
+            f"pour {uuid_court(porteur.pk)}, TOUJOURS liee dans Lespass ({erreur_detachement_local}). "
             f"Carte perdue encore depensable en caisse V2."
         )
 
@@ -1308,8 +1310,8 @@ def declarer_la_carte_perdue(porteur, numero_carte, declarant):
         retirer_la_carte_des_cartes_primaires(carte_detachee_en_local)
 
     logger.info(
-        f"Carte perdue : carte {numero_carte} de {porteur.email}, declaree par "
-        f"{declarant.email} : {issue_de_la_declaration}."
+        f"Carte perdue : carte {carte_courte(numero_carte)} de {uuid_court(porteur.pk)}, declaree par "
+        f"{uuid_court(declarant.pk)} : {issue_de_la_declaration}."
     )
     return issue_de_la_declaration
 
@@ -1400,7 +1402,7 @@ class MyAccount(viewsets.ViewSet):
         try:
             cartes_chez_fedow = FedowAPI().NFCcard.retrieve_card_by_signature(user)
         except Exception as erreur_fedow:
-            logger.warning(f"Mon compte : cartes de {user.email} illisibles chez Fedow : {erreur_fedow}")
+            logger.warning(f"Mon compte : cartes de {uuid_court(user.pk)} illisibles chez Fedow : {erreur_fedow}")
 
         if cartes_chez_fedow is not None:
             try:
@@ -1411,7 +1413,7 @@ class MyAccount(viewsets.ViewSet):
                 )
             except Exception as erreur_alignement:
                 logger.error(
-                    f"Divergence Fedow/Lespass sur les cartes de {user.email} : "
+                    f"Divergence Fedow/Lespass sur les cartes de {uuid_court(user.pk)} : "
                     f"alignement local impossible ({erreur_alignement})."
                 )
 
@@ -2461,7 +2463,32 @@ class QrCodeScanPay(viewsets.ViewSet):
     def process_with_nfc(self, request):
         nfc_validator = QrCodeScanPayNfcValidator(data=request.data, context={'request': request})
         if not nfc_validator.is_valid():
-            logger.info(f"NFC validation failed: {nfc_validator.errors}")
+            # Ligne d'evenement : une ligne par refus, cherchable dans la supervision avec
+            # str_match(message, 'evenement=paiement_nfc'). Le validateur s'arrete a la
+            # premiere erreur : la carte, le wallet ou le solde peuvent manquer.
+            # / Event line: one per refusal, searchable in the monitoring. The validator
+            #   stops at the first error: card, wallet or balance may be missing.
+            erreurs_du_validateur = nfc_validator.errors
+            if 'tagSerial' in erreurs_du_validateur:
+                raison_du_refus = 'carte'
+            elif 'ligne_article_uuid_hex' in erreurs_du_validateur:
+                raison_du_refus = 'paiement_introuvable'
+            else:
+                raison_du_refus = 'solde_insuffisant'
+
+            tag_lu = getattr(nfc_validator, 'tag_id', None) or str(request.data.get('tagSerial', '')).replace(':', '')
+            wallet_lu = getattr(nfc_validator, 'wallet', None)
+            user_du_wallet_lu = wallet_lu.user if wallet_lu else None
+            ligne_lue = getattr(nfc_validator, 'ligne_article', None)
+            montant_demande = ligne_lue.amount if ligne_lue else 'inconnu'
+            solde_lu = getattr(nfc_validator, 'user_balance', 'inconnu')
+            logger.info(
+                f"evenement=paiement_nfc resultat=refuse raison={raison_du_refus} "
+                f"carte={carte_courte(tag_lu)} user={uuid_court(user_du_wallet_lu.pk if user_du_wallet_lu else None)} "
+                f"wallet={uuid_court(wallet_lu.uuid if wallet_lu else None)} "
+                f"montant_centimes={montant_demande} solde_centimes={solde_lu} "
+                f"lecteur={uuid_court(request.user.pk)} erreurs={dict(erreurs_du_validateur)}"
+            )
             return Response(nfc_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
         # Si c'est valid, alors tout est passé, même la vérification du solde du portefeuille.
@@ -2481,6 +2508,11 @@ class QrCodeScanPay(viewsets.ViewSet):
             sale_origin=SaleOrigin.QRCODE_MA,
         ).update(status=LigneArticle.UNPAID)
         if nombre_de_lignes_reservees == 0:
+            logger.info(
+                f"evenement=paiement_nfc resultat=refuse raison=deja_traite "
+                f"carte={carte_courte(tag_id)} user={uuid_court(wallet.user.pk)} "
+                f"ligne={uuid_court(ligne_article.uuid)} lecteur={uuid_court(request.user.pk)}"
+            )
             return Response(
                 {'detail': _("This payment has already been processed")},
                 status=status.HTTP_409_CONFLICT,
@@ -2516,8 +2548,9 @@ class QrCodeScanPay(viewsets.ViewSet):
             # plus jamais payable. Le lieu verifie dans Fedow.
             # / We do not know whether Fedow debited: the line fails for good.
             logger.error(
+                f"evenement=paiement_nfc resultat=echec raison=debit_incertain carte={carte_courte(tag_id)} "
                 f"Paiement NFC : debit Fedow incertain, ligne {ligne_article.uuid} en echec "
-                f"(montant {ligne_article.amount}, payeur {wallet.user.email}) : {erreur_fedow}"
+                f"(montant {ligne_article.amount}, payeur {uuid_court(wallet.user.pk)}) : {erreur_fedow}"
             )
             LigneArticle.objects.filter(uuid=ligne_article.uuid).update(status=LigneArticle.FAILED)
             return Response(
@@ -2539,8 +2572,9 @@ class QrCodeScanPay(viewsets.ViewSet):
             moyens_par_monnaie = self._moyens_des_monnaies_debitees(fedowAPI, transactions)
         except Exception as erreur_apres_le_debit:
             logger.error(
+                f"evenement=paiement_nfc resultat=echec raison=monnaies_illisibles carte={carte_courte(tag_id)} "
                 f"Paiement NFC : debit fait, monnaies illisibles, ligne {ligne_article.uuid} "
-                f"en echec (montant {ligne_article.amount}, payeur {wallet.user.email}, "
+                f"en echec (montant {ligne_article.amount}, payeur {uuid_court(wallet.user.pk)}, "
                 f"transactions {transactions}) : {erreur_apres_le_debit}"
             )
             LigneArticle.objects.filter(uuid=ligne_article.uuid).update(status=LigneArticle.FAILED)
@@ -2592,8 +2626,9 @@ class QrCodeScanPay(viewsets.ViewSet):
             # / The debit went through but recording the sale failed (nothing is
             #   written). The line fails: the debit is never replayed.
             logger.error(
+                f"evenement=paiement_nfc resultat=echec raison=vente_non_ecrite carte={carte_courte(tag_id)} "
                 f"Error validating payment: {str(e)} (ligne {ex_ligne_article_uuid}, "
-                f"payeur {wallet.user.email}, transactions {transactions})"
+                f"payeur {uuid_court(wallet.user.pk)}, transactions {transactions})"
             )
             LigneArticle.objects.filter(uuid=ex_ligne_article_uuid).update(status=LigneArticle.FAILED)
             return Response(
@@ -2616,6 +2651,17 @@ class QrCodeScanPay(viewsets.ViewSet):
                 logger.error(f"Error sending payment confirmation emails: {e_mail}")
 
         db_transaction.on_commit(envoyer_les_mails_de_confirmation)
+
+        # Ligne d'evenement du paiement accepte : meme cles que les refus, pour
+        # comparer dans la supervision. / Accepted payment event line, same keys.
+        solde_apres_paiement = nfc_validator.user_balance - total_amount
+        logger.info(
+            f"evenement=paiement_nfc resultat=accepte "
+            f"carte={carte_courte(tag_id)} user={uuid_court(wallet.user.pk)} wallet={uuid_court(wallet.uuid)} "
+            f"ligne={uuid_court(ex_ligne_article_uuid)} montant_centimes={ligne_article.amount} "
+            f"debite_centimes={total_amount} solde_apres_centimes={solde_apres_paiement} "
+            f"lecteur={uuid_court(request.user.pk)}"
+        )
 
         # C'est un retour vers une swal alert -> on fait pas de HTML pour une fois
         return Response({
@@ -2713,7 +2759,6 @@ class QrCodeScanPay(viewsets.ViewSet):
 
         # Process the payment validation
         data = request.POST
-        logger.info(f"PAYMENT VALIDATION POST: {data}")
 
         template_context = get_context(request)
 
@@ -2759,6 +2804,13 @@ class QrCodeScanPay(viewsets.ViewSet):
         user_balance = fedow_api.wallet.get_total_fiducial_and_all_federated_token(user)
 
         if user_balance < amount:
+            # Ligne d'evenement, cherchable avec str_match(message, 'evenement=paiement_qr').
+            # / Event line, searchable in the monitoring.
+            logger.info(
+                f"evenement=paiement_qr resultat=refuse raison=solde_insuffisant "
+                f"user={uuid_court(user.pk)} wallet={uuid_court(wallet.uuid)} ligne={uuid_court(ligne_article.uuid)} "
+                f"montant_centimes={amount} solde_centimes={user_balance}"
+            )
             # Insufficient funds scenario
             # Set the payment details in the template context
             tenant = connection.tenant
@@ -2781,6 +2833,10 @@ class QrCodeScanPay(viewsets.ViewSet):
             sale_origin=SaleOrigin.QRCODE_MA,
         ).update(status=LigneArticle.UNPAID)
         if nombre_de_lignes_reservees == 0:
+            logger.info(
+                f"evenement=paiement_qr resultat=refuse raison=deja_traite "
+                f"user={uuid_court(user.pk)} ligne={uuid_court(ligne_article.uuid)}"
+            )
             template_context['error_message'] = _("This payment has already been processed")
             return render(request, "fonctionnel/qrcode_scan_pay/payment_error.html", context=template_context)
 
@@ -2799,8 +2855,9 @@ class QrCodeScanPay(viewsets.ViewSet):
             # / We do not know whether Fedow debited: the line fails for good.
             #   The venue checks Fedow and generates a new QR code if needed.
             logger.error(
+                f"evenement=paiement_qr resultat=echec raison=debit_incertain "
                 f"Paiement QR : debit Fedow incertain, ligne {ligne_article.uuid} en echec "
-                f"(montant {amount}, payeur {user.email}) : {erreur_fedow}"
+                f"(montant {amount}, payeur {uuid_court(user.pk)}) : {erreur_fedow}"
             )
             LigneArticle.objects.filter(uuid=ligne_article.uuid).update(status=LigneArticle.FAILED)
             template_context['error_message'] = _(
@@ -2820,8 +2877,9 @@ class QrCodeScanPay(viewsets.ViewSet):
             moyens_par_monnaie = self._moyens_des_monnaies_debitees(fedow_api, transactions)
         except Exception as erreur_apres_le_debit:
             logger.error(
+                f"evenement=paiement_qr resultat=echec raison=monnaies_illisibles "
                 f"Paiement QR : debit fait, monnaies illisibles, ligne {ligne_article.uuid} "
-                f"en echec (montant {amount}, payeur {user.email}, "
+                f"en echec (montant {amount}, payeur {uuid_court(user.pk)}, "
                 f"transactions {transactions}) : {erreur_apres_le_debit}"
             )
             LigneArticle.objects.filter(uuid=ligne_article.uuid).update(status=LigneArticle.FAILED)
@@ -2869,8 +2927,9 @@ class QrCodeScanPay(viewsets.ViewSet):
             # / The debit went through but recording the sale failed (nothing is
             #   written). The line fails: the debit is never replayed.
             logger.error(
+                f"evenement=paiement_qr resultat=echec raison=vente_non_ecrite "
                 f"Error validating payment: {str(e)} (ligne {ex_ligne_article_uuid}, "
-                f"payeur {user.email}, transactions {transactions})"
+                f"payeur {uuid_court(user.pk)}, transactions {transactions})"
             )
             LigneArticle.objects.filter(uuid=ex_ligne_article_uuid).update(status=LigneArticle.FAILED)
             template_context['error_message'] = _("Error validating payment")
@@ -2882,6 +2941,12 @@ class QrCodeScanPay(viewsets.ViewSet):
         # reseau apres l'ecriture de la vente.
         # / The payer page shows the money really debited, like the mails. The balance
         #   shown is computed: no network call after the sale is written.
+        logger.info(
+            f"evenement=paiement_qr resultat=accepte "
+            f"user={uuid_court(user.pk)} wallet={uuid_court(wallet.uuid)} ligne={uuid_court(ex_ligne_article_uuid)} "
+            f"montant_centimes={amount} debite_centimes={total_amount} "
+            f"solde_apres_centimes={user_balance - total_amount}"
+        )
         tenant = connection.tenant
         template_context['payment_location'] = tenant.name
         template_context['amount'] = total_amount
@@ -5526,7 +5591,7 @@ class MembershipMVT(viewsets.ViewSet):
             membership.custom_form = updated_data
             membership.save(update_fields=['custom_form'])
 
-            logger.info(f"Admin {request.user.email} a modifié le custom_form de l'adhésion {membership.uuid}")
+            logger.info(f"Admin {uuid_court(request.user.pk)} a modifié le custom_form de l'adhésion {membership.uuid}")
 
         except Exception as e:
             logger.error(f"Erreur sauvegarde custom_form pour adhésion {membership.uuid}: {e}")
@@ -5612,7 +5677,7 @@ class MembershipMVT(viewsets.ViewSet):
         membership.custom_form = current_data
         membership.save(update_fields=['custom_form'])
 
-        logger.info(f"Admin {request.user.email} a ajouté le champ '{field_label}' au custom_form de {membership.uuid}")
+        logger.info(f"Admin {uuid_court(request.user.pk)} a ajouté le champ '{field_label}' au custom_form de {membership.uuid}")
 
         # Retour à la vue lecture seule avec message de succès
         # Return to read-only view with success message

@@ -18,6 +18,8 @@ import logging
 
 from django.db import transaction as db_transaction
 
+from TiBillet.identifiants_pour_les_logs import uuid_court
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,7 +108,7 @@ def declarer_wallet_user_a_fedow(user, tenant, ip="0.0.0.0"):
     # / Repairing a diverging local wallet.
     wallet_local_divergent = user.wallet
     logger.warning(
-        f"declarer_wallet_user_a_fedow : {user.email} porte un wallet LOCAL "
+        f"declarer_wallet_user_a_fedow : {uuid_court(user.pk)} porte un wallet LOCAL "
         f"({wallet_local_divergent.uuid}) que Fedow ne connait pas. Reparation en cours."
     )
 
@@ -129,13 +131,13 @@ def declarer_wallet_user_a_fedow(user, tenant, ip="0.0.0.0"):
         user.wallet = wallet_local_divergent
         user.save(update_fields=["wallet"])
         logger.error(
-            f"declarer_wallet_user_a_fedow : deplacement du solde de {user.email} echoue, "
+            f"declarer_wallet_user_a_fedow : deplacement du solde de {uuid_court(user.pk)} echoue, "
             f"wallet local {wallet_local_divergent.uuid} restaure."
         )
         raise
 
     logger.info(
-        f"declarer_wallet_user_a_fedow : {user.email} aligne sur son wallet Fedow "
+        f"declarer_wallet_user_a_fedow : {uuid_court(user.pk)} aligne sur son wallet Fedow "
         f"({wallet_fedow.uuid}), ancien wallet local {wallet_local_divergent.uuid} vide."
     )
     return wallet_fedow

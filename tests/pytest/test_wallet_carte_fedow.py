@@ -30,6 +30,7 @@ from unittest import mock
 
 import pytest
 from django_tenants.utils import tenant_context
+from TiBillet.identifiants_pour_les_logs import carte_courte
 
 pytestmark = pytest.mark.django_db
 
@@ -196,7 +197,8 @@ def test_carte_inconnue_de_fedow_leve_exception(carte_anonyme):
 
     # Le message d'erreur mentionne le tag_id et l'absence dans Fedow.
     # / The error message mentions the tag_id and the Fedow absence.
-    assert carte_anonyme["carte"].tag_id in str(exc_info.value)
+    assert carte_courte(carte_anonyme["carte"].tag_id) in str(exc_info.value)
+    assert carte_anonyme["carte"].tag_id not in str(exc_info.value)
 
     # Aucun wallet éphémère ne doit avoir été créé / rattaché.
     # / No ephemeral wallet must have been created / attached.

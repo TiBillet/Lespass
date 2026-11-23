@@ -38,6 +38,7 @@ import uuid as uuid_module
 import pytest
 from django.test import override_settings
 from django_tenants.utils import tenant_context
+from TiBillet.identifiants_pour_les_logs import carte_courte
 
 
 # override_settings(DEBUG=True) : pytest-django force DEBUG=False pendant
@@ -436,12 +437,14 @@ def test_refus_de_fedow_apres_enregistrement_ne_plante_pas_et_alerte(
 
     erreurs_journalisees = [
         record for record in caplog.records
-        if record.levelno >= logging.ERROR and numero_carte in record.getMessage()
+        if record.levelno >= logging.ERROR and carte_courte(numero_carte) in record.getMessage()
     ]
     assert erreurs_journalisees, (
         "Un vrai refus de Fedow doit rester une alerte (logger.error) : "
         "l'adhesion est enregistree sans sa carte."
     )
+    for erreur_journalisee in erreurs_journalisees:
+        assert numero_carte not in erreur_journalisee.getMessage()
 
 
 @override_settings(DEBUG=True)

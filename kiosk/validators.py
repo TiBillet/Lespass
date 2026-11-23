@@ -23,6 +23,7 @@ from fedow_connect.fedow_api import CarteInconnueDeFedow
 from kiosk.carte import lire_la_carte_pour_la_borne
 from QrcodeCashless.models import CarteCashless
 from QrcodeCashless.services import CarteDUnLieuNonMigre
+from TiBillet.identifiants_pour_les_logs import carte_courte
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ class RefillWisePoseValidator(serializers.Serializer):
         except Exception as e:
             # Le texte brut (reseau, Fedow) reste dans le journal ; le public lit
             # un message simple et traduit. / Raw error logged, plain message shown.
-            logger.error(f"validate_tag_id : lecture de la carte {value} impossible : {e}")
+            logger.error(f"validate_tag_id : lecture de la carte {carte_courte(value)} impossible : {e}")
             raise ValidationError(_("La carte n'a pas pu être lue. Merci de réessayer."))
 
     def validate_totalAmount(self, value):

@@ -32,6 +32,8 @@ from fedow_connect.utils import dround
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 from root_billet.models import RootConfiguration
 
+from TiBillet.identifiants_pour_les_logs import uuid_court
+
 logger = logging.getLogger(__name__)
 
 # Quantité maximum d'un tarif dans une demande de billets (parcours direct et panier).
@@ -736,7 +738,7 @@ class ReservationValidator(serializers.Serializer):
         return value
 
     def validate_email(self, value):
-        logger.info(f"validate email : {value}")
+        logger.info("validate email")
         if not hasattr(self, 'admin_created'):  # Si ça n'est pas un ticket créé dans l'admin :
             # On vérifie que l'utilisateur connecté et l'email correspondent bien.
             request = self.context.get('request')
@@ -1214,7 +1216,7 @@ class MembershipValidator(serializers.Serializer):
         # produit juste au-dessus : un seul endroit décide quelles adhésions comptent.
         # / The counting rule lives in Price.max_per_user_reached, like the product one.
         if self.price.max_per_user_reached(user=self.user):
-            logger.info(f"Max per user reached for {self.user.email} on price {self.price.uuid}")
+            logger.info(f"Max per user reached for {uuid_court(self.user.pk)} on price {self.price.uuid}")
             raise serializers.ValidationError(_('This product is limited in quantity per person.'))
 
         # Stock du tarif d'adhésion (adhésions valides, engagées ou en cours de paiement,

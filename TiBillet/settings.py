@@ -707,11 +707,23 @@ LOGGING = {
         'tenant_context': {
             '()': 'django_tenants.log.TenantContextFilter'
         },
+        # Retire les lignes de routine des taches Celery lancees en boucle.
+        # / Drops routine lines of looping Celery tasks.
+        'sans_routine_celery': {
+            '()': 'TiBillet.logging_filters.RetireLesLogsDeRoutineDesTachesCelery'
+        },
     },
     'formatters': {
         'simple': {
             'format': '%(levelname)s %(message)s',
             'datefmt': '%y %b %d, %H:%M:%S',
+        },
+        # Format de la console, lue par la supervision (OpenObserve).
+        # Pas d'heure : Docker et la supervision horodatent deja chaque ligne.
+        # Le schema dit de quel lieu vient la ligne, le nom dit quel module l'ecrit.
+        # / Console format read by the monitoring. No time: Docker already stamps lines.
+        'console': {
+            'format': '%(levelname)s [%(schema_name)s] %(name)s : %(message)s',
         },
         'tenant_context': {
             'format': '[%(schema_name)s:%(domain_url)s] '
@@ -722,8 +734,8 @@ LOGGING = {
         'console': {
             'level': LOGGING_LVL,
             'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-            'filters': ['tenant_context'],
+            'formatter': 'console',
+            'filters': ['tenant_context', 'sans_routine_celery'],
         },
         'logfile': {
             'level': LOGGING_LVL,
@@ -745,6 +757,20 @@ LOGGING = {
     "import_export": {
         "handlers": ["console", "logfile"],
         "level": "INFO",
+    },
+    'loggers': {
+        # weasyprint ecrit un avertissement pour chaque regle CSS qu'il ne connait
+        # pas (des milliers par jour, a chaque PDF). Seules ses erreurs comptent.
+        # Le handler est OBLIGATOIRE : a l'import, weasyprint remet son niveau a
+        # WARNING si son logger n'a aucun handler (weasyprint/logger.py).
+        # propagate False : sinon la ligne sortirait deux fois (ici et par root).
+        # / weasyprint warns on every unknown CSS rule. The handler is REQUIRED:
+        #   without one, weasyprint resets its level to WARNING on import.
+        'weasyprint': {
+            'level': 'ERROR',
+            'handlers': ['console'],
+            'propagate': False,
+        },
     },
     'root': {
         'level': 'INFO',
