@@ -1611,21 +1611,29 @@ class MyAccount(viewsets.ViewSet):
                     f"pour {user} : {erreur_tokens_locaux}"
                 )
 
-        # Transactions des 72 dernieres heures, via la signature de l'user de la fiche.
+        # TOUTES les transactions du wallet, via la signature de l'user de la fiche.
         # La signature retrouve tout l'historique du wallet (y compris les transactions
         # d'un ancien wallet ephemere fusionne : elles apparaissent via les actions FUS).
+        # Fedow pagine (plus recentes d'abord) : on lit les pages de 100 jusqu'a la derniere.
         # On encadre l'appel Fedow : s'il echoue, on n'affiche rien plutot que de casser la page.
-        # / Last 72h transactions via the profile user's signature. The signature returns the
+        # / ALL wallet transactions via the profile user's signature. The signature returns the
         # full wallet history (including a merged ephemeral wallet, shown as FUS actions).
+        # Fedow paginates (newest first): we read pages of 100 until the last one.
         # The Fedow call is wrapped: on failure we show nothing instead of breaking the page.
         transactions_recentes = []
         try:
-            transactions_paginees = fedowAPI.transaction.paginated_list_by_wallet_signature(user).validated_data
-            limite_72h = timezone.now() - timedelta(hours=72)
-            for transaction in transactions_paginees.get('results', []):
-                date_transaction = transaction.get('datetime')
-                if not (date_transaction and date_transaction >= limite_72h):
-                    continue
+            toutes_les_transactions = []
+            numero_de_page = 1
+            while True:
+                transactions_paginees = fedowAPI.transaction.paginated_list_by_wallet_signature(
+                    user, page=numero_de_page, page_size=100,
+                ).validated_data
+                toutes_les_transactions.extend(transactions_paginees.get('results', []))
+                if not transactions_paginees.get('next'):
+                    break
+                numero_de_page += 1
+
+            for transaction in toutes_les_transactions:
                 # On exclut les transactions d'adhesion (asset de categorie SUBSCRIPTION),
                 # comme on exclut deja les adhesions du solde de tokens plus haut.
                 # / Skip membership transactions (SUBSCRIPTION asset category), as we

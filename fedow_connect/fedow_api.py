@@ -127,7 +127,10 @@ def _get(fedow_config: FedowConfig = None,
          user: TibilletUser = None,
          path: str = None,
          apikey: str = None,
-         timeout: int = 30):
+         timeout: int = 30,
+         params: dict = None):
+    # params : parametres de l'URL (?page=2&page_size=100), ajoutes par requests.
+    # / params: URL query parameters, added by requests.
     fedow_domain = fedow_config.fedow_domain()
     now = f"{datetime.now().isoformat()}"
 
@@ -166,6 +169,7 @@ def _get(fedow_config: FedowConfig = None,
     request_fedow = session.get(
         f"https://{fedow_domain}/{path}/",
         headers=headers,
+        params=params,
         verify=bool(not settings.DEBUG),
         timeout=timeout,
     )
@@ -1224,11 +1228,21 @@ class TransactionFedow():
             logger.error(response_hash.json())
             return response_hash.status_code
 
-    def paginated_list_by_wallet_signature(self, user):
+    def paginated_list_by_wallet_signature(self, user, page: int = None, page_size: int = None):
+        # Sans page ni page_size : la premiere page de Fedow (10 transactions, les plus recentes).
+        # page_size : 100 au maximum cote Fedow.
+        # / Without page/page_size: Fedow's first page (10 most recent). page_size max is 100.
+        parametres_de_l_url = {}
+        if page:
+            parametres_de_l_url['page'] = page
+        if page_size:
+            parametres_de_l_url['page_size'] = page_size
+
         response_link = _get(
             self.fedow_config,
             user=user,
-            path=f'transaction/paginated_list_by_wallet_signature'
+            path=f'transaction/paginated_list_by_wallet_signature',
+            params=parametres_de_l_url,
         )
 
         if not response_link.status_code == 200:
