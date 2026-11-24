@@ -1,0 +1,32 @@
+{% comment %}
+UN CHOIX DE BOUTON RADIO, AVEC SA DESCRIPTION SOUS LE LIBELLE
+/ One radio choice, with its description under the label
+
+LOCALISATION : Administration/templates/admin/widgets/radio_option_avec_description.html
+
+Utilise par RadioAvecDescriptionWidget (Administration/admin/laboutik.py).
+Reprend le gabarit radio_option.html d'Unfold, sans la classe « truncate » :
+elle couperait la description sur une seule ligne.
+/ Used by RadioAvecDescriptionWidget. Copy of Unfold's radio_option.html without
+"truncate", which would cut the description to a single line.
+
+Styles en ligne : les classes Tailwind maison ne sont pas dans le bundle Unfold.
+/ Inline styles: custom Tailwind classes are not in Unfold's bundle.
+{% endcomment %}
+<label{% if widget.attrs.id %} for="{{ widget.attrs.id }}"{% endif %}
+       class="flex flex-row gap-2"
+       style="align-items: flex-start; cursor: pointer;"
+       data-testid="radio-choix-{{ widget.value }}">
+    <span style="padding-top: 2px;">
+        {% include "django/forms/widgets/input.html" %}
+    </span>
+    <span>
+        <span style="display: block; font-weight: 600;">{{ widget.label }}</span>
+        {% if widget.description %}
+            <span style="display: block; font-size: 0.8125rem; color: var(--color-base-500);"
+                  {% if widget.attrs.id %}id="{{ widget.attrs.id }}-description"{% endif %}>
+                {{ widget.description }}
+            </span>
+        {% endif %}
+    </span>
+</label>
