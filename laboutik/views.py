@@ -24,6 +24,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from django.views.decorators.csrf import csrf_exempt
 from django_htmx.http import HttpResponseClientRedirect
 import segno
@@ -77,6 +78,7 @@ from django.utils import timezone as dj_timezone
 
 from BaseBillet.models import (
     DUREE_D_UN_PAIEMENT_EN_COURS,
+    CategorieProduct,
     Configuration,
     Event,
     LigneArticle,
@@ -199,12 +201,26 @@ PAYMENT_METHOD_TRANSLATIONS = {
     "": _("inconnu"),
 }
 
-# Catégorie par défaut quand un produit n'a pas de categorie_pos
-# Default category when a product has no categorie_pos
+# Catégories de repli quand un produit n'a pas de categorie_pos.
+# Une adhesion sans categorie va dans « Adhésions », le reste dans « Divers ».
+# Chacune a son bouton de filtre dans la caisse, s'il y a des articles dedans
+# (voir _construire_donnees_categories).
+# gettext_lazy et pas _ : ces dicts sont crees au chargement du module.
+# _ (gettext) figerait la langue du demarrage.
+# / Fallback categories for products without categorie_pos. Lazy translation:
+#   these dicts are built at import time.
 CATEGORIE_PAR_DEFAUT = {
     "id": "default",
-    "name": "Divers",
+    "name": gettext_lazy("Divers"),
     "icon": "category",
+    "icone_type": "ms",
+    "couleur_backgr": "#FFFFFF",
+    "couleur_texte": "#333333",
+}
+CATEGORIE_ADHESIONS_PAR_DEFAUT = {
+    "id": "adhesions",
+    "name": gettext_lazy("Adhésions"),
+    "icon": "card_membership",
     "icone_type": "ms",
     "couleur_backgr": "#FFFFFF",
     "couleur_texte": "#333333",
@@ -785,6 +801,8 @@ def _construire_donnees_articles(
                 "couleur_backgr": categorie_pos.couleur_fond or "#17a2b8",
                 "couleur_texte": categorie_pos.couleur_texte,
             }
+        elif product.categorie_article == Product.ADHESION:
+            categorie_dict = CATEGORIE_ADHESIONS_PAR_DEFAUT
         else:
             categorie_dict = CATEGORIE_PAR_DEFAUT
 
@@ -1127,20 +1145,57 @@ def _construire_donnees_articles(
     return articles
 
 
-def _construire_donnees_categories(point_de_vente_instance, events_billetterie=None):
+def _construire_donnees_categories(
+    point_de_vente_instance, articles, events_billetterie=None
+):
     """
-    Construit la liste de dicts catégories au format attendu par les templates.
-    Pour un PV BILLETTERIE, ajoute les events futurs comme pseudo-catégories
-    avec date et mini-jauge (filtre CSS cat-{event_uuid}).
-    / Builds the list of category dicts in the format expected by templates.
-    For a BILLETTERIE POS, adds future events as pseudo-categories
-    with date and mini-gauge (CSS filter cat-{event_uuid}).
+    Construit les boutons de filtre a gauche de la caisse (« Tous » est dans le template).
+    / Builds the filter buttons on the left of the POS ("All" is in the template).
 
     LOCALISATION : laboutik/views.py
+
+    Les boutons viennent des categories des ARTICLES AFFICHES, deja construits par
+    _construire_donnees_articles(). Une tuile masquee (recharge sans « mode
+    recharge », produit sans tarif vendable...) ne cree donc pas de bouton vide.
+    / Buttons come from the categories of the DISPLAYED articles, so a hidden tile
+    never creates an empty button.
+
+    Ordre des boutons :
+    1. les categories des articles, triees par poid_liste puis nom ;
+    2. « Adhésions » puis « Divers » : articles sans categorie, s'il y en a ;
+    3. PV BILLETTERIE : les evenements a venir, avec date et mini-jauge.
+    Le filtre se fait cote navigateur sur la classe CSS cat-<id> de chaque tuile
+    (laboutik/static/js/articles.js).
+    / Order: real categories, then fallback buttons, then events.
+
+    :param point_de_vente_instance: le PointDeVente affiche
+    :param articles: la liste rendue par _construire_donnees_articles()
+    :param events_billetterie: le resultat de _charger_events_billetterie(), ou None
+    :return: list de dicts {id, name, icon, icone_type, ...}
     """
-    # Catégories classiques du M2M (Bar, etc.) — toujours chargées
-    # / Classic M2M categories (Bar, etc.) — always loaded
-    categories_qs = point_de_vente_instance.categories.order_by("poid_liste", "name")
+    # --- 1. Lire les categories des articles affiches ---
+    # / Read the categories of the displayed articles
+    identifiants_des_categories_des_articles = set()
+    il_y_a_des_adhesions_sans_categorie = False
+    il_y_a_des_articles_sans_categorie = False
+    # Une tuile billet porte l'uuid de son evenement comme categorie. Aucune
+    # CategorieProduct n'a cet uuid : la requete plus bas l'ignore. Le bouton de
+    # l'evenement est ajoute a l'etape 3.
+    # / A ticket tile carries its event uuid as category: the query ignores it.
+    for article in articles:
+        identifiant_de_la_categorie = article["categorie"]["id"]
+        if identifiant_de_la_categorie == CATEGORIE_ADHESIONS_PAR_DEFAUT["id"]:
+            il_y_a_des_adhesions_sans_categorie = True
+        elif identifiant_de_la_categorie == CATEGORIE_PAR_DEFAUT["id"]:
+            il_y_a_des_articles_sans_categorie = True
+        else:
+            identifiants_des_categories_des_articles.add(identifiant_de_la_categorie)
+
+    # Une seule requete, pour avoir l'ordre choisi dans l'admin (poid_liste).
+    # / One query, to get the admin-chosen order (poid_liste).
+    categories_qs = CategorieProduct.objects.filter(
+        uuid__in=identifiants_des_categories_des_articles
+    ).order_by("poid_liste", "name")
     categories = []
     for categorie in categories_qs:
         # Icone Material (defaut : grille) / Material icon (default: grid)
@@ -1155,6 +1210,14 @@ def _construire_donnees_categories(point_de_vente_instance, events_billetterie=N
             }
         )
 
+    # --- 2. Les boutons de repli, pour les articles sans categorie ---
+    # / Fallback buttons, for articles without a category
+    if il_y_a_des_adhesions_sans_categorie:
+        categories.append(CATEGORIE_ADHESIONS_PAR_DEFAUT)
+    if il_y_a_des_articles_sans_categorie:
+        categories.append(CATEGORIE_PAR_DEFAUT)
+
+    # --- 3. PV BILLETTERIE : les evenements a venir ---
     # PV BILLETTERIE : ajouter les events futurs comme pseudo-catégories
     # La jauge event dans la sidebar = jauge globale (toutes catégories confondues)
     # / BILLETTERIE POS: add future events as pseudo-categories
@@ -3634,8 +3697,10 @@ class CaisseViewSet(viewsets.ViewSet):
             events_billetterie=events_billetterie,
             afficher_les_recharges=la_carte_primaire_peut_recharger,
         )
+        # Les boutons de categorie viennent des articles affiches.
+        # / Category buttons come from the displayed articles.
         categories = _construire_donnees_categories(
-            pv, events_billetterie=events_billetterie
+            pv, articles, events_billetterie=events_billetterie
         )
 
         # --- Construire le state (enrichi avec PV + carte primaire) ---

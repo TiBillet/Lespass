@@ -1141,7 +1141,6 @@ class Command(BaseCommand):
                 if p
             ]
             pdv_mix.products.set(produits_mix)
-            pdv_mix.categories.set([categorie_bar, categorie_cashless])
 
             # Attacher Machine 3D et Pin's au PV Mix (produits non-fiduciaires)
             # Utilise add() plutot que set() pour ne pas ecraser les produits deja definis.
@@ -1162,16 +1161,6 @@ class Command(BaseCommand):
             # No need to create ticket Products here — demo_data_v2 events
             # provide articles automatically.
             # M2M articles (Beer, Water) are loaded in addition.
-            categorie_billetterie, _ = CategorieProduct.objects.update_or_create(
-                name="Billetterie",
-                defaults={
-                    "icon": "confirmation_number",
-                    "couleur_texte": "#FFFFFF",
-                    "couleur_fond": "#7C3AED",
-                    "poid_liste": 6,
-                },
-            )
-
             produit_eau = Product.objects.filter(
                 name="Eau", methode_caisse=Product.VENTE
             ).first()
@@ -1193,7 +1182,6 @@ class Command(BaseCommand):
             # / M2M articles: classic drinks available in addition to tickets
             produits_festival = [p for p in [produit_biere, produit_eau] if p]
             pdv_festival.products.set(produits_festival)
-            pdv_festival.categories.set([categorie_billetterie, categorie_bar])
 
             self.stdout.write(
                 f"  PV Accueil Festival (BILLETTERIE) : {pdv_festival.products.count()} articles M2M"
@@ -1214,14 +1202,10 @@ class Command(BaseCommand):
             # Bar : boissons froides, vins, snacks
             # / Bar: cold drinks, wines, snacks
             pdv_bar.products.set(bar_products)
-            pdv_bar.categories.set([categorie_bar, categorie_vins, categorie_snacks])
 
             # Restaurant : plats et boissons chaudes
             # / Restaurant: dishes and hot drinks
             pdv_restaurant.products.set(restaurant_products)
-            pdv_restaurant.categories.set(
-                [categorie_restauration, categorie_boissons_chaudes]
-            )
 
             # Terrasse : tout sauf les boissons chaudes et cashless
             # / Terrasse: everything except hot drinks and cashless
@@ -1234,14 +1218,6 @@ class Command(BaseCommand):
                 ]
             )
             pdv_terrasse.products.set(terrasse_products)
-            pdv_terrasse.categories.set(
-                [
-                    categorie_bar,
-                    categorie_restauration,
-                    categorie_vins,
-                    categorie_snacks,
-                ]
-            )
 
             # Cashless : les produits de recharge sont crees par le signal Asset.
             # Comme les Assets sont crees AVANT les PV, le signal n'a pas pu
@@ -1262,7 +1238,6 @@ class Command(BaseCommand):
             # Ajouter le bouton "Vider la carte" au PV Cashless
             # / Add the "Empty card" button to Cashless POS
             pdv_cashless.products.add(produit_vider_carte)
-            pdv_cashless.categories.set([categorie_cashless])
 
             self.stdout.write(
                 f"  Points de vente : "

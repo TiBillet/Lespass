@@ -102,7 +102,6 @@ def cleanup_test_data(tenant):
         pdv_tests = PointDeVente.objects.filter(name__startswith=TEST_PREFIX)
         for pdv in pdv_tests:
             pdv.products.clear()
-            pdv.categories.clear()
         pdv_tests.delete()
 
         Price.objects.filter(name__startswith=TEST_PREFIX).delete()

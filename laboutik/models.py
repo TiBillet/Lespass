@@ -14,7 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from solo.models import SingletonModel
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import CategorieProduct, Price, Product
+from BaseBillet.models import Price, Product
 from QrcodeCashless.models import CarteCashless
 from root_billet.utils import fernet_encrypt, fernet_decrypt
 
@@ -945,19 +945,16 @@ class PointDeVente(models.Model):
     # imprimante. C'est le Terminal qui porte l'imprimante, pas le point de vente.
     # / A point of sale carries NO printer: many terminals share one point of sale.
 
-    # Produits et categories disponibles a ce point de vente
-    # / Products and categories available at this point of sale
+    # Produits vendus a ce point de vente.
+    # Les boutons de categorie de la caisse se deduisent de leur categorie_pos
+    # (laboutik/views.py, _construire_donnees_categories) : pas de M2M categories.
+    # / Products sold at this point of sale. Category buttons are derived from
+    #   their categorie_pos: no categories M2M.
     products = models.ManyToManyField(
         Product, blank=True,
         related_name='points_de_vente',
         verbose_name=_("Products"),
         help_text=_("Products available at this point of sale."),
-    )
-    categories = models.ManyToManyField(
-        CategorieProduct, blank=True,
-        related_name='points_de_vente',
-        verbose_name=_("Categories"),
-        help_text=_("Product categories available at this point of sale."),
     )
 
     def __str__(self):

@@ -77,7 +77,6 @@ def cleanup_test_data(tenant):
         # / Clear M2M before deletion
         for pdv in pdv_test:
             pdv.products.clear()
-            pdv.categories.clear()
         pdv_test.delete()
 
         Price.objects.filter(name__startswith=TEST_PREFIX).delete()
@@ -295,8 +294,8 @@ def test_price_asset_fk(tenant):
 
 
 # ---------------------------------------------------------------------------
-# Test 6 : PointDeVente — creation + M2M products/categories
-# Test 6: PointDeVente — creation + M2M products/categories
+# Test 6 : PointDeVente — creation + M2M products
+# Test 6: PointDeVente — creation + M2M products
 # ---------------------------------------------------------------------------
 
 def test_point_de_vente(tenant):
@@ -323,14 +322,11 @@ def test_point_de_vente(tenant):
             accepte_commandes=False,
         )
 
-        # M2M products et categories
+        # M2M products
         pdv.products.add(product)
-        pdv.categories.add(cat)
 
         assert pdv.products.count() == 1
-        assert pdv.categories.count() == 1
         assert pdv.products.first().pk == product.pk
-        assert pdv.categories.first().pk == cat.pk
         assert str(pdv) == f'{TEST_PREFIX} Bar test'
 
         # Reverse relation : product.points_de_vente
@@ -506,7 +502,7 @@ def test_create_test_pos_data_command(tenant):
         assert pdv_bar is not None, "PdV 'Bar' doit exister"
         assert pdv_resto is not None, "PdV 'Restaurant' doit exister"
         assert pdv_bar.products.count() > 0, "PdV 'Bar' doit avoir des produits"
-        assert pdv_bar.categories.filter(pk=cat_bar.pk).exists(), "PdV 'Bar' doit avoir la categorie Bar"
+        assert pdv_bar.products.filter(categorie_pos=cat_bar).exists(), "PdV 'Bar' doit vendre un article de la categorie Bar"
         assert pdv_resto.products.count() > 0, "PdV 'Restaurant' doit avoir des produits"
 
         # --- PV Adhesion (type ADHESION, charge auto les produits adhesion) ---

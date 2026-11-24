@@ -78,7 +78,6 @@ def cleanup_test_data(tenant):
         pdv_tests = PointDeVente.objects.filter(name__startswith=TEST_PREFIX)
         for pdv in pdv_tests:
             pdv.products.clear()
-            pdv.categories.clear()
         pdv_tests.delete()
 
         Price.objects.filter(name__startswith=TEST_PREFIX).delete()
@@ -91,7 +90,7 @@ def cleanup_test_data(tenant):
 # Utility functions for tests
 # ---------------------------------------------------------------------------
 
-def creer_pdv_avec_produit(nom_prefix, product, cat=None):
+def creer_pdv_avec_produit(nom_prefix, product):
     """
     Cree un PointDeVente minimal et y ajoute le produit donne.
     Retourne le PDV cree.
@@ -105,8 +104,6 @@ def creer_pdv_avec_produit(nom_prefix, product, cat=None):
         comportement=PointDeVente.DIRECT,
     )
     pdv.products.add(product)
-    if cat:
-        pdv.categories.add(cat)
     return pdv
 
 
@@ -149,7 +146,7 @@ def test_couleurs_override_produit(tenant):
             prix=Decimal('5.00'),
         )
 
-        pdv = creer_pdv_avec_produit('Override Couleur', product, cat)
+        pdv = creer_pdv_avec_produit('Override Couleur', product)
         articles = _construire_donnees_articles(pdv)
 
         # Chercher notre article dans la liste retournee
@@ -199,7 +196,7 @@ def test_couleurs_fallback_categorie(tenant):
             prix=Decimal('3.00'),
         )
 
-        pdv = creer_pdv_avec_produit('Fallback Couleur', product, cat)
+        pdv = creer_pdv_avec_produit('Fallback Couleur', product)
         articles = _construire_donnees_articles(pdv)
 
         article = next((a for a in articles if a['name'] == f'{TEST_PREFIX} Fallback Couleur'), None)
@@ -616,7 +613,7 @@ def test_categorie_dict_contient_icone_type(tenant):
         )
         Price.objects.create(product=product, name=f'{TEST_PREFIX} Tarif Badge', prix=Decimal('5.00'))
 
-        pdv = creer_pdv_avec_produit('Badge Icone', product, cat)
+        pdv = creer_pdv_avec_produit('Badge Icone', product)
         articles = _construire_donnees_articles(pdv)
 
         article = next((a for a in articles if a['name'] == f'{TEST_PREFIX} Produit Badge Icone'), None)
@@ -640,9 +637,50 @@ def test_categorie_dict_contient_icone_type(tenant):
 
 
 # ---------------------------------------------------------------------------
-# Test 6 : _construire_donnees_categories — detection icone_type FA / MS / vide
-# Test 6: _construire_donnees_categories — icone_type detection FA / MS / empty
+# Test 6 : _construire_donnees_categories — boutons deduits des articles
+# Test 6: _construire_donnees_categories — buttons derived from articles
 # ---------------------------------------------------------------------------
+
+def creer_article_de_caisse(nom, categorie_article=None, categorie_pos=None):
+    """
+    Cree un produit vendable a la caisse (un tarif a 2 €), avec ou sans categorie.
+    / Creates a POS-sellable product (one 2 € price), with or without category.
+    """
+    from BaseBillet.models import Price, Product
+
+    if categorie_article == Product.ADHESION:
+        methode_caisse = None
+    else:
+        methode_caisse = Product.VENTE
+        categorie_article = Product.NONE
+
+    produit = Product.objects.create(
+        name=f'{TEST_PREFIX} {nom}',
+        categorie_article=categorie_article,
+        methode_caisse=methode_caisse,
+        categorie_pos=categorie_pos,
+    )
+    Price.objects.create(
+        product=produit,
+        name=f'{TEST_PREFIX} Tarif {nom}',
+        prix=Decimal('2.00'),
+    )
+    return produit
+
+
+def boutons_du_point_de_vente(pdv):
+    """
+    Construit les articles puis les boutons, comme la vue de la caisse.
+    / Builds articles then buttons, like the POS view.
+    """
+    from laboutik.views import (
+        _construire_donnees_articles,
+        _construire_donnees_categories,
+    )
+
+    articles = _construire_donnees_articles(pdv)
+    return _construire_donnees_categories(pdv, articles)
+
 
 def test_construire_donnees_categories_icone_type(tenant):
     """
@@ -654,7 +692,6 @@ def test_construire_donnees_categories_icone_type(tenant):
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import CategorieProduct
         from laboutik.models import PointDeVente
-        from laboutik.views import _construire_donnees_categories
 
         cat_fa = CategorieProduct.objects.create(
             name=f'{TEST_PREFIX} Cat Liste Stockee',
@@ -673,9 +710,13 @@ def test_construire_donnees_categories_icone_type(tenant):
             name=f'{TEST_PREFIX} PDV Categories Liste',
             comportement=PointDeVente.DIRECT,
         )
-        pdv.categories.add(cat_fa, cat_ms, cat_vide)
+        pdv.products.add(
+            creer_article_de_caisse('Article Stockee', categorie_pos=cat_fa),
+            creer_article_de_caisse('Article MS', categorie_pos=cat_ms),
+            creer_article_de_caisse('Article Vide', categorie_pos=cat_vide),
+        )
 
-        categories = _construire_donnees_categories(pdv)
+        categories = boutons_du_point_de_vente(pdv)
 
         # Trouver chaque categorie dans la liste retournee
         # / Find each category in the returned list
@@ -709,6 +750,151 @@ def test_construire_donnees_categories_icone_type(tenant):
         assert dict_vide['icon'] == 'apps', (
             f"Categorie vide → icon='apps' attendu (repli), obtenu '{dict_vide['icon']}'"
         )
+
+
+def test_un_bouton_par_categorie_des_articles_et_rien_d_autre(tenant):
+    """
+    Chaque categorie d'article a son bouton. Une categorie sans article dans ce
+    point de vente n'en a pas, meme si elle existe dans le lieu.
+    / Each article category gets a button; a category with no article here gets none.
+    """
+    with schema_context(TENANT_SCHEMA):
+        from BaseBillet.models import CategorieProduct
+        from laboutik.models import PointDeVente
+
+        categorie_vendue_ici = CategorieProduct.objects.create(
+            name=f'{TEST_PREFIX} Cat vendue ici',
+        )
+        categorie_vendue_ailleurs = CategorieProduct.objects.create(
+            name=f'{TEST_PREFIX} Cat vendue ailleurs',
+        )
+        creer_article_de_caisse('Article ailleurs', categorie_pos=categorie_vendue_ailleurs)
+
+        pdv = PointDeVente.objects.create(
+            name=f'{TEST_PREFIX} PDV Boutons deduits',
+            comportement=PointDeVente.DIRECT,
+        )
+        pdv.products.add(
+            creer_article_de_caisse('Article ici 1', categorie_pos=categorie_vendue_ici),
+            creer_article_de_caisse('Article ici 2', categorie_pos=categorie_vendue_ici),
+        )
+
+        identifiants_des_boutons = [c['id'] for c in boutons_du_point_de_vente(pdv)]
+
+    assert identifiants_des_boutons == [str(categorie_vendue_ici.uuid)]
+
+
+def test_les_boutons_suivent_le_poids_de_la_categorie(tenant):
+    """
+    Les boutons sont tries par poid_liste de la categorie, pas par ordre des articles.
+    / Buttons are sorted by the category poid_liste, not by article order.
+    """
+    with schema_context(TENANT_SCHEMA):
+        from BaseBillet.models import CategorieProduct
+        from laboutik.models import PointDeVente
+
+        categorie_en_second = CategorieProduct.objects.create(
+            name=f'{TEST_PREFIX} Cat en second', poid_liste=20,
+        )
+        categorie_en_premier = CategorieProduct.objects.create(
+            name=f'{TEST_PREFIX} Cat en premier', poid_liste=10,
+        )
+
+        pdv = PointDeVente.objects.create(
+            name=f'{TEST_PREFIX} PDV Ordre des boutons',
+            comportement=PointDeVente.DIRECT,
+        )
+        pdv.products.add(
+            creer_article_de_caisse('A article second', categorie_pos=categorie_en_second),
+            creer_article_de_caisse('B article premier', categorie_pos=categorie_en_premier),
+        )
+
+        identifiants_des_boutons = [c['id'] for c in boutons_du_point_de_vente(pdv)]
+
+    assert identifiants_des_boutons == [
+        str(categorie_en_premier.uuid),
+        str(categorie_en_second.uuid),
+    ]
+
+
+def test_articles_sans_categorie_boutons_adhesions_puis_divers(tenant):
+    """
+    Sans categorie, une adhesion va sous « Adhésions », un autre article sous « Divers ».
+    Ces deux boutons viennent apres les vraies categories.
+    / Without category: memberships under "Adhésions", others under "Divers",
+    after the real categories.
+    """
+    with schema_context(TENANT_SCHEMA):
+        from BaseBillet.models import CategorieProduct, Product
+        from laboutik.models import PointDeVente
+
+        vraie_categorie = CategorieProduct.objects.create(
+            name=f'{TEST_PREFIX} Cat vraie', poid_liste=999,
+        )
+
+        pdv = PointDeVente.objects.create(
+            name=f'{TEST_PREFIX} PDV Sans categorie',
+            comportement=PointDeVente.DIRECT,
+        )
+        pdv.products.add(
+            creer_article_de_caisse('Article sans cat'),
+            creer_article_de_caisse('Adhesion sans cat', categorie_article=Product.ADHESION),
+            creer_article_de_caisse('Article cat vraie', categorie_pos=vraie_categorie),
+        )
+
+        boutons = boutons_du_point_de_vente(pdv)
+        identifiants_des_boutons = [c['id'] for c in boutons]
+        noms_des_boutons = [str(c['name']) for c in boutons]
+
+    assert identifiants_des_boutons == [str(vraie_categorie.uuid), 'adhesions', 'default']
+    assert noms_des_boutons[1:] == ['Adhésions', 'Divers']
+
+
+def test_pas_de_bouton_de_repli_quand_tout_est_categorise(tenant):
+    """
+    Si tous les articles ont une categorie, ni « Adhésions » ni « Divers ».
+    / If every article has a category: no fallback button.
+    """
+    with schema_context(TENANT_SCHEMA):
+        from BaseBillet.models import CategorieProduct
+        from laboutik.models import PointDeVente
+
+        categorie = CategorieProduct.objects.create(name=f'{TEST_PREFIX} Cat seule')
+        pdv = PointDeVente.objects.create(
+            name=f'{TEST_PREFIX} PDV Tout categorise',
+            comportement=PointDeVente.DIRECT,
+        )
+        pdv.products.add(creer_article_de_caisse('Article categorise', categorie_pos=categorie))
+
+        identifiants_des_boutons = [c['id'] for c in boutons_du_point_de_vente(pdv)]
+
+    assert 'adhesions' not in identifiants_des_boutons
+    assert 'default' not in identifiants_des_boutons
+
+
+def test_une_tuile_non_affichee_ne_cree_pas_de_bouton(tenant):
+    """
+    Les boutons viennent des articles AFFICHES, pas du M2M products : un produit du
+    point de vente sans tuile (recharge masquee, pas de tarif...) ne cree pas de bouton.
+    On le simule en passant une liste d'articles vide.
+    / Buttons come from DISPLAYED articles: a product without a tile adds no button.
+    """
+    with schema_context(TENANT_SCHEMA):
+        from BaseBillet.models import CategorieProduct
+        from laboutik.models import PointDeVente
+        from laboutik.views import _construire_donnees_categories
+
+        categorie = CategorieProduct.objects.create(name=f'{TEST_PREFIX} Cat sans tuile')
+        pdv = PointDeVente.objects.create(
+            name=f'{TEST_PREFIX} PDV Tuile masquee',
+            comportement=PointDeVente.DIRECT,
+        )
+        pdv.products.add(creer_article_de_caisse('Article masque', categorie_pos=categorie))
+
+        aucun_article_affiche = []
+        categories = _construire_donnees_categories(pdv, aucun_article_affiche)
+
+    assert categories == []
 
 
 # ---------------------------------------------------------------------------

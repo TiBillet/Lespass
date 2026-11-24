@@ -1,6 +1,6 @@
 # Chantier 01 — Les boutons de catégorie viennent des articles
 
-**Statut :** plan à valider. Rien n'est codé.
+**Statut :** étapes 1 et 2 codées le 2026-11-24, non commitées. Fiche : `CHANGELOG/2026-11-24-pv-categories-deduites-des-articles.md`.
 **Date :** 2026-11-24
 
 ## 1. Le constat
@@ -52,8 +52,8 @@ vente, `laboutik/views.py`, appel juste après `_construire_donnees_articles()`)
 1. **`_construire_donnees_categories(point_de_vente_instance, articles, events_billetterie=None)`**
    reçoit la liste `articles` déjà construite. Elle en tire les boutons :
    - on parcourt les articles et on garde les `article["categorie"]["id"]` distincts ;
-   - on saute les tuiles billet (elles ont une clé `"event"` : leur bouton est l'événement,
-     ajouté plus bas comme aujourd'hui) ;
+   - les tuiles billet portent l'uuid de leur événement comme catégorie : aucune
+     `CategorieProduct` ne l'a, la requête l'ignore (pas de saut explicite) ;
    - on saute la catégorie par défaut `"default"` (voir la question Q1) ;
    - **une** requête : `CategorieProduct.objects.filter(uuid__in=ids).order_by("poid_liste", "name")`,
      pour garder l'ordre actuel des boutons ;
@@ -73,7 +73,6 @@ vente, `laboutik/views.py`, appel juste après `_construire_donnees_articles()`)
    - une catégorie d'article non cochée dans le M2M a son bouton ;
    - une catégorie cochée dans le M2M sans article n'a pas de bouton ;
    - l'ordre suit `poid_liste` puis `name` ;
-   - un PV Billetterie garde ses boutons d'événement ;
    - une tuile de recharge masquée ne crée pas de bouton (dépend du chantier voisin) ;
    - mutation : remettre la lecture du M2M doit faire échouer les deux premiers.
 

@@ -197,10 +197,9 @@ DESCRIPTIONS_DES_TYPES_DE_POINT_DE_VENTE = {
         "boissons, nourriture, adhésions… Pour un bar, une buvette, une boutique ou un accueil."
     ),
     PointDeVente.CASHLESS: _(
-        "Comme Direct, avec trois différences. "
+        "Comme Direct, avec deux différences. "
         "1) Pour chaque vente, la caisse demande la carte du client avant le paiement. "
-        "2) Le caissier voit le bouton « Recharger » quand il vérifie une carte. "
-        "3) Une nouvelle monnaie ajoute sa recharge à cette caisse. "
+        "2) Une nouvelle monnaie ajoute sa recharge à cette caisse. "
         "Les recharges des monnaies plus anciennes se choisissent dans « Produits », plus bas."
     ),
     PointDeVente.BILLETTERIE: _(
@@ -273,7 +272,7 @@ class PointDeVenteAdmin(ModelAdmin):
     list_filter = ['comportement', 'hidden']
     search_fields = ['name']
     ordering = ('poid_liste', 'name')
-    filter_horizontal = ('products', 'categories')
+    filter_horizontal = ('products',)
 
     fieldsets = (
         (_('General'), {
@@ -297,10 +296,9 @@ class PointDeVenteAdmin(ModelAdmin):
                 'accepte_commandes',
             ),
         }),
-        (_('Products & categories'), {
+        (_('Products'), {
             'fields': (
                 'products',
-                'categories',
             ),
         }),
     )
