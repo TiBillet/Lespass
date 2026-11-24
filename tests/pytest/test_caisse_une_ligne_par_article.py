@@ -114,6 +114,7 @@ from laboutik.utils.test_helpers import reset_carte
 from laboutik.views import _creer_lignes_articles_cascade, _extraire_articles_du_panier
 from fabriques_panier import (
     configuration_modifiee,
+    creer_adhesion,
     taches_celery_enregistrees,
 )
 from fabriques_vente import verifier_egalites
@@ -140,6 +141,7 @@ from test_caisse_ecrit_la_vente import (
     retrouver_la_vente_de_la_cle,
     seul_article_de_la_vente,
     solde_de_la_carte,
+    tag_de_la_carte_primaire_du_caissier,
 )
 from test_caisse_vider_carte_deux_fedow import (
     creer_une_carte_client_sans_solde,
@@ -385,6 +387,11 @@ def recharger_une_carte_en_especes(lieu):
         asset=monnaie_locale_du_lieu(lieu),
     )
     point_de_vente = creer_un_point_de_vente([recharge.produit])
+    # Le caissier a le droit de recharger (« mode recharge » de sa carte primaire).
+    # / The cashier may top up (primary card in top-up mode).
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
     carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=0)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
@@ -397,6 +404,7 @@ def recharger_une_carte_en_especes(lieu):
         moyen_de_paiement="espece",
         autres_champs={
             "tag_id": carte_du_client.tag_id,
+            "tag_id_cm": tag_de_la_carte_primaire,
             "cle_idempotence_paiement": cle_d_idempotence,
         },
     )
@@ -1716,6 +1724,123 @@ def test_ajout_a_une_commande_ouverte_refuse_un_tarif_au_poids(lieu, sorte_de_ta
 
     assert reponse.status_code == 400, reponse.content.decode()[:400]
     assert not ArticleCommandeSauvegarde.objects.filter(price=article.tarif).exists()
+    assert table_et_commande.commande.articles.count() == 1
+
+
+# --------------------------------------------------------------------------
+# 21 bis — Recharge : seule une carte primaire en « mode recharge » recharge
+# / 21 bis — Top-up: only a primary card in top-up mode can top up
+# --------------------------------------------------------------------------
+
+
+def creer_une_recharge_en_euros(lieu):
+    """Un produit de recharge en euros (monnaie locale du lieu), à 10,00 €.
+    / A 10.00 € euro top-up product (the venue's local currency)."""
+    return creer_un_article_de_caisse(
+        "recharge euros",
+        prix_en_euros="10.00",
+        taux_tva="0.00",
+        methode_caisse=Product.RECHARGE_EUROS,
+        asset=monnaie_locale_du_lieu(lieu),
+    )
+
+
+def test_recharge_et_adhesion_meme_panier_acceptees(lieu):
+    """
+    Une recharge et une adhésion dans le même panier, avec une carte primaire en
+    mode recharge : le panier garde les deux articles.
+    / A top-up and a membership in the same cart, card in top-up mode: both kept.
+    """
+    recharge = creer_une_recharge_en_euros(lieu)
+    adhesion = creer_adhesion(prix="5.00")
+    point_de_vente = creer_un_point_de_vente([recharge.produit, adhesion.produit])
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
+    donnees_du_panier = QueryDict(mutable=True)
+    donnees_du_panier[f"repid-{cle_de_panier(recharge)}"] = "1"
+    donnees_du_panier[f"repid-{cle_de_panier(adhesion)}"] = "1"
+    donnees_du_panier["tag_id_cm"] = tag_de_la_carte_primaire
+
+    articles_du_panier = _extraire_articles_du_panier(donnees_du_panier, point_de_vente)
+
+    assert len(articles_du_panier) == 2
+
+
+def test_recharge_sans_mode_recharge_refusee_par_le_panier(lieu):
+    """
+    Une recharge dans le panier, avec une carte primaire sans mode recharge : le
+    panier est refusé (ValueError, rendue en message par les vues de paiement).
+    / A top-up with a card without top-up mode: the cart is refused.
+    """
+    recharge = creer_une_recharge_en_euros(lieu)
+    point_de_vente = creer_un_point_de_vente([recharge.produit])
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=False
+    )
+    donnees_du_panier = QueryDict(mutable=True)
+    donnees_du_panier[f"repid-{cle_de_panier(recharge)}"] = "1"
+    donnees_du_panier["tag_id_cm"] = tag_de_la_carte_primaire
+
+    with pytest.raises(ValueError, match="droit de recharger"):
+        _extraire_articles_du_panier(donnees_du_panier, point_de_vente)
+
+
+def test_commande_de_table_refuse_une_recharge(lieu):
+    """
+    Ouvrir une commande de table avec une recharge : refus (400). Une recharge se
+    fait au comptoir : la carte du client n'est pas là quand on prend la commande.
+    Rien n'est écrit.
+    / Opening a table order with a top-up: refused (400), nothing written.
+    """
+    recharge = creer_une_recharge_en_euros(lieu)
+    point_de_vente = creer_un_point_de_vente([recharge.produit])
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+
+    reponse = client_du_caissier.post(
+        "/laboutik/commande/ouvrir/",
+        data={
+            "uuid_pv": str(point_de_vente.uuid),
+            "articles": [
+                {
+                    "product_uuid": str(recharge.produit.uuid),
+                    "price_uuid": str(recharge.tarif.uuid),
+                    "qty": 1,
+                }
+            ],
+        },
+        content_type="application/json",
+    )
+
+    assert reponse.status_code == 400, reponse.content.decode()[:400]
+    assert not ArticleCommandeSauvegarde.objects.filter(price=recharge.tarif).exists()
+
+
+def test_ajout_a_une_commande_ouverte_refuse_une_recharge(lieu):
+    """
+    Une table a une commande ouverte avec un jus. Y ajouter une recharge : refus
+    (400). Rien n'est ajouté, le jus reste seul.
+    / Adding a top-up to an open order: refused (400), nothing added.
+    """
+    jus = creer_un_article_de_caisse("jus", prix_en_euros="3.50", taux_tva="20.00")
+    table_et_commande = creer_une_table_occupee_avec_sa_commande(jus, quantite=1)
+    recharge = creer_une_recharge_en_euros(lieu)
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+
+    reponse = client_du_caissier.post(
+        f"/laboutik/commande/ajouter/{table_et_commande.commande.uuid}/",
+        data=[
+            {
+                "product_uuid": str(recharge.produit.uuid),
+                "price_uuid": str(recharge.tarif.uuid),
+                "qty": 1,
+            }
+        ],
+        content_type="application/json",
+    )
+
+    assert reponse.status_code == 400, reponse.content.decode()[:400]
+    assert not ArticleCommandeSauvegarde.objects.filter(price=recharge.tarif).exists()
     assert table_et_commande.commande.articles.count() == 1
 
 

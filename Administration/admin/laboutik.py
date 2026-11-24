@@ -61,7 +61,7 @@ from laboutik.plan_comptable import (
     nom_de_la_monnaie,
     s_assurer_que_le_plan_existe,
 )
-from unfold.widgets import UnfoldAdminSelectWidget
+from unfold.widgets import UnfoldAdminRadioSelectWidget, UnfoldAdminSelectWidget
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +145,71 @@ class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
+class RadioAvecDescriptionWidget(UnfoldAdminRadioSelectWidget):
+    """
+    Boutons radio Unfold, avec une phrase d'explication sous chaque choix.
+    / Unfold radio buttons, with an explanation under each choice.
+
+    LOCALISATION : Administration/admin/laboutik.py
+
+    Gabarit d'un choix : admin/widgets/radio_option_avec_description.html
+    La description est reliee au bouton par aria-describedby :
+    le lecteur d'ecran la lit avec le libelle.
+    / The description is linked to the radio with aria-describedby.
+
+    :param descriptions_par_valeur: dict {valeur du choix: texte de la description}
+    """
+    option_template_name = "admin/widgets/radio_option_avec_description.html"
+
+    def __init__(self, descriptions_par_valeur, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.descriptions_par_valeur = descriptions_par_valeur
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs,
+        )
+
+        # On ajoute la description du choix, si elle existe
+        # / Add the choice description, if any
+        description_du_choix = self.descriptions_par_valeur.get(value, "")
+        option["description"] = description_du_choix
+
+        identifiant_du_bouton = option["attrs"].get("id")
+        if description_du_choix and identifiant_du_bouton:
+            option["attrs"]["aria-describedby"] = f"{identifiant_du_bouton}-description"
+
+        return option
+
+
+# Types de point de vente proposes dans l'admin, avec leur explication.
+# Ne sont PAS proposes :
+# - ADHESION : il se comporte comme DIRECT. Les adhesions se choisissent
+#   dans la liste « Produits », sur n'importe quel point de vente.
+# - AVANCE : le mode commande restaurant n'est pas encore code.
+# - TIREUSE : le point de vente d'une tireuse est cree tout seul avec la tireuse
+#   (controlvanne/signals.py).
+# / POS types offered in the admin, with their explanation.
+#   ADHESION behaves like DIRECT, AVANCE is not coded, TIREUSE is auto-created.
+DESCRIPTIONS_DES_TYPES_DE_POINT_DE_VENTE = {
+    PointDeVente.DIRECT: _(
+        "Vend les produits choisis dans la liste « Produits », plus bas : "
+        "boissons, nourriture, adhésions… Pour un bar, une buvette, une boutique ou un accueil."
+    ),
+    PointDeVente.CASHLESS: _(
+        "Comme Direct, avec trois différences. "
+        "1) Pour chaque vente, la caisse demande la carte du client avant le paiement. "
+        "2) Le caissier voit le bouton « Recharger » quand il vérifie une carte. "
+        "3) Une nouvelle monnaie ajoute sa recharge à cette caisse. "
+        "Les recharges des monnaies plus anciennes se choisissent dans « Produits », plus bas."
+    ),
+    PointDeVente.BILLETTERIE: _(
+        "Pour vendre des billets sur place. Les tarifs des événements à venir "
+        "s'affichent tout seuls, en plus des produits de la liste « Produits »."
+    ),
+}
+
+
 class PointDeVenteForm(forms.ModelForm):
     """Formulaire pour les points de vente avec selecteur visuel d'icones.
     Form for points of sale with visual icon picker.
@@ -157,9 +222,42 @@ class PointDeVenteForm(forms.ModelForm):
         widget=IconPickerWidget(),
     )
 
+    comportement = forms.ChoiceField(
+        label=_("Type de caisse"),
+        help_text=_(
+            "Quel que soit le type, la caisse propose toujours les produits "
+            "de la liste « Produits »."
+        ),
+        widget=RadioAvecDescriptionWidget(
+            descriptions_par_valeur=DESCRIPTIONS_DES_TYPES_DE_POINT_DE_VENTE,
+        ),
+    )
+
     class Meta:
         model = PointDeVente
         fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Les choix proposes : ceux qui ont une description.
+        # / Offered choices: the ones with a description.
+        choix_proposes = []
+        for valeur, libelle in PointDeVente.COMPORTEMENT_CHOICES:
+            if valeur in DESCRIPTIONS_DES_TYPES_DE_POINT_DE_VENTE:
+                choix_proposes.append((valeur, libelle))
+
+        # Un point de vente existant peut deja avoir un type non propose
+        # (Adhesions, Avance). On le garde dans la liste pour lui seul :
+        # sinon l'enregistrement serait refuse ou changerait son type.
+        # / An existing POS may already have a type that is not offered.
+        #   Keep it in the list for this POS only, so saving never changes it.
+        type_actuel = self.instance.comportement
+        point_de_vente_existant = not self.instance._state.adding
+        if point_de_vente_existant and type_actuel not in DESCRIPTIONS_DES_TYPES_DE_POINT_DE_VENTE:
+            choix_proposes.append((type_actuel, self.instance.get_comportement_display()))
+
+        self.fields["comportement"].choices = choix_proposes
 
 
 @admin.register(PointDeVente, site=staff_admin_site)
@@ -829,7 +927,7 @@ class CartePrimaireAdminForm(forms.ModelForm):
 
     class Meta:
         model = CartePrimaire
-        fields = ('carte', 'edit_mode', 'points_de_vente')
+        fields = ('carte', 'edit_mode', 'mode_recharge', 'points_de_vente')
 
     def clean(self):
         donnees_nettoyees = super().clean()
@@ -920,8 +1018,8 @@ class CartePrimaireAdmin(ModelAdmin):
     warn_unsaved_form = True
     form = CartePrimaireAdminForm
 
-    list_display = ('carte', 'edit_mode', 'datetime', 'get_user_card')
-    list_filter = ['edit_mode']
+    list_display = ('carte', 'edit_mode', 'mode_recharge', 'datetime', 'get_user_card')
+    list_filter = ['edit_mode', 'mode_recharge']
     search_fields = ['carte__tag_id', 'carte__number']
     filter_horizontal = ('points_de_vente',)
 
@@ -945,6 +1043,7 @@ class CartePrimaireAdmin(ModelAdmin):
                 'carte',
                 'get_user_card',
                 'edit_mode',
+                'mode_recharge',
                 'points_de_vente',
             ),
         }),

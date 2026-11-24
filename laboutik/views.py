@@ -671,7 +671,9 @@ def _retirer_les_tarifs_en_points_non_vendables(produit):
     produit.prix_euros = tarifs_en_euros_seulement
 
 
-def _construire_donnees_articles(point_de_vente_instance, events_billetterie=None):
+def _construire_donnees_articles(
+    point_de_vente_instance, events_billetterie=None, afficher_les_recharges=False
+):
     """
     Construit la liste de dicts articles au format attendu par les templates.
     Builds the list of article dicts in the format expected by templates.
@@ -682,6 +684,10 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
     _tarifs_vendables_a_la_caisse). Les produits sans tarif sont ignorés.
     Each product must have at least one POS-sellable price. Products without a
     price are skipped.
+
+    :param afficher_les_recharges: True si la carte primaire du caissier est en
+        « mode recharge ». Sinon, les tuiles de recharge ne sont pas construites.
+        / True when the cashier's primary card is in top-up mode.
 
     """
     # Prefetch filtré : les tarifs vendables a la caisse, les euros d'abord.
@@ -720,9 +726,13 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         if product.methode_caisse == Product.RECHARGE_TEMPS:
             continue
 
-        # Produits de recharge sans Asset lie, ou Asset archive/inactif → ne pas afficher
-        # / Top-up products without linked Asset, or archived/inactive Asset → skip
+        # Produits de recharge : pas de tuile si le caissier n'a pas le droit de
+        # recharger, ou si l'Asset lie manque, est archive ou inactif.
+        # / Top-up products: no tile without the top-up right, or without an
+        #   active, non-archived linked Asset.
         if product.methode_caisse in METHODES_RECHARGE:
+            if not afficher_les_recharges:
+                continue
             if (
                 product.asset is None
                 or product.asset.archive
@@ -1289,21 +1299,24 @@ def _verifier_carte_primaire_aupres_de_l_ancien_fedow(carte_primaire_obj):
     return None
 
 
-def _carte_primaire_a_un_point_de_vente_cashless(tag_id_carte_primaire):
+def _carte_primaire_peut_recharger(tag_id_carte_primaire):
     """
-    La carte primaire du caissier donne-t-elle acces a un point de vente cashless ?
-    / Does the cashier's primary card give access to a cashless POS?
+    La carte primaire du caissier a-t-elle le droit de recharger une carte cashless ?
+    / May the cashier's primary card top up a cashless card?
 
     LOCALISATION : laboutik/views.py
 
-    Regle metier : la zone « Recharger » de la popup check carte ne s'affiche
-    que si la carte primaire a au moins un point de vente CASHLESS.
-    Un caissier de bar sans PV cashless ne voit donc pas la recharge.
-    Sans carte primaire (acces admin par session), pas de recharge non plus.
-    / Business rule: the check card "Top up" zone only shows when the primary
-    card has at least one CASHLESS POS. No primary card: no top-up either.
+    Regle metier : le droit vient de la case « Mode recharge » de la carte
+    primaire (CartePrimaire.mode_recharge), lue EN BASE. Un point de vente
+    Cashless sur la carte ne donne pas ce droit.
+    Sans le droit : pas de zone « Recharger » au check carte, pas de tuile de
+    recharge sur la grille, et le serveur refuse toute recharge.
+    Sans carte primaire, ou carte inconnue : pas de droit.
+    / Business rule: the right comes from the primary card's "top-up mode" box,
+    read from the database. No primary card: no right.
 
-    Utilise par / Used by : PaiementViewSet.retour_carte()
+    Utilise par / Used by : PaiementViewSet.retour_carte(),
+    _extraire_articles_du_panier()
 
     :param tag_id_carte_primaire: tag_id de la carte primaire (str, peut etre vide)
     :return: bool
@@ -1315,9 +1328,7 @@ def _carte_primaire_a_un_point_de_vente_cashless(tag_id_carte_primaire):
     if erreur is not None:
         return False
 
-    return carte_primaire_obj.points_de_vente.filter(
-        comportement=PointDeVente.CASHLESS,
-    ).exists()
+    return carte_primaire_obj.mode_recharge
 
 
 def obtenir_wallet_carte_depuis_fedow(carte):
@@ -2627,12 +2638,10 @@ def _produits_de_recharge_du_lieu():
     REGLE (decision du 2026-09-18) : la recharge est possible depuis TOUS les
     points de vente, pas seulement ceux qui contiennent le produit (Cashless).
     La vente reste enregistree sur le point de vente ou elle a lieu.
-    MAIS (decision du 2026-09-29) : le check carte ne propose la zone
-    « Recharger » que si la carte primaire du caissier a au moins un point
-    de vente cashless (voir _carte_primaire_a_un_point_de_vente_cashless).
-    / Top-ups are allowed from EVERY POS, not only those holding the product.
-    BUT the check card only shows the "Top up" zone when the primary card
-    has a cashless POS.
+    MAIS : seul un caissier en « mode recharge » peut recharger (voir
+    _carte_primaire_peut_recharger).
+    / Top-ups are allowed from EVERY POS, not only those holding the product,
+    but only for a cashier in top-up mode.
 
     Un produit est retenu s'il est publie, non archive, et lie a un Asset
     actif et non archive (meme regle que l'ecran de vente).
@@ -2683,7 +2692,7 @@ def _construire_contexte_recharge(
     recalculee ici (HTMX, pas d'etat cote JS) :
     1. Choisir QUOI : une tuile par produit de recharge du lieu
        (monnaie locale RE, cadeau RC, temps TM), depuis n'importe quel PV,
-       si la carte primaire a un PV cashless (sinon retour_carte passe None).
+       si la carte primaire est en mode recharge (sinon retour_carte passe None).
     2. Choisir COMBIEN : les tarifs du produit (1, 5, 10, Libre...).
     3. Montant libre : un champ de saisie (seulement si le tarif est libre).
     4. Confirmer : le montant, le solde apres recharge, puis
@@ -2699,8 +2708,8 @@ def _construire_contexte_recharge(
 
     :param carte: CarteCashless scannee
     :param point_de_vente: PointDeVente courant, ou None (pas de recharge alors).
-        retour_carte() passe None si la carte primaire n'a aucun PV cashless
-        (voir _carte_primaire_a_un_point_de_vente_cashless).
+        retour_carte() passe None si la carte primaire n'est pas en mode recharge
+        (voir _carte_primaire_peut_recharger).
     :param uuid_produit_choisi: uuid (str) du produit choisi a l'etape 1
     :param uuid_prix_choisi: uuid (str) du tarif choisi a l'etape 2
     :param montant_libre_saisi: centimes (int) valides par le serializer, ou None
@@ -3614,8 +3623,16 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # --- Construire les données articles et catégories ---
         # --- Build article and category data ---
+        # Les tuiles de recharge ne s'affichent que pour une carte primaire en
+        # « mode recharge ». La carte est deja chargee : pas de requete en plus.
+        # / Top-up tiles only show for a primary card in top-up mode.
+        la_carte_primaire_peut_recharger = (
+            carte_primaire_obj is not None and carte_primaire_obj.mode_recharge
+        )
         articles = _construire_donnees_articles(
-            pv, events_billetterie=events_billetterie
+            pv,
+            events_billetterie=events_billetterie,
+            afficher_les_recharges=la_carte_primaire_peut_recharger,
         )
         categories = _construire_donnees_categories(
             pv, events_billetterie=events_billetterie
@@ -6713,6 +6730,18 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
                 f"Produit {produit.name} (recharge temps) refusé : fonction désactivée"
             )
             continue
+
+        # Une recharge n'est acceptee que si la carte primaire du caissier est en
+        # « mode recharge », LU EN BASE. Sans ce controle, un POST force rechargerait
+        # une carte sans le droit : l'ecran cache la recharge, il ne l'interdit pas.
+        # Le controle est dans la boucle : un panier sans recharge ne fait aucune
+        # requete de plus.
+        # / A top-up is accepted only when the cashier's primary card is in top-up
+        #   mode, read from the database.
+        if produit.methode_caisse in METHODES_RECHARGE:
+            tag_id_carte_primaire = donnees_post.get("tag_id_cm", "")
+            if not _carte_primaire_peut_recharger(tag_id_carte_primaire):
+                raise ValueError(_("Cette carte primaire n'a pas le droit de recharger."))
 
         _retirer_les_tarifs_en_points_non_vendables(produit)
 
@@ -13890,13 +13919,13 @@ class PaiementViewSet(viewsets.ViewSet):
         # 6. Zone « Recharger » : les produits de recharge du point de vente courant.
         #    uuid_pv et tag_id_cm viennent de #addition-form (hx-include sur
         #    #form-check-nfc, voir hx_check_card.html).
-        #    La zone ne s'affiche que si la carte primaire a un PV cashless,
+        #    La zone ne s'affiche que si la carte primaire est en mode recharge,
         #    et seulement avec un PV valide.
         # 6. "Top up" zone: the current POS top-up products. uuid_pv and tag_id_cm
-        #    come from #addition-form. Shown only if the primary card has a
-        #    cashless POS, and only with a valid POS.
+        #    come from #addition-form. Shown only if the primary card is in
+        #    top-up mode, and only with a valid POS.
         tag_id_carte_primaire = request.POST.get("tag_id_cm", "").strip().upper()
-        la_recharge_est_permise = _carte_primaire_a_un_point_de_vente_cashless(
+        la_recharge_est_permise = _carte_primaire_peut_recharger(
             tag_id_carte_primaire
         )
 
@@ -15192,6 +15221,26 @@ class CommandeViewSet(viewsets.ViewSet):
                     status=400,
                 )
 
+            # Une recharge se fait au comptoir, carte du client en main : une
+            # commande de table ne la porte jamais. payer_commande ne passe pas par
+            # la garde du « mode recharge » (_extraire_articles_du_panier) : sans ce
+            # refus, une recharge entrerait par la table.
+            # / A top-up is done at the counter, never via a table order.
+            if produit.methode_caisse in METHODES_RECHARGE:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Une recharge se fait au comptoir, pas depuis une commande."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=400,
+                )
+
             # Un tarif au poids, au volume ou à prix libre a besoin d'une saisie (le
             # poids, le montant) qu'une commande de table ne porte pas : refus.
             # / A weight / volume / free price needs an input an order does not carry.
@@ -15376,6 +15425,25 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_type": "warning",
                 "msg_content": _(
                     "Un retour de consigne se règle au comptoir, pas depuis une commande."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        # Une recharge se fait au comptoir : elle n'entre jamais dans une commande
+        # (meme regle que ouvrir_commande). Refus AVANT toute ecriture.
+        # / A top-up never enters an order: refused before any write.
+        un_produit_est_une_recharge = Product.objects.filter(
+            uuid__in=uuids_des_produits_demandes,
+            methode_caisse__in=METHODES_RECHARGE,
+        ).exists()
+        if un_produit_est_une_recharge:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _(
+                    "Une recharge se fait au comptoir, pas depuis une commande."
                 ),
                 "selector_bt_retour": "#messages",
             }

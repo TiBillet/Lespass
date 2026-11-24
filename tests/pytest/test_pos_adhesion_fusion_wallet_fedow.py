@@ -62,7 +62,7 @@ from QrcodeCashless.models import CarteCashless
 from fedow_connect.models import FedowConfig
 from fedow_core.models import Asset, Token
 from fedow_core.services import AssetService
-from laboutik.models import PointDeVente
+from laboutik.models import CartePrimaire, PointDeVente
 
 
 # Solde porte par la carte anonyme, en centimes : 66,00 €.
@@ -825,6 +825,17 @@ class TestPosAdhesionFusionWalletFedow(FastTenantTestCase):
         tarif_dix_euros = produit_recharge.prices.get(prix=Decimal("10.00"))
         self.point_de_vente.products.add(produit_recharge)
 
+        # Le caissier a le droit de recharger : sa carte primaire est en « mode
+        # recharge ». Sans lui, la caisse refuse la recharge.
+        # / The cashier may top up: the primary card is in top-up mode.
+        carte_du_caissier = CarteCashless.objects.create(
+            tag_id="ADHCAIS1", number="ADHCAIS1", uuid=uuid_module.uuid4()
+        )
+        carte_primaire_du_caissier = CartePrimaire.objects.create(
+            carte=carte_du_caissier, mode_recharge=True
+        )
+        carte_primaire_du_caissier.points_de_vente.add(self.point_de_vente)
+
         wallet_fedow_du_user = Wallet.objects.create(
             uuid=uuid_module.uuid4(), origin=self.tenant, name="Wallet Fedow recharge"
         )
@@ -840,6 +851,7 @@ class TestPosAdhesionFusionWalletFedow(FastTenantTestCase):
             f"repid-{self.produit_adhesion.uuid}--{self.prix_adhesion.uuid}": "1",
             f"repid-{produit_recharge.uuid}--{tarif_dix_euros.uuid}": "1",
             "tag_id": self.carte_anonyme.tag_id,
+            "tag_id_cm": carte_du_caissier.tag_id,
             "email_adhesion": self.email_adherent,
             "prenom_adhesion": "Alice",
             "nom_adhesion": "Testeuse",

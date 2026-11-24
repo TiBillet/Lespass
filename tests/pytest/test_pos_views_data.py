@@ -547,7 +547,9 @@ def test_bt_groupement_par_methode_caisse(tenant):
         )
         pdv.products.add(product_vente, product_recharge)
 
-        articles = _construire_donnees_articles(pdv)
+        # Caissier en « mode recharge » : sans lui, la tuile de recharge n'est pas construite.
+        # / Cashier in top-up mode: without it, the top-up tile is not built.
+        articles = _construire_donnees_articles(pdv, afficher_les_recharges=True)
 
         art_vente = next((a for a in articles if 'VENTE' in a['name']), None)
         art_recharge = next((a for a in articles if 'RECHARGE' in a['name']), None)

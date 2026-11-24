@@ -94,6 +94,7 @@ from test_caisse_ecrit_la_vente import (
     nouvelle_cle_d_idempotence,
     payer_le_reste_avec_une_deuxieme_carte,
     retrouver_la_vente_de_la_cle,
+    tag_de_la_carte_primaire_du_caissier,
 )
 from test_caisse_ouverture_ancien_fedow import (
     ouvrir_la_caisse,
@@ -578,8 +579,9 @@ def scanner_pour_payer_en_nfc(preparation, tag_id):
 def preparer_une_recharge(lieu):
     """
     Une recharge de 10 € en monnaie locale du lieu (celle que la caisse lit), au point
-    de vente, et le caissier.
-    / A 10 € top-up in the venue's local currency, and the cashier.
+    de vente, et le caissier. Sa carte primaire est en « mode recharge » : il a le
+    droit de recharger.
+    / A 10 € top-up in the venue's local currency, and the cashier (top-up mode).
     """
     monnaie_locale = monnaie_locale_du_lieu(lieu)
     recharge = creer_un_article_de_caisse(
@@ -589,11 +591,15 @@ def preparer_une_recharge(lieu):
         methode_caisse=Product.RECHARGE_EUROS,
         asset=monnaie_locale,
     )
+    point_de_vente = creer_un_point_de_vente([recharge.produit])
     return SimpleNamespace(
         lieu=lieu,
         monnaie_locale=monnaie_locale,
         recharge=recharge,
-        point_de_vente=creer_un_point_de_vente([recharge.produit]),
+        point_de_vente=point_de_vente,
+        tag_de_la_carte_primaire=tag_de_la_carte_primaire_du_caissier(
+            point_de_vente, mode_recharge=True
+        ),
         client_http=client_du_caissier(lieu),
     )
 
@@ -607,7 +613,10 @@ def scanner_pour_une_recharge_en_especes(preparation, tag_id):
         preparation.recharge,
         quantite=1,
         moyen_de_paiement="espece",
-        autres_champs={"tag_id": tag_id},
+        autres_champs={
+            "tag_id": tag_id,
+            "tag_id_cm": preparation.tag_de_la_carte_primaire,
+        },
     )
 
 
@@ -620,7 +629,10 @@ def scanner_pour_une_recharge_par_cheque(preparation, tag_id):
         preparation.recharge,
         quantite=1,
         moyen_de_paiement="CH",
-        autres_champs={"tag_id": tag_id},
+        autres_champs={
+            "tag_id": tag_id,
+            "tag_id_cm": preparation.tag_de_la_carte_primaire,
+        },
     )
 
 

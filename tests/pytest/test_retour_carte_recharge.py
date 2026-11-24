@@ -10,8 +10,9 @@ CE QUI EST TESTE / WHAT IS TESTED
 1. retour_carte() propose les produits de recharge du LIEU, depuis n'importe
    quel point de vente (uuid_pv envoye par hx_check_card.html) — meme un PV
    qui ne contient aucun produit de recharge, comme le Bar. Rien sans PV.
-   Regle : la zone ne s'affiche que si la carte primaire (tag_id_cm) a au
-   moins un point de vente CASHLESS.
+   Regle : la zone ne s'affiche que si la carte primaire (tag_id_cm) est en
+   « mode recharge » (CartePrimaire.mode_recharge). Un point de vente
+   Cashless sur la carte ne suffit pas.
 2. recharge_carte() renvoie la zone a chaque etape : QUOI, COMBIEN,
    MONTANT LIBRE (valide ou non), CONFIRMER.
 3. Les champs de l'etape CONFIRMER, postes tels quels vers les vues
@@ -161,7 +162,7 @@ def point_de_vente(carte_caissier, produits_de_recharge):
     Un point de vente comme le Bar : il accepte les especes mais ne contient
     AUCUN produit de recharge. La recharge doit quand meme etre proposee et
     acceptee (regle : recharge depuis tous les PV), a condition que la carte du
-    caissier ait aussi un PV cashless (fixture point_de_vente_cashless_du_caissier).
+    caissier soit en mode recharge (fixture carte_caissier_en_mode_recharge).
     La carte du caissier y a acces.
     / A POS like the Bar: accepts cash but holds NO top-up product. Top-ups
     must still be offered and accepted (rule: top-up from every POS).
@@ -186,12 +187,31 @@ def point_de_vente(carte_caissier, produits_de_recharge):
 
 
 @pytest.fixture
+def carte_caissier_en_mode_recharge(carte_caissier, point_de_vente):
+    """
+    La carte primaire du caissier passe en « mode recharge » pendant le test.
+    Sans lui, la zone « Recharger » est cachee et le serveur refuse la recharge.
+    La base de dev n'a pas de rollback : la case est remise a faux a la fin.
+    / The cashier's primary card is in top-up mode during the test, reset after.
+    """
+    from laboutik.models import CartePrimaire
+
+    with schema_context("lespass"):
+        carte_primaire = CartePrimaire.objects.get(carte=carte_caissier)
+        carte_primaire.mode_recharge = True
+        carte_primaire.save(update_fields=["mode_recharge"])
+        yield carte_primaire
+        carte_primaire.mode_recharge = False
+        carte_primaire.save(update_fields=["mode_recharge"])
+
+
+@pytest.fixture
 def point_de_vente_cashless_du_caissier(carte_caissier, point_de_vente):
     """
     Un point de vente CASHLESS donne a la carte du caissier.
-    Sans lui, la zone « Recharger » ne s'affiche pas.
+    Il ne donne PAS le droit de recharger : seul le mode recharge le donne.
     Cache (hidden) pour ne pas apparaitre dans la vraie caisse.
-    / A CASHLESS POS given to the cashier card. Without it, no "Top up" zone.
+    / A CASHLESS POS given to the cashier card. It does NOT grant the top-up right.
     Hidden so it does not show up in the real POS.
     """
     from laboutik.models import CartePrimaire, PointDeVente
@@ -204,8 +224,8 @@ def point_de_vente_cashless_du_caissier(carte_caissier, point_de_vente):
         carte_primaire = CartePrimaire.objects.get(carte=carte_caissier)
         carte_primaire.points_de_vente.add(pv_cashless)
         yield pv_cashless
-        # Retire le PV de la carte : les autres tests partent d'une carte sans PV cashless
-        # / Remove the POS from the card: other tests start without a cashless POS
+        # Retire le PV de la carte : il ne doit pas rester dans la base de dev
+        # / Remove the POS from the card: it must not stay in the dev DB
         carte_primaire.points_de_vente.remove(pv_cashless)
         # Le signal y a rattache les produits de recharge : on les retire
         # / The signal attached top-up products to it: remove them
@@ -303,7 +323,7 @@ def _champs_du_formulaire_de_recharge(contenu_html):
 def test_retour_carte_avec_point_de_vente_affiche_les_tuiles_de_recharge(
     tenant_lespass,
     point_de_vente,
-    point_de_vente_cashless_du_caissier,
+    carte_caissier_en_mode_recharge,
     carte_caissier,
     carte_client,
     produits_de_recharge,
@@ -346,13 +366,18 @@ def test_retour_carte_sans_point_de_vente_ne_propose_pas_de_recharge(
     assert 'data-testid="recharge-produit-1"' not in contenu
 
 
-def test_retour_carte_sans_pv_cashless_sur_la_carte_primaire_masque_la_recharge(
-    tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
+def test_retour_carte_avec_pv_cashless_mais_sans_mode_recharge_masque_la_recharge(
+    tenant_lespass,
+    point_de_vente,
+    point_de_vente_cashless_du_caissier,
+    carte_caissier,
+    carte_client,
+    produits_de_recharge,
 ):
     """
-    La carte du caissier n'a que le PV de test (pas cashless) : pas de zone
-    « Recharger », meme avec un PV valide.
-    / The cashier card only has a non-cashless POS: no "Top up" zone.
+    La carte du caissier a un point de vente Cashless, mais pas le mode recharge :
+    pas de zone « Recharger ».
+    / The cashier card has a Cashless POS but no top-up mode: no "Top up" zone.
     """
     client_http = _client_connecte_admin(tenant_lespass)
     reponse = client_http.post(
@@ -372,7 +397,7 @@ def test_retour_carte_sans_pv_cashless_sur_la_carte_primaire_masque_la_recharge(
 def test_retour_carte_sans_carte_primaire_masque_la_recharge(
     tenant_lespass,
     point_de_vente,
-    point_de_vente_cashless_du_caissier,
+    carte_caissier_en_mode_recharge,
     carte_client,
     produits_de_recharge,
 ):
@@ -536,7 +561,12 @@ def test_recharge_montant_libre_avec_virgule_donne_des_centimes(
 
 
 def test_recharge_payee_en_especes_credite_la_carte(
-    tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
+    tenant_lespass,
+    point_de_vente,
+    carte_caissier,
+    carte_caissier_en_mode_recharge,
+    carte_client,
+    produits_de_recharge,
 ):
     produit_local = produits_de_recharge["produit_local"]
     tarif_5_euros = _tarif(produit_local, montant_en_euros=5)
@@ -623,7 +653,12 @@ def test_confirmer_en_mode_recharge_soumet_le_formulaire_de_recharge(
 
 
 def test_recharge_especes_avec_somme_donnee_a_virgule_credite_la_carte(
-    tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
+    tenant_lespass,
+    point_de_vente,
+    carte_caissier,
+    carte_caissier_en_mode_recharge,
+    carte_client,
+    produits_de_recharge,
 ):
     """
     Le JS envoie « somme x 100 », parfois un nombre a virgule (999.9999999).
@@ -654,7 +689,12 @@ def test_recharge_especes_avec_somme_donnee_a_virgule_credite_la_carte(
 
 
 def test_recharge_offerte_credite_la_carte_sans_paiement(
-    tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
+    tenant_lespass,
+    point_de_vente,
+    carte_caissier,
+    carte_caissier_en_mode_recharge,
+    carte_client,
+    produits_de_recharge,
 ):
     produit_cadeau = produits_de_recharge["produit_cadeau"]
     tarif_10 = _tarif(produit_cadeau, montant_en_euros=10)
@@ -686,6 +726,83 @@ def test_recharge_offerte_credite_la_carte_sans_paiement(
             carte_client.wallet_ephemere, produits_de_recharge["asset_cadeau"]
         )
     assert solde_cadeau == 1000
+
+
+def test_payer_une_recharge_sans_mode_recharge_refuse(
+    tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
+):
+    """
+    La carte du caissier n'est pas en mode recharge (droit retiré pendant que la
+    popup était ouverte, ou POST forcé). `payer` refuse la recharge : réponse 400
+    avec le message, aucune ligne de vente, aucun crédit.
+    / The cashier card is not in top-up mode: payer refuses with a 400, no sale
+    line, no credit.
+    """
+    produit_local = produits_de_recharge["produit_local"]
+    tarif_5_euros = _tarif(produit_local, montant_en_euros=5)
+    client_http = _client_connecte_admin(tenant_lespass)
+    with schema_context("lespass"):
+        nombre_de_lignes_avant = LigneArticle.objects.filter(
+            pricesold__price__product=produit_local
+        ).count()
+
+    reponse_confirmation = client_http.get(
+        URL_RECHARGE_CARTE,
+        {
+            "tag_id": carte_client.tag_id,
+            "uuid_pv": str(point_de_vente.uuid),
+            "produit": str(produit_local.uuid),
+            "prix": str(tarif_5_euros.uuid),
+        },
+    )
+    champs = _champs_du_formulaire_de_recharge(reponse_confirmation.content.decode())
+    champs["moyen_paiement"] = "espece"
+    champs["tag_id_cm"] = carte_caissier.tag_id
+    reponse_paiement = client_http.post(URL_PAYER, champs)
+
+    assert reponse_paiement.status_code == 400
+    assert "droit de recharger" in reponse_paiement.content.decode()
+    with schema_context("lespass"):
+        nombre_de_lignes_apres = LigneArticle.objects.filter(
+            pricesold__price__product=produit_local
+        ).count()
+        solde_local = WalletService.obtenir_solde(
+            carte_client.wallet_ephemere, produits_de_recharge["asset_local"]
+        )
+    assert nombre_de_lignes_apres == nombre_de_lignes_avant
+    assert solde_local == 0
+
+
+def test_offrir_une_recharge_sans_mode_recharge_ne_credite_rien(
+    tenant_lespass, point_de_vente, carte_caissier, carte_client, produits_de_recharge
+):
+    """
+    « Offrir » une recharge cadeau avec une carte de caissier sans mode recharge :
+    la carte du client n'est pas créditée.
+    / "Offer" a gift top-up without top-up mode: the client card gets nothing.
+    """
+    produit_cadeau = produits_de_recharge["produit_cadeau"]
+    tarif_10 = _tarif(produit_cadeau, montant_en_euros=10)
+    client_http = _client_connecte_admin(tenant_lespass)
+
+    reponse_confirmation = client_http.get(
+        URL_RECHARGE_CARTE,
+        {
+            "tag_id": carte_client.tag_id,
+            "uuid_pv": str(point_de_vente.uuid),
+            "produit": str(produit_cadeau.uuid),
+            "prix": str(tarif_10.uuid),
+        },
+    )
+    champs = _champs_du_formulaire_de_recharge(reponse_confirmation.content.decode())
+    champs["tag_id_cm"] = carte_caissier.tag_id
+    client_http.post(URL_IDENTIFIER_CLIENT, champs)
+
+    with schema_context("lespass"):
+        solde_cadeau = WalletService.obtenir_solde(
+            carte_client.wallet_ephemere, produits_de_recharge["asset_cadeau"]
+        )
+    assert solde_cadeau == 0
 
 
 def test_recharge_montant_libre_affiche_le_pave_numerique(

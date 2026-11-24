@@ -833,7 +833,8 @@ class PointDeVente(models.Model):
     # Type du point de vente — determine le chargement automatique des articles.
     # DIRECT : articles du M2M products uniquement (bar, restaurant, etc.)
     # ADHESION : charge automatiquement tous les Product(categorie_article=ADHESION)
-    # CASHLESS : charge automatiquement toutes les recharges
+    # CASHLESS : charge automatiquement toutes les recharges (tuiles visibles seulement
+    #            pour une carte primaire en mode recharge)
     # BILLETTERIE : construit les articles depuis les evenements futurs
     # AVANCE : mode commande restaurant (reserve, pas code)
     # Les articles du M2M products sont toujours charges EN PLUS du chargement automatique.
@@ -1006,6 +1007,19 @@ class CartePrimaire(models.Model):
         default=False,
         verbose_name=_("Edit mode"),
         help_text=_("Allow this operator to modify products and prices from the POS interface."),
+    )
+    # Mode recharge : autorise ce caissier à recharger une carte cashless.
+    # Sans lui, la zone « Recharger » du check carte et les tuiles de recharge de la
+    # grille sont cachées, et le serveur refuse toute recharge.
+    # Il est indépendant du mode gérant : un bénévole peut recharger sans modifier les prix.
+    # / Top-up mode: allows this cashier to top up a cashless card. Independent of edit mode.
+    mode_recharge = models.BooleanField(
+        default=False,
+        verbose_name=_("Mode recharge"),
+        help_text=_(
+            "Autorise ce caissier à recharger les cartes cashless, depuis le check "
+            "carte et depuis les tuiles de recharge."
+        ),
     )
     datetime = models.DateTimeField(
         auto_now_add=True,

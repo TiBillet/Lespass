@@ -194,8 +194,11 @@ class TestLignesHorsArgent(FastTenantTestCase):
     # Utilitaires
     # ------------------------------------------------------------------
 
-    def _payer(self, moyen, cle_article, quantite, total_centimes, tag_id=None):
+    def _payer(
+        self, moyen, cle_article, quantite, total_centimes, tag_id=None, tag_id_cm=None
+    ):
         """Encaisse par la VRAIE route de paiement, reseau federe coupe.
+        `tag_id_cm` : la carte primaire du caissier (obligatoire pour une recharge).
         / Collects through the REAL payment route, federated network off."""
         donnees = {
             "uuid_pv": str(self.point_de_vente.uuid),
@@ -206,6 +209,8 @@ class TestLignesHorsArgent(FastTenantTestCase):
         }
         if tag_id is not None:
             donnees["tag_id"] = tag_id
+        if tag_id_cm is not None:
+            donnees["tag_id_cm"] = tag_id_cm
         with (
             mock.patch("laboutik.views.FedowConfig") as configuration_fedow,
             mock.patch("laboutik.views.FedowAPI"),
@@ -444,12 +449,16 @@ class TestLignesHorsArgent(FastTenantTestCase):
         """Corriger une recharge cadeau en especes ferait apparaitre de l'argent
         jamais encaisse : refuse.
         / Correcting a gift top-up into cash would create money: refused."""
+        carte_du_caissier = self._carte_primaire(
+            "REC1AAAA", mode_gerant=False, mode_recharge=True
+        )
         self._payer(
             "nfc",
             self._cle_du_tarif(self.recharge_cadeau, "10"),
             1,
             1000,
             tag_id=self.carte.tag_id,
+            tag_id_cm=carte_du_caissier.tag_id,
         )
         ligne_offerte = LigneArticle.objects.get(
             source_offert=LigneArticle.SourceOffert.OFFRIR
@@ -482,14 +491,15 @@ class TestLignesHorsArgent(FastTenantTestCase):
     # Bouton OFFRIR en mode gerant / GIFT button in manager mode
     # ------------------------------------------------------------------
 
-    def _carte_primaire(self, tag_id, mode_gerant):
+    def _carte_primaire(self, tag_id, mode_gerant, mode_recharge=False):
         """Une carte primaire (carte du caissier) avec acces au point de vente.
+        `mode_recharge=True` : le caissier a le droit de recharger.
         / A primary card (cashier card) with access to the point of sale."""
         from laboutik.models import CartePrimaire
 
         carte_du_caissier = CarteCashless.objects.create(tag_id=tag_id, number=tag_id)
         carte_primaire = CartePrimaire.objects.create(
-            carte=carte_du_caissier, edit_mode=mode_gerant
+            carte=carte_du_caissier, edit_mode=mode_gerant, mode_recharge=mode_recharge
         )
         carte_primaire.points_de_vente.add(self.point_de_vente)
         return carte_du_caissier

@@ -1320,7 +1320,7 @@ class Command(BaseCommand):
             )
             carte_primaire_cm, carte_primaire_cm_creee = CartePrimaire.objects.get_or_create(
                 carte=carte_cm,
-                defaults={"edit_mode": True},
+                defaults={"edit_mode": True, "mode_recharge": True},
             )
 
             # Une carte primaire créée ici est déclarée à l'ancien Fedow (lieu relié

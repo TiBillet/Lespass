@@ -593,6 +593,11 @@ def test_recharge_seule_hors_ca_tva_zero(lieu):
         asset=monnaie_locale,
     )
     point_de_vente = creer_un_point_de_vente([recharge.produit])
+    # Le caissier a le droit de recharger (« mode recharge » de sa carte primaire).
+    # / The cashier may top up (primary card in top-up mode).
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
     carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=0)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
@@ -605,6 +610,7 @@ def test_recharge_seule_hors_ca_tva_zero(lieu):
         moyen_de_paiement="espece",
         autres_champs={
             "tag_id": carte_du_client.tag_id,
+            "tag_id_cm": tag_de_la_carte_primaire,
             "cle_idempotence_paiement": cle_d_idempotence,
         },
     )
@@ -654,6 +660,11 @@ def test_biere_et_recharge_meme_panier_une_seule_vente(lieu):
         asset=monnaie_locale,
     )
     point_de_vente = creer_un_point_de_vente([biere.produit, recharge.produit])
+    # Le caissier a le droit de recharger (« mode recharge » de sa carte primaire).
+    # / The cashier may top up (primary card in top-up mode).
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
     carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=0)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
@@ -668,7 +679,10 @@ def test_biere_et_recharge_meme_panier_une_seule_vente(lieu):
         champs_du_panier,
         moyen_de_paiement="espece",
         cle_d_idempotence=cle_d_idempotence,
-        autres_champs={"tag_id": carte_du_client.tag_id},
+        autres_champs={
+            "tag_id": carte_du_client.tag_id,
+            "tag_id_cm": tag_de_la_carte_primaire,
+        },
     )
 
     assert reponse.status_code == 200
@@ -720,6 +734,11 @@ def test_recharge_cadeau_offerte_en_totalite(lieu):
         asset=monnaie_cadeau,
     )
     point_de_vente = creer_un_point_de_vente([recharge_cadeau.produit])
+    # Le caissier a le droit de recharger (« mode recharge » de sa carte primaire).
+    # / The cashier may top up (primary card in top-up mode).
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
     carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=0)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
 
@@ -728,6 +747,7 @@ def test_recharge_cadeau_offerte_en_totalite(lieu):
         {
             "uuid_pv": str(point_de_vente.uuid),
             "tag_id": carte_du_client.tag_id,
+            "tag_id_cm": tag_de_la_carte_primaire,
             f"repid-{cle_de_panier(recharge_cadeau)}": "1",
         },
     )
@@ -788,6 +808,11 @@ def test_recharge_cadeau_melangee_a_d_autres_articles_refusee(lieu, moyen_de_pai
         asset=monnaie_cadeau,
     )
     point_de_vente = creer_un_point_de_vente([biere.produit, recharge_cadeau.produit])
+    # Le caissier a le droit de recharger (« mode recharge » de sa carte primaire).
+    # / The cashier may top up (primary card in top-up mode).
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
     # La carte porte de quoi payer la bière : un refus n'est donc pas un solde trop bas.
     # / The card can pay the beer: a refusal is not a low balance.
     carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=2000)
@@ -805,7 +830,10 @@ def test_recharge_cadeau_melangee_a_d_autres_articles_refusee(lieu, moyen_de_pai
         champs_du_panier,
         moyen_de_paiement=moyen_de_paiement,
         cle_d_idempotence=cle_d_idempotence,
-        autres_champs={"tag_id": carte_du_client.tag_id},
+        autres_champs={
+            "tag_id": carte_du_client.tag_id,
+            "tag_id_cm": tag_de_la_carte_primaire,
+        },
     )
 
     assert reponse.status_code == 400
@@ -840,6 +868,11 @@ def test_complement_refuse_le_melange_recharge_cadeau(lieu):
         asset=monnaie_cadeau,
     )
     point_de_vente = creer_un_point_de_vente([biere.produit, recharge_cadeau.produit])
+    # Le caissier a le droit de recharger (« mode recharge » de sa carte primaire).
+    # / The cashier may top up (primary card in top-up mode).
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
     carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=300)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
@@ -853,6 +886,7 @@ def test_complement_refuse_le_melange_recharge_cadeau(lieu):
             f"repid-{cle_de_panier(biere)}": "1",
             f"repid-{cle_de_panier(recharge_cadeau)}": "1",
             "tag_id_carte1": carte_du_client.tag_id,
+            "tag_id_cm": tag_de_la_carte_primaire,
             "moyen_complement": "espece",
             "given_sum": "0",
         },
@@ -891,6 +925,11 @@ def test_recharge_cadeau_seule_par_la_route_payer_aucun_reglement_d_argent(lieu)
         asset=monnaie_cadeau,
     )
     point_de_vente = creer_un_point_de_vente([recharge_cadeau.produit])
+    # Le caissier a le droit de recharger (« mode recharge » de sa carte primaire).
+    # / The cashier may top up (primary card in top-up mode).
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
     carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=0)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
@@ -903,6 +942,7 @@ def test_recharge_cadeau_seule_par_la_route_payer_aucun_reglement_d_argent(lieu)
         moyen_de_paiement="espece",
         autres_champs={
             "tag_id": carte_du_client.tag_id,
+            "tag_id_cm": tag_de_la_carte_primaire,
             "cle_idempotence_paiement": cle_d_idempotence,
         },
     )
@@ -1272,14 +1312,19 @@ def test_retour_consigne_gobelet_sans_prix_d_achat_cout_inconnu(lieu):
 # --------------------------------------------------------------------------
 
 
-def html_de_la_grille_de_la_caisse(client_du_caissier, point_de_vente):
+def html_de_la_grille_de_la_caisse(client_du_caissier, point_de_vente, tag_id_cm=None):
     """
     La page de la caisse d'un point de vente (la grille des tuiles), en texte.
     / The register page of a point of sale (the tile grid), as text.
+
+    :param tag_id_cm: tag de la carte primaire du caissier, ou None (pas de carte)
     """
+    parametres_de_la_page = {"uuid_pv": str(point_de_vente.uuid)}
+    if tag_id_cm is not None:
+        parametres_de_la_page["tag_id_cm"] = tag_id_cm
     reponse_de_la_grille = client_du_caissier.get(
         "/laboutik/caisse/point_de_vente/",
-        {"uuid_pv": str(point_de_vente.uuid)},
+        parametres_de_la_page,
     )
     assert reponse_de_la_grille.status_code == 200
     return reponse_de_la_grille.content.decode()
@@ -1350,6 +1395,60 @@ def test_tuile_retour_consigne_gobelet_sans_tarif_en_euros_masquee(lieu):
     assert not la_tuile_du_produit_est_affichee(
         html_de_la_grille, consigne.retour.produit
     )
+
+
+def test_tuile_de_recharge_visible_avec_le_mode_recharge(lieu):
+    """
+    Une carte primaire en « mode recharge » voit la tuile de recharge de la grille.
+    / A primary card in top-up mode sees the grid's top-up tile.
+    """
+    recharge = creer_un_article_de_caisse(
+        "recharge euros",
+        prix_en_euros="10.00",
+        taux_tva="20.00",
+        methode_caisse=Product.RECHARGE_EUROS,
+        asset=monnaie_locale_du_lieu(lieu),
+    )
+    point_de_vente = creer_un_point_de_vente([recharge.produit])
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+
+    html_de_la_grille = html_de_la_grille_de_la_caisse(
+        client_du_caissier, point_de_vente, tag_id_cm=tag_de_la_carte_primaire
+    )
+
+    assert la_tuile_du_produit_est_affichee(html_de_la_grille, recharge.produit)
+
+
+def test_tuile_de_recharge_masquee_sans_le_mode_recharge(lieu):
+    """
+    Une carte primaire sans « mode recharge » ne voit pas la tuile de recharge. La
+    tuile d'un article ordinaire du même point de vente est bien là : la grille est
+    donc affichée.
+    / A primary card without top-up mode does not see the top-up tile.
+    """
+    biere = creer_un_article_de_caisse("biere", prix_en_euros="5.00", taux_tva="20.00")
+    recharge = creer_un_article_de_caisse(
+        "recharge euros",
+        prix_en_euros="10.00",
+        taux_tva="20.00",
+        methode_caisse=Product.RECHARGE_EUROS,
+        asset=monnaie_locale_du_lieu(lieu),
+    )
+    point_de_vente = creer_un_point_de_vente([biere.produit, recharge.produit])
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=False
+    )
+    client_du_caissier = creer_un_administrateur_du_lieu(lieu)
+
+    html_de_la_grille = html_de_la_grille_de_la_caisse(
+        client_du_caissier, point_de_vente, tag_id_cm=tag_de_la_carte_primaire
+    )
+
+    assert la_tuile_du_produit_est_affichee(html_de_la_grille, biere.produit)
+    assert not la_tuile_du_produit_est_affichee(html_de_la_grille, recharge.produit)
 
 
 # --------------------------------------------------------------------------
@@ -1981,9 +2080,10 @@ def creer_une_carte_nfc_d_un_membre_sans_solde_local(lieu):
     return carte
 
 
-def tag_de_la_carte_primaire_du_caissier(point_de_vente):
+def tag_de_la_carte_primaire_du_caissier(point_de_vente, mode_recharge=False):
     """
     La carte primaire du caissier, autorisée sur ce point de vente, hors mode gérant.
+    Avec `mode_recharge=True`, le caissier a le droit de recharger une carte.
     La caisse envoie son tag (`tag_id_cm`) avec chaque paiement : l'ancien Fedow
     exige une carte primaire du lieu pour débiter le FED d'une carte.
     / The cashier's primary card, allowed on this point of sale. The register sends
@@ -2002,6 +2102,7 @@ def tag_de_la_carte_primaire_du_caissier(point_de_vente):
     carte_primaire = CartePrimaire.objects.create(
         carte=carte_du_caissier,
         edit_mode=False,
+        mode_recharge=mode_recharge,
     )
     carte_primaire.points_de_vente.add(point_de_vente)
     return tag_de_la_carte_primaire
@@ -2628,6 +2729,11 @@ def test_recharge_cadeau_seule_par_la_route_nfc_meme_vente_avec_identifiant(lieu
         asset=monnaie_cadeau_du_lieu(lieu),
     )
     point_de_vente = creer_un_point_de_vente([recharge_cadeau.produit])
+    # Le caissier a le droit de recharger (« mode recharge » de sa carte primaire).
+    # / The cashier may top up (primary card in top-up mode).
+    tag_de_la_carte_primaire = tag_de_la_carte_primaire_du_caissier(
+        point_de_vente, mode_recharge=True
+    )
     carte_du_client = creer_une_carte_nfc_chargee(lieu, solde_en_centimes=0)
     client_du_caissier = creer_un_administrateur_du_lieu(lieu)
     cle_d_idempotence = nouvelle_cle_d_idempotence()
@@ -2638,6 +2744,7 @@ def test_recharge_cadeau_seule_par_la_route_nfc_meme_vente_avec_identifiant(lieu
         {f"repid-{cle_de_panier(recharge_cadeau)}": "1"},
         carte_du_client,
         cle_d_idempotence,
+        tag_id_carte_primaire=tag_de_la_carte_primaire,
     )
 
     assert reponse.status_code == 200
