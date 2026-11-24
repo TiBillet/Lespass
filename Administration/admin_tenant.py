@@ -48,7 +48,8 @@ from Administration.admin import (  # noqa: F401
 # autodiscover, importing the module triggers the @admin.register calls.
 import pages.admin  # noqa: F401
 import datetime
-
+import io
+import zipfile
 import hmac
 import json
 from functools import partial
@@ -65,7 +66,7 @@ from django.urls import path, reverse, NoReverseMatch
 
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin
-from django.db.models import Model
+from django.db.models import Model, F, ExpressionWrapper, FloatField
 from django.forms import ValidationError
 from django.http import HttpRequest
 
@@ -4472,6 +4473,7 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         'name',
         # 'categorie',
         'display_valid_tickets_count',
+        'display_valid_tickets_percentage',
         'display_datetime_with_weekday',
         'published',
         'communication_envoyee',
@@ -4547,6 +4549,12 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
                 # / Preloaded here instead of one exists() per row: Unfold
                 #   renders every section of every row on every page load.
                 section_children_count=Count('children', distinct=True),
+            )
+            .annotate(
+                valid_tickets_percentage=ExpressionWrapper(
+                    100.0 * F("valid_tickets_count_annotated") / F("jauge_max") ,
+                    output_field=FloatField()
+                ),
             )
         )
 
@@ -4722,6 +4730,13 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
+
+    @display(description=_("Pourcentage de ticket valide"))
+    def display_valid_tickets_percentage(self, instance: Event):
+        # Use annotated value to avoid N+1; fallback to method if not present (e.g., detail page)
+        valid_tickets_percentage = round(getattr(instance, 'valid_tickets_percentage', None),1)
+        return f"{valid_tickets_percentage}%"
+    display_valid_tickets_percentage.admin_order_field = "valid_tickets_percentage"
 
     @display(description=_("Ressource utilisée"), boolean=True, ordering="ressource_bloquee")
     def display_ressource_utilisee(self, instance: Event):
@@ -5937,7 +5952,7 @@ class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAd
     resource_classes = [TicketExportResource]
     export_form_class = ExportForm
 
-    actions = ["action_unscan_selected", "action_cancel_refund_selected"]
+    actions = ["action_unscan_selected", "action_cancel_refund_selected", "export_pdf_selected"]
 
     # Expandable section to display parent reservation custom form answers
     list_sections = [TicketCustomFormSection]
@@ -5947,6 +5962,30 @@ class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAd
 
     # Formulaire de modification
     form = TicketChangeAdmin
+
+    @admin.action(description=_("Exporter les billets sélectionnés en PDF"))
+    def export_pdf_selected(self, request, queryset):
+        files = []
+        # Parcours tout les billets et les convertis en dictionnaire
+        # {pdf : LE_PDF_EN_BINAIRE, name : LE_NOM_DU_FICHIER_PDF}
+        for billet in queryset:
+            pdf_binary = create_ticket_pdf(billet)
+            files.append({"pdf":pdf_binary, "name":billet.pdf_filename()})
+
+        # Crée un fichier ZIP
+        outfile = io.BytesIO()
+        with zipfile.ZipFile(outfile, 'w') as zf:
+            # Parcours les fichiers et les ajoute au ZIP
+            for file in files:
+                zf.writestr("{}.pdf".format(file["name"]), file["pdf"])
+
+
+        # Create the HTTP response and return the zip
+        response = HttpResponse(outfile.getvalue(), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename={_("billets")}.zip'
+
+        return response
+
 
     @admin.action(description=_("Unscan selected tickets"))
     def action_unscan_selected(self, request, queryset):
