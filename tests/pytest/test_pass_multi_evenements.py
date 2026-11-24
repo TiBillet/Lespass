@@ -1068,3 +1068,11 @@ def test_choix_d_un_evenement_du_pass_retire_les_evenements_deja_choisis(lieu, a
     for resultat in json.loads(reponse.content)["results"]:
         identifiants_proposes.add(resultat["id"])
     assert identifiants_proposes == {str(lundi.pk)}
+
+
+def test_page_des_passes_rangee_dans_configurer():
+    """Dans le menu de l'admin, la page des passes est dans « Configurer », comme les produits billet.
+    / The Passes admin page sits under "Configurer", like ticket products."""
+    from Administration.admin.dashboard import CATEGORIE_DES_PAGES
+
+    assert CATEGORIE_DES_PAGES["BaseBillet.passproduct"] == "configurer"
