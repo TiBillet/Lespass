@@ -275,12 +275,10 @@ class CreationPaiementStripe():
                 data_checkout = self.dict_checkout_creator()
                 checkout_session = stripe.checkout.Session.create(**data_checkout)
 
-        logger.info(" ")
-        logger.info("-" * 40)
+        # Pas de lignes vides ni de « ---- » : chaque ligne devient une entree a part
+        # dans la supervision. / No blank or "----" lines: each one is a separate entry.
         logger.info(f"Création d'un nouveau paiment stripe. Metadata : {self.metadata}")
         logger.info(f"checkout_session.id {checkout_session.id} payment_intent : {checkout_session.payment_intent}")
-        logger.info("-" * 40)
-        logger.info(" ")
 
         self.paiement_stripe_db.payment_intent_id = checkout_session.payment_intent
         self.paiement_stripe_db.checkout_session_id_stripe = checkout_session.id

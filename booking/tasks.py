@@ -11,6 +11,7 @@ from django.utils.translation import gettext_lazy as _, activate
 from django.utils import timezone
 from django.utils.formats import date_format
 from TiBillet.celery import app
+from TiBillet.identifiants_pour_les_logs import uuid_court
 from booking.models import Booking
 
 logger = logging.getLogger(__name__)
@@ -612,9 +613,9 @@ def rappeler_les_benevoles_du_lendemain_du_lieu():
                 InscriptionBenevole.objects.filter(pk__in=pk_des_inscriptions).update(rappel_envoye_le=timezone.now())
                 nombre_de_rappels_envoyes += 1
             else:
-                logger.warning(f"rappel bénévole non envoyé à {personne.email}")
+                logger.warning(f"rappel bénévole non envoyé à user {uuid_court(personne.pk)}")
         except Exception:
-            logger.exception(f"rappel bénévole en erreur pour {personne.email}")
+            logger.exception(f"rappel bénévole en erreur pour user {uuid_court(personne.pk)}")
 
     logger.info(f"rappeler_les_benevoles_du_lendemain : {nombre_de_rappels_envoyes} rappels envoyés")
     return nombre_de_rappels_envoyes

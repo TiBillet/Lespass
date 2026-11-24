@@ -112,7 +112,10 @@ def onboard_otp_mailer(wc_uuid, otp_clair):
         mail.send()
 
     # IMPORTANT : ne JAMAIS logger otp_clair. / IMPORTANT: never log otp_clair.
-    logger.info("OTP mail sent to %s for WC %s", destinataire, wc_uuid)
+    # Jamais l'adresse entiere dans les logs : seul le domaine sert au diagnostic.
+    # / Never the full address in logs: only the domain helps the diagnosis.
+    domaine_de_l_email = str(destinataire).split("@")[-1]
+    logger.info("OTP mail sent to @%s for WC %s", domaine_de_l_email, wc_uuid)
 
 
 @shared_task(name="onboard.tasks.onboard_ready_mailer")

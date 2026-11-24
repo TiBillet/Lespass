@@ -24,7 +24,7 @@ from fedow_connect.validators import WalletValidator, AssetValidator, Transactio
     PaginatedTransactionValidator, CardValidator, QrCardValidator, validate_hex8
 from fedow_public.models import AssetFedowPublic
 
-from TiBillet.identifiants_pour_les_logs import carte_courte
+from TiBillet.identifiants_pour_les_logs import carte_courte, uuid_court
 
 logger = logging.getLogger(__name__)
 
@@ -576,7 +576,7 @@ class WalletFedow():
                     origin=connection.tenant,
                 )[0]
                 user.save()
-                logger.info(f"user {user} tout neuf, on ajoute le wallet : {user.wallet}")
+                logger.info(f"user {uuid_court(user.pk)} tout neuf, on ajoute le wallet : {uuid_court(user.wallet.uuid)}")
 
             # Wallet existe déja et est lié à l'user, on compare avec celui envoyé par Fedow
             elif user.wallet.uuid != UUID(response_link.json()):

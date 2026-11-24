@@ -30,6 +30,7 @@ from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from booking.models import Booking
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
+from TiBillet.identifiants_pour_les_logs import uuid_court
 from laboutik.views import _taux_tva_de_la_ligne_de_caisse
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement
             f"échec, vente laissée en attente : {erreur!r}"
         )
 
-    logger.info(f"    END PAIEMENT_STRIPE set_ligne_article_paid\n")
+    logger.info(f"    END PAIEMENT_STRIPE set_ligne_article_paid")
 
 
 def expire_paiement_stripe(old_instance, new_instance):
@@ -187,7 +188,7 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
                     f"         PAS OK, il doit y avoir d'autres lignes à valider : {len(lignes_meme_panier)} != {len(lignes_meme_panier_valide)}")
 
     logger.info(
-        f"    END SIGNAL LIGNE_ARTICLE set_paiement_stripe_valid {old_instance.status} to {new_instance.status}\n")
+        f"    END SIGNAL LIGNE_ARTICLE set_paiement_stripe_valid {old_instance.status} to {new_instance.status}")
 
 
 def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
@@ -272,8 +273,11 @@ def reservation_paid(old_instance: Reservation, new_instance: Reservation):
     if not new_instance.mail_send:
         # Envoie du mail. Le succes du mail envoyé mettra la Reservation.VALID
         if new_instance.user_commande.email:
+            # Jamais l'e-mail dans les logs : l'UUID court de la personne suffit.
+            # / Never the email in logs: the short UUID of the person is enough.
             logger.info(
-                f"         Envoie du mail via celery à {new_instance.user_commande.email}. Celery passera la Reservation à VALID")
+                f"         Envoie du mail via celery à user {uuid_court(new_instance.user_commande.pk)}. "
+                f"Celery passera la Reservation à VALID")
             ticket_celery_mailer.delay(new_instance.pk)  # met la Reservation à VALID si mail envoyé
 
     else:
@@ -282,7 +286,7 @@ def reservation_paid(old_instance: Reservation, new_instance: Reservation):
         # Le mail a déja été envoyé
         set_paiement_valid(old_instance, new_instance)
 
-    logger.info(f"    END SIGNAL RESERVATION reservation_paid\n")
+    logger.info(f"    END SIGNAL RESERVATION reservation_paid")
 
 
 def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
@@ -295,7 +299,7 @@ def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
             paiement.traitement_en_cours = False
             paiement.save()
 
-    logger.info(f"    END SIGNAL RESERVATION set_paiement_valid\n")
+    logger.info(f"    END SIGNAL RESERVATION set_paiement_valid")
 
 
 def error_in_mail(old_instance: Reservation, new_instance: Reservation):
@@ -318,7 +322,7 @@ def check_reward(old_instance: Ticket, new_instance: Ticket):
 ######################## SIGNAL TIBILLETUSER ########################
 
 def activator_free_reservation(old_instance: TibilletUser, new_instance: TibilletUser):
-    logger.info(f"activator_free_reservation : {new_instance}")
+    logger.info(f"activator_free_reservation : user {uuid_court(new_instance.pk)}")
     if connection.tenant.schema_name != "public":
         free_reservation = Reservation.objects.filter(
             user_commande=new_instance,
@@ -343,7 +347,7 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
                 valid_tickets_count = event.valid_tickets_count()
                 total_ticket_qty = resa.tickets.count()
                 if valid_tickets_count + total_ticket_qty + under_purchase > event.jauge_max:
-                    logger.warning(f"    {resa} : {valid_tickets_count} + {total_ticket_qty} + {under_purchase} > {event.jauge_max}")
+                    logger.warning(f"    reservation {uuid_court(resa.pk)} : {valid_tickets_count} + {total_ticket_qty} + {under_purchase} > {event.jauge_max}")
                     remains = event.jauge_max - valid_tickets_count - under_purchase
                     # Message affiché à l'utilisateur par activate() (AuthBillet/views.py).
                     # / Message shown to the user by activate() (AuthBillet/views.py).
@@ -505,8 +509,14 @@ def pre_save_signal_status(sender, instance, **kwargs):
                 old_instance.status = getattr(old_instance, CALLABLE_STATUS_MODEL.get(sender_str))
                 new_instance.status = getattr(new_instance, CALLABLE_STATUS_MODEL.get(sender_str))
 
+            # Une seule ligne, sans \n : la supervision coupe un message a chaque retour a la ligne.
+            # L'UUID court et pas str(instance) : pour une Reservation ou un TibilletUser,
+            # str() renvoie l'e-mail.
+            # / One line, no \n: the monitoring splits a message at each newline.
+            #   Short UUID, not str(instance): for a Reservation or a user, str() is the email.
             logger.info(
-                f"\n\nSTART MACHINE A ETAT pre_save_signal_status {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}\n")
+                f"START MACHINE A ETAT pre_save_signal_status {sender_str} {uuid_court(new_instance.pk)} : "
+                f"{old_instance.status} to {new_instance.status}")
 
             transitions = dict_transition.get(old_instance.status, None)
             if transitions:
@@ -596,7 +606,7 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
     membership: Membership = instance
     # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
     if created and membership.status == Membership.ADMIN:
-        logger.info(f"create_lignearticle_if_membership_created_on_admin {instance} {created}")
+        logger.info(f"create_lignearticle_if_membership_created_on_admin {uuid_court(instance.pk)} {created}")
 
         # La vente de l'admin : client = l'adhérent, opérateur vide. Elle est écrite
         # dans la transaction de l'admin (changeform_view est atomic).

@@ -43,6 +43,7 @@ from BaseBillet.models import Reservation, Ticket, Configuration, Membership, We
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
+from TiBillet.identifiants_pour_les_logs import uuid_court
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import dround
 
@@ -354,7 +355,10 @@ class CeleryMailerClass():
                 # logger.info(f'          html len : {len(str(self.html))}')
                 # logger.info(f'          return_email : {self.return_email}')
             else:
-                logger.error(f'     WORKER CELERY mail non envoyé : {mail_return} - {self.email}')
+                # Jamais l'adresse entiere dans les logs : seul le domaine sert au diagnostic.
+                # / Never the full address in logs: only the domain helps the diagnosis.
+                domaine_de_l_email = str(self.email).split("@")[-1]
+                logger.error(f'     WORKER CELERY mail non envoyé : {mail_return} - @{domaine_de_l_email}')
 
             return mail_return
         else:
@@ -1617,7 +1621,10 @@ def connexion_celery_mailer(self, user_email,
     :type url: str
     :type tenant_name: str
     """
-    logger.info(f'WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
+    # Jamais l'adresse entiere dans les logs : seul le domaine sert au diagnostic.
+    # / Never the full address in logs: only the domain helps the diagnosis.
+    domaine_de_l_email = str(user_email).split("@")[-1]
+    logger.info(f'WORKDER CELERY app.task connexion_celery_mailer : adresse @{domaine_de_l_email}')
     User = get_user_model()
     user = User.objects.get(email=user_email)
     connexion_url = forge_connexion_url(user, base_url)
@@ -1627,7 +1634,10 @@ def connexion_celery_mailer(self, user_email,
 
 
     logger.info(f"connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
-    logger.info(f"{connexion_url}")
+    # JAMAIS le lien de connexion dans les logs hors DEBUG : son jeton ouvre le compte
+    # pendant 72 h, et les logs restent un an dans la supervision. Il est loggé plus bas,
+    # sous `if settings.DEBUG`, pour le dev.
+    # / NEVER the login link in logs outside DEBUG: its token opens the account for 72 h.
 
     config = Configuration.get_solo()
     activate(config.language)
@@ -1667,14 +1677,14 @@ def connexion_celery_mailer(self, user_email,
             logger.info(f"mail.sent: {mail.sended}")
 
         except smtplib.SMTPRecipientsRefused as e:
-            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion user {uuid_court(user.pk)} : {e}")
             logger.error(f"mail.sent: {mail.sended}")
             User = get_user_model()
             # ATTENTION : Jamais de user.save() dans celery : s'il ya un traitement en cours dans Django, ça va ecraser l'objet.
             User.objects.filter(pk=user.pk).update(is_active=False, email_error=True)
 
     except Exception as e:
-        logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+        logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion user {uuid_court(user.pk)} : {e}")
         raise Exception
 
 
@@ -1784,7 +1794,7 @@ def ticket_celery_mailer(reservation_uuid: str):
 
 
         except Exception as e:
-            logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
+            logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {uuid_court(reservation.pk)} : {e}")
             raise Exception
 
 
@@ -1831,10 +1841,7 @@ def webhook_membership(membership_pk):
                 response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
                                             headers={"Content-type": "application/json"},
                                             verify=bool(not settings.DEBUG))
-                logger.debug(f"############### webhook_membership ###############\n")
-                logger.debug(f"data sended : {data_sended}\n")
-                logger.debug(f"response : {response.content}")
-                logger.debug(f"############### webhook_membership ###############\n")
+                logger.debug(f"webhook_membership response : {response.content}")
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
                 if not response.ok:
                     logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")
@@ -1867,7 +1874,7 @@ def send_to_brevo(membership_pk):
         try:
             # First, check if the contact already exists
             api_instance.get_contact_info(membership.user.email)
-            logger.info(f"Contact with email {membership.user.email} already exists in Brevo")
+            logger.info(f"Contact of user {uuid_court(membership.user.pk)} already exists in Brevo")
             brevo_config.last_log = f"Contact already exists: {membership.user.email}"
             brevo_config.save()
             return  # Exit as there's nothing more to do
@@ -1899,6 +1906,9 @@ def send_to_ghost_email(email, name=None, etiquettes_en_plus=None):
     / Extra Ghost labels. An existing member gets the missing ones.
     """
     etiquettes_en_plus = etiquettes_en_plus or []
+    # Jamais l'adresse entiere dans les logs : seul le domaine sert au diagnostic.
+    # / Never the full address in logs: only the domain helps the diagnosis.
+    domaine_de_l_email = str(email).split("@")[-1]
     ghost_config = GhostConfig.get_solo()
     ghost_url = ghost_config.ghost_url
     ghost_key = ghost_config.get_api_key()
@@ -1967,19 +1977,21 @@ def send_to_ghost_email(email, name=None, etiquettes_en_plus=None):
                     # Décoder la réponse JSON
                     j = response.json()
                     members = j['members']
-                    logger.info(f"Le nouveau membre a été créé avec succès : {members}")
+                    # Pas la reponse de Ghost : elle contient l'e-mail et le nom du membre.
+                    # / Not Ghost's answer: it holds the member's email and name.
+                    logger.info(f"Le nouveau membre @{domaine_de_l_email} a été créé avec succès dans Ghost")
                 elif response.status_code == 422 and 'Member already exists' in response.text:
                     # Idempotent case: member already exists in Ghost, treat as success
-                    logger.info(f"Le membre {email} existe déjà (détection via 422), aucune action nécessaire.")
+                    logger.info(f"Le membre @{domaine_de_l_email} existe déjà (détection via 422), aucune action nécessaire.")
                 else:
                     logger.warning(
                         f"Erreur lors de la création du nouveau membre Ghost : "
-                        f"status={response.status_code}, email={email}, "
+                        f"status={response.status_code}, email=@{domaine_de_l_email}, "
                         f"response={response.text[:500] if response.text else '(vide)'}"
                     )
             else:
                 # Afficher la liste des membres
-                logger.info(f"Le membre {email} existe déja dans : {members}")
+                logger.info(f"Le membre @{domaine_de_l_email} existe déja dans Ghost")
 
                 # Membre existant : on lui ajoute les étiquettes demandées qu'il n'a pas.
                 # Ghost remplace la liste entière : on renvoie ses étiquettes + les manquantes.
@@ -1997,13 +2009,13 @@ def send_to_ghost_email(email, name=None, etiquettes_en_plus=None):
                     )
                     if not response.ok:
                         logger.warning(
-                            f"Ghost : ajout des étiquettes {etiquettes_manquantes} refusé pour {email} : "
+                            f"Ghost : ajout des étiquettes {etiquettes_manquantes} refusé pour @{domaine_de_l_email} : "
                             f"status={response.status_code}"
                         )
         else:
             logger.error(
                 f"Erreur lors de la récupération des membres Ghost : "
-                f"status={response.status_code}, url={ghost_url}, email={email}, "
+                f"status={response.status_code}, url={ghost_url}, email=@{domaine_de_l_email}, "
                 f"response={response.text[:500] if response.text else '(vide)'}"
             )
 

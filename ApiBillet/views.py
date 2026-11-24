@@ -37,6 +37,7 @@ from BaseBillet.tasks import send_membership_sepa_pending_user
 from Customers.models import Client, lieu_en_moteur_legacy
 from PaiementStripe.views import new_entry_from_stripe_subscription_invoice
 from TiBillet import settings
+from TiBillet.identifiants_pour_les_logs import uuid_court
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, data_to_b64
 from root_billet.models import RootConfiguration
@@ -1159,7 +1160,6 @@ class Webhook_stripe(APIView):
 
     def post(self, request):
         payload = request.data
-        logger.info(f" ")
         # logger.info(f"Webhook_stripe --> {payload}")
         logger.info(f"Webhook_stripe --> {payload.get('type')} - id : {payload.get('id')}")
         try :
@@ -1183,7 +1183,9 @@ class Webhook_stripe(APIView):
                 return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
 
             if not payload["data"]["object"]["metadata"].get('tenant'):
-                logger.warning(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
+                # Pas le payload entier : il contient l'e-mail et le nom du client.
+                # / Not the whole payload: it holds the customer's email and name.
+                logger.warning(f"Webhook_stripe Pas de tenant dans metadata --> {payload.get('type')} - id : {payload.get('id')}")
                 return Response(f"Pas de tenant dans metadata, pas pour nous ? {payload}",
                                 status=status.HTTP_204_NO_CONTENT)
 
@@ -1272,7 +1274,9 @@ class Webhook_stripe(APIView):
 
         elif payload.get('type') == "checkout.session.async_payment_failed":
             if not payload["data"]["object"]["metadata"].get('tenant'):
-                logger.warning(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
+                # Pas le payload entier : il contient l'e-mail et le nom du client.
+                # / Not the whole payload: it holds the customer's email and name.
+                logger.warning(f"Webhook_stripe Pas de tenant dans metadata --> {payload.get('type')} - id : {payload.get('id')}")
                 return Response(f"Pas de tenant dans metadata, pas pour nous ? {payload}",
                                 status=status.HTTP_204_NO_CONTENT)
 
@@ -1528,7 +1532,9 @@ class Webhook_stripe(APIView):
                                 price__uuid=price_uuid
                             )
 
-                            logger.info(f"    get membership uuid : {membership} {membership.uuid}")
+                            # Pas str(membership) : c'est le nom ou l'e-mail de l'adherent.
+                            # / Not str(membership): it is the member's name or email.
+                            logger.info(f"    get membership uuid : {uuid_court(membership.uuid)}")
                             invoice = payload_object['id']
                             last_stripe_invoice = membership.last_stripe_invoice
 

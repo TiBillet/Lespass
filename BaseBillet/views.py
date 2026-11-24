@@ -1592,7 +1592,7 @@ class MyAccount(viewsets.ViewSet):
             wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
             tokens = [token for token in wallet.get('tokens', []) if token.get('asset_category') not in ['SUB', 'BDG']]
         except Exception as erreur_fedow_distant:
-            logger.error(f"admin_my_cards : Fedow distant indisponible pour {user} : {erreur_fedow_distant}")
+            logger.error(f"admin_my_cards : Fedow distant indisponible pour user {uuid_court(user.pk)} : {erreur_fedow_distant}")
 
         # Agrege les tokens LOCAUX (fedow_core) si tenant V2 (cf. helper module).
         # Lecture pure (pas d'ecriture, vue GET, pas d'atomic) : encadree pour que,
@@ -1645,7 +1645,7 @@ class MyAccount(viewsets.ViewSet):
                     continue
                 transactions_recentes.append(transaction)
         except Exception as erreur_fedow:
-            logger.error(f"admin_my_cards : transactions Fedow indisponibles pour {user} : {erreur_fedow}")
+            logger.error(f"admin_my_cards : transactions Fedow indisponibles pour user {uuid_court(user.pk)} : {erreur_fedow}")
 
         context = {
             'cards': cards,
@@ -4813,7 +4813,9 @@ class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def create(self, request):
-        logger.info(f"new membership : {request.data}")
+        # Seulement les noms des champs : les valeurs contiennent l'e-mail et le nom.
+        # / Field names only: the values hold the email and the name.
+        logger.info(f"new membership : champs {list(request.data.keys())}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
         if not membership_validator.is_valid():
             # Validation d'entree echouee (souvent un bot qui POST le formulaire vide ou partiel).
@@ -4874,7 +4876,7 @@ class MembershipMVT(viewsets.ViewSet):
 
         else:
             msg = "Une erreur lors de la gestion de vos adhésion est survenue, merci de contacter un administrateur."
-            logger.error(f"MembershipViewset ERROR {msg} : {membership_validator.membership}")
+            logger.error(f"MembershipViewset ERROR {msg} : {uuid_court(membership_validator.membership.pk)}")
             raise ValueError(msg)
 
     def list(self, request: HttpRequest):

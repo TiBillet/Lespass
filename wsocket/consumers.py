@@ -37,6 +37,7 @@ from django.template.loader import get_template
 from django_tenants.utils import tenant_context
 
 from AuthBillet.models import TibilletUser
+from TiBillet.identifiants_pour_les_logs import uuid_court
 from laboutik.printing.base import nom_du_groupe_websocket
 
 logger = logging.getLogger(__name__)
@@ -382,11 +383,12 @@ class TerminalConsumer(AsyncWebsocketConsumer):
         # DEBUG=True would expose this socket to anyone. Rule mirrors IsKioskTerminal:
         # Kiosk device owning the payment, OR tenant admin (demo/debug supervision).
         if not await self.connexion_autorisee():
-            logger.error(f"{self.room_name} {self.user} ERROR WEBSOCKET ACCESS REFUSED")
+            # L'UUID court et pas str(user) : c'est l'e-mail. / Short UUID, not str(user): it is the email.
+            logger.error(f"{self.room_name} user {uuid_court(self.user.pk)} ERROR WEBSOCKET ACCESS REFUSED")
             await self.close()
             return
 
-        logger.info(f"{self.room_name} {self.user} connected")
+        logger.info(f"{self.room_name} user {uuid_court(self.user.pk)} connected")
 
         # Join room group
         await self.channel_layer.group_add(self.room_name, self.channel_name)

@@ -6968,11 +6968,11 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
             messages.success(request, _("Api OK"))
         except ApiException as e:
             brevo_config.last_log = f"{e}"
-            logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
+            logger.warning("ApiException when calling AccountApi->get_account: %s" % e)
             messages.error(request, _(f"Api not OK : {e}"))
         except Exception as e:
             brevo_config.last_log = f"{type(e)} - {e}"
-            logger.error("Exception when calling AccountApi->get_account: %s\n" % e)
+            logger.error("Exception when calling AccountApi->get_account: %s" % e)
             messages.error(request, f"Error : {type(e)} - {e}")
 
         brevo_config.save()
@@ -7059,7 +7059,7 @@ class AssetAdmin(ModelAdmin):
 
     # On affiche que les assets non adhésions + origin + fédéré
     def get_queryset(self, request):
-        logger.info(f"get_queryset AssetAdmin : {request.user}")
+        logger.info(f"get_queryset AssetAdmin : user {uuid_court(request.user.pk)}")
         # Synchronise les assets acceptes depuis Fedow, seulement si le lieu y est
         # relie. Sinon, instancier FedowAPI lance create_place() (handshake reseau
         # involontaire) et plante sur un lieu sans admin, comme `meta` : la page

@@ -4408,7 +4408,10 @@ class Paiement_stripe(models.Model):
         # grace au post_save BaseBillet.models.check_status_stripe
 
         # Reservation.VALID lorsque le mail est envoyé et non en erreur
-        logger.info(f"Update status stripe metadata : {metadata}")
+        # dict() et json.dumps sans indent : str() d'un objet Stripe est un JSON indente,
+        # sur plusieurs lignes, que la supervision coupe en morceaux.
+        # / dict() and json.dumps without indent: str() of a Stripe object is multi-line.
+        logger.info(f"Update status stripe metadata : {json.dumps(dict(metadata))}")
         self.save()
         return self.status
 

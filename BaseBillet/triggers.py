@@ -297,10 +297,10 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         try:
             # on met en majuscule et on rajoute _ au début du nom de la catégorie.
             trigger_name = f"_{self.categorie.upper()}"
-            logger.info(f"\nSTART TRIGGER_LigneArticlePaid_ActionByCategorie : {self.ligne_article} - trigger_name : {trigger_name}")
+            logger.info(f"START TRIGGER_LigneArticlePaid_ActionByCategorie : {self.ligne_article} - trigger_name : {trigger_name}")
             trigger = getattr(self, f"trigger{trigger_name}")
             trigger()
-            logger.info(f"END TRIGGER_LigneArticlePaid_ActionByCategorie\n")
+            logger.info(f"END TRIGGER_LigneArticlePaid_ActionByCategorie")
 
         except AttributeError as exc:
             logger.info(f"Pas de trigger pour la categorie {self.categorie} - ERROR : {exc} - {type(exc)}")
@@ -349,7 +349,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         logger.info(f"        TRIGGER_C BOOKING PAID -> set ligne_article VALID (no save)")
         self.ligne_article.status = LigneArticle.VALID
 
-        logger.info(f"    END TRIGGER_C BOOKING PAID\n")
+        logger.info(f"    END TRIGGER_C BOOKING PAID")
 
 
     # Category BILLET
@@ -365,7 +365,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         logger.info(f"        TRIGGER_B BILLET PAID -> set ligne_article VALID (no save)")
         self.ligne_article.status = LigneArticle.VALID
 
-        logger.info(f"    END TRIGGER_A BILLET PAID\n")
+        logger.info(f"    END TRIGGER_A BILLET PAID")
 
     # Category Free Reservation
     # def trigger_F(self):
@@ -432,4 +432,4 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         # Envoi des webhooks lors du save membership
         # webhook_membership.delay(membership.pk)
 
-        logger.info(f"END    TRIGGER_A ADHESION PAID\n")
+        logger.info(f"END    TRIGGER_A ADHESION PAID")

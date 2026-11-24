@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from decimal import Decimal, InvalidOperation
 
 from django import forms
 from django.contrib import admin, messages
@@ -1178,8 +1179,40 @@ class ProductAdminCustomForm(ModelForm):
     def clean(self):
         categorie = self.data.get("categorie_article")
 
-        # Vérification que la clé Stripe est opérationnelle :
-        if categorie != Product.FREERES:
+        # On cherche un tarif payant parmi les tarifs envoyés par l'inline.
+        # Un tarif est payant s'il coûte plus de 0 €, ou s'il est à prix libre.
+        # Un tarif coché « supprimer » ne compte pas.
+        # Le prix est lu brut dans self.data : l'inline des tarifs est validé
+        # après ce formulaire, ses cleaned_data n'existent pas encore.
+        # / Look for a paid price among the prices sent by the inline.
+        nombre_de_tarifs_envoyes = int(self.data.get("prices-TOTAL_FORMS") or 0)
+        le_produit_a_un_tarif_payant = False
+        for numero_du_tarif in range(nombre_de_tarifs_envoyes):
+            prefixe = f"prices-{numero_du_tarif}"
+            tarif_a_supprimer = self.data.get(f"{prefixe}-DELETE") == "on"
+            if tarif_a_supprimer:
+                continue
+
+            tarif_a_prix_libre = self.data.get(f"{prefixe}-free_price") == "on"
+            if tarif_a_prix_libre:
+                le_produit_a_un_tarif_payant = True
+                break
+
+            # Un prix illisible est refusé plus tard par l'inline : on l'ignore ici.
+            # / An unreadable price is refused later by the inline: ignored here.
+            prix_saisi = (self.data.get(f"{prefixe}-prix") or "0").replace(",", ".")
+            try:
+                prix_du_tarif = Decimal(prix_saisi)
+            except InvalidOperation:
+                continue
+            if prix_du_tarif > 0:
+                le_produit_a_un_tarif_payant = True
+                break
+
+        # Vérification que la clé Stripe est opérationnelle, seulement si un
+        # tarif est payant. Un produit gratuit ne passe jamais par Stripe.
+        # / Stripe check, only when a price is paid. A free product never uses Stripe.
+        if categorie != Product.FREERES and le_produit_a_un_tarif_payant:
             config = Configuration.get_solo()
             if not config.stripe_payouts_enabled:
                 raise forms.ValidationError(
@@ -1913,13 +1946,19 @@ class POSProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
         required=False,
     )
 
-    # Methode de caisse : obligatoire pour un produit POS
-    # / POS method: required for a POS product
+    # Méthode de caisse : champ caché. Pour l'instant, l'admin ne crée que des
+    # articles « Vente ». La valeur envoyée par le navigateur est ignorée :
+    # clean_methode_caisse() décide seul. Le champ reste dans le formulaire
+    # (caché) car Alpine.js lit sa valeur pour afficher « Rembourse la consigne »
+    # (voir conditional_fields de POSProductAdmin).
+    # / POS method: hidden field. The admin only creates "Sale" items for now.
+    #   The posted value is ignored: clean_methode_caisse() decides.
     methode_caisse = forms.ChoiceField(
         choices=Product.METHODE_CAISSE_CHOICES,
-        widget=UnfoldAdminSelectWidget(),
+        widget=forms.HiddenInput(),
         label=_("POS method"),
-        help_text=_("Payment/action method at the cash register."),
+        initial=Product.VENTE,
+        required=False,
     )
 
     # --- Champs d'affichage POS / POS display fields ---
@@ -1967,6 +2006,18 @@ class POSProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
             "leur catégorie : bouton « Synchroniser la TVA » de la catégorie."
         )
 
+        # Aide du prix d'achat : il sert à calculer le bénéfice, ce n'est pas le
+        # prix de vente. Écrite ici et pas dans le modèle : changer le help_text
+        # du modèle créerait une migration.
+        # Le champ n'existe que si le fieldset de l'admin le demande.
+        # / Purchase price help: used to compute the profit, not the sale price.
+        if "prix_achat" in self.fields:
+            self.fields["prix_achat"].help_text = _(
+                "Prix auquel vous achetez cet article, en centimes, par unité de "
+                "vente (kg, litre, pièce). Il sert à calculer le bénéfice. "
+                "0 = inconnu. Le prix de vente se règle plus bas, dans les tarifs."
+            )
+
         # « Rembourse la consigne » : seuls les articles de caisse ordinaires (méthode
         # « Vente ») peuvent être une consigne remboursée. INDISPENSABLE : le queryset
         # du champ VALIDE la valeur postée, la liste affichée n'est qu'un confort.
@@ -1982,6 +2033,20 @@ class POSProductForm(ChampsStockFicheProduitMixin, ProductAdminCustomForm):
         """Pas de validation de categorie pour les produits POS.
         No category validation for POS products."""
         return self.cleaned_data.get("categorie_article", Product.NONE)
+
+    def clean_methode_caisse(self):
+        """La méthode de caisse ne vient jamais du navigateur.
+        Nouvel article : toujours « Vente ». Article existant : sa méthode reste
+        celle enregistrée en base, elle ne peut pas changer depuis l'admin.
+        / The POS method never comes from the browser. New item: always "Sale".
+        Existing item: keeps its stored method."""
+        # _state.adding et pas « not self.instance.pk » : la clé UUID a une
+        # valeur par défaut, elle existe donc déjà avant l'enregistrement.
+        # / _state.adding, not "not pk": the UUID pk has a default value.
+        article_en_creation = self.instance._state.adding
+        if article_en_creation:
+            return Product.VENTE
+        return self.instance.methode_caisse
 
     def clean_couleur_fond_pos(self):
         """Le fond est écrit dans le CSS de la caisse : #rrggbb ou vide.

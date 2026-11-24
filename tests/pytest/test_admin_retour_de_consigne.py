@@ -14,6 +14,9 @@ de méthode « Retour de consigne » :
   la caisse, `_tarifs_vendables_a_la_caisse` dans laboutik/views.py).
 L'erreur est posée sur le champ `consigne_remboursee`. Un article ordinaire (méthode
 « Vente ») n'a pas besoin de consigne reliée.
+L'admin ne crée que des articles « Vente » (méthode figée, voir
+test_admin_article_caisse_methode_vente.py) : les retours de consigne testés ici
+existent déjà en base, et passent par la page de MODIFICATION.
 C'est la première des trois sécurités : la caisse masque aussi la tuile d'un tel retour,
 et refuse de l'encaisser.
 / The POS product form refuses a deposit return without a linked cup, or linked to a
@@ -51,9 +54,9 @@ from test_caisse_ecrit_la_vente import creer_un_article_de_caisse
 
 pytestmark = pytest.mark.django_db
 
-# Page d'ajout d'un produit de caisse dans l'admin.
-# / Add page of a POS product in the admin.
-URL_D_AJOUT_D_UN_PRODUIT_DE_CAISSE = "/admin/BaseBillet/posproduct/add/"
+# Page de modification d'un produit de caisse dans l'admin.
+# / Change page of a POS product in the admin.
+URL_DE_MODIFICATION_D_UN_PRODUIT_DE_CAISSE = "/admin/BaseBillet/posproduct/{pk}/change/"
 
 # Début du nom de tout ce que ces tests créent.
 # / Prefix of everything these tests create.
@@ -111,18 +114,38 @@ def admin_des_produits_de_caisse():
     return POSProductAdmin(POSProduct, staff_admin_site)
 
 
-def formulaire_rempli_d_un_produit_de_caisse(administrateur, donnees):
+def formulaire_rempli_d_un_produit_de_caisse(administrateur, donnees, produit=None):
     """
-    Le formulaire que l'admin affiche pour AJOUTER un produit de caisse, rempli avec
-    `donnees`. La classe du formulaire est construite par l'admin lui-même (`get_form`) :
+    Le formulaire que l'admin affiche pour un produit de caisse, rempli avec `donnees`.
+    Sans `produit` : la page d'AJOUT. Avec `produit` : la page de MODIFICATION de ce
+    produit. La classe du formulaire est construite par l'admin lui-même (`get_form`) :
     elle contient les champs des sections de l'admin, dont `consigne_remboursee`.
-    / The form the admin shows to ADD a POS product, filled with `donnees`. The form
-    class is built by the admin itself, with the fields of its sections.
+    / The form the admin shows for a POS product, filled with `donnees`. Without
+    `produit`: the ADD page. With `produit`: its CHANGE page.
+
+    :param produit: le POSProduct à modifier, ou None pour un ajout
     """
     requete = RequestFactory().post("/")
     requete.user = administrateur
-    ClasseDuFormulaire = admin_des_produits_de_caisse().get_form(requete, obj=None)
-    return ClasseDuFormulaire(data=donnees)
+    ClasseDuFormulaire = admin_des_produits_de_caisse().get_form(requete, obj=produit)
+    return ClasseDuFormulaire(data=donnees, instance=produit)
+
+
+def creer_un_retour_de_consigne_existant():
+    """
+    Un « Retour de consigne » déjà en base (tarif à −1,00 €), sans consigne reliée.
+    L'admin ne crée que des « Vente » : ce retour est créé directement en base.
+    Rendu comme POSProduct, le modèle du formulaire de l'admin.
+    / A deposit return already in the database, without a linked cup. Returned as a
+    POSProduct, the admin form's model.
+    """
+    retour = creer_un_article_de_caisse(
+        "retour consigne",
+        prix_en_euros="-1.00",
+        taux_tva="20.00",
+        methode_caisse=Product.RETOUR_CONSIGNE,
+    )
+    return POSProduct.objects.get(pk=retour.produit.pk)
 
 
 def donnees_d_un_produit_de_caisse(methode_caisse, consigne_remboursee=None):
@@ -185,9 +208,12 @@ def test_admin_refuse_un_retour_de_consigne_sans_consigne_reliee(lieu):
     the `consigne_remboursee` field.
     """
     administrateur = administrateur_du_lieu(lieu)
+    retour_existant = creer_un_retour_de_consigne_existant()
     donnees = donnees_d_un_produit_de_caisse(Product.RETOUR_CONSIGNE)
 
-    formulaire = formulaire_rempli_d_un_produit_de_caisse(administrateur, donnees)
+    formulaire = formulaire_rempli_d_un_produit_de_caisse(
+        administrateur, donnees, produit=retour_existant
+    )
 
     assert not formulaire.is_valid()
     assert "consigne_remboursee" in formulaire.errors
@@ -202,12 +228,15 @@ def test_admin_refuse_un_retour_relie_a_un_gobelet_sans_tarif_en_euros(lieu):
     register: the form is refused, with an error on `consigne_remboursee`.
     """
     administrateur = administrateur_du_lieu(lieu)
+    retour_existant = creer_un_retour_de_consigne_existant()
     gobelet_sans_tarif_vendable = creer_un_gobelet(avec_tarif_en_euros_vendable=False)
     donnees = donnees_d_un_produit_de_caisse(
         Product.RETOUR_CONSIGNE, consigne_remboursee=gobelet_sans_tarif_vendable
     )
 
-    formulaire = formulaire_rempli_d_un_produit_de_caisse(administrateur, donnees)
+    formulaire = formulaire_rempli_d_un_produit_de_caisse(
+        administrateur, donnees, produit=retour_existant
+    )
 
     assert not formulaire.is_valid()
     assert "consigne_remboursee" in formulaire.errors
@@ -228,12 +257,15 @@ def test_admin_accepte_un_retour_relie_a_un_gobelet_avec_tarif_en_euros(lieu):
     Control: a validation that refuses everything would fail this test.
     """
     administrateur = administrateur_du_lieu(lieu)
+    retour_existant = creer_un_retour_de_consigne_existant()
     gobelet = creer_un_gobelet(avec_tarif_en_euros_vendable=True)
     donnees = donnees_d_un_produit_de_caisse(
         Product.RETOUR_CONSIGNE, consigne_remboursee=gobelet
     )
 
-    formulaire = formulaire_rempli_d_un_produit_de_caisse(administrateur, donnees)
+    formulaire = formulaire_rempli_d_un_produit_de_caisse(
+        administrateur, donnees, produit=retour_existant
+    )
 
     assert formulaire.is_valid(), formulaire.errors
 
@@ -253,29 +285,33 @@ def test_admin_vente_ordinaire_sans_consigne_reliee_acceptee(lieu):
 
 
 # --------------------------------------------------------------------------
-# La vraie page d'ajout de l'admin : rien n'est créé
-# / The real admin add page: nothing is created
+# La vraie page de modification de l'admin : rien n'est enregistré
+# / The real admin change page: nothing is saved
 # --------------------------------------------------------------------------
 
 
-def donnees_des_listes_sous_la_fiche(administrateur, tarifs_saisis):
+def donnees_des_listes_sous_la_fiche(administrateur, tarifs_saisis, produit=None):
     """
-    Les champs des listes affichées sous la fiche d'ajout (tarifs, stock), comme le
-    navigateur les envoie. Chaque liste a quatre champs de gestion (`<préfixe>-TOTAL_FORMS`…) ;
+    Les champs des listes affichées sous la fiche (tarifs, stock), comme le navigateur
+    les envoie. Chaque liste a quatre champs de gestion (`<préfixe>-TOTAL_FORMS`…) ;
     l'admin les exige même quand la liste est vide. Les préfixes sont lus sur l'admin
     lui-même : le test n'a pas à les deviner.
-    / The fields of the lists under the add page (prices, stock), as the browser sends
-    them. The prefixes are read from the admin itself.
+    `INITIAL_FORMS` vaut 0 : les tarifs déjà en base ne sont pas renvoyés, l'admin
+    les laisse donc tels quels.
+    / The fields of the lists under the page (prices, stock), as the browser sends
+    them. The prefixes are read from the admin itself. INITIAL_FORMS is 0: existing
+    prices are not sent, so the admin leaves them unchanged.
 
     :param tarifs_saisis: liste de dicts {champ: valeur} pour la liste des tarifs
+    :param produit: le POSProduct de la page de modification, ou None pour l'ajout
     """
     requete = RequestFactory().get("/")
     requete.user = administrateur
-    listes_de_la_page_d_ajout = (
-        admin_des_produits_de_caisse().get_formsets_with_inlines(requete, None)
+    listes_de_la_page = admin_des_produits_de_caisse().get_formsets_with_inlines(
+        requete, produit
     )
     donnees = {}
-    for ClasseDeLaListe, liste_sous_la_fiche in listes_de_la_page_d_ajout:
+    for ClasseDeLaListe, liste_sous_la_fiche in listes_de_la_page:
         prefixe = ClasseDeLaListe.get_default_prefix()
         liste_des_tarifs = liste_sous_la_fiche.model is Price
         if liste_des_tarifs:
@@ -295,35 +331,36 @@ def donnees_des_listes_sous_la_fiche(administrateur, tarifs_saisis):
     return donnees
 
 
-def test_admin_post_d_un_retour_sans_consigne_reliee_ne_cree_rien(lieu):
+def test_admin_post_d_un_retour_sans_consigne_reliee_n_enregistre_rien(lieu):
     """
-    L'administrateur `admin@admin.com` remplit la VRAIE page d'ajout d'un produit de
-    caisse : un « Retour de consigne » avec un tarif à −1,00 €, sans consigne reliée, et
-    l'enregistre. Aucun produit n'est créé ; la page revient avec une erreur sur le champ
-    « Rembourse la consigne ».
+    L'administrateur `admin@admin.com` ouvre la VRAIE page de modification d'un
+    « Retour de consigne » existant, sans consigne reliée. Il change le nom et
+    enregistre. Rien n'est enregistré : le nom en base ne change pas, et la page revient
+    avec une erreur sur le champ « Rembourse la consigne ».
     Ce test passe par la page affichée : il prouve que le champ est bien dans le
     formulaire de l'admin, et que l'erreur empêche l'enregistrement.
     L'erreur de la consigne est la SEULE erreur de la page : un autre champ manquant ne
     peut pas faire passer ce test à tort.
-    / `admin@admin.com` posts the REAL add page: a deposit return with a −1.00 € price,
-    no linked deposit. No product is created; the page comes back with an error on
-    `consigne_remboursee`, and it is the ONLY error of the page.
+    / `admin@admin.com` posts the REAL change page of an existing deposit return, no
+    linked deposit, with a new name. Nothing is saved; the page comes back with an error
+    on `consigne_remboursee`, and it is the ONLY error of the page.
     """
     administrateur = administrateur_du_lieu(lieu)
     client_de_l_admin = client_connecte(administrateur)
+    retour_existant = creer_un_retour_de_consigne_existant()
+    nom_avant_la_modification = retour_existant.name
     donnees = donnees_d_un_produit_de_caisse(Product.RETOUR_CONSIGNE)
-    nom_du_produit = donnees["name"]
-    tarif_du_retour = {
-        "name": "Gobelet",
-        "prix": "-1.00",
-        "publish": "on",
-        "order": "100",
-    }
-    donnees.update(donnees_des_listes_sous_la_fiche(administrateur, [tarif_du_retour]))
+    donnees.update(
+        donnees_des_listes_sous_la_fiche(administrateur, [], produit=retour_existant)
+    )
 
-    reponse = client_de_l_admin.post(URL_D_AJOUT_D_UN_PRODUIT_DE_CAISSE, donnees)
+    reponse = client_de_l_admin.post(
+        URL_DE_MODIFICATION_D_UN_PRODUIT_DE_CAISSE.format(pk=retour_existant.pk),
+        donnees,
+    )
 
-    assert not Product.objects.filter(name=nom_du_produit).exists(), (
+    retour_existant.refresh_from_db()
+    assert retour_existant.name == nom_avant_la_modification, (
         "Le retour de consigne sans consigne reliée a été enregistré."
     )
     assert reponse.status_code == 200

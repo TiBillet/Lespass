@@ -800,7 +800,10 @@ class ReservationValidator(serializers.Serializer):
             Que chaque maximum par user est respecté
             TODO: Que chaque billet possède un nom/prenom si le billet doit être nominatif
         """
-        logger.info(f"validate : {attrs}")
+        # Jamais l'e-mail dans les logs : on retire le champ « email » avant d'ecrire.
+        # / Never the email in logs: the "email" field is removed before writing.
+        attrs_sans_email = {cle: valeur for cle, valeur in attrs.items() if cle != "email"}
+        logger.info(f"validate : {attrs_sans_email}")
         event = self.event
 
         if not hasattr(self, 'admin_created'):
