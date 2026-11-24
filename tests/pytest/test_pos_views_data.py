@@ -9,7 +9,9 @@ Couvre :
   - _construire_donnees_articles : couleurs (override produit / fallback categorie),
     icones Material (stockees / vide), icone_type, fallback icone categorie, bt_groupement,
     prix en centimes, categorie_dict avec icone_type
-  - _construire_donnees_categories : icones Material (stockees / repli)
+  - _construire_donnees_categories : icones Material (stockees / repli), boutons
+    deduits des articles affiches, ordre poid_liste, boutons de repli
+    « Adhésions » / « Divers », recharge masquee sans bouton
   - LaboutikConfiguration.get_solo() : singleton, valeurs par defaut
 
 Prerequis / Prerequisites:
@@ -35,6 +37,7 @@ django.setup()
 import pytest
 from decimal import Decimal
 
+from django.utils import translation
 from django_tenants.utils import schema_context
 
 from Customers.models import Client
@@ -844,7 +847,11 @@ def test_articles_sans_categorie_boutons_adhesions_puis_divers(tenant):
 
         boutons = boutons_du_point_de_vente(pdv)
         identifiants_des_boutons = [c['id'] for c in boutons]
-        noms_des_boutons = [str(c['name']) for c in boutons]
+
+        # Les noms sont traduits : on les lit en francais, quelle que soit la langue active.
+        # / Names are translated: read them in French, whatever the active language.
+        with translation.override('fr'):
+            noms_des_boutons = [str(c['name']) for c in boutons]
 
     assert identifiants_des_boutons == [str(vraie_categorie.uuid), 'adhesions', 'default']
     assert noms_des_boutons[1:] == ['Adhésions', 'Divers']
@@ -872,29 +879,70 @@ def test_pas_de_bouton_de_repli_quand_tout_est_categorise(tenant):
     assert 'default' not in identifiants_des_boutons
 
 
-def test_une_tuile_non_affichee_ne_cree_pas_de_bouton(tenant):
+def test_une_recharge_masquee_ne_cree_pas_de_bouton(tenant):
     """
-    Les boutons viennent des articles AFFICHES, pas du M2M products : un produit du
-    point de vente sans tuile (recharge masquee, pas de tarif...) ne cree pas de bouton.
-    On le simule en passant une liste d'articles vide.
-    / Buttons come from DISPLAYED articles: a product without a tile adds no button.
+    Les boutons viennent des articles AFFICHES, pas du M2M products.
+    Sans « mode recharge », la tuile de recharge n'est pas construite :
+    sa categorie n'a pas de bouton. Avec le mode recharge, le bouton existe.
+    / Buttons come from DISPLAYED articles: a hidden top-up tile adds no button.
     """
     with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import CategorieProduct
+        from BaseBillet.models import CategorieProduct, Price, Product
+        from fedow_core.models import Asset
         from laboutik.models import PointDeVente
-        from laboutik.views import _construire_donnees_categories
-
-        categorie = CategorieProduct.objects.create(name=f'{TEST_PREFIX} Cat sans tuile')
-        pdv = PointDeVente.objects.create(
-            name=f'{TEST_PREFIX} PDV Tuile masquee',
-            comportement=PointDeVente.DIRECT,
+        from laboutik.views import (
+            _construire_donnees_articles,
+            _construire_donnees_categories,
         )
-        pdv.products.add(creer_article_de_caisse('Article masque', categorie_pos=categorie))
 
-        aucun_article_affiche = []
-        categories = _construire_donnees_categories(pdv, aucun_article_affiche)
+        # Une recharge a besoin d'un Asset actif et non archive, sinon la caisse la masque.
+        # / A top-up needs an active, non-archived Asset, otherwise the POS hides it.
+        tenant_client = Client.objects.get(schema_name=TENANT_SCHEMA)
+        asset_recharge = Asset.objects.filter(
+            tenant_origin=tenant_client,
+            category=Asset.TLF,
+            active=True,
+            archive=False,
+        ).first()
+        assert asset_recharge is not None, (
+            "Le lieu de dev doit avoir une monnaie locale (Asset TLF) active et non archivee"
+        )
 
-    assert categories == []
+        categorie_des_ventes = CategorieProduct.objects.create(name=f'{TEST_PREFIX} Cat Ventes')
+        categorie_des_recharges = CategorieProduct.objects.create(
+            name=f'{TEST_PREFIX} Cat Recharges'
+        )
+        produit_recharge = Product.objects.create(
+            name=f'{TEST_PREFIX} Recharge masquee',
+            methode_caisse=Product.RECHARGE_EUROS,
+            categorie_pos=categorie_des_recharges,
+            asset=asset_recharge,
+        )
+        Price.objects.create(
+            product=produit_recharge,
+            name=f'{TEST_PREFIX} Tarif Recharge masquee',
+            prix=Decimal('10.00'),
+        )
+
+        pdv = PointDeVente.objects.create(
+            name=f'{TEST_PREFIX} PDV Recharge masquee',
+            comportement=PointDeVente.CASHLESS,
+        )
+        pdv.products.add(
+            creer_article_de_caisse('Vente visible', categorie_pos=categorie_des_ventes),
+            produit_recharge,
+        )
+
+        # Caissier sans « mode recharge » / Cashier without top-up mode
+        articles_sans_recharge = _construire_donnees_articles(pdv, afficher_les_recharges=False)
+        boutons_sans_recharge = _construire_donnees_categories(pdv, articles_sans_recharge)
+
+        # Caissier en « mode recharge » / Cashier in top-up mode
+        articles_avec_recharge = _construire_donnees_articles(pdv, afficher_les_recharges=True)
+        boutons_avec_recharge = _construire_donnees_categories(pdv, articles_avec_recharge)
+
+    assert [c['id'] for c in boutons_sans_recharge] == [str(categorie_des_ventes.uuid)]
+    assert str(categorie_des_recharges.uuid) in [c['id'] for c in boutons_avec_recharge]
 
 
 # ---------------------------------------------------------------------------

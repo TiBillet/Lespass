@@ -11,7 +11,7 @@
 **Pourquoi / Why :** le M2M faisait doublon avec `Product.categorie_pos`. Quand les deux divergeaient, un article n'avait pas de bouton, ou un bouton affichait une grille vide (cas « Billetterie » sur « Accueil Festival », ou « Cashless » pour un caissier sans « mode recharge »).
 / The M2M duplicated `Product.categorie_pos`; mismatches gave missing buttons or empty grids.
 
-Au passage : la description du type « Cashless » dans l'admin ne cite plus le bouton « Recharger » du check carte. Depuis le « mode recharge », il dépend de la carte primaire, pas du type de caisse.
+Au passage : la description du type « Cashless » dans l'admin ne cite plus le bouton « Recharger » du check carte. Depuis le « mode recharge », il dépend de la carte primaire, pas du type de caisse. Elle précise que les recharges ne s'affichent que pour une carte primaire en « mode recharge ». Les commentaires du modèle sur les types de caisse décrivent ce que fait vraiment le code (seule Billetterie ajoute des articles).
 / Also: the "Cashless" type description no longer mentions the check-card top-up button, which now depends on the primary card's top-up mode.
 
 ### Fichiers modifies / Modified files
@@ -22,7 +22,7 @@ Au passage : la description du type « Cashless » dans l'admin ne cite plus le 
 | `laboutik/migrations/0004_pointdevente_sans_categories.py` | `RemoveField` |
 | `Administration/admin/laboutik.py` | Champ retiré du fieldset (« Produits ») et de `filter_horizontal` ; description Cashless corrigée |
 | `laboutik/management/commands/create_test_pos_data.py` | Plus de `.categories.set(...)`, plus de catégorie « Billetterie » |
-| `tests/pytest/test_pos_views_data.py` | Test 6 réécrit + 4 tests (boutons déduits, ordre, repli, tuile masquée) |
+| `tests/pytest/test_pos_views_data.py` | Test 6 réécrit + 4 tests (boutons déduits, ordre, repli, recharge masquée sans « mode recharge ») |
 | `tests/pytest/test_pos_models.py`, `tests/pytest/test_stock_visuel_pos.py` | Plus d'usage du M2M |
 
 **i18n :** 2 nouvelles chaînes (« Divers », « Adhésions ») + la description Cashless modifiée. Workflow i18n à lancer.

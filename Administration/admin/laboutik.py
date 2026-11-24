@@ -200,7 +200,9 @@ DESCRIPTIONS_DES_TYPES_DE_POINT_DE_VENTE = {
         "Comme Direct, avec deux différences. "
         "1) Pour chaque vente, la caisse demande la carte du client avant le paiement. "
         "2) Une nouvelle monnaie ajoute sa recharge à cette caisse. "
-        "Les recharges des monnaies plus anciennes se choisissent dans « Produits », plus bas."
+        "Les recharges des monnaies plus anciennes se choisissent dans « Produits », plus bas. "
+        "Les recharges ne s'affichent que pour un caissier dont la carte primaire "
+        "est en « mode recharge »."
     ),
     PointDeVente.BILLETTERIE: _(
         "Pour vendre des billets sur place. Les tarifs des événements à venir "

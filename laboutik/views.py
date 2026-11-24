@@ -1217,8 +1217,7 @@ def _construire_donnees_categories(
     if il_y_a_des_articles_sans_categorie:
         categories.append(CATEGORIE_PAR_DEFAUT)
 
-    # --- 3. PV BILLETTERIE : les evenements a venir ---
-    # PV BILLETTERIE : ajouter les events futurs comme pseudo-catégories
+    # --- 3. PV BILLETTERIE : les evenements a venir, comme pseudo-categories ---
     # La jauge event dans la sidebar = jauge globale (toutes catégories confondues)
     # / BILLETTERIE POS: add future events as pseudo-categories
     # Event gauge in sidebar = global gauge (all rates combined)

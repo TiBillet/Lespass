@@ -808,11 +808,10 @@ class TPEBancaire(models.Model):
 class PointDeVente(models.Model):
     """
     Un point de vente physique ou virtuel (bar, restaurant, billetterie, etc.).
-    Le type du PV (comportement) determine le chargement automatique des articles.
-    Les articles du M2M products sont toujours charges en plus.
-    / A physical or virtual point of sale (bar, restaurant, ticketing, etc.).
-    The POS type (comportement) determines automatic article loading.
-    M2M products are always loaded in addition.
+    La caisse affiche les articles du M2M products. Seul le type BILLETTERIE
+    ajoute d'autres articles : les tarifs des evenements a venir.
+    / A physical or virtual point of sale. The POS shows the M2M products.
+    Only the BILLETTERIE type adds other articles: upcoming event prices.
 
     LOCALISATION : laboutik/models.py
     """
@@ -830,21 +829,21 @@ class PointDeVente(models.Model):
         help_text=_("Icon name (e.g. Bootstrap Icons class)."),
     )
 
-    # Type du point de vente — determine le chargement automatique des articles.
-    # DIRECT : articles du M2M products uniquement (bar, restaurant, etc.)
-    # ADHESION : charge automatiquement tous les Product(categorie_article=ADHESION)
-    # CASHLESS : charge automatiquement toutes les recharges (tuiles visibles seulement
-    #            pour une carte primaire en mode recharge)
-    # BILLETTERIE : construit les articles depuis les evenements futurs
-    # AVANCE : mode commande restaurant (reserve, pas code)
-    # Les articles du M2M products sont toujours charges EN PLUS du chargement automatique.
-    # / POS type — determines automatic article loading.
-    # DIRECT: M2M products only (bar, restaurant, etc.)
-    # ADHESION: auto-loads all Product(categorie_article=ADHESION)
-    # CASHLESS: auto-loads all top-up products
-    # BILLETTERIE: builds articles from future events
-    # AVANCE: restaurant order mode (reserved, not coded)
-    # M2M products are always loaded IN ADDITION to automatic loading.
+    # Type du point de vente. Tous les types affichent les articles du M2M products.
+    # DIRECT : rien de plus (bar, restaurant, boutique, accueil...).
+    # ADHESION : se comporte comme DIRECT. N'est plus propose dans l'admin.
+    # CASHLESS : comme DIRECT, mais la caisse demande la carte du client avant le
+    #            paiement (hx_display_type_payment.html). Une nouvelle monnaie ajoute
+    #            sa recharge au M2M de ces points de vente (fedow_core/signals.py).
+    #            Les tuiles de recharge ne s'affichent que pour une carte primaire en
+    #            « mode recharge ».
+    # BILLETTERIE : ajoute les tarifs des evenements a venir.
+    # AVANCE : mode commande restaurant, pas code. N'est plus propose dans l'admin.
+    # TIREUSE : cree tout seul avec une tireuse (controlvanne/signals.py).
+    # / POS type. Every type shows the M2M products.
+    # DIRECT: nothing more. ADHESION: same as DIRECT, no longer offered.
+    # CASHLESS: asks the client card before payment; new currencies add their top-up.
+    # BILLETTERIE: adds upcoming event prices. AVANCE: not coded. TIREUSE: auto-created.
     DIRECT = 'D'
     ADHESION = 'A'
     CASHLESS = 'C'
