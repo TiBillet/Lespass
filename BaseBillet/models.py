@@ -1694,9 +1694,14 @@ class TicketProductManager(models.Manager):
     """
     Manager for TicketProduct.
     With it, when using 'TicketProduct.objects.all()' only product with categorie_article__in=[Product.BILLET, Product.FREERES] will be returned
+    Les passes en sont exclus : ils ont leur propre proxy, PassProduct.
+    / Passes are excluded: they have their own proxy, PassProduct.
     """
     def get_queryset(self):
-        return super().get_queryset().filter(categorie_article__in=[Product.BILLET, Product.FREERES])
+        return super().get_queryset().filter(
+            categorie_article__in=[Product.BILLET, Product.FREERES],
+            est_un_pass=False,
+        )
 
 
 class TicketProduct(Product):
@@ -1710,6 +1715,35 @@ class TicketProduct(Product):
         proxy = True
         verbose_name = _("Ticket product")
         verbose_name_plural = _("Ticket products")
+
+
+class PassProductManager(models.Manager):
+    """
+    Les produits billet qui sont des passes (est_un_pass=True), payants ou gratuits.
+    / Ticket products that are passes, paid or free.
+    """
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            categorie_article__in=[Product.BILLET, Product.FREERES],
+            est_un_pass=True,
+        )
+
+
+class PassProduct(Product):
+    """
+    Proxy pour la page admin « Pass ». Un pass reste un produit BILLET ou FREERES :
+    seul `est_un_pass` le distingue, et tout le code de vente lit ce champ.
+    / Proxy for the "Pass" admin page; a pass stays a BILLET or FREERES product.
+
+    LOCALISATION : BaseBillet/models.py
+    """
+
+    objects = PassProductManager()
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Pass")
+        verbose_name_plural = _("Passes")
 
 
 class MembershipProductManager(models.Manager):
@@ -2021,7 +2055,7 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
 # stay silent too.
 # Guard: tests/pytest/test_signaux_proxys_product.py fails if a new Product
 # proxy is created without being added to PROXYS_PRODUCT.
-PROXYS_PRODUCT = (TicketProduct, MembershipProduct, ResourceProduct, POSProduct, FutProduct)
+PROXYS_PRODUCT = (TicketProduct, PassProduct, MembershipProduct, ResourceProduct, POSProduct, FutProduct)
 for _proxy_product in PROXYS_PRODUCT:
     post_save.connect(post_save_Product, sender=_proxy_product)
 

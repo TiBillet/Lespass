@@ -15,7 +15,7 @@ from faker import Faker
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, \
-    FormbricksConfig, FormbricksForms, ProductFormField, FederatedPlace, Membership, Tva
+    FormbricksConfig, FormbricksForms, ProductFormField, FederatedPlace, Membership, Tva, EvenementDuPass
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
 from fedow_connect.models import FedowConfig
@@ -1254,6 +1254,25 @@ class Command(BaseCommand):
             prix_gated.adhesions_obligatoires.add(adhesion)
             event_gated.products.add(billet_gated)
 
+            # 4bis) Pass sur l'event gratuit (0 €) et l'event payant (8 €) : la page admin
+            # « Pass » a ainsi un objet à ouvrir (tests/pytest/test_admin_barre_de_module.py).
+            # Le prix du tarif est la somme des lignes, comme après un enregistrement admin.
+            # / Pass over the free and paid events: gives the "Pass" admin page an object.
+            pass_e2e, _ = Product.objects.get_or_create(
+                name="E2E Test — Pass deux événements",
+                defaults={'categorie_article': Product.BILLET, 'est_un_pass': True},
+            )
+            for event_du_pass, prix_dans_le_pass in [(event_gratuit, Decimal("0")), (event_payant, Decimal("8"))]:
+                EvenementDuPass.objects.get_or_create(
+                    produit=pass_e2e, evenement=event_du_pass,
+                    defaults={'prix': prix_dans_le_pass},
+                )
+                event_du_pass.products.add(pass_e2e)
+            Price.objects.get_or_create(
+                product=pass_e2e, name="Pass 2 événements",
+                defaults={'prix': pass_e2e.prix_total_du_pass(), 'publish': True},
+            )
+
             # 5) Adhesion a validation selective : deux tarifs, dont "Solidaire".
             # Ce produit est lu par test_membership_fix_solidaire.py, qui cherche
             # un Product dont le nom contient "validation selective" et un Price
@@ -1298,7 +1317,7 @@ class Command(BaseCommand):
             self._seed_e2e_fixtures_du_panier(tenant)
 
         self.stdout.write(self.style.SUCCESS(
-            "Fixtures E2E assurees sur 'lespass' : 3 events + 9 produits "
+            "Fixtures E2E assurees sur 'lespass' : 3 events + 10 produits "
             "(prefixe 'E2E Test — ' + adhesion a validation selective) + 1 salle."
         ))
 

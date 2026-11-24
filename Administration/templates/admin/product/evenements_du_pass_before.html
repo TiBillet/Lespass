@@ -1,67 +1,24 @@
 {% load i18n %}
 {% comment %}
-CASE « CECI EST UN PASS » DANS LE CADRE « ÉVÉNEMENTS DU PASS »
-/ "This is a pass" checkbox inside the "Pass events" frame
+CHOIX DES ÉVÉNEMENTS DU PASS
+/ Choosing the pass events
 
 LOCALISATION : Administration/templates/admin/product/evenements_du_pass_before.html
-Inclus en haut de EvenementDuPassInline (template_before, Administration/admin/products.py).
-
-La case `est_un_pass` appartient au formulaire du produit. Les inlines sont dans la même
-balise <form> : la déplacer ici ne change rien à ce qui est envoyé.
+Inclus en haut de EvenementDuPassInline (template_before, Administration/admin/products.py),
+sur la page admin « Pass ».
 
 FLUX :
-1. Déplace la case dans ce cadre et masque son ancienne section.
-2. Affiche la liste des événements seulement si la case est cochée, sans enregistrer.
-3. Envoie les événements déjà choisis à chaque recherche (`deja_choisis`) : le serveur
+1. Envoie les événements déjà choisis à chaque recherche (`deja_choisis`) : le serveur
    les retire des choix (EventAdmin.get_search_results).
-4. Renomme le lien d'ajout.
-Sans JavaScript, la case reste dans sa section et la liste est visible.
-/ Moves the checkbox here, shows the list only when checked, hides already chosen events.
+2. Renomme le lien d'ajout.
+/ Hides already chosen events from the event search, renames the add link.
 {% endcomment %}
-<div id="emplacement-case-pass" data-testid="pass-emplacement-case"></div>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const emplacementDeLaCase = document.getElementById("emplacement-case-pass");
-    const ligneDeLaCase = document.querySelector(".field-est_un_pass");
-    const caseCeciEstUnPass = document.getElementById("id_est_un_pass");
-    if (!emplacementDeLaCase || !ligneDeLaCase || !caseCeciEstUnPass) {
-        return;
-    }
-
-    // 1.
-    const blocDeLaCase = ligneDeLaCase.closest(".form-rows") || ligneDeLaCase;
-    const ancienneSection = blocDeLaCase.closest("fieldset");
-    emplacementDeLaCase.appendChild(blocDeLaCase);
-    if (ancienneSection) {
-        ancienneSection.style.display = "none";
-    }
-
-    // 2. Tout ce qui suit l'emplacement dans le cadre : le tableau et le lien d'ajout.
-    // / 2. Everything after the slot: the table and the add link.
-    const elementsDeLaListe = [];
-    let emplacementDejaPasse = false;
-    for (const enfant of emplacementDeLaCase.parentElement.children) {
-        if (enfant === emplacementDeLaCase) {
-            emplacementDejaPasse = true;
-            continue;
-        }
-        if (emplacementDejaPasse && enfant.tagName !== "SCRIPT") {
-            elementsDeLaListe.push(enfant);
-        }
-    }
-
-    function afficherOuMasquerLaListe() {
-        for (const element of elementsDeLaListe) {
-            element.style.display = caseCeciEstUnPass.checked ? "" : "none";
-        }
-    }
-    caseCeciEstUnPass.addEventListener("change", afficherOuMasquerLaListe);
-    afficherOuMasquerLaListe();
-
-    // 3. L'autocomplétion select2 de Django passe par django.jQuery.ajax : on ajoute
+    // 1. L'autocomplétion select2 de Django passe par django.jQuery.ajax : on ajoute
     // `deja_choisis` à chaque recherche d'événement du pass. Une ligne cochée
     // « supprimer » ne compte pas.
-    // / 3. Add `deja_choisis` to each pass event search; deleted lines do not count.
+    // / 1. Add `deja_choisis` to each pass event search; deleted lines do not count.
     function evenementsDejaChoisisDansLePass() {
         const evenementsDejaChoisis = [];
         const menusDesEvenements = document.querySelectorAll(
@@ -98,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // 4.
+    // 2.
     const groupeDuPass = document.getElementById("evenements_du_pass-group");
     if (groupeDuPass) {
         // « > » : seulement le <span> enfant direct du lien (le texte). Sans lui, le

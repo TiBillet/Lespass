@@ -363,6 +363,14 @@ def _construire_sections_modules(request):
                         "permission": admin_permission,
                     },
                     {
+                        "title": _("Passes"),
+                        "icon": "confirmation_number",
+                        "link": _safe_rev(
+                            "staff_admin:BaseBillet_passproduct_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
                         "title": _("Carousel"),
                         "icon": "photo_library",
                         "link": _safe_rev(

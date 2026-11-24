@@ -601,68 +601,66 @@ def test_synchronisation_rattache_le_pass_a_ses_evenements_seulement(lieu):
     assert resultat["evenements_retires"] == [evenement_hors_du_pass]
 
 
-def test_liste_des_evenements_du_pass_presente_sur_tout_produit_billet(lieu):
-    """
-    L'inline des événements du pass est toujours dans la fiche d'un produit billet : la
-    case « Ceci est un pass » l'affiche ou le masque côté navigateur, sans enregistrer.
-    / The pass events inline is always on a ticket product page (shown by the checkbox).
-    """
-    from Administration.admin.products import EvenementDuPassInline, TicketProductAdmin
-    from Administration.admin.site import staff_admin_site
-    from BaseBillet.models import TicketProduct
+def test_un_pass_n_est_visible_que_par_le_proxy_pass_product(lieu):
+    """Un pass est listé par PassProduct, jamais par TicketProduct, et l'inverse pour un billet.
+    / A pass is listed by PassProduct only; a normal ticket by TicketProduct only."""
+    from BaseBillet.models import PassProduct, TicketProduct
 
-    admin_des_billets = TicketProductAdmin(TicketProduct, staff_admin_site)
+    le_pass = creer_un_pass_deux_jours()
     produit_normal = creer_evenement_avec_tarif().produit
 
-    assert EvenementDuPassInline in admin_des_billets.get_inlines(None, produit_normal)
-    assert EvenementDuPassInline in admin_des_billets.get_inlines(None, None)
+    assert PassProduct.objects.filter(pk=le_pass.produit_pass.pk).exists()
+    assert not TicketProduct.objects.filter(pk=le_pass.produit_pass.pk).exists()
+    assert TicketProduct.objects.filter(pk=produit_normal.pk).exists()
+    assert not PassProduct.objects.filter(pk=produit_normal.pk).exists()
 
 
-def test_page_admin_d_un_produit_normal_contient_la_case_et_son_emplacement(lieu, admin_client):
-    """
-    La fiche d'un produit billet normal contient la liste des événements du pass et
-    l'emplacement où le script déplace la case.
-    / A normal ticket product page holds the pass events list and the checkbox slot.
-    """
+def test_page_admin_d_un_pass_affiche_ses_evenements_sans_case(lieu, admin_client):
+    """La page « Pass » affiche la liste des événements, sans case « Ceci est un pass ».
+    / The Pass page lists the events, without the checkbox."""
+    le_pass = creer_un_pass_deux_jours()
+
+    reponse = admin_client.get(f"/admin/BaseBillet/passproduct/{le_pass.produit_pass.pk}/change/")
+
+    contenu = reponse.content.decode()
+    assert reponse.status_code == 200
+    assert "evenements_du_pass-TOTAL_FORMS" in contenu
+    assert 'id="id_est_un_pass"' not in contenu
+
+
+def test_fiche_d_un_produit_billet_normal_n_a_rien_du_pass(lieu, admin_client):
+    """La fiche d'un produit billet n'a ni liste d'événements du pass, ni case.
+    / A ticket product page has no pass events list and no checkbox."""
     produit_normal = creer_evenement_avec_tarif().produit
 
     reponse = admin_client.get(f"/admin/BaseBillet/ticketproduct/{produit_normal.pk}/change/")
 
     contenu = reponse.content.decode()
     assert reponse.status_code == 200
-    assert "evenements_du_pass-TOTAL_FORMS" in contenu
-    assert 'id="emplacement-case-pass"' in contenu
-    assert 'id="id_est_un_pass"' in contenu
+    assert "evenements_du_pass-TOTAL_FORMS" not in contenu
+    assert 'id="id_est_un_pass"' not in contenu
 
 
-def test_un_seul_enregistrement_suffit_pour_creer_un_pass(lieu, admin_client):
+def test_creer_un_pass_depuis_la_page_pass(lieu, admin_client):
     """
-    Cocher « Ceci est un pass » et ajouter deux événements dans le même envoi suffit.
-    / Checking the box and adding events in ONE submit creates the pass.
+    Un pass gratuit créé depuis la page « Pass », avec deux événements, en un envoi : il est
+    marqué pass, a ses deux lignes, est rattaché aux deux événements, et a son tarif à 0 €
+    (signal du tarif gratuit, branché sur le proxy par PROXYS_PRODUCT).
+    / Creating a free pass from the Pass page in one submit.
     """
     samedi = creer_evenement_avec_tarif(jours_avant_l_evenement=10).evenement
     dimanche = creer_evenement_avec_tarif(jours_avant_l_evenement=11).evenement
-    produit = Product.objects.create(
-        name=f"TEST_pass {identifiant_unique()}", categorie_article=Product.FREERES
-    )
-    tarif_gratuit = produit.prices.get()
+    nom_du_pass = f"TEST_pass {identifiant_unique()}"
 
     reponse = admin_client.post(
-        f"/admin/BaseBillet/ticketproduct/{produit.pk}/change/",
+        "/admin/BaseBillet/passproduct/add/",
         data={
-            "name": produit.name,
+            "name": nom_du_pass,
             "categorie_article": Product.FREERES,
             "poids": "0",
             "publish": "on",
-            "est_un_pass": "on",
-            "prices-TOTAL_FORMS": "1",
-            "prices-INITIAL_FORMS": "1",
-            "prices-0-uuid": str(tarif_gratuit.uuid),
-            "prices-0-product": str(produit.pk),
-            "prices-0-name": tarif_gratuit.name,
-            "prices-0-prix": "0",
-            "prices-0-publish": "on",
-            "prices-0-order": "100",
+            "prices-TOTAL_FORMS": "0",
+            "prices-INITIAL_FORMS": "0",
             "evenements_du_pass-TOTAL_FORMS": "2",
             "evenements_du_pass-INITIAL_FORMS": "0",
             "evenements_du_pass-0-evenement": str(samedi.uuid),
@@ -682,25 +680,15 @@ def test_un_seul_enregistrement_suffit_pour_creer_un_pass(lieu, admin_client):
             [formset.errors for formset in reponse.context["inline_admin_formsets"]],
         )
     assert reponse.status_code == 302, erreurs
-    produit.refresh_from_db()
+    produit = Product.objects.get(name=nom_du_pass)
     assert produit.est_un_pass is True
     assert produit.evenements_du_pass.count() == 2
     assert samedi.products.filter(pk=produit.pk).exists()
     assert dimanche.products.filter(pk=produit.pk).exists()
+    assert produit.prices.filter(archived=False).count() == 1
 
 
-def test_page_admin_d_un_pass_affiche_ses_evenements(lieu, admin_client):
-    """La page admin d'un pass s'affiche et contient la liste de ses événements.
-    / The admin page of a pass renders and lists its events."""
-    le_pass = creer_un_pass_deux_jours()
-
-    reponse = admin_client.get(f"/admin/BaseBillet/ticketproduct/{le_pass.produit_pass.pk}/change/")
-
-    assert reponse.status_code == 200
-    assert "evenements_du_pass-TOTAL_FORMS" in reponse.content.decode()
-
-
-def donnees_du_formulaire_de_produit_gratuit(produit, est_un_pass=True, tarifs=None, lignes_du_pass=None):
+def donnees_du_formulaire_de_produit_gratuit(tarifs=None, lignes_du_pass=None):
     """
     Données POST minimales du formulaire admin d'un produit gratuit (pas de contrôle Stripe).
     `tarifs` : [{"name", "free_price"}] ; `lignes_du_pass` : [{"evenement", "prix", "supprimer"}].
@@ -710,15 +698,13 @@ def donnees_du_formulaire_de_produit_gratuit(produit, est_un_pass=True, tarifs=N
 
     donnees = QueryDict(mutable=True)
     donnees.update({
-        "name": produit.name,
+        "name": f"TEST_pass {identifiant_unique()}",
         "categorie_article": Product.FREERES,
         "poids": "0",
         "publish": "on",
         "prices-TOTAL_FORMS": str(len(tarifs or [])),
         "prices-INITIAL_FORMS": "0",
     })
-    if est_un_pass:
-        donnees["est_un_pass"] = "on"
     for numero_du_tarif, tarif in enumerate(tarifs or []):
         donnees[f"prices-{numero_du_tarif}-name"] = tarif["name"]
         if tarif.get("free_price"):
@@ -743,134 +729,88 @@ def deux_lignes_de_pass():
     ]
 
 
-def test_formulaire_refuse_un_pass_a_deux_tarifs(lieu):
-    """Un pass n'a qu'un seul tarif : deux tarifs dans le formulaire sont refusés.
-    / A pass has one price only: two prices are refused."""
-    from Administration.admin.products import TicketProductForm
+def test_formulaire_accepte_un_pass_a_un_tarif_et_deux_evenements(lieu):
+    """Un pass gratuit, un tarif fixe, deux événements : accepté.
+    / A free pass with one fixed price and two events is accepted."""
+    from Administration.admin.products import PassProductForm
 
-    produit = Product.objects.create(name=f"TEST_pass {identifiant_unique()}", categorie_article=Product.FREERES)
     donnees = donnees_du_formulaire_de_produit_gratuit(
-        produit, tarifs=[{"name": "Pass"}, {"name": "Pass réduit"}]
+        tarifs=[{"name": "Pass"}], lignes_du_pass=deux_lignes_de_pass()
     )
 
-    formulaire = TicketProductForm(data=donnees, instance=produit)
+    formulaire = PassProductForm(data=donnees)
 
-    assert not formulaire.is_valid()
+    assert formulaire.is_valid(), formulaire.errors
+
+
+def test_formulaire_refuse_un_pass_a_deux_tarifs(lieu):
+    """Un pass n'a qu'un seul tarif : deux tarifs sont refusés.
+    / A pass has one price only: two prices are refused."""
+    from Administration.admin.products import PassProductForm
+
+    donnees = donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Pass"}, {"name": "Pass réduit"}], lignes_du_pass=deux_lignes_de_pass()
+    )
+
+    assert not PassProductForm(data=donnees).is_valid()
 
 
 def test_formulaire_refuse_un_pass_a_prix_libre(lieu):
     """Un pass ne peut pas être à prix libre.
     / A pass cannot be a free price."""
-    from Administration.admin.products import TicketProductForm
+    from Administration.admin.products import PassProductForm
 
-    produit = Product.objects.create(name=f"TEST_pass {identifiant_unique()}", categorie_article=Product.FREERES)
     donnees = donnees_du_formulaire_de_produit_gratuit(
-        produit, tarifs=[{"name": "Pass", "free_price": True}]
+        tarifs=[{"name": "Pass", "free_price": True}], lignes_du_pass=deux_lignes_de_pass()
     )
 
-    formulaire = TicketProductForm(data=donnees, instance=produit)
-
-    assert not formulaire.is_valid()
-
-
-def test_formulaire_refuse_de_transformer_un_produit_vendu_en_pass(lieu):
-    """Un produit dont un billet a été vendu ne peut plus devenir un pass.
-    / A product with a sold ticket cannot become a pass."""
-    from Administration.admin.products import TicketProductForm
-
-    concert = creer_evenement_avec_tarif(prix="10.00")
-    acheteur = creer_utilisateur()
-    reservation = Reservation.objects.create(user_commande=acheteur, event=concert.evenement)
-    vente = ouvrir_vente(origine=SaleOrigin.LESPASS, nature=Vente.Nature.VENTE, client=acheteur)
-    TicketCreator(
-        reservation=reservation,
-        products_dict={concert.produit: {concert.tarif: 1}},
-        create_checkout=False,
-        vente=vente,
-    )
-    Product.objects.filter(pk=concert.produit.pk).update(categorie_article=Product.FREERES)
-    concert.produit.refresh_from_db()
-    donnees = donnees_du_formulaire_de_produit_gratuit(concert.produit, tarifs=[{"name": "Pass"}])
-
-    formulaire = TicketProductForm(data=donnees, instance=concert.produit)
-
-    assert not formulaire.is_valid()
-
-
-def test_formulaire_accepte_un_pass_a_un_tarif(lieu):
-    """Un pass gratuit avec un seul tarif fixe est accepté.
-    / A free pass with one fixed price is accepted."""
-    from Administration.admin.products import TicketProductForm
-
-    produit = Product.objects.create(name=f"TEST_pass {identifiant_unique()}", categorie_article=Product.FREERES)
-    donnees = donnees_du_formulaire_de_produit_gratuit(
-        produit, tarifs=[{"name": "Pass"}], lignes_du_pass=deux_lignes_de_pass()
-    )
-
-    formulaire = TicketProductForm(data=donnees, instance=produit)
-
-    assert formulaire.is_valid(), formulaire.errors
+    assert not PassProductForm(data=donnees).is_valid()
 
 
 def test_formulaire_refuse_un_pass_a_un_seul_evenement(lieu):
     """Un pass qui ne couvre qu'un événement est refusé : il en faut au moins 2.
-    / A pass covering a single event is refused: at least 2 are needed."""
-    from Administration.admin.products import TicketProductForm
+    / A pass covering a single event is refused."""
+    from Administration.admin.products import PassProductForm
 
-    produit = Product.objects.create(name=f"TEST_pass {identifiant_unique()}", categorie_article=Product.FREERES)
-    une_seule_ligne = deux_lignes_de_pass()[:1]
     donnees = donnees_du_formulaire_de_produit_gratuit(
-        produit, tarifs=[{"name": "Pass"}], lignes_du_pass=une_seule_ligne
+        tarifs=[{"name": "Pass"}], lignes_du_pass=deux_lignes_de_pass()[:1]
     )
 
-    formulaire = TicketProductForm(data=donnees, instance=produit)
-
-    assert not formulaire.is_valid()
+    assert not PassProductForm(data=donnees).is_valid()
 
 
 def test_formulaire_refuse_un_pass_dont_une_ligne_n_a_pas_de_prix(lieu):
     """Deux événements, mais l'un sans prix : il ne compte pas, le pass est refusé.
     / Two events but one without a price: refused."""
-    from Administration.admin.products import TicketProductForm
+    from Administration.admin.products import PassProductForm
 
-    produit = Product.objects.create(name=f"TEST_pass {identifiant_unique()}", categorie_article=Product.FREERES)
     lignes = deux_lignes_de_pass()
     lignes[1]["prix"] = ""
-    donnees = donnees_du_formulaire_de_produit_gratuit(
-        produit, tarifs=[{"name": "Pass"}], lignes_du_pass=lignes
-    )
+    donnees = donnees_du_formulaire_de_produit_gratuit(tarifs=[{"name": "Pass"}], lignes_du_pass=lignes)
 
-    formulaire = TicketProductForm(data=donnees, instance=produit)
-
-    assert not formulaire.is_valid()
+    assert not PassProductForm(data=donnees).is_valid()
 
 
 def test_formulaire_refuse_un_pass_dont_une_ligne_est_supprimee(lieu):
     """Deux événements, mais l'un coché « supprimer » : il en reste 1, le pass est refusé.
     / Two events but one marked for deletion: refused."""
-    from Administration.admin.products import TicketProductForm
+    from Administration.admin.products import PassProductForm
 
-    produit = Product.objects.create(name=f"TEST_pass {identifiant_unique()}", categorie_article=Product.FREERES)
     lignes = deux_lignes_de_pass()
     lignes[1]["supprimer"] = True
-    donnees = donnees_du_formulaire_de_produit_gratuit(
-        produit, tarifs=[{"name": "Pass"}], lignes_du_pass=lignes
-    )
+    donnees = donnees_du_formulaire_de_produit_gratuit(tarifs=[{"name": "Pass"}], lignes_du_pass=lignes)
 
-    formulaire = TicketProductForm(data=donnees, instance=produit)
-
-    assert not formulaire.is_valid()
+    assert not PassProductForm(data=donnees).is_valid()
 
 
-def test_formulaire_accepte_un_produit_normal_sans_evenement_de_pass(lieu):
-    """La règle des 2 événements ne touche pas un produit billet normal.
-    / The 2-event rule does not apply to a normal ticket product."""
+def test_formulaire_d_un_produit_billet_n_a_pas_les_regles_du_pass(lieu):
+    """Un produit billet sans événement de pass s'enregistre comme avant.
+    / A ticket product without pass events is saved as before."""
     from Administration.admin.products import TicketProductForm
 
-    produit = Product.objects.create(name=f"TEST_billet {identifiant_unique()}", categorie_article=Product.FREERES)
-    donnees = donnees_du_formulaire_de_produit_gratuit(produit, est_un_pass=False, tarifs=[{"name": "Gratuit"}])
+    donnees = donnees_du_formulaire_de_produit_gratuit(tarifs=[{"name": "Gratuit"}])
 
-    formulaire = TicketProductForm(data=donnees, instance=produit)
+    formulaire = TicketProductForm(data=donnees)
 
     assert formulaire.is_valid(), formulaire.errors
 
