@@ -1743,7 +1743,7 @@ class PassProduct(Product):
     class Meta:
         proxy = True
         verbose_name = _("Pass")
-        verbose_name_plural = _("Passes")
+        verbose_name_plural = _("Pass")
 
 
 class MembershipProductManager(models.Manager):

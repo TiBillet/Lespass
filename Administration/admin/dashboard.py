@@ -363,7 +363,7 @@ def _construire_sections_modules(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Passes"),
+                        "title": _("Pass"),
                         "icon": "confirmation_number",
                         "link": _safe_rev(
                             "staff_admin:BaseBillet_passproduct_changelist"
@@ -1470,7 +1470,7 @@ DESCRIPTION_DES_PAGES = {
     "BaseBillet.reservation": _("Les demandes entrantes."),
     "BaseBillet.ticket": _("Les billets émis."),
     "BaseBillet.ticketproduct": _("Les types de billets proposés."),
-    "BaseBillet.passproduct": _("Les billets qui couvrent plusieurs évènements."),
+    "BaseBillet.passproduct": _("Un seul achat, un billet pour chaque évènement."),
     "BaseBillet.promotionalcode": _("Les réductions ponctuelles."),
     "BaseBillet.carrousel": _("Les images des galeries d'évènements."),
     "BaseBillet.tag": _("Les étiquettes de classement."),

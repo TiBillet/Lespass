@@ -1904,13 +1904,13 @@ class PassPriceInlineForm(TicketPriceInlineForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if "stock" in self.fields:
-            self.fields["stock"].label = _("Nombre maximum de passes")
+            self.fields["stock"].label = _("Nombre maximum de pass")
             self.fields["stock"].help_text = _(
                 "Tous événements confondus. Vide : pas de limite, en dehors des places "
                 "de chaque événement."
             )
         if "max_per_user" in self.fields:
-            self.fields["max_per_user"].label = _("Maximum de passes par personne")
+            self.fields["max_per_user"].label = _("Maximum de pass par personne")
             self.fields["max_per_user"].help_text = _("Vide : pas de limite.")
         if "reward_on_ticket_scanned" in self.fields:
             self.fields["reward_on_ticket_scanned"].help_text = _(
@@ -1985,7 +1985,7 @@ class PassProductForm(ProductAdminCustomForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if "max_per_user" in self.fields:
-            self.fields["max_per_user"].label = _("Maximum de passes par personne")
+            self.fields["max_per_user"].label = _("Maximum de pass par personne")
 
     def clean(self):
         # Les événements d'abord, avant super().clean() qui vérifie déjà un tarif : le

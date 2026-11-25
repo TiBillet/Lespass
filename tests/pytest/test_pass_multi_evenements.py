@@ -889,7 +889,7 @@ def test_page_d_un_pass_n_a_pas_les_champs_d_adhesion_ni_de_prix_saisi(lieu, adm
         "prices-0-reward_on_ticket_scanned",
     ]:
         assert f'name="{champ_present}"' in contenu, champ_present
-    assert "Nombre maximum de passes" in contenu
+    assert "Nombre maximum de pass" in contenu
 
 
 def test_tarif_ajoute_sans_prix_recoit_la_somme_des_lignes(lieu):

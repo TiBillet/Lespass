@@ -1,7 +1,7 @@
 # Pass multi-événements / Multi-event pass
 
 **Date :** 2026-11-20
-**Migration :** Oui — `BaseBillet/migrations/0241_pass_multi_evenements.py` et `0243_proxy_pass_product.py` (proxy, aucune table)
+**Migration :** Oui — `BaseBillet/migrations/0241_pass_multi_evenements.py` et `0243_proxy_pass_product.py` (proxy, aucune table) et `0244_pass_au_pluriel_invariable.py` (nom affiché, aucune requête SQL)
 (`docker exec lespass_django poetry run python manage.py migrate_schemas --executor=standard`)
 
 ## Resume / Summary
@@ -15,7 +15,7 @@ annuler un de ses billets, ou une réservation qui en contient, annule et rembou
 du pass, chacun sur sa réservation. La caisse LaBoutik vend aussi le pass : un billet, une
 réservation et une ligne de vente par événement. Au comptoir, le pass se vend encore après le
 début du premier événement (vente à l'entrée), tant qu'aucun de ses événements n'est terminé, dans
-la limite des places et du stock de passes.
+la limite des places et du stock de pass.
 / A ticket product can become a "pass" covering several events, each with its own price; the
 pass price is the sum. Buying a pass creates one ticket per event, all sharing one pass id. This
 delivery adds the model, stock, ticket creation and cart purchase; direct booking refuses a pass
@@ -38,15 +38,16 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `BaseBillet/migrations/0241_pass_multi_evenements.py` | Migration des trois ajouts |
 | `BaseBillet/models.py` (proxy) | Proxy `PassProduct` (manager `est_un_pass=True`) ajouté à `PROXYS_PRODUCT` pour les signaux ; le manager de `TicketProduct` exclut les passes |
 | `BaseBillet/migrations/0243_proxy_pass_product.py` | Proxy `PassProduct` (aucune table) |
+| `BaseBillet/migrations/0244_pass_au_pluriel_invariable.py` | Nom du modèle au pluriel « Pass » (aucune requête SQL) |
 | `BaseBillet/services_pass.py` | Nouveau : `deplier_le_pass(produit, quantite)` |
 | `BaseBillet/validators.py` | `TicketCreator(identifiants_des_passes=...)` : prix de la ligne du pass, identifiant sur chaque billet, refus d'un pass sans identifiants ou hors de ses événements, pas de code promo sur un pass |
 | `BaseBillet/validators.py` (`ReservationValidator.validate`) | Refus d'un pass en réservation directe (et donc en API v2) : « s'achète par le panier » |
 | `BaseBillet/services_panier.py` | Un pass au panier occupe une place sur chacun de ses événements (`_item_billet_couvre_l_evenement`) ; `add_ticket` vérifie l'événement, la disponibilité, les limites de tous les événements du pass, le stock commun et refuse un code promo ; le total compte la somme des prix par événement |
 | `BaseBillet/services_commande.py` | `materialiser` déplie chaque pass en un item par événement, avec les mêmes identifiants, et le passe dans son propre `TicketCreator` |
 | `BaseBillet/context_processors.py`, `BaseBillet/templates/htmx/components/panier_item.html` | Le panier affiche le nom du pass, son prix total et la liste de ses événements |
-| `Administration/admin/products.py` | Nouvelle page `PassProductAdmin` (pose `est_un_pass=True`, inline `EvenementDuPassInline`, `save_related` → `synchroniser_le_produit_pass` : prix du tarif = somme, produit rattaché aux événements du pass et retiré des autres, messages) ; formulaire sans les champs réservés aux adhésions (descriptions, texte du bouton d'adhésion, mentions légales) ; `PassPriceInline` : tarif unique (`max_num = 1`, une ligne vierge tant qu'il n'y a pas de tarif), affiché après les événements du pass, prix en lecture seule, sans prix libre ni ordre, adhésion obligatoire possible (un tarif adhérent = un second pass), libellés « Nombre maximum de passes » / « Maximum de passes par personne », récompense au scan précisée « à chaque billet scanné » ; `PassProductForm.clean` : un seul tarif et au moins un non supprimé, pas de tarif ajouté à un pass gratuit (le sien est créé tout seul), au moins 2 événements avec leur prix. `TicketProductAdmin` / `TicketProductForm` inchangés par rapport à avant le chantier |
+| `Administration/admin/products.py` | Nouvelle page `PassProductAdmin` (pose `est_un_pass=True`, inline `EvenementDuPassInline`, `save_related` → `synchroniser_le_produit_pass` : prix du tarif = somme, produit rattaché aux événements du pass et retiré des autres, messages) ; formulaire sans les champs réservés aux adhésions (descriptions, texte du bouton d'adhésion, mentions légales) ; `PassPriceInline` : tarif unique (`max_num = 1`, une ligne vierge tant qu'il n'y a pas de tarif), affiché après les événements du pass, prix en lecture seule, sans prix libre ni ordre, adhésion obligatoire possible (un tarif adhérent = un second pass), libellés « Nombre maximum de pass » / « Maximum de pass par personne », récompense au scan précisée « à chaque billet scanné » ; `PassProductForm.clean` : un seul tarif et au moins un non supprimé, pas de tarif ajouté à un pass gratuit (le sien est créé tout seul), au moins 2 événements avec leur prix. `TicketProductAdmin` / `TicketProductForm` inchangés par rapport à avant le chantier |
 | `Administration/admin/products.py` (tarifs) | `compter_les_tarifs_envoyes` et `verifier_qu_il_reste_un_tarif`, utilisées par `PassProductForm` et `TicketProductForm` : refus d'enregistrer un produit billet ou un pass dont le dernier tarif est coché « supprimer » (la règle de `ProductAdminCustomForm` compte les tarifs affichés, même supprimés). Sauf un produit gratuit à sa création (tarif à 0 € créé par signal). Message commun existant « Merci d'ajouter au moins un tarif à ce produit. » |
-| `Administration/admin/dashboard.py` | Entrée « Passes » dans le menu Billetterie, rangée dans « Configurer » avec sa description |
+| `Administration/admin/dashboard.py` | Entrée « Pass » dans le menu Billetterie, rangée dans « Configurer » avec sa description |
 | `Administration/management/commands/demo_data_v2.py` | Fixture E2E « E2E Test — Pass deux événements » (la page « Pass » a un objet à ouvrir) |
 | `Administration/admin/products.py` (`EvenementDuPassInline.get_extra`) | Lignes d'événement vierges jusqu'à 2 : un nouveau pass en propose 2 |
 | `Administration/templates/admin/product/evenements_du_pass_before.html` | Nouveau : envoi des événements déjà choisis à chaque recherche (`deja_choisis`), libellé « Ajouter un événement au pass » |
@@ -55,7 +56,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `BaseBillet/models.py` (annulation) | `cancel_and_refund_ticket` et `cancel_and_refund_resa` annulent tout le pass ; l'annulation d'origine devient `_annuler_et_rembourser_un_seul_billet` / `_annuler_et_rembourser_la_reservation_seule` ; `verifier_qu_aucun_billet_du_pass_n_est_scanne` refuse avant tout remboursement ; `Reservation.contient_des_billets_de_pass()` |
 | `pages/templates/pages/{classic,V2}/vues/compte/reservations.html`, `.../partials/ticket_accordion.html` | La confirmation d'annulation prévient que tout le pass sera annulé |
 | `BaseBillet/models.py` (`pass_est_vendable`) | Paramètre `vente_au_comptoir` : au comptoir, refus seulement si un événement du pass est terminé (au lieu de commencé) |
-| `laboutik/views.py` | `_deplier_l_article_pass` vérifie aussi le stock de passes (message clair au caissier) ; `_extraire_articles_du_panier` déplie un pass (`_deplier_l_article_pass`) en un article par événement au prix de sa ligne ; `_creer_billets_depuis_panier` pose `pass_vendu` et le prix de la ligne sur chaque billet, et rattache chaque ligne de vente à sa réservation (liste de lignes par produit, au même prix unitaire) |
+| `laboutik/views.py` | `_deplier_l_article_pass` vérifie aussi le stock de pass (message clair au caissier) ; `_extraire_articles_du_panier` déplie un pass (`_deplier_l_article_pass`) en un article par événement au prix de sa ligne ; `_creer_billets_depuis_panier` pose `pass_vendu` et le prix de la ligne sur chaque billet, et rattache chaque ligne de vente à sa réservation (liste de lignes par produit, au même prix unitaire) |
 | `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 58 tests |
 | `tests/pytest/test_pass_multi_evenements_caisse.py` | Nouveau : 7 tests (schéma `test_pass_caisse`) |
 
@@ -83,7 +84,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 
 ### Test 1 — créer un pass dans l'admin
 1. Créer deux événements à venir (samedi, dimanche), chacun avec un billet « jour seul ».
-2. Admin > Billetterie > Configurer > Passes : nouveau pass « Pass week-end », type « Billet »,
+2. Admin > Billetterie > Configurer > Pass : nouveau pass « Pass week-end », type « Billet »,
    un tarif « Pass 2 jours » (le prix ne se saisit pas). La page n'a ni descriptions, ni texte du
    bouton d'adhésion, ni mentions légales, ni prix libre. Les événements du pass sont avant le
    tarif, et une fois le tarif créé, le lien pour en ajouter un second disparaît.
