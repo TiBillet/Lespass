@@ -565,9 +565,9 @@ def test_panier_affiche_les_evenements_du_pass_et_son_prix_total(lieu):
 # --------------------------------------------------------------------------
 
 
-def test_synchronisation_met_le_prix_du_tarif_a_la_somme_des_lignes(lieu):
-    """Le tarif du pass prend la somme des prix par événement, sans prix libre.
-    / The pass price takes the sum of the per-event prices, never a free price."""
+def test_synchronisation_met_le_prix_du_tarif_a_la_somme_des_lignes_et_garde_le_prix_libre(lieu):
+    """Le tarif du pass prend la somme des prix par événement ; un prix libre reste coché.
+    / The pass price takes the sum of the per-event prices; a free price stays on."""
     from Administration.admin.products import synchroniser_le_produit_pass
 
     le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
@@ -577,7 +577,7 @@ def test_synchronisation_met_le_prix_du_tarif_a_la_somme_des_lignes(lieu):
 
     le_pass.tarif_pass.refresh_from_db()
     assert le_pass.tarif_pass.prix == Decimal("25.00")
-    assert le_pass.tarif_pass.free_price is False
+    assert le_pass.tarif_pass.free_price is True
 
 
 def test_synchronisation_rattache_le_pass_a_ses_evenements_seulement(lieu):
@@ -871,9 +871,9 @@ def test_formulaire_refuse_un_pass_dont_une_ligne_est_supprimee(lieu):
 
 def test_page_d_un_pass_n_a_pas_les_champs_d_adhesion_ni_de_prix_saisi(lieu, admin_client):
     """
-    La page « Pass » n'a ni les champs réservés aux adhésions, ni prix libre, ni ordre de
-    tarif. Le prix du tarif s'affiche sans pouvoir être saisi.
-    / The Pass page has no membership-only fields, no free price nor order; price is shown only.
+    La page « Pass » n'a ni les champs réservés aux adhésions, ni ordre de tarif. Le prix du
+    tarif s'affiche sans pouvoir être saisi ; le prix libre est proposé.
+    / The Pass page has no membership-only fields nor order; price shown only; free price offered.
     """
     le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
 
@@ -881,11 +881,11 @@ def test_page_d_un_pass_n_a_pas_les_champs_d_adhesion_ni_de_prix_saisi(lieu, adm
 
     for champ_absent in [
         "short_description", "long_description", "validate_button_text", "legal_link",
-        "prices-0-prix", "prices-0-free_price", "prices-0-order",
+        "prices-0-prix", "prices-0-order",
     ]:
         assert f'name="{champ_absent}"' not in contenu, champ_absent
     for champ_present in [
-        "name", "max_per_user", "img", "prices-0-stock", "prices-0-adhesions_obligatoires",
+        "name", "max_per_user", "img", "prices-0-free_price", "prices-0-stock", "prices-0-adhesions_obligatoires",
         "prices-0-reward_on_ticket_scanned",
     ]:
         assert f'name="{champ_present}"' in contenu, champ_present
@@ -1448,3 +1448,124 @@ def test_panier_annonce_le_nombre_de_pass_restants(lieu):
     message = message_du_refus_au_panier(panier, le_pass.samedi, le_pass.tarif_pass, 3)
 
     assert message == "Il ne reste que 2 pass au tarif « Pass 2 jours »."
+
+
+
+# --------------------------------------------------------------------------
+# Le pass à prix libre
+# / The free-price pass
+# --------------------------------------------------------------------------
+
+
+def test_repartition_donne_le_minimum_puis_partage_le_reste():
+    """Minimums 10 € et 0 €, 30 € payés : reste 20 € partagé, soit 20 € et 10 €.
+    / Minimums 10 and 0, 30 paid: 20 and 10."""
+    from BaseBillet.services_pass import repartir_le_montant_du_pass
+
+    lignes = [SimpleNamespace(prix=Decimal("10.00")), SimpleNamespace(prix=Decimal("0"))]
+
+    assert repartir_le_montant_du_pass(lignes, 3000) == [2000, 1000]
+
+
+def test_repartition_au_minimum_exact_donne_les_minimums():
+    """Payer exactement le minimum donne à chaque événement son minimum.
+    / Paying the exact minimum gives each event its minimum."""
+    from BaseBillet.services_pass import repartir_le_montant_du_pass
+
+    lignes = [SimpleNamespace(prix=Decimal("12.00")), SimpleNamespace(prix=Decimal("13.00"))]
+
+    assert repartir_le_montant_du_pass(lignes, 2500) == [1200, 1300]
+
+
+def test_repartition_donne_l_arrondi_au_dernier_evenement():
+    """10 € sur 3 événements à 0 € : 3,33 + 3,33 + 3,34 €, la somme tombe juste.
+    / 10 over 3 zero-minimum events: the last takes the rounding."""
+    from BaseBillet.services_pass import repartir_le_montant_du_pass
+
+    lignes = [SimpleNamespace(prix=Decimal("0"))] * 3
+
+    assert repartir_le_montant_du_pass(lignes, 1000) == [333, 333, 334]
+
+
+def creer_un_pass_a_prix_libre():
+    """Pass 12 € + 13 € à prix libre : minimum 25 €. / Free-price pass, minimum 25."""
+    le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
+    Price.objects.filter(pk=le_pass.tarif_pass.pk).update(free_price=True)
+    le_pass.tarif_pass.refresh_from_db()
+    return le_pass
+
+
+def test_panier_compte_le_montant_saisi_d_un_pass_a_prix_libre(lieu):
+    """Pass à prix libre, 30 € saisis : le total du panier vaut 3000 centimes.
+    / Free-price pass with 30 typed: the cart total is 3000 cents."""
+    le_pass = creer_un_pass_a_prix_libre()
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    panier.add_ticket(le_pass.samedi.uuid, le_pass.tarif_pass.uuid, qty=1, custom_amount="30.00")
+
+    assert panier.calcul_total_centimes() == 3000
+
+
+def test_panier_refuse_un_montant_sous_le_minimum_du_pass(lieu):
+    """Pass à prix libre de minimum 25 € : 20 € saisis sont refusés.
+    / Free-price pass with a 25 minimum: 20 is refused."""
+    le_pass = creer_un_pass_a_prix_libre()
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    with pytest.raises(InvalidItemError):
+        panier.add_ticket(le_pass.samedi.uuid, le_pass.tarif_pass.uuid, qty=1, custom_amount="20.00")
+
+
+def test_paiement_d_un_pass_a_prix_libre_repartit_le_montant(lieu):
+    """
+    Pass 12 € + 13 € à prix libre, 30 € payés : le samedi reçoit 14,50 € et le dimanche
+    15,50 € (minimum + la moitié des 5 € de reste).
+    / 30 paid: Saturday 14.50, Sunday 15.50 (minimum + half of the 5 left).
+    """
+    le_pass = creer_un_pass_a_prix_libre()
+    acheteur = creer_utilisateur()
+    panier = PanierSession(requete_avec_session(acheteur))
+    panier.add_ticket(le_pass.samedi.uuid, le_pass.tarif_pass.uuid, qty=1, custom_amount="30.00")
+
+    commande = payer_le_panier(panier, acheteur)
+
+    reservation_du_samedi = commande.reservations.get(event=le_pass.samedi)
+    reservation_du_dimanche = commande.reservations.get(event=le_pass.dimanche)
+    assert LigneArticle.objects.get(reservation=reservation_du_samedi).amount == 1450
+    assert LigneArticle.objects.get(reservation=reservation_du_dimanche).amount == 1550
+    assert reservation_du_samedi.tickets.get().pricesold.prix == Decimal("14.50")
+
+
+def test_formulaire_accepte_un_pass_payant_a_prix_libre(lieu):
+    """Un pass payant peut être à prix libre. / A paid pass can be a free price."""
+    from Administration.admin.products import PassProductForm
+
+    donnees = donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Pass au chapeau", "free_price": True}],
+        lignes_du_pass=deux_lignes_de_pass(),
+        tarifs_deja_enregistres=True,
+        categorie=Product.BILLET,
+    )
+
+    with patch(
+        "Administration.admin.products.Configuration.get_solo",
+        return_value=SimpleNamespace(stripe_payouts_enabled=True),
+    ):
+        formulaire = PassProductForm(data=donnees)
+        assert formulaire.is_valid(), formulaire.errors
+
+
+def test_formulaire_refuse_un_pass_gratuit_a_prix_libre(lieu):
+    """Un pass gratuit ne peut pas être à prix libre. / A free pass cannot be a free price."""
+    from Administration.admin.products import PassProductForm
+
+    donnees = donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Tarif gratuit", "free_price": True}],
+        lignes_du_pass=deux_lignes_de_pass(),
+        tarifs_deja_enregistres=True,
+    )
+
+    formulaire = PassProductForm(data=donnees)
+
+    assert not formulaire.is_valid()
+    assert "Un pass gratuit ne peut pas être à prix libre." in formulaire.non_field_errors()

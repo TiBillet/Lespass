@@ -1785,8 +1785,8 @@ class EvenementDuPassInline(TabularInline):
 
 def synchroniser_le_produit_pass(produit_pass):
     """
-    Aligne un pass enregistré sur ses événements : le tarif prend la somme des prix (sans
-    prix libre), et le produit n'est rattaché qu'aux événements du pass.
+    Aligne un pass enregistré sur ses événements : le tarif prend la somme des prix (le
+    minimum, s'il est à prix libre), et le produit n'est rattaché qu'aux événements du pass.
     / Aligns a saved pass: price = sum, attached to its events only.
 
     LOCALISATION : Administration/admin/products.py
@@ -1800,7 +1800,7 @@ def synchroniser_le_produit_pass(produit_pass):
 
     # update() : écrit le prix sans repasser par la validation du formulaire de tarif.
     # / update(): writes the price without the price form validation.
-    produit_pass.prices.filter(archived=False).update(prix=prix_du_pass, free_price=False)
+    produit_pass.prices.filter(archived=False).update(prix=prix_du_pass)
 
     evenements_du_pass = []
     for ligne_du_pass in produit_pass.lignes_du_pass():
@@ -1832,13 +1832,14 @@ def compter_les_tarifs_envoyes(donnees_du_formulaire):
 
     LOCALISATION : Administration/admin/products.py
 
-    :return: dict avec "gardes" (tarifs non supprimés), "nouveaux" (parmi eux, ceux qui
-        ne sont pas encore enregistrés) et "deja_enregistres" (INITIAL_FORMS)
+    :return: dict avec "gardes" (tarifs non supprimés), "nouveaux" et "a_prix_libre" (parmi
+        eux, ceux pas encore enregistrés et ceux à prix libre), "deja_enregistres" (INITIAL_FORMS)
     """
     nombre_de_tarifs_deja_enregistres = int(donnees_du_formulaire.get("prices-INITIAL_FORMS", 0))
     nombre_de_formulaires_de_tarif = int(donnees_du_formulaire.get("prices-TOTAL_FORMS", 0))
     nombre_de_tarifs_gardes = 0
     nombre_de_nouveaux_tarifs = 0
+    nombre_de_tarifs_a_prix_libre = 0
     for numero_du_tarif in range(nombre_de_formulaires_de_tarif):
         nom_du_tarif = donnees_du_formulaire.get(f"prices-{numero_du_tarif}-name", "")
         tarif_a_supprimer = donnees_du_formulaire.get(f"prices-{numero_du_tarif}-DELETE") == "on"
@@ -1846,9 +1847,12 @@ def compter_les_tarifs_envoyes(donnees_du_formulaire):
             nombre_de_tarifs_gardes += 1
             if numero_du_tarif >= nombre_de_tarifs_deja_enregistres:
                 nombre_de_nouveaux_tarifs += 1
+            if donnees_du_formulaire.get(f"prices-{numero_du_tarif}-free_price") == "on":
+                nombre_de_tarifs_a_prix_libre += 1
     return {
         "gardes": nombre_de_tarifs_gardes,
         "nouveaux": nombre_de_nouveaux_tarifs,
+        "a_prix_libre": nombre_de_tarifs_a_prix_libre,
         "deja_enregistres": nombre_de_tarifs_deja_enregistres,
     }
 
@@ -1912,6 +1916,11 @@ class PassPriceInlineForm(TicketPriceInlineForm):
         if "max_per_user" in self.fields:
             self.fields["max_per_user"].label = _("Maximum de pass par personne")
             self.fields["max_per_user"].help_text = _("Vide : pas de limite.")
+        if "free_price" in self.fields:
+            self.fields["free_price"].help_text = _(
+                "Le prix ci-contre est le minimum. Chaque événement reçoit son prix dans le "
+                "pass, puis le reste du montant payé est partagé à parts égales."
+            )
         if "reward_on_ticket_scanned" in self.fields:
             self.fields["reward_on_ticket_scanned"].help_text = _(
                 "Le portefeuille est crédité à chaque billet scanné : un pass de 2 "
@@ -1930,8 +1939,9 @@ class PassPriceInlineForm(TicketPriceInlineForm):
 class PassPriceInline(TicketPriceInline):
     """
     Le tarif unique d'un pass. Le prix est la somme des prix par événement : affiché, pas
-    saisi. Pas de prix libre ni d'ordre. Pour un tarif adhérent, on crée un second pass.
-    / The single pass price: shown, not typed. A members' price is a second pass.
+    saisi (c'est le minimum si le tarif est à prix libre). Pas d'ordre. Pour un tarif
+    adhérent, on crée un second pass.
+    / The single pass price: shown, not typed (the minimum for a free price).
 
     LOCALISATION : Administration/admin/products.py
     """
@@ -1952,7 +1962,7 @@ class PassPriceInline(TicketPriceInline):
 
     fields = (
         "name",
-        "prix",
+        ("prix", "free_price"),
         ("stock", "max_per_user"),
         "adhesions_obligatoires",
         "publish",
@@ -2014,6 +2024,9 @@ class PassProductForm(ProductAdminCustomForm):
                 _("Un pass n'a qu'un seul tarif : son prix est la somme des prix par événement.")
             )
         verifier_qu_il_reste_un_tarif(tarifs_envoyes, categorie)
+
+        if categorie == Product.FREERES and tarifs_envoyes["a_prix_libre"] > 0:
+            raise forms.ValidationError(_("Un pass gratuit ne peut pas être à prix libre."))
 
         # Pass gratuit : le signal post_save_Product lui crée son tarif à 0 €. Un tarif
         # ajouté ici en ferait un second.

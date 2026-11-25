@@ -161,6 +161,8 @@ def _build_items_with_details(panier):
                         detail['annulation_par_le_client_refusee'] = True
                 detail['evenements_du_pass'] = evenements_du_pass
                 detail['prix_du_pass'] = product.prix_total_du_pass()
+                if price.free_price and item.get('custom_amount'):
+                    detail['prix_du_pass'] = Decimal(str(item['custom_amount']))
 
             # Code promo : le panier affiche le prix avant remise, le prix remisé et le code,
             # calculés comme au paiement (PanierSession.code_promo_du_billet,

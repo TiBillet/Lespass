@@ -1360,9 +1360,11 @@ class PanierSession:
             else:
                 amount_eur = price.prix or Decimal("0.00")
 
-            # Pass : le paiement facture la somme des prix par événement.
-            # / Pass: the checkout bills the sum of the per-event prices.
-            if item.get('type') == 'ticket' and price.product.est_un_pass:
+            # Pass à prix fixe : le paiement facture la somme des prix par événement.
+            # Pass à prix libre : le montant saisi, déjà pris juste au-dessus.
+            # / Fixed pass: sum of the per-event prices; free-price pass: the typed amount.
+            pass_a_prix_libre_saisi = price.free_price and item.get('custom_amount')
+            if item.get('type') == 'ticket' and price.product.est_un_pass and not pass_a_prix_libre_saisi:
                 amount_eur = price.product.prix_total_du_pass()
 
             # Billet avec code promo : même remise qu'au paiement.

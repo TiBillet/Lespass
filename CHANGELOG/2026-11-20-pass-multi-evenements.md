@@ -45,8 +45,9 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `BaseBillet/services_panier.py` | Un pass au panier occupe une place sur chacun de ses événements (`_item_billet_couvre_l_evenement`) ; `add_ticket` vérifie l'événement, la disponibilité, les limites de tous les événements du pass, le stock commun et refuse un code promo ; le total compte la somme des prix par événement |
 | `BaseBillet/services_commande.py` | `materialiser` déplie chaque pass en un item par événement, avec les mêmes identifiants, et le passe dans son propre `TicketCreator` |
 | `BaseBillet/context_processors.py`, `BaseBillet/templates/htmx/components/panier_item.html` | Le panier affiche le nom du pass, son prix total et la liste de ses événements |
-| `Administration/admin/products.py` | Nouvelle page `PassProductAdmin` (pose `est_un_pass=True`, inline `EvenementDuPassInline`, `save_related` → `synchroniser_le_produit_pass` : prix du tarif = somme, produit rattaché aux événements du pass et retiré des autres, messages) ; formulaire sans les champs réservés aux adhésions (descriptions, texte du bouton d'adhésion, mentions légales) ; `PassPriceInline` : tarif unique (`max_num = 1`, une ligne vierge tant qu'il n'y a pas de tarif), affiché après les événements du pass, prix en lecture seule, sans prix libre ni ordre, adhésion obligatoire possible (un tarif adhérent = un second pass), libellés « Nombre maximum de pass » / « Maximum de pass par personne », récompense au scan précisée « à chaque billet scanné » ; `PassProductForm.clean` : un seul tarif et au moins un non supprimé, pas de tarif ajouté à un pass gratuit (le sien est créé tout seul), au moins 2 événements avec leur prix. `TicketProductAdmin` / `TicketProductForm` inchangés par rapport à avant le chantier |
+| `Administration/admin/products.py` | Nouvelle page `PassProductAdmin` (pose `est_un_pass=True`, inline `EvenementDuPassInline`, `save_related` → `synchroniser_le_produit_pass` : prix du tarif = somme, produit rattaché aux événements du pass et retiré des autres, messages) ; formulaire sans les champs réservés aux adhésions (descriptions, texte du bouton d'adhésion, mentions légales) ; `PassPriceInline` : tarif unique (`max_num = 1`, une ligne vierge tant qu'il n'y a pas de tarif), affiché après les événements du pass, prix en lecture seule (minimum si prix libre), prix libre possible pour un pass payant, sans ordre, adhésion obligatoire possible (un tarif adhérent = un second pass), libellés « Nombre maximum de pass » / « Maximum de pass par personne », récompense au scan précisée « à chaque billet scanné » ; `PassProductForm.clean` : un seul tarif et au moins un non supprimé, pas de tarif ajouté à un pass gratuit (le sien est créé tout seul), pas de prix libre sur un pass gratuit, au moins 2 événements avec leur prix. `TicketProductAdmin` / `TicketProductForm` inchangés par rapport à avant le chantier |
 | `Administration/admin/products.py` (tarifs) | `compter_les_tarifs_envoyes` et `verifier_qu_il_reste_un_tarif`, utilisées par `PassProductForm` et `TicketProductForm` : refus d'enregistrer un produit billet ou un pass dont le dernier tarif est coché « supprimer » (la règle de `ProductAdminCustomForm` compte les tarifs affichés, même supprimés). Sauf un produit gratuit à sa création (tarif à 0 € créé par signal). Message commun existant « Merci d'ajouter au moins un tarif à ce produit. » |
+| `BaseBillet/services_pass.py` (`repartir_le_montant_du_pass`), `services_commande.py`, `services_panier.py`, `context_processors.py`, `validators.py`, `laboutik/views.py` | Pass à prix libre : le montant payé est réparti, chaque événement reçoit son prix dans le pass (le minimum), puis le reste est partagé à parts égales entre tous les événements (le dernier prend l'arrondi). Panier (total, affichage, paiement) et caisse |
 | `BaseBillet/models.py` (`Price.stock_restant`) | Nombre de places libres du tarif (`None` = illimité) ; `out_of_stock` s'appuie dessus, même résultat qu'avant |
 | `BaseBillet/services_panier.py` (`message_de_stock_insuffisant`) | Le refus d'ajout au panier pour stock insuffisant donne le nom du tarif et ce qu'il reste (« Il ne reste que 3 billets au tarif « Plein tarif ». », en pass pour un pass), ou dit que le tarif est épuisé, ou que les dernières places sont déjà dans le panier. Remplace « Ce tarif est épuisé. » pour les billets |
 | `Administration/admin/dashboard.py` | Entrée « Pass » dans le menu Billetterie, rangée dans « Configurer » avec sa description |
@@ -59,8 +60,8 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `pages/templates/pages/{classic,V2}/vues/compte/reservations.html`, `.../partials/ticket_accordion.html` | La confirmation d'annulation prévient que tout le pass sera annulé |
 | `BaseBillet/models.py` (`pass_est_vendable`) | Paramètre `vente_au_comptoir` : au comptoir, refus seulement si un événement du pass est terminé (au lieu de commencé) |
 | `laboutik/views.py` | `_deplier_l_article_pass` vérifie aussi le stock de pass (message clair au caissier) ; `_extraire_articles_du_panier` déplie un pass (`_deplier_l_article_pass`) en un article par événement au prix de sa ligne ; `_creer_billets_depuis_panier` pose `pass_vendu` et le prix de la ligne sur chaque billet, et rattache chaque ligne de vente à sa réservation (liste de lignes par produit, au même prix unitaire) |
-| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 63 tests |
-| `tests/pytest/test_pass_multi_evenements_caisse.py` | Nouveau : 7 tests (schéma `test_pass_caisse`) |
+| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 71 tests |
+| `tests/pytest/test_pass_multi_evenements_caisse.py` | Nouveau : 8 tests (schéma `test_pass_caisse`) |
 
 ### Pas encore fait / Not done yet
 - Formulaire de l'événement : masquer « Payer maintenant » quand un pass est choisi (aujourd'hui,
@@ -88,7 +89,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 1. Créer deux événements à venir (samedi, dimanche), chacun avec un billet « jour seul ».
 2. Admin > Billetterie > Configurer > Pass : nouveau pass « Pass week-end », type « Billet »,
    un tarif « Pass 2 jours » (le prix ne se saisit pas). La page n'a ni descriptions, ni texte du
-   bouton d'adhésion, ni mentions légales, ni prix libre. Les événements du pass sont avant le
+   bouton d'adhésion, ni mentions légales. Les événements du pass sont avant le
    tarif, et une fois le tarif créé, le lien pour en ajouter un second disparaît.
 3. La page propose déjà 2 lignes d'événement vierges et 1 ligne de tarif. Y mettre samedi
    (12 €) et dimanche (13 €), enregistrer une seule fois (pour un pass gratuit, laisser la ligne
@@ -112,7 +113,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 ### Test 2 — tests automatiques
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements.py -q`
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements_caisse.py -q`
-- Attendu : 63 passed et 7 passed.
+- Attendu : 71 passed et 8 passed.
 
 ### Test 3 — achat par le panier
 1. Partir du pass du Test 1 (samedi + dimanche).
@@ -147,6 +148,15 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 5. Le samedi commencé (pas terminé), vendre un pass en caisse : accepté. En ligne au même moment,
    l'ajout du pass au panier est refusé.
 6. Stock du tarif pass à 1, un pass déjà vendu : la caisse affiche « Plus de pass … disponible ».
+7. Cocher « Prix libre » sur le tarif du pass (12 € + 13 €), vendre un pass à 30 € : les lignes de
+   vente valent 14,50 € (samedi) et 15,50 € (dimanche).
+
+### Test 6 — pass à prix libre en ligne
+1. Pass payant 12 € + 13 €, cocher « Prix libre » sur son tarif (minimum 25 €).
+2. Sur le site, ajouter le pass au panier avec 20 € : refusé (sous le minimum). Avec 30 € : le
+   panier affiche 30 €.
+3. Payer : les lignes de vente valent 14,50 € (samedi) et 15,50 € (dimanche).
+4. Admin : un pass gratuit avec « Prix libre » coché est refusé.
 
 ### Verifs DB
 - Après un achat : `Ticket.objects.filter(pass_vendu=<uuid>)` renvoie un billet par événement du pass.

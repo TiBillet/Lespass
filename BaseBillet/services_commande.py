@@ -265,7 +265,7 @@ class CommandeService:
             # -- Phase 2 : Reservations groupées par event_uuid --
             # -- Phase 2: Reservations grouped by event_uuid --
             from BaseBillet.models import Event
-            from BaseBillet.services_pass import deplier_le_pass
+            from BaseBillet.services_pass import deplier_le_pass, repartir_le_montant_du_pass
             tickets_par_event = {}
             for item in panier.items():
                 if item['type'] != 'ticket':
@@ -278,9 +278,25 @@ class CommandeService:
                 price_de_l_item = Price.objects.get(uuid=item['price_uuid'])
                 if price_de_l_item.product.est_un_pass:
                     pass_deplie = deplier_le_pass(price_de_l_item.product, int(item['qty']))
-                    for ligne_du_pass in pass_deplie["lignes_du_pass"]:
+
+                    # Pass à prix libre : le montant saisi (pour un pass) est réparti entre
+                    # ses événements. Seulement si le tarif est ENCORE à prix libre.
+                    # / Free-price pass: the typed amount is split between its events.
+                    parts_du_montant_en_centimes = None
+                    if item.get('custom_amount') and price_de_l_item.free_price:
+                        parts_du_montant_en_centimes = repartir_le_montant_du_pass(
+                            pass_deplie["lignes_du_pass"],
+                            dec_to_int(Decimal(str(item['custom_amount']))),
+                        )
+
+                    for numero_de_la_ligne, ligne_du_pass in enumerate(pass_deplie["lignes_du_pass"]):
                         uuid_de_l_evenement = str(ligne_du_pass.evenement.uuid)
                         item_du_pass_pour_cet_evenement = dict(item)
+                        item_du_pass_pour_cet_evenement['part_du_montant_en_centimes'] = None
+                        if parts_du_montant_en_centimes is not None:
+                            item_du_pass_pour_cet_evenement['part_du_montant_en_centimes'] = (
+                                parts_du_montant_en_centimes[numero_de_la_ligne]
+                            )
                         item_du_pass_pour_cet_evenement['event_uuid'] = uuid_de_l_evenement
                         item_du_pass_pour_cet_evenement['identifiants_des_passes'] = (
                             pass_deplie["identifiants_des_passes"]
@@ -383,9 +399,15 @@ class CommandeService:
                 # / A pass item gets its own TicketCreator with its pass ids.
                 for item_de_pass in items_de_pass:
                     price = Price.objects.get(uuid=item_de_pass['price_uuid'])
+                    part_de_cet_evenement = {}
+                    if item_de_pass['part_du_montant_en_centimes'] is not None:
+                        part_de_cet_evenement = {
+                            price.uuid: Decimal(item_de_pass['part_du_montant_en_centimes']) / 100,
+                        }
                     creator = TicketCreator(
                         reservation=reservation,
                         products_dict={price.product: {price: int(item_de_pass['qty'])}},
+                        custom_amounts=part_de_cet_evenement,
                         sale_origin=SaleOrigin.LESPASS,
                         create_checkout=False,
                         vente=vente,

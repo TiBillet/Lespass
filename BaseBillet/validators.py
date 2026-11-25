@@ -463,10 +463,13 @@ class TicketCreator():
 
             montant_du_billet = self.custom_amounts.get(price_generique.uuid)
 
-            # Pass : le billet coûte le prix de sa ligne, sans code promo.
-            # / Pass: the ticket costs its line price, no promo code.
+            # Pass : le billet coûte le prix de sa ligne, sans code promo. Pass à prix
+            # libre : l'appelant donne la part de cet événement dans custom_amounts
+            # (services_pass.repartir_le_montant_du_pass).
+            # / Pass: line price, no promo code; free-price pass: the caller gives the share.
             if price_generique.product.est_un_pass:
-                montant_du_billet = self._prix_de_cet_evenement_dans_le_pass(price_generique, event)
+                if montant_du_billet is None:
+                    montant_du_billet = self._prix_de_cet_evenement_dans_le_pass(price_generique, event)
                 code_promo_de_ce_tarif = None
             identifiants_des_passes = self._identifiants_des_passes_pour_ce_tarif(price_generique, qty)
 

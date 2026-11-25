@@ -6852,7 +6852,9 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         # / Pass: one article per event, at its line price.
         if est_billet and produit.est_un_pass:
             articles_panier.extend(
-                _deplier_l_article_pass(produit, prix_obj, quantite, event_billet)
+                _deplier_l_article_pass(
+                    produit, prix_obj, quantite, event_billet, custom_amount_centimes
+                )
             )
             continue
 
@@ -6872,17 +6874,21 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
     return articles_panier
 
 
-def _deplier_l_article_pass(produit_pass, tarif_pass, quantite, evenement_de_la_tuile):
+def _deplier_l_article_pass(
+    produit_pass, tarif_pass, quantite, evenement_de_la_tuile, montant_saisi_en_centimes=None
+):
     """
     Transforme l'article « pass » de la caisse en un article billet par événement, avec
     les mêmes identifiants de pass. Refuse (ValueError) si l'événement de la tuile n'est
     pas dans le pass, si le pass n'est plus vendable au comptoir, ou si le stock est épuisé.
     Au comptoir, le pass se vend encore le premier jour, après le début de l'événement.
+    Pass à prix libre : `montant_saisi_en_centimes` (pour un pass, minimum déjà vérifié)
+    est réparti entre les événements (services_pass.repartir_le_montant_du_pass).
     / Turns the register "pass" article into one ticket article per event.
 
     LOCALISATION : laboutik/views.py
     """
-    from BaseBillet.services_pass import deplier_le_pass
+    from BaseBillet.services_pass import deplier_le_pass, repartir_le_montant_du_pass
 
     pass_deplie = deplier_le_pass(produit_pass, quantite)
     evenements_du_pass = []
@@ -6904,19 +6910,28 @@ def _deplier_l_article_pass(produit_pass, tarif_pass, quantite, evenement_de_la_
             _("Plus de pass « %(pass)s » disponible.") % {"pass": produit_pass.name}
         )
 
-    articles_du_pass = []
+    parts_en_centimes = []
     for ligne_du_pass in pass_deplie["lignes_du_pass"]:
+        parts_en_centimes.append(int(round(ligne_du_pass.prix * 100)))
+    if tarif_pass.free_price and montant_saisi_en_centimes is not None:
+        parts_en_centimes = repartir_le_montant_du_pass(
+            pass_deplie["lignes_du_pass"], montant_saisi_en_centimes
+        )
+
+    articles_du_pass = []
+    for numero_de_la_ligne, ligne_du_pass in enumerate(pass_deplie["lignes_du_pass"]):
+        part_en_centimes = parts_en_centimes[numero_de_la_ligne]
         articles_du_pass.append(
             {
                 "product": produit_pass,
                 "price": tarif_pass,
                 "quantite": quantite,
-                "prix_centimes": int(round(ligne_du_pass.prix * 100)),
+                "prix_centimes": part_en_centimes,
                 "custom_amount_centimes": None,
                 "weight_amount": None,
                 "est_billet": True,
                 "event": ligne_du_pass.evenement,
-                "prix_dans_le_pass": ligne_du_pass.prix,
+                "prix_dans_le_pass": Decimal(part_en_centimes) / 100,
                 "identifiants_des_passes": pass_deplie["identifiants_des_passes"],
             }
         )

@@ -248,3 +248,36 @@ class TestPassVenduEnCaisse(DonneesBilletterieMixin, FastTenantTestCase):
         assert reservation_du_samedi.total_paid() == 0
         assert reservation_du_dimanche.total_paid() == 0
         assert reservation_du_dimanche.tickets.get().status == Ticket.CANCELED
+
+    def test_pass_a_prix_libre_vendu_en_caisse_repartit_le_montant(self):
+        """
+        Pass 12 € + 13 € à prix libre, 30 € saisis au comptoir : le samedi reçoit 14,50 € et
+        le dimanche 15,50 € (minimum + la moitié des 5 € de reste).
+        / Free-price pass sold 30 at the register: 14.50 and 15.50.
+        """
+        from BaseBillet.models import LigneArticle, Reservation
+
+        self.tarif_pass.free_price = True
+        self.tarif_pass.save()
+        id_composite = f"{self.samedi.uuid}__{self.tarif_pass.uuid}"
+
+        self.client_http.post(
+            "/laboutik/paiement/payer/",
+            data={
+                "uuid_pv": str(self.pv.uuid),
+                "moyen_paiement": "espece",
+                "total": "3000",
+                "given_sum": "0",
+                "email_adhesion": "pass-caisse-libre@tibillet.localhost",
+                "prenom_adhesion": "Pass",
+                "nom_adhesion": "Libre",
+                f"repid-{id_composite}": "1",
+                f"custom-{id_composite}": "3000",
+            },
+        )
+
+        reservation_du_samedi = Reservation.objects.get(event=self.samedi, tickets__pricesold__price=self.tarif_pass)
+        reservation_du_dimanche = Reservation.objects.get(event=self.dimanche, tickets__pricesold__price=self.tarif_pass)
+        assert LigneArticle.objects.get(reservation=reservation_du_samedi).amount == 1450
+        assert LigneArticle.objects.get(reservation=reservation_du_dimanche).amount == 1550
+        assert reservation_du_dimanche.tickets.get().pricesold.prix == Decimal("15.50")
