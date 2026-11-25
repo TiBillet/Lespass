@@ -55,7 +55,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `pages/templates/pages/{classic,V2}/vues/compte/reservations.html`, `.../partials/ticket_accordion.html` | La confirmation d'annulation prévient que tout le pass sera annulé |
 | `BaseBillet/models.py` (`pass_est_vendable`) | Paramètre `vente_au_comptoir` : au comptoir, refus seulement si un événement du pass est terminé (au lieu de commencé) |
 | `laboutik/views.py` | `_deplier_l_article_pass` vérifie aussi le stock de passes (message clair au caissier) ; `_extraire_articles_du_panier` déplie un pass (`_deplier_l_article_pass`) en un article par événement au prix de sa ligne ; `_creer_billets_depuis_panier` pose `pass_vendu` et le prix de la ligne sur chaque billet, et rattache chaque ligne de vente à sa réservation (liste de lignes par produit, au même prix unitaire) |
-| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 56 tests |
+| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 57 tests |
 | `tests/pytest/test_pass_multi_evenements_caisse.py` | Nouveau : 7 tests (schéma `test_pass_caisse`) |
 
 ### Pas encore fait / Not done yet
@@ -97,6 +97,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 6. Retirer le dimanche du pass, enregistrer : message « Le pass n'est plus proposé sur … ».
 7. Ajouter un 2e tarif, ajouter un tarif à un pass gratuit, supprimer le tarif (corbeille), ou ne
    garder qu'un seul événement (ou un événement sans prix) : enregistrement refusé avec un message.
+   S'il manque à la fois des événements et un tarif, le message sur les événements vient d'abord.
 8. Code promo : le produit pass n'est pas proposé dans la liste des produits.
 8bis. Sur un produit billet (« Produits billetterie »), supprimer son seul tarif à la corbeille puis
    enregistrer : refusé avec « Merci d'ajouter au moins un tarif à ce produit. ».
@@ -106,7 +107,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 ### Test 2 — tests automatiques
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements.py -q`
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements_caisse.py -q`
-- Attendu : 56 passed et 7 passed.
+- Attendu : 57 passed et 7 passed.
 
 ### Test 3 — achat par le panier
 1. Partir du pass du Test 1 (samedi + dimanche).

@@ -1282,3 +1282,24 @@ def test_page_des_passes_rangee_dans_configurer():
     from Administration.admin.dashboard import CATEGORIE_DES_PAGES
 
     assert CATEGORIE_DES_PAGES["BaseBillet.passproduct"] == "configurer"
+
+
+def test_formulaire_signale_les_evenements_avant_le_tarif(lieu):
+    """
+    Un pass sans événement ET sans tarif : le message affiché concerne les événements,
+    pas le tarif.
+    / A pass missing both events and price: the events message comes first.
+    """
+    from Administration.admin.products import PassProductForm
+
+    donnees = donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Tarif gratuit", "supprimer": True}],
+        tarifs_deja_enregistres=True,
+    )
+
+    formulaire = PassProductForm(data=donnees)
+
+    assert not formulaire.is_valid()
+    assert formulaire.non_field_errors() == [
+        "Un pass doit couvrir au moins 2 événements, chacun avec son prix dans le pass."
+    ]

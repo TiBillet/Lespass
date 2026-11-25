@@ -1972,6 +1972,23 @@ class PassProductForm(ProductAdminCustomForm):
             self.fields["max_per_user"].label = _("Maximum de passes par personne")
 
     def clean(self):
+        # Les événements d'abord, avant super().clean() qui vérifie déjà un tarif : le
+        # formulaire s'arrête au premier refus. On lit l'inline envoyé, pas la base : il
+        # contient les lignes ajoutées ou supprimées dans ce même enregistrement.
+        # / Events first (first refusal wins), read from the submitted inline, not the DB.
+        nombre_d_evenements_du_pass = 0
+        nombre_de_formulaires_d_evenement = int(self.data.get("evenements_du_pass-TOTAL_FORMS", 0))
+        for numero_de_la_ligne in range(nombre_de_formulaires_d_evenement):
+            evenement_de_la_ligne = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-evenement", "")
+            prix_de_la_ligne = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-prix", "")
+            ligne_a_supprimer = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-DELETE") == "on"
+            if evenement_de_la_ligne and prix_de_la_ligne != "" and not ligne_a_supprimer:
+                nombre_d_evenements_du_pass += 1
+        if nombre_d_evenements_du_pass < 2:
+            raise forms.ValidationError(
+                _("Un pass doit couvrir au moins 2 événements, chacun avec son prix dans le pass.")
+            )
+
         resultat_du_formulaire_de_base = super().clean()
 
         categorie = self.cleaned_data.get("categorie_article")
@@ -1988,22 +2005,6 @@ class PassProductForm(ProductAdminCustomForm):
         if categorie == Product.FREERES and tarifs_envoyes["nouveaux"] > 0:
             raise forms.ValidationError(
                 _("Un pass gratuit reçoit son tarif à 0 € automatiquement : n'en ajoutez pas.")
-            )
-
-        # On lit l'inline envoyé, pas la base : il contient les lignes ajoutées ou
-        # supprimées dans ce même enregistrement.
-        # / Read the submitted inline, not the DB: it holds this save's changes.
-        nombre_d_evenements_du_pass = 0
-        nombre_de_formulaires_d_evenement = int(self.data.get("evenements_du_pass-TOTAL_FORMS", 0))
-        for numero_de_la_ligne in range(nombre_de_formulaires_d_evenement):
-            evenement_de_la_ligne = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-evenement", "")
-            prix_de_la_ligne = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-prix", "")
-            ligne_a_supprimer = self.data.get(f"evenements_du_pass-{numero_de_la_ligne}-DELETE") == "on"
-            if evenement_de_la_ligne and prix_de_la_ligne != "" and not ligne_a_supprimer:
-                nombre_d_evenements_du_pass += 1
-        if nombre_d_evenements_du_pass < 2:
-            raise forms.ValidationError(
-                _("Un pass doit couvrir au moins 2 événements, chacun avec son prix dans le pass.")
             )
 
         return resultat_du_formulaire_de_base
