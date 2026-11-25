@@ -688,10 +688,11 @@ def test_creer_un_pass_depuis_la_page_pass(lieu, admin_client):
     assert produit.prices.filter(archived=False).count() == 1
 
 
-def donnees_du_formulaire_de_produit_gratuit(tarifs=None, lignes_du_pass=None):
+def donnees_du_formulaire_de_produit_gratuit(tarifs=None, lignes_du_pass=None, tarifs_deja_enregistres=False):
     """
     Données POST minimales du formulaire admin d'un produit gratuit (pas de contrôle Stripe).
     `tarifs` : [{"name", "free_price"}] ; `lignes_du_pass` : [{"evenement", "prix", "supprimer"}].
+    `tarifs_deja_enregistres` : les tarifs sont des tarifs existants (INITIAL_FORMS), pas nouveaux.
     / Minimal POST data of a free product admin form.
     """
     from django.http import QueryDict
@@ -703,7 +704,7 @@ def donnees_du_formulaire_de_produit_gratuit(tarifs=None, lignes_du_pass=None):
         "poids": "0",
         "publish": "on",
         "prices-TOTAL_FORMS": str(len(tarifs or [])),
-        "prices-INITIAL_FORMS": "0",
+        "prices-INITIAL_FORMS": str(len(tarifs or [])) if tarifs_deja_enregistres else "0",
     })
     for numero_du_tarif, tarif in enumerate(tarifs or []):
         donnees[f"prices-{numero_du_tarif}-name"] = tarif["name"]
@@ -729,14 +730,12 @@ def deux_lignes_de_pass():
     ]
 
 
-def test_formulaire_accepte_un_pass_a_un_tarif_et_deux_evenements(lieu):
-    """Un pass gratuit, un tarif fixe, deux événements : accepté.
-    / A free pass with one fixed price and two events is accepted."""
+def test_formulaire_accepte_un_pass_gratuit_a_deux_evenements(lieu):
+    """Un pass gratuit sans tarif saisi (le sien est créé tout seul), deux événements : accepté.
+    / A free pass without a typed price and two events is accepted."""
     from Administration.admin.products import PassProductForm
 
-    donnees = donnees_du_formulaire_de_produit_gratuit(
-        tarifs=[{"name": "Pass"}], lignes_du_pass=deux_lignes_de_pass()
-    )
+    donnees = donnees_du_formulaire_de_produit_gratuit(lignes_du_pass=deux_lignes_de_pass())
 
     formulaire = PassProductForm(data=donnees)
 
@@ -749,19 +748,21 @@ def test_formulaire_refuse_un_pass_a_deux_tarifs(lieu):
     from Administration.admin.products import PassProductForm
 
     donnees = donnees_du_formulaire_de_produit_gratuit(
-        tarifs=[{"name": "Pass"}, {"name": "Pass réduit"}], lignes_du_pass=deux_lignes_de_pass()
+        tarifs=[{"name": "Pass"}, {"name": "Pass réduit"}],
+        lignes_du_pass=deux_lignes_de_pass(),
+        tarifs_deja_enregistres=True,
     )
 
     assert not PassProductForm(data=donnees).is_valid()
 
 
-def test_formulaire_refuse_un_pass_a_prix_libre(lieu):
-    """Un pass ne peut pas être à prix libre.
-    / A pass cannot be a free price."""
+def test_formulaire_refuse_un_tarif_ajoute_a_un_pass_gratuit(lieu):
+    """Un pass gratuit reçoit son tarif à 0 € tout seul : en ajouter un en ferait deux.
+    / A free pass gets its 0 € price automatically: adding one is refused."""
     from Administration.admin.products import PassProductForm
 
     donnees = donnees_du_formulaire_de_produit_gratuit(
-        tarifs=[{"name": "Pass", "free_price": True}], lignes_du_pass=deux_lignes_de_pass()
+        tarifs=[{"name": "Pass"}], lignes_du_pass=deux_lignes_de_pass()
     )
 
     assert not PassProductForm(data=donnees).is_valid()
@@ -772,9 +773,7 @@ def test_formulaire_refuse_un_pass_a_un_seul_evenement(lieu):
     / A pass covering a single event is refused."""
     from Administration.admin.products import PassProductForm
 
-    donnees = donnees_du_formulaire_de_produit_gratuit(
-        tarifs=[{"name": "Pass"}], lignes_du_pass=deux_lignes_de_pass()[:1]
-    )
+    donnees = donnees_du_formulaire_de_produit_gratuit(lignes_du_pass=deux_lignes_de_pass()[:1])
 
     assert not PassProductForm(data=donnees).is_valid()
 
@@ -786,7 +785,7 @@ def test_formulaire_refuse_un_pass_dont_une_ligne_n_a_pas_de_prix(lieu):
 
     lignes = deux_lignes_de_pass()
     lignes[1]["prix"] = ""
-    donnees = donnees_du_formulaire_de_produit_gratuit(tarifs=[{"name": "Pass"}], lignes_du_pass=lignes)
+    donnees = donnees_du_formulaire_de_produit_gratuit(lignes_du_pass=lignes)
 
     assert not PassProductForm(data=donnees).is_valid()
 
@@ -798,9 +797,97 @@ def test_formulaire_refuse_un_pass_dont_une_ligne_est_supprimee(lieu):
 
     lignes = deux_lignes_de_pass()
     lignes[1]["supprimer"] = True
-    donnees = donnees_du_formulaire_de_produit_gratuit(tarifs=[{"name": "Pass"}], lignes_du_pass=lignes)
+    donnees = donnees_du_formulaire_de_produit_gratuit(lignes_du_pass=lignes)
 
     assert not PassProductForm(data=donnees).is_valid()
+
+
+def test_page_d_un_pass_n_a_pas_les_champs_d_adhesion_ni_de_prix_saisi(lieu, admin_client):
+    """
+    La page « Pass » n'a ni les champs réservés aux adhésions, ni prix libre, ni ordre de
+    tarif. Le prix du tarif s'affiche sans pouvoir être saisi.
+    / The Pass page has no membership-only fields, no free price nor order; price is shown only.
+    """
+    le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
+
+    contenu = admin_client.get(f"/admin/BaseBillet/passproduct/{le_pass.produit_pass.pk}/change/").content.decode()
+
+    for champ_absent in [
+        "short_description", "long_description", "validate_button_text", "legal_link",
+        "prices-0-prix", "prices-0-free_price", "prices-0-order",
+    ]:
+        assert f'name="{champ_absent}"' not in contenu, champ_absent
+    for champ_present in [
+        "name", "max_per_user", "img", "prices-0-stock", "prices-0-adhesions_obligatoires",
+        "prices-0-reward_on_ticket_scanned",
+    ]:
+        assert f'name="{champ_present}"' in contenu, champ_present
+    assert "Nombre maximum de passes" in contenu
+
+
+def test_tarif_ajoute_sans_prix_recoit_la_somme_des_lignes(lieu):
+    """
+    Le tarif d'un pass payant s'enregistre sans prix saisi (0 €), puis la synchronisation
+    lui donne la somme des lignes.
+    / A pass price saved without a typed price gets the sum after the sync.
+    """
+    from django.test import RequestFactory
+
+    from Administration.admin.products import PassPriceInline, synchroniser_le_produit_pass
+    from Administration.admin.site import staff_admin_site
+    from AuthBillet.models import TibilletUser
+    from BaseBillet.models import PassProduct
+
+    le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
+    le_pass.tarif_pass.delete()
+    produit_pass = PassProduct.objects.get(pk=le_pass.produit_pass.pk)
+    requete = RequestFactory().get("/admin/")
+    requete.user = TibilletUser.objects.filter(is_superuser=True).first()
+    classe_du_formset = PassPriceInline(PassProduct, staff_admin_site).get_formset(requete, produit_pass)
+    formset = classe_du_formset(
+        data={
+            "prices-TOTAL_FORMS": "1", "prices-INITIAL_FORMS": "0",
+            "prices-0-name": "Pass 2 jours", "prices-0-publish": "on",
+        },
+        instance=produit_pass,
+        prefix="prices",
+    )
+
+    assert formset.is_valid(), formset.errors
+    formset.save()
+    synchroniser_le_produit_pass(produit_pass)
+
+    assert produit_pass.prices.get(archived=False).prix == Decimal("25.00")
+
+
+def test_page_d_un_pass_montre_les_evenements_avant_le_tarif_unique():
+    """Les événements du pass viennent avant le tarif, limité à un seul.
+    / Pass events come before the price, limited to one."""
+    from Administration.admin.products import EvenementDuPassInline, PassPriceInline, PassProductAdmin
+
+    assert PassProductAdmin.inlines[:2] == [EvenementDuPassInline, PassPriceInline]
+    assert PassPriceInline.max_num == 1
+
+
+def test_pass_reserve_aux_adherents_refuse_au_panier_sans_l_adhesion(lieu):
+    """
+    Un pass dont le tarif exige une adhésion est refusé au panier sans elle, et accepté
+    quand l'adhésion est dans le même panier.
+    / A members-only pass is refused without the membership, accepted with it in the cart.
+    """
+    from fabriques_panier import creer_adhesion
+
+    le_pass = creer_un_pass_deux_jours()
+    adhesion = creer_adhesion()
+    le_pass.tarif_pass.adhesions_obligatoires.add(adhesion.produit)
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    with pytest.raises(InvalidItemError):
+        panier.add_ticket(le_pass.samedi.uuid, le_pass.tarif_pass.uuid, qty=1)
+
+    panier.add_membership(adhesion.tarif.uuid)
+    panier.add_ticket(le_pass.samedi.uuid, le_pass.tarif_pass.uuid, qty=1)
+    assert panier.count() == 2
 
 
 def test_formulaire_d_un_produit_billet_n_a_pas_les_regles_du_pass(lieu):

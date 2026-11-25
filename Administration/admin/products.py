@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from decimal import Decimal
 
 from django import forms
 from django.contrib import admin, messages
@@ -1833,11 +1834,71 @@ class TicketProductForm(ProductAdminCustomForm):
     )
 
 
+class PassPriceInlineForm(TicketPriceInlineForm):
+    """
+    Tarif d'un pass : libellés adaptés à un pass, et prix posé par le serveur.
+    / Pass price: pass labels, price set by the server.
+
+    LOCALISATION : Administration/admin/products.py
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "stock" in self.fields:
+            self.fields["stock"].label = _("Nombre maximum de passes")
+            self.fields["stock"].help_text = _(
+                "Tous événements confondus. Vide : pas de limite, en dehors des places "
+                "de chaque événement."
+            )
+        if "max_per_user" in self.fields:
+            self.fields["max_per_user"].label = _("Maximum de passes par personne")
+            self.fields["max_per_user"].help_text = _("Vide : pas de limite.")
+        if "reward_on_ticket_scanned" in self.fields:
+            self.fields["reward_on_ticket_scanned"].help_text = _(
+                "Le portefeuille est crédité à chaque billet scanné : un pass de 2 "
+                "événements crédite 2 fois."
+            )
+
+    def save(self, commit=True):
+        # Le prix n'est pas dans le formulaire : synchroniser_le_produit_pass le pose
+        # après l'enregistrement. La base exige une valeur pour un nouveau tarif.
+        # / The price is not in the form; the sync sets it. The DB needs a value now.
+        if self.instance.prix is None:
+            self.instance.prix = Decimal("0")
+        return super().save(commit=commit)
+
+
+class PassPriceInline(TicketPriceInline):
+    """
+    Le tarif unique d'un pass. Le prix est la somme des prix par événement : affiché, pas
+    saisi. Pas de prix libre ni d'ordre. Pour un tarif adhérent, on crée un second pass.
+    / The single pass price: shown, not typed. A members' price is a second pass.
+
+    LOCALISATION : Administration/admin/products.py
+    """
+
+    form = PassPriceInlineForm
+    readonly_fields = ("prix",)
+    # Un seul tarif : le lien d'ajout disparaît dès qu'il existe. PassProductForm.clean
+    # refuse aussi un second tarif envoyé quand même.
+    # / One price: the add link disappears once it exists; the form also refuses a second.
+    max_num = 1
+    fields = (
+        "name",
+        "prix",
+        ("stock", "max_per_user"),
+        "adhesions_obligatoires",
+        "publish",
+        "reward_on_ticket_scanned",
+        ("fedow_reward_asset", "fedow_reward_amount"),
+    )
+
+
 class PassProductForm(ProductAdminCustomForm):
     """
     Formulaire d'un pass : payant (billet) ou gratuit (réservation gratuite).
-    Règles : un seul tarif, sans prix libre, et au moins 2 événements avec leur prix.
-    / Pass form: one fixed price, at least 2 events with their price.
+    Règles : un seul tarif, et au moins 2 événements avec leur prix.
+    / Pass form: one price, at least 2 events with their price.
 
     LOCALISATION : Administration/admin/products.py
     """
@@ -1854,21 +1915,37 @@ class PassProductForm(ProductAdminCustomForm):
         label=_("Product type"),
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "max_per_user" in self.fields:
+            self.fields["max_per_user"].label = _("Maximum de passes par personne")
+
     def clean(self):
         resultat_du_formulaire_de_base = super().clean()
 
         nombre_de_tarifs_du_pass = 0
+        nombre_de_nouveaux_tarifs = 0
+        nombre_de_tarifs_deja_enregistres = int(self.data.get("prices-INITIAL_FORMS", 0))
         nombre_de_formulaires_de_tarif = int(self.data.get("prices-TOTAL_FORMS", 0))
         for numero_du_tarif in range(nombre_de_formulaires_de_tarif):
             nom_du_tarif = self.data.get(f"prices-{numero_du_tarif}-name", "")
             tarif_a_supprimer = self.data.get(f"prices-{numero_du_tarif}-DELETE") == "on"
             if nom_du_tarif and not tarif_a_supprimer:
                 nombre_de_tarifs_du_pass += 1
-                if self.data.get(f"prices-{numero_du_tarif}-free_price") == "on":
-                    raise forms.ValidationError(_("Un pass ne peut pas être à prix libre."))
+                if numero_du_tarif >= nombre_de_tarifs_deja_enregistres:
+                    nombre_de_nouveaux_tarifs += 1
         if nombre_de_tarifs_du_pass > 1:
             raise forms.ValidationError(
                 _("Un pass n'a qu'un seul tarif : son prix est la somme des prix par événement.")
+            )
+
+        # Pass gratuit : le signal post_save_Product lui crée son tarif à 0 €. Un tarif
+        # ajouté ici en ferait un second.
+        # / Free pass: the Product signal creates its 0 € price; another would be a second.
+        pass_gratuit = self.cleaned_data.get("categorie_article") == Product.FREERES
+        if pass_gratuit and nombre_de_nouveaux_tarifs > 0:
+            raise forms.ValidationError(
+                _("Un pass gratuit reçoit son tarif à 0 € automatiquement : n'en ajoutez pas.")
             )
 
         # On lit l'inline envoyé, pas la base : il contient les lignes ajoutées ou
@@ -1951,9 +2028,32 @@ class PassProductAdmin(ProductAdmin):
     """
 
     form = PassProductForm
-    inlines = [TicketPriceInline, EvenementDuPassInline, ProductFormFieldInline]
+    # Les événements d'abord : le prix du tarif en découle.
+    # / Events first: the price derives from them.
+    inlines = [EvenementDuPassInline, PassPriceInline, ProductFormFieldInline]
 
     list_filter = ["publish", ProductArchiveFilter]
+
+    # Sans les champs réservés aux adhésions : descriptions, texte du bouton d'adhésion,
+    # lien vers les mentions légales. L'image sert à la tuile de caisse et à Stripe.
+    # / Without the membership-only fields. The image is used by the POS tile and Stripe.
+    fieldsets = (
+        (
+            _("General"),
+            {
+                "fields": (
+                    "name",
+                    "categorie_article",
+                    "tva",
+                    "img",
+                    "poids",
+                    "max_per_user",
+                    "publish",
+                    "archive",
+                ),
+            },
+        ),
+    )
 
     def save_model(self, request, obj, form, change):
         # Le formulaire n'a pas de case : un produit enregistré ici est toujours un pass.
