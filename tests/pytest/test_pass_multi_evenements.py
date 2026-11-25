@@ -688,10 +688,12 @@ def test_creer_un_pass_depuis_la_page_pass(lieu, admin_client):
     assert produit.prices.filter(archived=False).count() == 1
 
 
-def donnees_du_formulaire_de_produit_gratuit(tarifs=None, lignes_du_pass=None, tarifs_deja_enregistres=False):
+def donnees_du_formulaire_de_produit_gratuit(
+    tarifs=None, lignes_du_pass=None, tarifs_deja_enregistres=False, categorie=Product.FREERES
+):
     """
     Données POST minimales du formulaire admin d'un produit gratuit (pas de contrôle Stripe).
-    `tarifs` : [{"name", "free_price"}] ; `lignes_du_pass` : [{"evenement", "prix", "supprimer"}].
+    `tarifs` : [{"name", "free_price", "supprimer"}] ; `lignes_du_pass` : [{"evenement", "prix", "supprimer"}].
     `tarifs_deja_enregistres` : les tarifs sont des tarifs existants (INITIAL_FORMS), pas nouveaux.
     / Minimal POST data of a free product admin form.
     """
@@ -700,7 +702,7 @@ def donnees_du_formulaire_de_produit_gratuit(tarifs=None, lignes_du_pass=None, t
     donnees = QueryDict(mutable=True)
     donnees.update({
         "name": f"TEST_pass {identifiant_unique()}",
-        "categorie_article": Product.FREERES,
+        "categorie_article": categorie,
         "poids": "0",
         "publish": "on",
         "prices-TOTAL_FORMS": str(len(tarifs or [])),
@@ -710,6 +712,8 @@ def donnees_du_formulaire_de_produit_gratuit(tarifs=None, lignes_du_pass=None, t
         donnees[f"prices-{numero_du_tarif}-name"] = tarif["name"]
         if tarif.get("free_price"):
             donnees[f"prices-{numero_du_tarif}-free_price"] = "on"
+        if tarif.get("supprimer"):
+            donnees[f"prices-{numero_du_tarif}-DELETE"] = "on"
     donnees["evenements_du_pass-TOTAL_FORMS"] = str(len(lignes_du_pass or []))
     for numero_de_la_ligne, ligne in enumerate(lignes_du_pass or []):
         donnees[f"evenements_du_pass-{numero_de_la_ligne}-evenement"] = ligne["evenement"]
@@ -766,6 +770,69 @@ def test_formulaire_refuse_un_tarif_ajoute_a_un_pass_gratuit(lieu):
     )
 
     assert not PassProductForm(data=donnees).is_valid()
+
+
+def test_formulaire_refuse_de_supprimer_le_tarif_d_un_pass_gratuit(lieu):
+    """Supprimer le tarif enregistré d'un pass gratuit le laisserait sans tarif : refusé.
+    / Deleting a saved free pass's price would leave it without one: refused."""
+    from Administration.admin.products import PassProductForm
+
+    donnees = donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Tarif gratuit", "supprimer": True}],
+        lignes_du_pass=deux_lignes_de_pass(),
+        tarifs_deja_enregistres=True,
+    )
+
+    assert not PassProductForm(data=donnees).is_valid()
+
+
+def message_un_tarif_au_moins_est_dans(formulaire):
+    """Vrai si le formulaire refuse avec le message commun « au moins un tarif » (en français,
+    langue par défaut du projet).
+    / True if the form refuses with the shared "at least one price" message."""
+    return "Merci d'ajouter au moins un tarif à ce produit." in formulaire.non_field_errors()
+
+
+def donnees_d_un_pass_payant_a_un_tarif_enregistre(supprimer_le_tarif):
+    """Un pass payant et son tarif enregistré, supprimé ou non, avec un compte Stripe simulé actif.
+    / A paid pass with its saved price, deleted or not, and a simulated active Stripe account."""
+    return donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Pass 2 jours", "supprimer": supprimer_le_tarif}],
+        lignes_du_pass=deux_lignes_de_pass(),
+        tarifs_deja_enregistres=True,
+        categorie=Product.BILLET,
+    )
+
+
+def test_formulaire_accepte_un_pass_payant_qui_garde_son_tarif(lieu):
+    """Témoin : un pass payant qui garde son tarif est accepté.
+    / Control: a paid pass keeping its price is accepted."""
+    from Administration.admin.products import PassProductForm
+
+    donnees = donnees_d_un_pass_payant_a_un_tarif_enregistre(supprimer_le_tarif=False)
+
+    with patch(
+        "Administration.admin.products.Configuration.get_solo",
+        return_value=SimpleNamespace(stripe_payouts_enabled=True),
+    ):
+        formulaire = PassProductForm(data=donnees)
+        assert formulaire.is_valid(), formulaire.errors
+
+
+def test_formulaire_refuse_de_supprimer_le_seul_tarif_d_un_pass_payant(lieu):
+    """Supprimer le seul tarif d'un pass payant est refusé : le pass n'aurait plus de tarif.
+    / Deleting a paid pass's only price is refused."""
+    from Administration.admin.products import PassProductForm
+
+    donnees = donnees_d_un_pass_payant_a_un_tarif_enregistre(supprimer_le_tarif=True)
+
+    with patch(
+        "Administration.admin.products.Configuration.get_solo",
+        return_value=SimpleNamespace(stripe_payouts_enabled=True),
+    ):
+        formulaire = PassProductForm(data=donnees)
+        assert not formulaire.is_valid()
+        assert message_un_tarif_au_moins_est_dans(formulaire)
 
 
 def test_formulaire_refuse_un_pass_a_un_seul_evenement(lieu):
@@ -888,6 +955,58 @@ def test_pass_reserve_aux_adherents_refuse_au_panier_sans_l_adhesion(lieu):
     panier.add_membership(adhesion.tarif.uuid)
     panier.add_ticket(le_pass.samedi.uuid, le_pass.tarif_pass.uuid, qty=1)
     assert panier.count() == 2
+
+
+def test_formulaire_billet_refuse_de_supprimer_son_seul_tarif(lieu):
+    """Un produit billet payant dont on supprime le seul tarif est refusé, avec le message commun.
+    / A paid ticket product whose only price is deleted is refused."""
+    from Administration.admin.products import TicketProductForm
+
+    donnees = donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Plein tarif", "supprimer": True}],
+        tarifs_deja_enregistres=True,
+        categorie=Product.BILLET,
+    )
+
+    with patch(
+        "Administration.admin.products.Configuration.get_solo",
+        return_value=SimpleNamespace(stripe_payouts_enabled=True),
+    ):
+        formulaire = TicketProductForm(data=donnees)
+        assert not formulaire.is_valid()
+        assert message_un_tarif_au_moins_est_dans(formulaire)
+
+
+def test_formulaire_billet_accepte_un_produit_qui_garde_son_tarif(lieu):
+    """Témoin : un produit billet payant qui garde son tarif est accepté.
+    / Control: a paid ticket product keeping its price is accepted."""
+    from Administration.admin.products import TicketProductForm
+
+    donnees = donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Plein tarif"}],
+        tarifs_deja_enregistres=True,
+        categorie=Product.BILLET,
+    )
+
+    with patch(
+        "Administration.admin.products.Configuration.get_solo",
+        return_value=SimpleNamespace(stripe_payouts_enabled=True),
+    ):
+        formulaire = TicketProductForm(data=donnees)
+        assert formulaire.is_valid(), formulaire.errors
+
+
+def test_formulaire_billet_gratuit_refuse_de_supprimer_son_tarif(lieu):
+    """Un produit gratuit enregistré dont on supprime le tarif est refusé aussi.
+    / A saved free ticket product whose price is deleted is refused too."""
+    from Administration.admin.products import TicketProductForm
+
+    donnees = donnees_du_formulaire_de_produit_gratuit(
+        tarifs=[{"name": "Tarif gratuit", "supprimer": True}],
+        tarifs_deja_enregistres=True,
+    )
+
+    assert not TicketProductForm(data=donnees).is_valid()
 
 
 def test_formulaire_d_un_produit_billet_n_a_pas_les_regles_du_pass(lieu):

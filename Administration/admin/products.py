@@ -1817,6 +1817,49 @@ def synchroniser_le_produit_pass(produit_pass):
     }
 
 
+def compter_les_tarifs_envoyes(donnees_du_formulaire):
+    """
+    Compte les tarifs de l'inline envoyé qui ne sont pas cochés « supprimer ».
+    / Counts the submitted inline prices not marked for deletion.
+
+    LOCALISATION : Administration/admin/products.py
+
+    :return: dict avec "gardes" (tarifs non supprimés), "nouveaux" (parmi eux, ceux qui
+        ne sont pas encore enregistrés) et "deja_enregistres" (INITIAL_FORMS)
+    """
+    nombre_de_tarifs_deja_enregistres = int(donnees_du_formulaire.get("prices-INITIAL_FORMS", 0))
+    nombre_de_formulaires_de_tarif = int(donnees_du_formulaire.get("prices-TOTAL_FORMS", 0))
+    nombre_de_tarifs_gardes = 0
+    nombre_de_nouveaux_tarifs = 0
+    for numero_du_tarif in range(nombre_de_formulaires_de_tarif):
+        nom_du_tarif = donnees_du_formulaire.get(f"prices-{numero_du_tarif}-name", "")
+        tarif_a_supprimer = donnees_du_formulaire.get(f"prices-{numero_du_tarif}-DELETE") == "on"
+        if nom_du_tarif and not tarif_a_supprimer:
+            nombre_de_tarifs_gardes += 1
+            if numero_du_tarif >= nombre_de_tarifs_deja_enregistres:
+                nombre_de_nouveaux_tarifs += 1
+    return {
+        "gardes": nombre_de_tarifs_gardes,
+        "nouveaux": nombre_de_nouveaux_tarifs,
+        "deja_enregistres": nombre_de_tarifs_deja_enregistres,
+    }
+
+
+def verifier_qu_il_reste_un_tarif(tarifs_envoyes, categorie):
+    """
+    Refuse d'enregistrer un produit billet sans tarif non supprimé. La règle de
+    ProductAdminCustomForm compte les tarifs affichés, même cochés « supprimer » : elle
+    laisse passer le dernier tarif supprimé. Exception : un produit gratuit qu'on crée,
+    dont le tarif à 0 € est créé par le signal post_save_Product.
+    / Refuses a ticket product without a non-deleted price (except a new free product).
+
+    LOCALISATION : Administration/admin/products.py
+    """
+    nouveau_produit_gratuit = categorie == Product.FREERES and tarifs_envoyes["deja_enregistres"] == 0
+    if tarifs_envoyes["gardes"] == 0 and not nouveau_produit_gratuit:
+        raise forms.ValidationError(_("Please add at least one rate to this product."))
+
+
 class TicketProductForm(ProductAdminCustomForm):
     """Formulaire produit restreint aux types billetterie.
     Product form restricted to ticket types."""
@@ -1832,6 +1875,14 @@ class TicketProductForm(ProductAdminCustomForm):
         widget=UnfoldAdminSelectWidget(),
         label=_("Product type"),
     )
+
+    def clean(self):
+        resultat_du_formulaire_de_base = super().clean()
+        verifier_qu_il_reste_un_tarif(
+            compter_les_tarifs_envoyes(self.data),
+            self.cleaned_data.get("categorie_article"),
+        )
+        return resultat_du_formulaire_de_base
 
 
 class PassPriceInlineForm(TicketPriceInlineForm):
@@ -1923,27 +1974,18 @@ class PassProductForm(ProductAdminCustomForm):
     def clean(self):
         resultat_du_formulaire_de_base = super().clean()
 
-        nombre_de_tarifs_du_pass = 0
-        nombre_de_nouveaux_tarifs = 0
-        nombre_de_tarifs_deja_enregistres = int(self.data.get("prices-INITIAL_FORMS", 0))
-        nombre_de_formulaires_de_tarif = int(self.data.get("prices-TOTAL_FORMS", 0))
-        for numero_du_tarif in range(nombre_de_formulaires_de_tarif):
-            nom_du_tarif = self.data.get(f"prices-{numero_du_tarif}-name", "")
-            tarif_a_supprimer = self.data.get(f"prices-{numero_du_tarif}-DELETE") == "on"
-            if nom_du_tarif and not tarif_a_supprimer:
-                nombre_de_tarifs_du_pass += 1
-                if numero_du_tarif >= nombre_de_tarifs_deja_enregistres:
-                    nombre_de_nouveaux_tarifs += 1
-        if nombre_de_tarifs_du_pass > 1:
+        categorie = self.cleaned_data.get("categorie_article")
+        tarifs_envoyes = compter_les_tarifs_envoyes(self.data)
+        if tarifs_envoyes["gardes"] > 1:
             raise forms.ValidationError(
                 _("Un pass n'a qu'un seul tarif : son prix est la somme des prix par événement.")
             )
+        verifier_qu_il_reste_un_tarif(tarifs_envoyes, categorie)
 
         # Pass gratuit : le signal post_save_Product lui crée son tarif à 0 €. Un tarif
         # ajouté ici en ferait un second.
         # / Free pass: the Product signal creates its 0 € price; another would be a second.
-        pass_gratuit = self.cleaned_data.get("categorie_article") == Product.FREERES
-        if pass_gratuit and nombre_de_nouveaux_tarifs > 0:
+        if categorie == Product.FREERES and tarifs_envoyes["nouveaux"] > 0:
             raise forms.ValidationError(
                 _("Un pass gratuit reçoit son tarif à 0 € automatiquement : n'en ajoutez pas.")
             )
