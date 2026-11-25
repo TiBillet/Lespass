@@ -1762,6 +1762,14 @@ class EvenementDuPassInline(TabularInline):
     verbose_name = _("Événement du pass")
     verbose_name_plural = _("Événements du pass")
 
+    def get_extra(self, request, obj=None, **kwargs):
+        # Lignes vierges jusqu'à 2, le minimum d'un pass : 2 sur un nouveau pass.
+        # / Blank rows up to 2, a pass minimum: 2 on a new pass.
+        nombre_d_evenements_enregistres = 0
+        if obj is not None:
+            nombre_d_evenements_enregistres = obj.evenements_du_pass.count()
+        return max(0, 2 - nombre_d_evenements_enregistres)
+
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
@@ -1934,6 +1942,14 @@ class PassPriceInline(TicketPriceInline):
     # refuse aussi un second tarif envoyé quand même.
     # / One price: the add link disappears once it exists; the form also refuses a second.
     max_num = 1
+
+    def get_extra(self, request, obj=None, **kwargs):
+        # Une ligne vierge tant que le pass n'a pas de tarif.
+        # / One blank row while the pass has no price.
+        if obj is not None and obj.prices.filter(archived=False).exists():
+            return 0
+        return 1
+
     fields = (
         "name",
         "prix",

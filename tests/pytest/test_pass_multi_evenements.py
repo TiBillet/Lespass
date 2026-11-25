@@ -677,7 +677,7 @@ def test_creer_un_pass_depuis_la_page_pass(lieu, admin_client):
     if reponse.status_code == 200:
         erreurs = (
             reponse.context["adminform"].form.errors,
-            [formset.errors for formset in reponse.context["inline_admin_formsets"]],
+            [inline.formset.errors for inline in reponse.context["inline_admin_formsets"]],
         )
     assert reponse.status_code == 302, erreurs
     produit = Product.objects.get(name=nom_du_pass)
@@ -1303,3 +1303,76 @@ def test_formulaire_signale_les_evenements_avant_le_tarif(lieu):
     assert formulaire.non_field_errors() == [
         "Un pass doit couvrir au moins 2 événements, chacun avec son prix dans le pass."
     ]
+
+
+def valeurs_initiales_du_formulaire(contenu_html):
+    """
+    Les valeurs que le navigateur envoie pour un formulaire laissé tel quel : champs texte et
+    cachés avec leur valeur, cases cochées, option choisie de chaque liste. Les gabarits vides
+    des lignes ajoutées en JavaScript (`__prefix__`) sont ignorés.
+    / The values a browser sends for an untouched form.
+    """
+    import html as module_html
+    import re
+
+    donnees = {}
+    for balise in re.findall(r"<input\b[^>]*>", contenu_html):
+        nom = re.search(r'name="([^"]+)"', balise)
+        if not nom or "__prefix__" in nom.group(1) or nom.group(1).startswith("_"):
+            continue
+        type_du_champ = re.search(r'type="([^"]+)"', balise)
+        type_du_champ = type_du_champ.group(1) if type_du_champ else "text"
+        if type_du_champ in ("checkbox", "radio"):
+            # On retire `class` : les classes d'Unfold contiennent « checked:… ».
+            # / Drop `class`: Unfold classes contain "checked:…".
+            balise_sans_classe = re.sub(r'class="[^"]*"', "", balise)
+            if re.search(r"\schecked(\s|>|/|=)", balise_sans_classe):
+                donnees[nom.group(1)] = "on"
+            continue
+        if type_du_champ in ("file", "submit", "button"):
+            continue
+        valeur = re.search(r'value="([^"]*)"', balise)
+        donnees[nom.group(1)] = module_html.unescape(valeur.group(1)) if valeur else ""
+    for nom, options in re.findall(r'<select\b[^>]*name="([^"]+)"[^>]*>(.*?)</select>', contenu_html, re.S):
+        if "__prefix__" in nom:
+            continue
+        choisie = re.search(r'<option[^>]*value="([^"]*)"[^>]*selected', options)
+        donnees[nom] = choisie.group(1) if choisie else ""
+    return donnees
+
+
+def test_pass_gratuit_cree_en_laissant_la_ligne_de_tarif_vierge(lieu, admin_client):
+    """
+    Nouveau pass gratuit : on remplit les 2 lignes d'événement proposées et on laisse la
+    ligne de tarif vierge. L'enregistrement passe, et le pass a son seul tarif à 0 €.
+    / New free pass with the blank price row left untouched: saved, with its single 0 € price.
+    """
+    samedi = creer_evenement_avec_tarif(jours_avant_l_evenement=10).evenement
+    dimanche = creer_evenement_avec_tarif(jours_avant_l_evenement=11).evenement
+    nom_du_pass = f"TEST_pass {identifiant_unique()}"
+    page_d_ajout = admin_client.get("/admin/BaseBillet/passproduct/add/").content.decode()
+    donnees = valeurs_initiales_du_formulaire(page_d_ajout)
+    assert donnees["evenements_du_pass-TOTAL_FORMS"] == "2"
+    assert donnees["prices-TOTAL_FORMS"] == "1"
+    donnees.update({
+        "name": nom_du_pass,
+        "categorie_article": Product.FREERES,
+        "evenements_du_pass-0-evenement": str(samedi.uuid),
+        "evenements_du_pass-0-prix": "0",
+        "evenements_du_pass-1-evenement": str(dimanche.uuid),
+        "evenements_du_pass-1-prix": "0",
+        "_save": "Enregistrer",
+    })
+
+    reponse = admin_client.post("/admin/BaseBillet/passproduct/add/", data=donnees)
+
+    erreurs = None
+    if reponse.status_code == 200:
+        erreurs = (
+            reponse.context["adminform"].form.errors,
+            [inline.formset.errors for inline in reponse.context["inline_admin_formsets"]],
+        )
+    assert reponse.status_code == 302, erreurs
+    produit = Product.objects.get(name=nom_du_pass)
+    assert produit.evenements_du_pass.count() == 2
+    assert produit.prices.filter(archived=False).count() == 1
