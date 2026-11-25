@@ -1376,3 +1376,75 @@ def test_pass_gratuit_cree_en_laissant_la_ligne_de_tarif_vierge(lieu, admin_clie
     produit = Product.objects.get(name=nom_du_pass)
     assert produit.evenements_du_pass.count() == 2
     assert produit.prices.filter(archived=False).count() == 1
+
+
+# --------------------------------------------------------------------------
+# Les messages de stock du panier (billets et pass)
+# / Cart stock messages (tickets and passes)
+# --------------------------------------------------------------------------
+
+
+def message_du_refus_au_panier(panier, evenement, tarif, quantite):
+    """Le message du refus d'un ajout au panier. / The cart refusal message."""
+    with pytest.raises(InvalidItemError) as refus:
+        panier.add_ticket(evenement.uuid, tarif.uuid, qty=quantite)
+    return str(refus.value)
+
+
+def test_panier_annonce_le_nombre_de_billets_restants_au_tarif(lieu):
+    """Stock de 3, demande de 5 : « Il ne reste que 3 billets au tarif « Plein tarif ». »
+    / Stock 3, request 5: the message gives the price name and 3 left."""
+    concert = creer_evenement_avec_tarif(prix="10.00", stock_du_tarif=3)
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    message = message_du_refus_au_panier(panier, concert.evenement, concert.tarif, 5)
+
+    assert message == "Il ne reste que 3 billets au tarif « Plein tarif »."
+
+
+def test_panier_annonce_le_dernier_billet_au_singulier(lieu):
+    """Stock de 1, demande de 2 : « Il ne reste qu'un billet au tarif « Plein tarif ». »
+    / Stock 1, request 2: singular message."""
+    concert = creer_evenement_avec_tarif(prix="10.00", stock_du_tarif=1)
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    message = message_du_refus_au_panier(panier, concert.evenement, concert.tarif, 2)
+
+    assert message == "Il ne reste qu'un billet au tarif « Plein tarif »."
+
+
+def test_panier_annonce_un_tarif_epuise(lieu):
+    """Stock de 1, déjà vendu : « Le tarif « Plein tarif » est épuisé. »
+    / Stock 1 already sold: sold-out message with the price name."""
+    from fabriques_panier import creer_un_billet_deja_vendu
+
+    concert = creer_evenement_avec_tarif(prix="10.00", stock_du_tarif=1)
+    creer_un_billet_deja_vendu(creer_utilisateur(), concert)
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    message = message_du_refus_au_panier(panier, concert.evenement, concert.tarif, 1)
+
+    assert message == "Le tarif « Plein tarif » est épuisé."
+
+
+def test_panier_signale_que_les_derniers_billets_sont_deja_au_panier(lieu):
+    """Stock de 2, déjà 2 au panier, demande de 1 : les dernières places sont dans le panier.
+    / Stock 2, 2 already in the cart: the last places are already in the cart."""
+    concert = creer_evenement_avec_tarif(prix="10.00", stock_du_tarif=2)
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+    panier.add_ticket(concert.evenement.uuid, concert.tarif.uuid, qty=2)
+
+    message = message_du_refus_au_panier(panier, concert.evenement, concert.tarif, 1)
+
+    assert message == "Plus de place au tarif « Plein tarif » : les dernières sont déjà dans votre panier."
+
+
+def test_panier_annonce_le_nombre_de_pass_restants(lieu):
+    """Pass en stock de 2, demande de 3 : « Il ne reste que 2 pass au tarif « Pass 2 jours ». »
+    / Pass stock 2, request 3: counted in passes."""
+    le_pass = creer_un_pass_deux_jours(stock_de_passes=2)
+    panier = PanierSession(requete_avec_session(creer_utilisateur()))
+
+    message = message_du_refus_au_panier(panier, le_pass.samedi, le_pass.tarif_pass, 3)
+
+    assert message == "Il ne reste que 2 pass au tarif « Pass 2 jours »."

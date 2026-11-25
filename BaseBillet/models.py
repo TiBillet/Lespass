@@ -2164,19 +2164,33 @@ class Price(models.Model):
 
     def out_of_stock(self, event=None, quantite_demandee=1):
         """
-        Vrai si le stock du tarif ne peut pas accueillir `quantite_demandee` de plus.
-        Occupent le stock : ce qui est vendu, ce qui est en train d'être payé (depuis moins de
-        DUREE_D_UN_PAIEMENT_EN_COURS), et la quantité demandée. Avec la valeur par défaut (1),
-        répond à « le tarif est-il épuisé ? » (affichage).
+        Vrai si le stock du tarif ne peut pas accueillir `quantite_demandee` de plus. Avec la
+        valeur par défaut (1), répond à « le tarif est-il épuisé ? » (affichage).
+        / True when the price stock cannot take `quantite_demandee` more.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        quantite_encore_libre = self.stock_restant(event=event)
+        if quantite_encore_libre is None:
+            return False
+        return quantite_demandee > quantite_encore_libre
+
+    def stock_restant(self, event=None):
+        """
+        Le nombre de places encore libres dans le stock du tarif (jamais négatif), ou None si
+        le stock est illimité. Occupent le stock : ce qui est vendu, et ce qui est en train
+        d'être payé depuis moins de DUREE_D_UN_PAIEMENT_EN_COURS.
         - Billet : stock par événement (billets actifs ou scannés + billets en cours de paiement).
+        - Pass : stock commun à ses événements, compté en passes.
         - Adhésion : adhésions en cours de validité, engagées mais pas encore payées
           (Membership.STATUTS_EN_COURS : validation manuelle en attente, prélèvement SEPA en
           cours) et en attente de paiement depuis moins de DUREE_D_UN_PAIEMENT_EN_COURS.
-        / True when the price stock cannot take `quantite_demandee` more: sold + being paid +
-        requested.
+        / Free places left in the price stock (never negative), None when unlimited.
+
+        LOCALISATION : BaseBillet/models.py
         """
         if self.stock is None or self.stock < 1:
-            return False
+            return None
 
         debut_des_paiements_en_cours = timezone.localtime() - DUREE_D_UN_PAIEMENT_EN_COURS
 
@@ -2188,7 +2202,7 @@ class Price(models.Model):
             ).exclude(
                 status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
             ).distinct().count()
-            return adhesions_qui_occupent_le_stock + quantite_demandee > self.stock
+            return max(0, self.stock - adhesions_qui_occupent_le_stock)
 
         # Pass : un pass vendu fait un billet par événement. On compte donc les
         # identifiants `pass_vendu` différents. `event` ne sert pas.
@@ -2205,7 +2219,7 @@ class Price(models.Model):
                 status__in=[Ticket.CREATED, Ticket.NOT_ACTIV],
                 reservation__datetime__gt=debut_des_paiements_en_cours,
             ).values("pass_vendu").distinct().count()
-            return passes_vendus + passes_en_cours_de_paiement + quantite_demandee > self.stock
+            return max(0, self.stock - passes_vendus - passes_en_cours_de_paiement)
 
         if self.product.categorie_article in [Product.FREERES, Product.BILLET]:
             billets_vendus = Ticket.objects.filter(
@@ -2219,9 +2233,9 @@ class Price(models.Model):
                 status__in=[Ticket.CREATED, Ticket.NOT_ACTIV],
                 reservation__datetime__gt=debut_des_paiements_en_cours,
             ).count()
-            return billets_vendus + billets_en_cours_de_paiement + quantite_demandee > self.stock
+            return max(0, self.stock - billets_vendus - billets_en_cours_de_paiement)
 
-        return False
+        return None
 
     max_per_user = models.PositiveSmallIntegerField(
         blank=True, null=True,

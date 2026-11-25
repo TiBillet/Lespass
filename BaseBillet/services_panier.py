@@ -307,6 +307,37 @@ def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_it
             ) % {'n': remains})
 
 
+def message_de_stock_insuffisant(price, stock_restant, quantite_deja_au_panier):
+    """
+    Le refus d'un ajout au panier quand le stock du tarif ne suffit pas, avec le nom du
+    tarif et ce qu'il reste. Compte en billets, ou en pass pour un pass.
+    / Cart refusal when the price stock is too low: price name and what is left.
+
+    LOCALISATION : BaseBillet/services_panier.py
+
+    :param stock_restant: places libres du tarif (Price.stock_restant), panier non compté
+    :param quantite_deja_au_panier: quantité de ce tarif déjà dans le panier de la personne
+    """
+    quantite_encore_disponible = stock_restant - quantite_deja_au_panier
+    if quantite_encore_disponible <= 0 and quantite_deja_au_panier > 0:
+        return _("Plus de place au tarif « %(tarif)s » : les dernières sont déjà dans votre panier.") % {
+            'tarif': price.name,
+        }
+    if quantite_encore_disponible <= 0:
+        return _("Le tarif « %(tarif)s » est épuisé.") % {'tarif': price.name}
+    if price.product.est_un_pass:
+        return ngettext(
+            "Il ne reste qu'un pass au tarif « %(tarif)s ».",
+            "Il ne reste que %(n)s pass au tarif « %(tarif)s ».",
+            quantite_encore_disponible,
+        ) % {'n': quantite_encore_disponible, 'tarif': price.name}
+    return ngettext(
+        "Il ne reste qu'un billet au tarif « %(tarif)s ».",
+        "Il ne reste que %(n)s billets au tarif « %(tarif)s ».",
+        quantite_encore_disponible,
+    ) % {'n': quantite_encore_disponible, 'tarif': price.name}
+
+
 def reservations_bloquantes_pour_user(user, start, end):
     """
     Retourne les reservations du user qui chevauchent [start, end] et qui
@@ -635,8 +666,15 @@ class PanierSession:
             )
             if meme_tarif_meme_evenement:
                 quantite_deja_au_panier += int(item_du_panier.get('qty', 0))
-        if price.out_of_stock(event=event, quantite_demandee=int(qty) + quantite_deja_au_panier):
-            raise InvalidItemError(_("This rate is sold out."))
+        stock_restant_du_tarif = price.stock_restant(event=event)
+        stock_insuffisant = (
+            stock_restant_du_tarif is not None
+            and int(qty) + quantite_deja_au_panier > stock_restant_du_tarif
+        )
+        if stock_insuffisant:
+            raise InvalidItemError(
+                message_de_stock_insuffisant(price, stock_restant_du_tarif, quantite_deja_au_panier)
+            )
 
         # Validation 7 : free_price → custom_amount >= prix minimum
         # Validation 7: free_price → custom_amount >= minimum price
