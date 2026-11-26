@@ -132,7 +132,21 @@ data-testid="membership-cancel-auto-<uuid>".
                     </form>
                 {% endif %}
             {% else %}
-                <p class="compte-champ__aide">{% translate 'Expired' %} {{ membership.deadline|naturaltime }}</p>
+                {% if membership.est_annulee_par_un_admin %}
+                    {# Annulee par un gestionnaire : la deadline reste celle de la periode payee, #}
+                    {# souvent dans le futur. On date l'annulation (issue #450).                   #}
+                    {# / Cancelled by a manager: the deadline is still the paid one, often in the  #}
+                    {# future. Show the cancellation date instead (issue #450).                    #}
+                    <p class="compte-champ__aide">
+                        {% if membership.annulee_le %}
+                            {% translate "Annulée le" %} {{ membership.annulee_le|date }}
+                        {% else %}
+                            {% translate "Annulé par un admin" %}
+                        {% endif %}
+                    </p>
+                {% else %}
+                    <p class="compte-champ__aide">{% translate 'Expired' %} {{ membership.deadline|naturaltime }}</p>
+                {% endif %}
                 <a href="/memberships/" class="btn btn-primaire btn--sm" hx-get="/memberships/" hx-target="body" hx-push-url="true">
                     {% translate "Renew" %}
                 </a>

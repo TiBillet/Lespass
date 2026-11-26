@@ -123,7 +123,19 @@
   <div class="card mt-3 border-warning">
     <div class="card-footer">
       <p class="mt-3">
+        {% if membership.est_annulee_par_un_admin %}
+          {# Annulee par un gestionnaire : la deadline reste celle de la periode payee, #}
+          {# souvent dans le futur. On date l'annulation (issue #450).                   #}
+          {# / Cancelled by a manager: the deadline is still the paid one, often in the  #}
+          {# future. Show the cancellation date instead (issue #450).                    #}
+          {% if membership.annulee_le %}
+            {% trans "Annulée le" %} {{ membership.annulee_le|date }}
+          {% else %}
+            {% trans "Annulé par un admin" %}
+          {% endif %}
+        {% else %}
         {% trans 'Expired' %} {{ membership.deadline|naturaltime }}
+        {% endif %}
       </p>
       <a href="/memberships/" class="btn btn-primary d-block mb-3">
         {% trans "Renew" %}
