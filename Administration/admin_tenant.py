@@ -81,6 +81,7 @@ from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError, transaction as db_transaction
 from django.db.models import Count, Q, Prefetch, F, Exists, OuterRef, Subquery, Sum
+from django.db.models.functions import NullIf
 from django.db import OperationalError
 from django.forms import ModelForm, Form
 from django.http import HttpResponse
@@ -4551,8 +4552,12 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
                 section_children_count=Count('children', distinct=True),
             )
             .annotate(
+                # NullIf transforme une jauge à 0 en NULL. Diviser par NULL donne NULL :
+                # pas de pourcentage. Sans NullIf, PostgreSQL lève « division by zero »
+                # et toute la liste des événements du lieu tombe en erreur 500.
+                # / NullIf turns a zero capacity into NULL: no percentage instead of an SQL error.
                 valid_tickets_percentage=ExpressionWrapper(
-                    100.0 * F("valid_tickets_count_annotated") / F("jauge_max") ,
+                    100.0 * F("valid_tickets_count_annotated") / NullIf(F("jauge_max"), 0),
                     output_field=FloatField()
                 ),
             )
@@ -4734,8 +4739,12 @@ class EventAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ImportExportModelAdm
     @display(description=_("Pourcentage de ticket valide"))
     def display_valid_tickets_percentage(self, instance: Event):
         # Use annotated value to avoid N+1; fallback to method if not present (e.g., detail page)
-        valid_tickets_percentage = round(getattr(instance, 'valid_tickets_percentage', None),1)
-        return f"{valid_tickets_percentage}%"
+        valid_tickets_percentage = getattr(instance, 'valid_tickets_percentage', None)
+        # None quand la jauge vaut 0 : un pourcentage n'a pas de sens, on affiche un tiret.
+        # / None when the capacity is 0: a percentage is meaningless, show a dash.
+        if valid_tickets_percentage is None:
+            return "—"
+        return f"{round(valid_tickets_percentage, 1)}%"
     display_valid_tickets_percentage.admin_order_field = "valid_tickets_percentage"
 
     @display(description=_("Ressource utilisée"), boolean=True, ordering="ressource_bloquee")

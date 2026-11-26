@@ -17,7 +17,10 @@ counters of the weekly and monthly closure reports.
 Une rubrique est un dict :
 {"cle", "titre", "nombre", "lignes", "nombre_de_lignes_cachees", "lien"}.
 Une rubrique vide n'existe pas (la fonction rend None).
+Une ligne est un texte. Quand elle mène à une fiche (un événement), c'est un dict
+{"texte", "lien"} : le gabarit du mail en fait un lien.
 / A section is a dict. An empty section does not exist (the function returns None).
+/ A line is a text, or a {"texte", "lien"} dict when it links to a record.
 
 Spécifications : TECH_DOC/SESSIONS/RECAP_QUOTIDIEN/SPEC.md (chantier 01)
 et TECH_DOC/SESSIONS/RECAP_QUOTIDIEN/CHANTIER-02-recap-allege.md (chantier 02).
@@ -616,12 +619,14 @@ def _rubrique_nouvelles_reservations_de_ressources(debut, fin, domaine):
 def _rubrique_nouvelles_inscriptions_benevoles(debut, fin, domaine):
     """
     Inscriptions de bénévoles faites hier.
-    / Volunteer sign-ups made yesterday.
+    Le lien ouvre la liste publique des plannings (booking/urls.py, « benevolat-liste »),
+    pas l'admin : on y voit les créneaux remplis et ceux qui manquent encore.
+    / Volunteer sign-ups made yesterday. The link opens the public plannings list.
     """
     return _construire_la_rubrique(
         "nouvelles_inscriptions_benevoles",
         _("Nouvelles inscriptions de bénévoles"),
-        f"https://{domaine}/admin/booking/inscriptionbenevole/",
+        f"https://{domaine}/booking/benevolat/",
         _nouvelles_inscriptions_benevoles(debut, fin).select_related(
             "user", "besoin__tache"
         ),
@@ -633,15 +638,26 @@ def _rubrique_nouvelles_inscriptions_benevoles(debut, fin, domaine):
 def _rubrique_nouveaux_evenements(debut, fin, domaine):
     """
     Événements créés hier. Une proposition y est marquée « proposition en attente ».
+    Chaque ligne est un lien vers la fiche de l'événement dans l'admin.
     / Events created yesterday. A proposal is marked "pending proposal".
+    / Each line links to the event's admin page.
     """
+
+    # Le texte de la ligne, et le lien vers la fiche admin de l'événement.
+    # / The line text, and the link to the event's admin page.
+    def ligne_avec_le_lien_vers_la_fiche_admin(evenement):
+        return {
+            "texte": _ligne_d_un_evenement(evenement),
+            "lien": f"https://{domaine}/admin/BaseBillet/event/{evenement.pk}/change/",
+        }
+
     return _construire_la_rubrique(
         "nouveaux_evenements",
         _("Nouveaux événements"),
         f"https://{domaine}/admin/BaseBillet/event/",
         _nouveaux_evenements(debut, fin),
         "created_at",
-        _ligne_d_un_evenement,
+        ligne_avec_le_lien_vers_la_fiche_admin,
     )
 
 

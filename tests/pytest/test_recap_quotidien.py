@@ -653,9 +653,9 @@ class TestLesRubriques(RecapQuotidienTestCase):
         self._inscription(self.aujourd_hui)
         rubrique = self._rubrique("nouvelles_inscriptions_benevoles")
         assert rubrique["nombre"] == 1
-        assert rubrique["lien"] == (
-            f"https://{self.DOMAINE}/admin/booking/inscriptionbenevole/"
-        )
+        # Le lien ouvre la liste publique des plannings, pas l'admin.
+        # / The link opens the public plannings list, not the admin.
+        assert rubrique["lien"] == f"https://{self.DOMAINE}/booking/benevolat/"
 
     # --- Nouveaux événements ---
 
@@ -672,15 +672,22 @@ class TestLesRubriques(RecapQuotidienTestCase):
         self._evenement(self.hier, published=False, is_proposal=False)
         with translation.override("fr"):
             lignes = self._rubrique("nouveaux_evenements")["lignes"]
-        assert any("proposition en attente" in ligne for ligne in lignes)
-        assert any("brouillon" in ligne for ligne in lignes)
+        assert any("proposition en attente" in ligne["texte"] for ligne in lignes)
+        assert any("brouillon" in ligne["texte"] for ligne in lignes)
 
     def test_une_proposition_creee_et_validee_hier_est_dans_les_nouveaux_evenements(self):
         # Publié est l'état normal : la ligne ne porte que le nom.
         evenement = self._evenement(self.hier, published=True, is_proposal=False)
         rubrique = self._rubrique("nouveaux_evenements")
         assert rubrique["nombre"] == 1
-        assert rubrique["lignes"][0] == evenement.name
+        assert rubrique["lignes"][0]["texte"] == evenement.name
+
+    def test_chaque_evenement_mene_a_sa_fiche_admin(self):
+        evenement = self._evenement(self.hier)
+        ligne = self._rubrique("nouveaux_evenements")["lignes"][0]
+        assert ligne["lien"] == (
+            f"https://{self.DOMAINE}/admin/BaseBillet/event/{evenement.pk}/change/"
+        )
 
     def test_une_proposition_d_hier_n_a_pas_de_rubrique_a_part(self):
         # Elle est dans « Nouveaux événements », marquée « proposition en attente ».
@@ -1848,6 +1855,49 @@ class TestEnvoiDuRecap(RecapQuotidienTestCase):
             )
 
         assert "&lt;b&gt;x&lt;/b&gt;" in pages_rendues[0]
+
+    def test_le_gabarit_fait_un_lien_d_une_ligne_qui_porte_un_lien(self):
+        # Une ligne {texte, lien} devient un lien ; une ligne texte reste du texte.
+        # / A {texte, lien} line becomes a link; a text line stays text.
+        self._faire_un_z_hier_soir()
+        rubrique_de_test = {
+            "cle": "nouveaux_evenements",
+            "titre": "Nouveaux événements",
+            "nombre": 2,
+            "lignes": [
+                {
+                    "texte": "Concert du jeudi",
+                    "lien": "https://exemple.test/admin/BaseBillet/event/abc/change/",
+                },
+                "Bal du samedi — brouillon",
+            ],
+            "nombre_de_lignes_cachees": 0,
+            "lien": "https://exemple.test/admin/BaseBillet/event/",
+        }
+        pages_rendues = []
+
+        def construire_le_mailer(**arguments):
+            pages_rendues.append(
+                render_to_string(arguments["template"], arguments["context"])
+            )
+            return SimpleNamespace(send=lambda: True)
+
+        with patch(
+            "Administration.recap_quotidien.rubriques_de_la_veille",
+            return_value=[rubrique_de_test],
+        ):
+            self._appeler_a(
+                heure_de_paris(2026, 10, 13, 7, 10),
+                effet_du_mailer=construire_le_mailer,
+            )
+
+        page = pages_rendues[0]
+        assert (
+            '<a href="https://exemple.test/admin/BaseBillet/event/abc/change/" '
+            'target="_blank" style="color:#1f5172;">Concert du jeudi</a>'
+        ) in page
+        assert "Bal du samedi — brouillon" in page
+        assert "{&#x27;texte&#x27;" not in page
         assert "<b>x</b>" not in pages_rendues[0]
 
 

@@ -22,8 +22,10 @@ Contexte : config, date_de_la_veille, rubriques, clotures, lien_admin, lien_des_
     </tr>
 
     {% comment %}
-    Le titre de la rubrique est le lien vers sa liste dans l'admin.
-    / The section title is the link to its admin list.
+    Le titre de la rubrique est le lien vers sa liste (l'admin, ou le site public pour
+    le bénévolat). Une ligne est un texte, ou un dict {texte, lien} quand elle mène à
+    une fiche (les nouveaux événements) : elle devient alors un lien.
+    / The section title links to its list. A line with a "lien" becomes a link.
     {% endcomment %}
     {% for rubrique in rubriques %}
     <tr>
@@ -31,7 +33,7 @@ Contexte : config, date_de_la_veille, rubriques, clotures, lien_admin, lien_des_
             <h2 style="margin:0 0 4px; font:700 17px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#17141a;">
                 <a href="{{ rubrique.lien }}" target="_blank" style="color:#1f5172;">{{ rubrique.titre }} ({{ rubrique.nombre }})</a>
             </h2>
-            {% for ligne in rubrique.lignes %}{{ ligne }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+            {% for ligne in rubrique.lignes %}{% if ligne.lien %}<a href="{{ ligne.lien }}" target="_blank" style="color:#1f5172;">{{ ligne.texte }}</a>{% else %}{{ ligne }}{% endif %}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
             {% if rubrique.nombre_de_lignes_cachees > 0 %}
             <br/>{% blocktranslate count nombre=rubrique.nombre_de_lignes_cachees %}et {{ nombre }} autre{% plural %}et {{ nombre }} autres{% endblocktranslate %}
             {% endif %}
