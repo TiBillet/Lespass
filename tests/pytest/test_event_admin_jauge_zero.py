@@ -100,3 +100,23 @@ def test_le_pourcentage_reste_calcule_avec_une_jauge_normale(tenant):
         )
 
     assert texte_de_la_colonne == "0.0%"
+
+
+def test_la_fiche_de_l_evenement_s_ouvre_avec_une_jauge_a_zero(tenant):
+    # La page de modification charge l'événement par get_object(), qui passe
+    # aussi par get_queryset() et donc par le calcul du pourcentage.
+    # / The change page loads the event through get_object(), which also uses
+    #   get_queryset() and therefore the percentage computation.
+    from Administration.admin_tenant import EventAdmin, staff_admin_site
+    from BaseBillet.models import Event
+
+    with tenant_context(tenant):
+        evenement = creer_evenement_avec_une_jauge_a_zero()
+        requete = RequestFactory().get(
+            f"/admin/BaseBillet/event/{evenement.pk}/change/"
+        )
+        evenement_de_la_fiche = EventAdmin(Event, staff_admin_site).get_object(
+            requete, str(evenement.pk)
+        )
+
+    assert evenement_de_la_fiche.pk == evenement.pk
