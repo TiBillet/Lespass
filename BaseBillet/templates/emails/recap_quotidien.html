@@ -24,7 +24,7 @@ Contexte : config, date_de_la_veille, rubriques, clotures, lien_admin, lien_des_
     {% comment %}
     Le titre de la rubrique est le lien vers sa liste (l'admin, ou le site public pour
     le bénévolat). Une ligne est un texte, ou un dict {texte, lien} quand elle mène à
-    une fiche (les nouveaux événements) : elle devient alors un lien.
+    une page (un événement, le planning d'une inscription) : elle devient alors un lien.
     / The section title links to its list. A line with a "lien" becomes a link.
     {% endcomment %}
     {% for rubrique in rubriques %}

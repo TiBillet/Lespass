@@ -17,7 +17,7 @@ counters of the weekly and monthly closure reports.
 Une rubrique est un dict :
 {"cle", "titre", "nombre", "lignes", "nombre_de_lignes_cachees", "lien"}.
 Une rubrique vide n'existe pas (la fonction rend None).
-Une ligne est un texte. Quand elle mène à une fiche (un événement), c'est un dict
+Une ligne est un texte. Quand elle mène à une page (un événement, un planning), c'est un dict
 {"texte", "lien"} : le gabarit du mail en fait un lien.
 / A section is a dict. An empty section does not exist (the function returns None).
 / A line is a text, or a {"texte", "lien"} dict when it links to a record.
@@ -619,19 +619,31 @@ def _rubrique_nouvelles_reservations_de_ressources(debut, fin, domaine):
 def _rubrique_nouvelles_inscriptions_benevoles(debut, fin, domaine):
     """
     Inscriptions de bénévoles faites hier.
-    Le lien ouvre la liste publique des plannings (booking/urls.py, « benevolat-liste »),
-    pas l'admin : on y voit les créneaux remplis et ceux qui manquent encore.
-    / Volunteer sign-ups made yesterday. The link opens the public plannings list.
+    Les liens mènent au site public, pas à l'admin : on y voit les créneaux remplis
+    et ceux qui manquent encore.
+    - Le titre ouvre la liste des plannings (booking/urls.py, « benevolat-liste »).
+    - Chaque ligne ouvre le planning de son inscription (« benevolat-planning »).
+    / Volunteer sign-ups made yesterday. Links go to the public site, not the admin.
     """
+
+    # Le texte de la ligne, et le lien vers la page publique du planning.
+    # / The line text, and the link to the planning's public page.
+    def ligne_avec_le_lien_vers_le_planning(inscription):
+        slug_du_planning = inscription.besoin.planning.slug
+        return {
+            "texte": _ligne_d_une_inscription(inscription),
+            "lien": f"https://{domaine}/booking/benevolat/{slug_du_planning}/",
+        }
+
     return _construire_la_rubrique(
         "nouvelles_inscriptions_benevoles",
         _("Nouvelles inscriptions de bénévoles"),
         f"https://{domaine}/booking/benevolat/",
         _nouvelles_inscriptions_benevoles(debut, fin).select_related(
-            "user", "besoin__tache"
+            "user", "besoin__tache", "besoin__planning"
         ),
         "created_at",
-        _ligne_d_une_inscription,
+        ligne_avec_le_lien_vers_le_planning,
     )
 
 

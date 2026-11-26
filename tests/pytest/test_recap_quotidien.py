@@ -657,6 +657,15 @@ class TestLesRubriques(RecapQuotidienTestCase):
         # / The link opens the public plannings list, not the admin.
         assert rubrique["lien"] == f"https://{self.DOMAINE}/booking/benevolat/"
 
+    def test_chaque_inscription_mene_a_la_page_publique_de_son_planning(self):
+        inscription = self._inscription(self.hier)
+        ligne = self._rubrique("nouvelles_inscriptions_benevoles")["lignes"][0]
+        slug_du_planning = inscription.besoin.planning.slug
+        assert ligne["lien"] == (
+            f"https://{self.DOMAINE}/booking/benevolat/{slug_du_planning}/"
+        )
+        assert inscription.besoin.tache.name in ligne["texte"]
+
     # --- Nouveaux événements ---
 
     def test_nouveaux_evenements_compte_hier_et_pas_avant_hier_ni_aujourd_hui(self):
