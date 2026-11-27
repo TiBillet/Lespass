@@ -3435,6 +3435,67 @@ def verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_du_pass):
             )
 
 
+def lignes_stripe_des_billets_du_pass(billets_du_pass):
+    """
+    Les lignes Stripe à rembourser pour ces billets de pass, chacune avec sa quantité à
+    rendre (`to_refund_qty`, un billet = 1). Un billet payé par Stripe sans ligne trouvée
+    fait refuser l'annulation, AVANT tout remboursement.
+    / The Stripe lines to refund for these pass tickets (one ticket = 1); a Stripe-paid
+    ticket without a line refuses the cancellation before any refund.
+
+    LOCALISATION : BaseBillet/models.py
+    """
+    lignes_par_identifiant = {}
+    for billet_du_pass in billets_du_pass:
+        reservation = billet_du_pass.reservation
+        if reservation._montant_paye_par_stripe() <= 0:
+            continue
+        ligne_payee_par_stripe = reservation.lignearticles.filter(paiement_stripe__isnull=False).first()
+        ligne = reservation._ligne_stripe_du_billet_avec_une_quantite_a_rendre(
+            ligne_payee_par_stripe.paiement_stripe, billet_du_pass
+        )
+        if ligne is None:
+            raise Exception(_("Ticket does not have a matching LigneArticle."))
+        if ligne.pk in lignes_par_identifiant:
+            lignes_par_identifiant[ligne.pk].to_refund_qty += 1
+        else:
+            ligne.to_refund_qty = 1
+            lignes_par_identifiant[ligne.pk] = ligne
+    return list(lignes_par_identifiant.values())
+
+
+def rembourser_les_lignes_stripe(lignes):
+    """
+    Rembourse ces lignes Stripe : UN appel à Stripe par paiement. Un pass payé en ligne
+    passe par le panier : tous ses billets sont sur le même paiement, donc un seul appel,
+    tout ou rien. partial_refund_payment relit les quantités sous verrou avant Stripe.
+    / Refunds these Stripe lines: ONE Stripe call per payment (one for an online pass).
+
+    LOCALISATION : BaseBillet/models.py
+    """
+    if not lignes:
+        return
+    config = Configuration.get_solo()
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    lignes_par_paiement = {}
+    for ligne in lignes:
+        lignes_par_paiement.setdefault(ligne.paiement_stripe_id, []).append(ligne)
+    for lignes_du_paiement in lignes_par_paiement.values():
+        partial_refund_payment(lignes_du_paiement[0].paiement_stripe, config, lignes_du_paiement)
+
+
+def verrouiller_les_reservations(identifiants_des_reservations):
+    """
+    Verrouille ces réservations, toujours dans l'ordre de leur identifiant : deux
+    annulations simultanées du même pass attendent l'une l'autre sans se bloquer.
+    / Locks these reservations, always in id order (no deadlock between two cancels).
+
+    LOCALISATION : BaseBillet/models.py
+    """
+    for identifiant_de_la_reservation in sorted(set(identifiants_des_reservations)):
+        Reservation.objects.select_for_update().get(pk=identifiant_de_la_reservation)
+
+
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     datetime = models.DateTimeField(auto_now=True, verbose_name=_("Date et heure"))
@@ -3764,20 +3825,67 @@ class Reservation(models.Model):
         )
         verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_de_pass_des_autres_reservations)
 
+        if not billets_de_pass_des_autres_reservations:
+            return self._annuler_et_rembourser_la_reservation_seule(
+                annulation_par_l_admin=annulation_par_l_admin,
+                moyen_rembourse=moyen_rembourse,
+            )
+
+        # Pass : un seul remboursement Stripe couvre cette réservation et les billets du
+        # pass sur les autres événements. Ensuite, chacun est annulé sans être
+        # remboursé une seconde fois.
+        # / Pass: one Stripe refund for this reservation and the linked tickets, then each
+        # is cancelled without a second refund.
+        identifiants_des_reservations = [self.pk]
+        for billet_lie in billets_de_pass_des_autres_reservations:
+            identifiants_des_reservations.append(billet_lie.reservation_id)
+        verrouiller_les_reservations(identifiants_des_reservations)
+
+        lignes_stripe_a_rembourser = self._lignes_stripe_de_toute_la_reservation()
+        lignes_stripe_a_rembourser += lignes_stripe_des_billets_du_pass(billets_de_pass_des_autres_reservations)
+        rembourser_les_lignes_stripe(lignes_stripe_a_rembourser)
+        reservations_remboursees_par_stripe = set()
+        for ligne in lignes_stripe_a_rembourser:
+            reservations_remboursees_par_stripe.add(ligne.reservation_id)
+
         message_pour_la_personne = self._annuler_et_rembourser_la_reservation_seule(
             annulation_par_l_admin=annulation_par_l_admin,
             moyen_rembourse=moyen_rembourse,
+            remboursement_stripe_deja_fait=self.pk in reservations_remboursees_par_stripe,
         )
         for billet_lie in billets_de_pass_des_autres_reservations:
             billet_lie.reservation._annuler_et_rembourser_un_seul_billet(
                 billet_lie,
                 annulation_par_l_admin=annulation_par_l_admin,
                 moyen_rembourse=moyen_rembourse,
+                remboursement_stripe_deja_fait=billet_lie.reservation_id in reservations_remboursees_par_stripe,
             )
         return message_pour_la_personne
 
+    def _lignes_stripe_de_toute_la_reservation(self):
+        """
+        Les lignes Stripe de cette réservation passée par le panier, chacune avec la
+        quantité de ses billets encore actifs (`to_refund_qty`). Vide si elle n'est pas
+        payée par Stripe, ou pas passée par le panier (un pass passe toujours par lui).
+        / This cart reservation's Stripe lines with their active tickets quantity.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        if self._montant_paye_par_stripe() <= 0 or not self.commande:
+            return []
+        lignes = list(
+            self.lignearticles.filter(
+                status__in=[LigneArticle.VALID, LigneArticle.PAID],
+                paiement_stripe__isnull=False,
+            )
+        )
+        self._poser_les_quantites_a_rendre_des_lignes_stripe(lignes, {})
+        return lignes
+
     @atomic
-    def _annuler_et_rembourser_la_reservation_seule(self, annulation_par_l_admin=False, moyen_rembourse=None):
+    def _annuler_et_rembourser_la_reservation_seule(
+        self, annulation_par_l_admin=False, moyen_rembourse=None, remboursement_stripe_deja_fait=False
+    ):
         """
         Annule toute la réservation et rembourse ce qui reste à rembourser, sans toucher
         aux billets de pass des autres réservations (voir cancel_and_refund_resa).
@@ -3809,6 +3917,8 @@ class Reservation(models.Model):
         :param annulation_par_l_admin: True quand l'admin annule
         :param moyen_rembourse: `PaymentMethod` de l'argent hors Stripe rendu par
             l'admin ; vide permis quand les lignes hors Stripe sont entièrement offertes
+        :param remboursement_stripe_deja_fait: True quand l'appelant a déjà remboursé par
+            Stripe (pass : un seul appel pour tous ses billets)
         :return: le message pour la personne
         """
         # Import local : services_vente importe ce module au chargement.
@@ -3835,16 +3945,17 @@ class Reservation(models.Model):
 
         montant_paye = self.total_paid()
         montant_paye_par_stripe = self._montant_paye_par_stripe()
-        remboursement_stripe_effectue = False
+        remboursement_stripe_effectue = remboursement_stripe_deja_fait
         avoir_hors_stripe_ecrit = False
         # Par tarif vendu : les billets actifs déjà donnés à rendre aux lignes Stripe
         # précédentes (le même tarif vendu peut être sur plusieurs lignes).
         # / Per PriceSold: active tickets already given to previous Stripe lines.
         billets_actifs_deja_repartis_par_tarif_vendu = {}
 
-        # 1) Remboursement Stripe, avec ou sans panier
-        # / Stripe refund, with or without cart
-        if montant_paye > 0:
+        # 1) Remboursement Stripe, avec ou sans panier. Déjà fait par cancel_and_refund_resa
+        # pour une réservation qui contient un pass (un seul appel pour tout le pass).
+        # / Stripe refund, with or without cart (already done for a pass, in one call).
+        if montant_paye > 0 and not remboursement_stripe_deja_fait:
             config = Configuration.get_solo()
             # stripe.api_key = config.get_stripe_api()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -3979,8 +4090,9 @@ class Reservation(models.Model):
 
         LOCALISATION : BaseBillet/models.py
 
-        Les billets sont traités dans l'ordre des réservations : deux annulations
-        simultanées verrouillent dans le même ordre et ne se bloquent pas.
+        Pour un pass, un seul remboursement Stripe couvre tous ses billets (tout ou rien).
+        Les réservations sont verrouillées dans l'ordre : deux annulations simultanées
+        ne se bloquent pas.
         Appelée par BaseBillet/views.py (cancel_ticket) et l'action admin « Cancel and refund ».
         Paramètres et message : ceux de _annuler_et_rembourser_un_seul_billet.
         """
@@ -4000,6 +4112,9 @@ class Reservation(models.Model):
         if ticket.status == Ticket.CANCELED:
             raise Exception(_("This ticket has already been canceled."))
 
+        verrouiller_les_reservations(
+            Ticket.objects.filter(pass_vendu=ticket.pass_vendu).values_list("reservation_id", flat=True)
+        )
         billets_du_pass_encore_actifs = list(
             Ticket.objects.filter(pass_vendu=ticket.pass_vendu)
             .exclude(status=Ticket.CANCELED)
@@ -4008,19 +4123,31 @@ class Reservation(models.Model):
         )
         verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_du_pass_encore_actifs)
 
+        # Un seul remboursement Stripe pour tout le pass, puis chaque billet est annulé
+        # sans être remboursé une seconde fois.
+        # / One Stripe refund for the whole pass, then each ticket is cancelled.
+        lignes_stripe_du_pass = lignes_stripe_des_billets_du_pass(billets_du_pass_encore_actifs)
+        rembourser_les_lignes_stripe(lignes_stripe_du_pass)
+        reservations_remboursees_par_stripe = set()
+        for ligne in lignes_stripe_du_pass:
+            reservations_remboursees_par_stripe.add(ligne.reservation_id)
+
         message_pour_la_personne = None
         for billet_du_pass in billets_du_pass_encore_actifs:
             message_du_billet = billet_du_pass.reservation._annuler_et_rembourser_un_seul_billet(
                 billet_du_pass,
                 annulation_par_l_admin=annulation_par_l_admin,
                 moyen_rembourse=moyen_rembourse,
+                remboursement_stripe_deja_fait=billet_du_pass.reservation_id in reservations_remboursees_par_stripe,
             )
             if billet_du_pass.pk == ticket.pk:
                 message_pour_la_personne = message_du_billet
         return message_pour_la_personne
 
     @atomic
-    def _annuler_et_rembourser_un_seul_billet(self, ticket, annulation_par_l_admin=False, moyen_rembourse=None):
+    def _annuler_et_rembourser_un_seul_billet(
+        self, ticket, annulation_par_l_admin=False, moyen_rembourse=None, remboursement_stripe_deja_fait=False
+    ):
         """
         Annule et rembourse UN billet de cette réservation, sans toucher aux autres
         billets d'un pass (voir cancel_and_refund_ticket).
@@ -4052,6 +4179,8 @@ class Reservation(models.Model):
         :param annulation_par_l_admin: True quand l'admin annule
         :param moyen_rembourse: `PaymentMethod` de l'argent hors Stripe rendu par
             l'admin ; vide permis quand la ligne est entièrement offerte
+        :param remboursement_stripe_deja_fait: True quand l'appelant a déjà remboursé par
+            Stripe (pass : un seul appel pour tous ses billets)
         :return: le message pour la personne
         """
         # Import local : services_vente importe ce module au chargement.
@@ -4081,12 +4210,13 @@ class Reservation(models.Model):
         if ticket.status == Ticket.SCANNED:
             raise Exception(_("You cannot cancel a ticket that has been scanned."))
 
-        refund = False
+        refund = remboursement_stripe_deja_fait
         montant_paye = self.total_paid()
         montant_paye_par_stripe = self._montant_paye_par_stripe()
-        # 1) Réservation payée : remboursement Stripe d'un billet
-        # / Paid reservation: Stripe refund of one ticket
-        if montant_paye > 0:
+        # 1) Réservation payée : remboursement Stripe d'un billet. Déjà fait par
+        # cancel_and_refund_ticket pour un billet de pass (un seul appel pour tout le pass).
+        # / Paid reservation: Stripe refund of one ticket (already done for a pass).
+        if montant_paye > 0 and not remboursement_stripe_deja_fait:
             config = Configuration.get_solo()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 

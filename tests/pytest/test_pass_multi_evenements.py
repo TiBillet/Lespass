@@ -1651,3 +1651,117 @@ def test_dupliquer_un_pass_copie_les_reglages_de_son_tarif(lieu):
     assert tarif_copie.free_price is True
     assert tarif_copie.stock == 50
     assert list(tarif_copie.adhesions_obligatoires.all()) == [adhesion.produit]
+
+
+# --------------------------------------------------------------------------
+# L'annulation d'un pass payé par Stripe : un seul remboursement
+# / Cancelling a Stripe-paid pass: one single refund
+# --------------------------------------------------------------------------
+
+
+def acheter_le_pass_par_stripe(le_pass, acheteur, mock_stripe):
+    """
+    Achète un pass par le vrai panier, puis simule le paiement Stripe validé, comme
+    fabriques_reservation.simuler_paiement_valide : paiement VALID, lignes VALID, billets
+    actifs, réservations VALID, vente encaissée. Rend (commande, paiement).
+    / Buys a pass through the real cart, then simulates the validated Stripe payment.
+    """
+    from BaseBillet.models import Paiement_stripe, PaymentMethod
+    from BaseBillet.services_vente import encaisser_vente_stripe
+
+    panier = PanierSession(requete_avec_session(acheteur))
+    panier.add_ticket(le_pass.samedi.uuid, le_pass.tarif_pass.uuid, qty=1)
+    commande, _succes = CommandeService.materialiser(
+        panier, acheteur, first_name="Test", last_name="Pass", email=acheteur.email,
+    )
+    paiement = commande.paiement_stripe
+    lignes_du_paiement = LigneArticle.objects.filter(paiement_stripe=paiement)
+    montant_encaisse = 0
+    for ligne in lignes_du_paiement:
+        montant_encaisse += ligne.total_catalogue
+    identifiant_du_paiement = f"pi_pass_{identifiant_unique()}"
+    Paiement_stripe.objects.filter(pk=paiement.pk).update(
+        status=Paiement_stripe.VALID,
+        payment_intent_id=identifiant_du_paiement,
+        montant_encaisse=montant_encaisse,
+        moyen=PaymentMethod.STRIPE_NOFED,
+    )
+    lignes_du_paiement.update(status=LigneArticle.VALID)
+    Ticket.objects.filter(reservation__commande=commande).update(status=Ticket.NOT_SCANNED)
+    commande.reservations.update(status=Reservation.VALID)
+    paiement.refresh_from_db()
+    encaisser_vente_stripe(paiement)
+    mock_stripe.session.payment_intent = identifiant_du_paiement
+    return commande, paiement
+
+
+def test_annuler_un_billet_d_un_pass_paye_par_stripe_fait_un_seul_remboursement(lieu, mock_stripe):
+    """
+    Pass 12 € + 13 € payé par Stripe, annulé depuis le billet du dimanche : UN seul
+    remboursement Stripe de 25 €, les deux billets annulés, plus rien de payé.
+    / Stripe-paid pass cancelled from Sunday: ONE refund of 25, both tickets cancelled.
+    """
+    from test_caracterisation_annulations import rembourser_comme_stripe
+
+    le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
+    commande, _paiement = acheter_le_pass_par_stripe(le_pass, creer_utilisateur(), mock_stripe)
+    reservation_du_samedi = commande.reservations.get(event=le_pass.samedi)
+    reservation_du_dimanche = commande.reservations.get(event=le_pass.dimanche)
+
+    with patch("stripe.Refund.create", side_effect=rembourser_comme_stripe) as remboursement_stripe:
+        reservation_du_dimanche.cancel_and_refund_ticket(reservation_du_dimanche.tickets.get())
+
+    assert remboursement_stripe.call_count == 1
+    assert remboursement_stripe.call_args.kwargs["amount"] == 2500
+    assert reservation_du_samedi.tickets.get().status == Ticket.CANCELED
+    assert reservation_du_dimanche.tickets.get().status == Ticket.CANCELED
+    assert reservation_du_samedi.total_paid() == 0
+    assert reservation_du_dimanche.total_paid() == 0
+
+
+def test_annuler_la_reservation_d_un_pass_paye_par_stripe_fait_un_seul_remboursement(lieu, mock_stripe):
+    """
+    Même pass, annulé depuis la réservation du samedi : UN seul remboursement de 25 €.
+    / Same pass cancelled from Saturday's reservation: ONE refund of 25.
+    """
+    from test_caracterisation_annulations import rembourser_comme_stripe
+
+    le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
+    commande, _paiement = acheter_le_pass_par_stripe(le_pass, creer_utilisateur(), mock_stripe)
+    reservation_du_samedi = commande.reservations.get(event=le_pass.samedi)
+    reservation_du_dimanche = commande.reservations.get(event=le_pass.dimanche)
+
+    with patch("stripe.Refund.create", side_effect=rembourser_comme_stripe) as remboursement_stripe:
+        reservation_du_samedi.cancel_and_refund_resa()
+
+    assert remboursement_stripe.call_count == 1
+    assert remboursement_stripe.call_args.kwargs["amount"] == 2500
+    assert reservation_du_dimanche.tickets.get().status == Ticket.CANCELED
+    reservation_du_samedi.refresh_from_db()
+    reservation_du_dimanche.refresh_from_db()
+    assert reservation_du_samedi.status == Reservation.CANCELED
+    assert reservation_du_dimanche.status == Reservation.CANCELED
+
+
+def test_si_stripe_refuse_le_remboursement_rien_n_est_annule(lieu, mock_stripe):
+    """
+    Stripe refuse le remboursement : l'annulation échoue, aucun billet n'est annulé, et
+    Stripe n'a été appelé qu'une fois (jamais un remboursement partiel du pass).
+    / Stripe refuses: nothing is cancelled, Stripe was called once (never a partial refund).
+    """
+    import stripe as module_stripe
+    from django.db import transaction
+
+    le_pass = creer_un_pass_deux_jours()
+    commande, _paiement = acheter_le_pass_par_stripe(le_pass, creer_utilisateur(), mock_stripe)
+    reservation_du_dimanche = commande.reservations.get(event=le_pass.dimanche)
+
+    with patch(
+        "stripe.Refund.create", side_effect=module_stripe.error.APIConnectionError("Stripe injoignable")
+    ) as remboursement_stripe:
+        with pytest.raises(Exception):
+            with transaction.atomic():
+                reservation_du_dimanche.cancel_and_refund_ticket(reservation_du_dimanche.tickets.get())
+
+    assert remboursement_stripe.call_count == 1
+    assert not Ticket.objects.filter(reservation__commande=commande, status=Ticket.CANCELED).exists()

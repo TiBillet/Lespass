@@ -58,10 +58,11 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `Administration/admin_tenant.py` | `evenements_affiches_par_defaut` (non archivés, à venir ou en cours) : utilisée par les filtres par défaut de la liste des événements et par `EventAdmin.get_search_results` pour le choix d'un événement du pass, qui retire aussi les événements déjà choisis (`deja_choisis`) |
 | `Administration/admin/prices.py` | Le choix du produit d'un code promo exclut les passes |
 | `BaseBillet/models.py` (annulation) | `cancel_and_refund_ticket` et `cancel_and_refund_resa` annulent tout le pass ; l'annulation d'origine devient `_annuler_et_rembourser_un_seul_billet` / `_annuler_et_rembourser_la_reservation_seule` ; `verifier_qu_aucun_billet_du_pass_n_est_scanne` refuse avant tout remboursement ; `Reservation.contient_des_billets_de_pass()` |
+| `BaseBillet/models.py` (remboursement d'un pass) | Un pass payé par Stripe est remboursé en UN seul appel (`lignes_stripe_des_billets_du_pass`, `rembourser_les_lignes_stripe`) : les lignes de tous ses billets sont réunies, une ligne manquante fait refuser avant tout remboursement, et Stripe rend tout ou rien. Les annulations privées reçoivent `remboursement_stripe_deja_fait` ; les réservations du pass sont verrouillées dans l'ordre (`verrouiller_les_reservations`) |
 | `pages/templates/pages/{classic,V2}/vues/compte/reservations.html`, `.../partials/ticket_accordion.html` | La confirmation d'annulation prévient que tout le pass sera annulé |
 | `BaseBillet/models.py` (`pass_est_vendable`) | Paramètre `vente_au_comptoir` : au comptoir, refus seulement si un événement du pass est terminé (au lieu de commencé) |
 | `laboutik/views.py` | `_deplier_l_article_pass` vérifie aussi le stock de pass (message clair au caissier) ; `_extraire_articles_du_panier` déplie un pass (`_deplier_l_article_pass`) en un article par événement au prix de sa ligne ; `_creer_billets_depuis_panier` pose `pass_vendu` et le prix de la ligne sur chaque billet, et rattache chaque ligne de vente à sa réservation (liste de lignes par produit, au même prix unitaire) |
-| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 74 tests |
+| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 77 tests |
 | `tests/pytest/test_pass_multi_evenements_caisse.py` | Nouveau : 8 tests (schéma `test_pass_caisse`) |
 
 ### Pas encore fait / Not done yet
@@ -72,9 +73,6 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
   où le pass est ajouté, pas sur les autres événements du pass.
 - Annulation : un seul mail d'annulation part (celui du billet ou de la réservation cliqué),
   pas un par événement du pass.
-- Annulation : si un remboursement Stripe réussit puis le suivant échoue, la base revient en
-  arrière mais le premier remboursement Stripe reste fait (même risque qu'aujourd'hui pour une
-  réservation à plusieurs lignes).
 - Admin : passer un pass existant de payant à gratuit lui ajoute un tarif à 0 € (signal du
   produit gratuit) en plus du sien.
 - Le refus du dernier tarif supprimé ne vaut que pour les produits billets et les passes : la même
@@ -116,7 +114,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 ### Test 2 — tests automatiques
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements.py -q`
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements_caisse.py -q`
-- Attendu : 74 passed et 8 passed.
+- Attendu : 77 passed et 8 passed.
 
 ### Test 3 — achat par le panier
 1. Partir du pass du Test 1 (samedi + dimanche).
