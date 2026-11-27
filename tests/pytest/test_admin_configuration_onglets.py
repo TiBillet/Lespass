@@ -73,6 +73,7 @@ CHAMPS_ATTENDUS = [
     "language",
     "jauge_max",
     "allow_concurrent_bookings",
+    "connexion_obligatoire_pour_reserver",
     "currency_code",
     # Personnalisation
     "event_menu_name",

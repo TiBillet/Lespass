@@ -20,9 +20,18 @@ et l'id #bookingPanel (aussi ouvert par ?openbookingPanel, voir evenement.html).
             class="btn btn-primaire reservation-declencheur__bouton"
             type="button"
             data-bs-toggle="offcanvas"
+            {# Connexion exigée par le lieu : le bouton ouvre le panneau de connexion #}
+            {# (voir commun/offcanvas/connexion.html). / Login required: opens the login panel. #}
+            {% if config.connexion_obligatoire_pour_reserver and not user.is_authenticated %}
+            data-bs-target="#loginPanel"
+            aria-controls="loginPanel"
+            data-adresse-de-retour-apres-connexion="{{ request.path }}?openbookingPanel=true"
+            data-testid="booking-open-login"
+            {% else %}
             data-bs-target="#bookingPanel"
             aria-controls="bookingPanel"
-            data-testid="booking-open-panel">
+            data-testid="booking-open-panel"
+            {% endif %}>
         {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
     </button>
 </div>

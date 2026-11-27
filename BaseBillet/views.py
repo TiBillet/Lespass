@@ -599,13 +599,41 @@ def deconnexion(request):
     return redirect('index')
 
 
+def adresse_de_retour_signee_apres_connexion(request):
+    """
+    L'adresse où le lien du mail de connexion ramène la personne (champ `next` du
+    formulaire), signée pour emailconfirmation. None si absente, ou si ce n'est pas une
+    adresse de ce site : un lien piégé ne doit pas renvoyer ailleurs.
+    / The signed return address for the login link; None if missing or off-site.
+
+    LOCALISATION : BaseBillet/views.py
+    """
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    adresse_de_retour = request.POST.get('next', '').strip()
+    if not adresse_de_retour.startswith('/'):
+        return None
+    adresse_du_site = url_has_allowed_host_and_scheme(
+        adresse_de_retour, allowed_hosts={request.get_host()}, require_https=False
+    )
+    if not adresse_du_site:
+        return None
+    return signing.dumps(adresse_de_retour)
+
+
 def connexion(request):
     if request.method == 'POST':
         validator = LoginEmailValidator(data=request.POST)
         if validator.is_valid():
             # Création de l'user et envoie du mail de validation
             email = validator.validated_data['email']
-            user = get_or_create_user(email=email, send_mail=True, force_mail=True)
+            adresse_de_retour_signee = adresse_de_retour_signee_apres_connexion(request)
+            user = get_or_create_user(
+                email=email,
+                send_mail=True,
+                force_mail=True,
+                next_url=adresse_de_retour_signee,
+            )
             if not user.wallet:
                 fedowAPI = FedowAPI()
                 fedowAPI.wallet.get_or_create_wallet(user)
@@ -618,6 +646,8 @@ def connexion(request):
                 token = user.get_connect_token()
                 base_url = connection.tenant.get_primary_domain().domain
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
+                if adresse_de_retour_signee:
+                    connexion_url += f"?next={adresse_de_retour_signee}"
                 messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
 
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))

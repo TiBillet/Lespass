@@ -690,6 +690,18 @@ class Configuration(SingletonModel):
                                     verbose_name=_("Users have to give a first and last name at registration."))
     allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"),
                                                     help_text=_("Events need start and end dates to be comparable."))
+    # Lu par les boutons « réserver » des skins (partials/reservation_declencheur.html).
+    # C'est un choix d'affichage : la réservation directe reste ouverte côté serveur.
+    # / Read by the skins' booking buttons. Display only: direct booking stays open server side.
+    connexion_obligatoire_pour_reserver = models.BooleanField(
+        default=False,
+        verbose_name=_("Se connecter avant de réserver"),
+        help_text=_(
+            "Une personne non connectée qui veut réserver doit d'abord se connecter. Après le "
+            "clic sur le lien reçu par mail, elle revient sur l'événement, avec le formulaire de "
+            "réservation ouvert et le panier."
+        ),
+    )
 
     """
     ######### MODULES GROUPWARE #########

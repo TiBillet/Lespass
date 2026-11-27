@@ -11,6 +11,15 @@ cible #loginPanel par id. L'id fait partie du contrat de skin : ne JAMAIS
 le renommer.
 / Shared chrome, NOT skinnable. An auto-open JS (?login=1 param) targets
 #loginPanel by id. The id is part of the skin contract.
+
+CONNEXION AVANT DE RÉSERVER (Configuration.connexion_obligatoire_pour_reserver)
+Le bouton « réserver » d'un skin ouvre ce panneau au lieu du formulaire, avec
+l'attribut data-adresse-de-retour-apres-connexion. À l'ouverture, le script en bas
+affiche le message et copie cette adresse dans le champ caché `next` du formulaire.
+La vue connexion la signe et la met dans le lien du mail. Ouvert par un autre
+bouton, le panneau cache le message et vide `next`.
+/ Opened by a booking button: shows the message and copies the return address
+into the hidden `next` field. Opened otherwise: hides it and empties `next`.
 {% endcomment %}
 <div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
     <div class="offcanvas-header">
@@ -18,6 +27,26 @@ le renommer.
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
     </div>
     <div class="offcanvas-body">
+        <p class="alert alert-info d-none" role="status" id="loginPanelMessagePourReserver"
+           data-testid="login-message-pour-reserver">
+            {% translate "Pour réserver des places, connectez-vous d'abord." %}
+        </p>
         {% include 'commun/formulaires/login.html' %}
     </div>
 </div>
+
+<script>
+    // Ouvert par un bouton « réserver », le panneau garde l'adresse de l'événement :
+    // le lien du mail y ramènera la personne, formulaire de réservation ouvert.
+    // / Opened by a booking button: keep the event address for the login link.
+    document.getElementById('loginPanel').addEventListener('show.bs.offcanvas', function (evenement) {
+        const bouton_qui_ouvre = evenement.relatedTarget
+        let adresse_de_retour = ''
+        if (bouton_qui_ouvre && bouton_qui_ouvre.dataset.adresseDeRetourApresConnexion) {
+            adresse_de_retour = bouton_qui_ouvre.dataset.adresseDeRetourApresConnexion
+        }
+        document.getElementById('loginNext').value = adresse_de_retour
+        const message_pour_reserver = document.getElementById('loginPanelMessagePourReserver')
+        message_pour_reserver.classList.toggle('d-none', adresse_de_retour === '')
+    })
+</script>

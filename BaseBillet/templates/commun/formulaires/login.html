@@ -3,6 +3,9 @@
       hx-post="/connexion/" hx-target="body"
       hx-swap="innerHTML">
     <h4>{% trans "With an email" %}</h4>
+    {# Rempli par commun/offcanvas/connexion.html quand un bouton « réserver » ouvre le panneau. #}
+    {# / Filled by the login offcanvas when a booking button opens it. #}
+    <input type="hidden" name="next" id="loginNext" value="">
     <div class="form-floating mb-3">
         <input type="email" class="form-control" id="loginEmail" placeholder="{% trans 'mon@email.fr' %}" name="email" required>
         <label for="loginEmail">{% trans "Email address" %}</label>
