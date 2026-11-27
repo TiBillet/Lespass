@@ -2899,6 +2899,17 @@ class Event(models.Model):
         """
         return PromotionalCode.objects.filter(product__in=self.products.all()).exists()
 
+    def delai_d_annulation_depasse(self):
+        """
+        Vrai si le délai de remboursement (`refund_deadline`, en jours avant le début)
+        est dépassé : le client ne peut plus annuler lui-même, seul l'admin le peut.
+        / True when the refund deadline is over: only the admin can cancel.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        fin_du_delai = self.datetime - timedelta(days=self.refund_deadline)
+        return timezone.localtime() >= fin_du_delai
+
     def est_termine(self):
         """
         Vrai si l'événement est fini. Sans date de fin, il est considéré fini 24 heures après
@@ -3484,6 +3495,51 @@ def rembourser_les_lignes_stripe(lignes):
         partial_refund_payment(lignes_du_paiement[0].paiement_stripe, config, lignes_du_paiement)
 
 
+def reservations_concernees_par_l_annulation(reservation, ticket=None):
+    """
+    Les réservations que touche l'annulation d'un billet (`ticket`) ou de toute la
+    réservation : elle-même, plus celles des autres billets de ses passes, annulés avec
+    elle (le pass est indivisible). À lire AVANT d'annuler : après, les billets ne sont
+    plus actifs. Sert à mesurer ce que l'annulation a rendu, pour le mail.
+    / The reservations a cancellation touches (its passes' ones too). Read before cancelling.
+
+    LOCALISATION : BaseBillet/models.py
+    """
+    if ticket is not None:
+        if ticket.pass_vendu is None:
+            return [reservation]
+        identifiants_des_passes = [ticket.pass_vendu]
+    else:
+        identifiants_des_passes = list(
+            reservation.tickets.filter(pass_vendu__isnull=False)
+            .exclude(status=Ticket.CANCELED)
+            .values_list("pass_vendu", flat=True)
+        )
+
+    reservations_par_identifiant = {reservation.pk: reservation}
+    billets_des_passes = (
+        Ticket.objects.filter(pass_vendu__in=identifiants_des_passes)
+        .exclude(status=Ticket.CANCELED)
+        .select_related("reservation")
+    )
+    for billet_du_pass in billets_des_passes:
+        reservations_par_identifiant.setdefault(billet_du_pass.reservation_id, billet_du_pass.reservation)
+    return list(reservations_par_identifiant.values())
+
+
+def montant_paye_par_les_reservations(reservations):
+    """
+    Ce que ces réservations ont payé, remboursements déduits (somme des total_paid).
+    / What these reservations paid, refunds deducted.
+
+    LOCALISATION : BaseBillet/models.py
+    """
+    montant_paye = Decimal("0")
+    for reservation in reservations:
+        montant_paye += reservation.total_paid()
+    return montant_paye
+
+
 def verrouiller_les_reservations(identifiants_des_reservations):
     """
     Verrouille ces réservations, toujours dans l'ordre de leur identifiant : deux
@@ -3650,14 +3706,63 @@ class Reservation(models.Model):
             .exists()
         )
 
+    def delai_d_annulation_depasse(self):
+        """
+        Vrai si le délai d'annulation de cet événement, ou de l'un des événements de ses
+        passes, est dépassé (le pass est indivisible : le premier délai compte).
+        / True if the deadline of its event, or of an event of its passes, is over.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        if self.event.delai_d_annulation_depasse():
+            return True
+        identifiants_des_passes_de_la_reservation = (
+            self.tickets.filter(pass_vendu__isnull=False)
+            .exclude(status=Ticket.CANCELED)
+            .values("pass_vendu")
+        )
+        billets_des_passes = (
+            Ticket.objects.filter(pass_vendu__in=identifiants_des_passes_de_la_reservation)
+            .exclude(status=Ticket.CANCELED)
+            .select_related("reservation__event")
+        )
+        for billet_du_pass in billets_des_passes:
+            if billet_du_pass.reservation.event.delai_d_annulation_depasse():
+                return True
+        return False
+
+    def message_d_annulation_refusee(self):
+        """
+        Pourquoi le client ne peut pas annuler lui-même, ou "" s'il le peut : délai
+        dépassé, ou annulation par le client désactivée sur l'événement.
+        / Why the customer cannot cancel, or "" when they can.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        if self.delai_d_annulation_depasse():
+            return _("Le délai d'annulation est dépassé : contactez l'organisateur.")
+        if self.annulation_par_le_client_refusee():
+            return _("Annulation en ligne impossible : contactez l'organisateur.")
+        return ""
+
     def can_refund(self):
-        return timezone.localtime() < (self.event.datetime - timedelta(days=self.event.refund_deadline))
+        return not self.delai_d_annulation_depasse()
 
     def cancel_text(self):
         if self.can_refund():
-            return _("You will be refunded to the credit card used to make the reservation.")
+            return self.texte_d_annulation_remboursee()
         else:
             return _("The deadline for getting a refund has passed.")
+
+    def texte_d_annulation_remboursee(self):
+        """
+        Le texte d'une annulation remboursée (confirmation, mail). Le mail d'annulation
+        l'utilise quand de l'argent a vraiment été rendu, même après le délai.
+        / The text of a refunded cancellation, used by the mail when money was given back.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        return _("You will be refunded to the credit card used to make the reservation.")
 
     def _lignes_hors_stripe(self, price_ids=None):
         """
@@ -3808,8 +3913,10 @@ class Reservation(models.Model):
         Appelée par BaseBillet/views.py (cancel_reservation) et les actions admin.
         Paramètres et message : ceux de _annuler_et_rembourser_la_reservation_seule.
         """
-        if not annulation_par_l_admin and self.annulation_par_le_client_refusee():
-            raise Exception(_("Annulation en ligne impossible : contactez l'organisateur."))
+        if not annulation_par_l_admin:
+            message_de_refus = self.message_d_annulation_refusee()
+            if message_de_refus:
+                raise Exception(message_de_refus)
 
         identifiants_des_passes_de_la_reservation = (
             self.tickets.filter(pass_vendu__isnull=False)
@@ -4096,8 +4203,10 @@ class Reservation(models.Model):
         Appelée par BaseBillet/views.py (cancel_ticket) et l'action admin « Cancel and refund ».
         Paramètres et message : ceux de _annuler_et_rembourser_un_seul_billet.
         """
-        if not annulation_par_l_admin and ticket.annulation_par_le_client_refusee():
-            raise Exception(_("Annulation en ligne impossible : contactez l'organisateur."))
+        if not annulation_par_l_admin:
+            message_de_refus = ticket.message_d_annulation_refusee()
+            if message_de_refus:
+                raise Exception(message_de_refus)
 
         billet_hors_pass = ticket.pass_vendu is None
         if billet_hors_pass:
@@ -4460,6 +4569,40 @@ class Ticket(models.Model):
             .exclude(status=Ticket.CANCELED)
             .exists()
         )
+
+    def delai_d_annulation_depasse(self):
+        """
+        Vrai si le délai d'annulation de son événement est dépassé. Pour un billet de pass,
+        celui de n'importe quel événement du pass suffit (le pass est indivisible).
+        / True if its event's deadline is over; for a pass, any of its events.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        billet_hors_pass = self.pass_vendu is None
+        if billet_hors_pass:
+            return self.reservation.event.delai_d_annulation_depasse()
+        billets_du_pass = (
+            Ticket.objects.filter(pass_vendu=self.pass_vendu)
+            .exclude(status=Ticket.CANCELED)
+            .select_related("reservation__event")
+        )
+        for billet_du_pass in billets_du_pass:
+            if billet_du_pass.reservation.event.delai_d_annulation_depasse():
+                return True
+        return False
+
+    def message_d_annulation_refusee(self):
+        """
+        Pourquoi le client ne peut pas annuler ce billet lui-même, ou "" s'il le peut.
+        / Why the customer cannot cancel this ticket, or "" when they can.
+
+        LOCALISATION : BaseBillet/models.py
+        """
+        if self.delai_d_annulation_depasse():
+            return _("Le délai d'annulation est dépassé : contactez l'organisateur.")
+        if self.annulation_par_le_client_refusee():
+            return _("Annulation en ligne impossible : contactez l'organisateur.")
+        return ""
 
     def paid(self):
         # Billet offert = 0€

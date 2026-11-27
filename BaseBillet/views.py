@@ -43,6 +43,7 @@ from rest_framework.views import APIView
 from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission, \
     CanInitiatePaymentPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
+from BaseBillet.models import montant_paye_par_les_reservations, reservations_concernees_par_l_annulation
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user, get_client_ip
@@ -1744,12 +1745,20 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/my_reservations/')
         # Mark reservation as canceled
         try:
+            # Ce que l'annulation a vraiment rendu, pour le mail, sur toutes les réservations
+            # touchées (un pass annule aussi ses autres événements).
+            # / What was actually refunded, over every touched reservation (a pass too).
+            reservations_concernees = reservations_concernees_par_l_annulation(resa)
+            montant_paye_avant_l_annulation = montant_paye_par_les_reservations(reservations_concernees)
             cancel_text = resa.cancel_and_refund_resa()
+            montant_rembourse_en_centimes = dec_to_int(
+                montant_paye_avant_l_annulation - montant_paye_par_les_reservations(reservations_concernees)
+            )
             messages.add_message(request, messages.SUCCESS,
                                  _("Your reservation has been cancelled.") + f" {cancel_text}")
             # Trigger email notification to the user via Celery
             try:
-                send_reservation_cancellation_user.delay(str(resa.uuid))
+                send_reservation_cancellation_user.delay(str(resa.uuid), montant_rembourse_en_centimes)
             except Exception as ce:
                 logger.error(f"Failed to queue cancellation email for reservation {resa.uuid}: {ce}")
 
@@ -1765,12 +1774,20 @@ class MyAccount(viewsets.ViewSet):
     def cancel_ticket(self, request, pk):
         ticket = get_object_or_404(Ticket, pk=pk, reservation__user_commande=request.user)
         try:
+            # Ce que l'annulation a vraiment rendu, pour le mail, sur toutes les réservations
+            # touchées (un billet de pass annule tout le pass).
+            # / What was actually refunded, over every touched reservation (a pass too).
+            reservations_concernees = reservations_concernees_par_l_annulation(ticket.reservation, ticket)
+            montant_paye_avant_l_annulation = montant_paye_par_les_reservations(reservations_concernees)
             msg = ticket.reservation.cancel_and_refund_ticket(ticket)
+            montant_rembourse_en_centimes = dec_to_int(
+                montant_paye_avant_l_annulation - montant_paye_par_les_reservations(reservations_concernees)
+            )
             messages.add_message(request, messages.SUCCESS,
                                  _("Your ticket has been cancelled.") + (f" {msg}" if msg else ""))
             # Trigger email notification to the user via Celery
             try:
-                send_ticket_cancellation_user.delay(str(ticket.uuid))
+                send_ticket_cancellation_user.delay(str(ticket.uuid), montant_rembourse_en_centimes)
             except Exception as ce:
                 logger.error(f"Failed to queue cancellation email for ticket {ticket.uuid}: {ce}")
 

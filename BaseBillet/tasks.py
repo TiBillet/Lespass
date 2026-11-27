@@ -5,6 +5,7 @@ import logging
 import os
 import smtplib
 import time
+from decimal import Decimal
 from html.parser import HTMLParser
 from io import BytesIO
 from time import sleep
@@ -2404,9 +2405,18 @@ def test_logger():
 
 
 @app.task
-def send_reservation_cancellation_user(reservation_uuid: str):
+def send_reservation_cancellation_user(reservation_uuid: str, montant_rembourse_en_centimes=None):
     """
     Envoie un email à l'utilisateur pour confirmer l'annulation de sa réservation.
+    / Emails the user to confirm the cancellation of their reservation.
+
+    LOCALISATION : BaseBillet/tasks.py
+
+    `montant_rembourse_en_centimes` : ce que l'annulation a vraiment rendu (donné par
+    l'appelant). S'il est positif, le mail annonce le remboursement et ce montant, même
+    après le délai (l'admin peut rembourser après lui). Sinon, texte et montant d'après la
+    date (can_refund), comme avant.
+    / The amount actually refunded; when positive, the mail announces it, whatever the date.
     """
     config = Configuration.get_solo()
     activate(config.language)
@@ -2428,13 +2438,18 @@ def send_reservation_cancellation_user(reservation_uuid: str):
                 refund_amount += ticket.paid()
     except Exception:
         refund_amount = None
+    cancel_text = reservation.cancel_text()
+
+    if montant_rembourse_en_centimes:
+        refund_amount = Decimal(montant_rembourse_en_centimes) / 100
+        cancel_text = reservation.texte_d_annulation_remboursee()
 
     currency_symbol = "€"
     context = {
         'title': title,
         'organisation': config.organisation,
         'reservation': reservation,
-        'cancel_text': reservation.cancel_text(),
+        'cancel_text': cancel_text,
         'refund_amount': refund_amount,
         'currency_symbol': currency_symbol,
     }
@@ -2450,10 +2465,15 @@ def send_reservation_cancellation_user(reservation_uuid: str):
 
 
 @app.task
-def send_ticket_cancellation_user(ticket_uuid: str):
+def send_ticket_cancellation_user(ticket_uuid: str, montant_rembourse_en_centimes=None):
     """
     Envoie un email à l'utilisateur pour confirmer l'annulation d'un billet (ticket) individuel,
     avec indication sur le remboursement selon la politique en vigueur.
+    / Emails the user to confirm a single ticket cancellation.
+
+    LOCALISATION : BaseBillet/tasks.py
+
+    `montant_rembourse_en_centimes` : voir send_reservation_cancellation_user.
     """
     config = Configuration.get_solo()
     activate(config.language)
@@ -2479,6 +2499,10 @@ def send_ticket_cancellation_user(ticket_uuid: str):
             refund_amount = ticket.paid()
     except Exception:
         refund_amount = None
+
+    if montant_rembourse_en_centimes:
+        refund_amount = Decimal(montant_rembourse_en_centimes) / 100
+        cancel_text = reservation.texte_d_annulation_remboursee()
 
     currency_symbol = "€"
     context = {

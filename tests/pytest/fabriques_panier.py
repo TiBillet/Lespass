@@ -224,6 +224,7 @@ def creer_evenement_avec_tarif(
     categorie=None,
     jauge_max=100,
     jours_avant_l_evenement=7,
+    delai_d_annulation_en_jours=0,
     duree_en_heures=2,
     max_par_personne_evenement=None,
     max_par_personne_produit=None,
@@ -239,6 +240,10 @@ def creer_evenement_avec_tarif(
     Avec `Product.FREERES` (réservation gratuite), le tarif à 0 € est créé automatiquement
     par le signal post_save de Product : on le réutilise (piège 12.16).
     / Default category is paid tickets. With FREERES, the 0 € price is auto-created.
+
+    `delai_d_annulation_en_jours` : 0 par défaut, pour que le client puisse annuler même
+    un événement proche. Un test du délai d'annulation le fixe lui-même.
+    / Zero-day cancellation deadline by default; a deadline test sets its own.
 
     Rend un objet avec `evenement`, `produit`, `tarif`.
     """
@@ -256,6 +261,7 @@ def creer_evenement_avec_tarif(
         end_datetime=debut + timedelta(hours=duree_en_heures),
         jauge_max=jauge_max,
         max_per_user=max_par_personne_evenement,
+        refund_deadline=delai_d_annulation_en_jours,
     )
     produit = Product.objects.create(
         name=f"{PREFIXE_DE_TEST} billet {identifiant}",

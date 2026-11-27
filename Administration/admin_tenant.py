@@ -139,6 +139,7 @@ from Administration.importers.ticket_exporter import TicketExportResource
 from Administration.importers.lignearticle_exporter import LigneArticleExportResource
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
+from BaseBillet.models import montant_paye_par_les_reservations, reservations_concernees_par_l_annulation
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
@@ -5747,12 +5748,20 @@ class ReservationAdmin(ModelAdmin):
         errors = []
         for resa in reservations_cochees:
             try:
+                # Ce que l'annulation a vraiment rendu, pour le mail, sur toutes les
+                # réservations touchées (un pass annule aussi ses autres événements).
+                # / What was refunded, over every touched reservation (a pass too).
+                reservations_concernees = reservations_concernees_par_l_annulation(resa)
+                montant_paye_avant_l_annulation = montant_paye_par_les_reservations(reservations_concernees)
                 msg = resa.cancel_and_refund_resa(
                     annulation_par_l_admin=True,
                     moyen_rembourse=moyen_choisi,
                 )
+                montant_rembourse_en_centimes = dec_to_int(
+                    montant_paye_avant_l_annulation - montant_paye_par_les_reservations(reservations_concernees)
+                )
                 try:
-                    send_reservation_cancellation_user.delay(str(resa.uuid))
+                    send_reservation_cancellation_user.delay(str(resa.uuid), montant_rembourse_en_centimes)
                 except Exception as ce:
                     logger.error(f"Failed to queue reservation cancellation email for {resa.uuid}: {ce}")
                 success_count += 1
@@ -6080,12 +6089,17 @@ class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAd
                 total_in_resa = resa.tickets.count()
                 if len(selected_tickets) == total_in_resa:
                     # All tickets of reservation selected -> cancel whole reservation
+                    reservations_concernees = reservations_concernees_par_l_annulation(resa)
+                    montant_paye_avant_l_annulation = montant_paye_par_les_reservations(reservations_concernees)
                     msg = resa.cancel_and_refund_resa(
                         annulation_par_l_admin=True,
                         moyen_rembourse=moyen_choisi,
                     )
+                    montant_rembourse_en_centimes = dec_to_int(
+                        montant_paye_avant_l_annulation - montant_paye_par_les_reservations(reservations_concernees)
+                    )
                     try:
-                        send_reservation_cancellation_user.delay(str(resa.uuid))
+                        send_reservation_cancellation_user.delay(str(resa.uuid), montant_rembourse_en_centimes)
                     except Exception as ce:
                         logger.error(f"Failed to queue reservation cancellation email for {resa.uuid}: {ce}")
                     resa_success += 1
@@ -6093,13 +6107,21 @@ class TicketAdmin(ExportCsvLisibleParExcelMixin, ModelAdmin, ExportActionModelAd
                     # Partial selection -> cancel each selected ticket
                     for t in selected_tickets:
                         try:
+                            reservations_concernees = reservations_concernees_par_l_annulation(resa, t)
+                            montant_paye_avant_l_annulation = montant_paye_par_les_reservations(
+                                reservations_concernees
+                            )
                             msg = resa.cancel_and_refund_ticket(
                                 t,
                                 annulation_par_l_admin=True,
                                 moyen_rembourse=moyen_choisi,
                             )
+                            montant_rembourse_en_centimes = dec_to_int(
+                                montant_paye_avant_l_annulation
+                                - montant_paye_par_les_reservations(reservations_concernees)
+                            )
                             try:
-                                send_ticket_cancellation_user.delay(str(t.uuid))
+                                send_ticket_cancellation_user.delay(str(t.uuid), montant_rembourse_en_centimes)
                             except Exception as ce:
                                 logger.error(f"Failed to queue ticket cancellation email for {t.uuid}: {ce}")
                             ticket_success += 1

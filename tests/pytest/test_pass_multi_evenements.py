@@ -1765,3 +1765,104 @@ def test_si_stripe_refuse_le_remboursement_rien_n_est_annule(lieu, mock_stripe):
 
     assert remboursement_stripe.call_count == 1
     assert not Ticket.objects.filter(reservation__commande=commande, status=Ticket.CANCELED).exists()
+
+
+# --------------------------------------------------------------------------
+# Le délai d'annulation : après lui, seul l'admin peut annuler
+# / The cancellation deadline: after it, only the admin can cancel
+# --------------------------------------------------------------------------
+
+MESSAGE_DELAI_DEPASSE = "Le délai d'annulation est dépassé : contactez l'organisateur."
+
+
+def reserver_un_billet(evenement, produit, tarif):
+    """Une réservation d'un billet, active, sans paiement. / One active unpaid ticket."""
+    acheteur = creer_utilisateur()
+    reservation = Reservation.objects.create(user_commande=acheteur, event=evenement)
+    TicketCreator(
+        reservation=reservation,
+        products_dict={produit: {tarif: 1}},
+        create_checkout=False,
+        vente=ouvrir_vente(origine=SaleOrigin.LESPASS, nature=Vente.Nature.VENTE, client=acheteur),
+    )
+    reservation.tickets.update(status=Ticket.NOT_SCANNED)
+    return reservation
+
+
+def test_client_ne_peut_plus_annuler_un_billet_apres_le_delai(lieu):
+    """Event dans 3 jours, délai de 7 jours : le client est refusé avec le message du délai.
+    / Event in 3 days, 7-day deadline: the customer is refused with the deadline message."""
+    concert = creer_evenement_avec_tarif(jours_avant_l_evenement=3, delai_d_annulation_en_jours=7)
+    reservation = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
+
+    with pytest.raises(Exception) as refus:
+        reservation.cancel_and_refund_ticket(reservation.tickets.get())
+
+    assert str(refus.value) == MESSAGE_DELAI_DEPASSE
+    assert reservation.tickets.get().status == Ticket.NOT_SCANNED
+
+
+def test_client_ne_peut_plus_annuler_une_reservation_apres_le_delai(lieu):
+    """Même chose pour toute la réservation. / Same for the whole reservation."""
+    concert = creer_evenement_avec_tarif(jours_avant_l_evenement=3, delai_d_annulation_en_jours=7)
+    reservation = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
+
+    with pytest.raises(Exception) as refus:
+        reservation.cancel_and_refund_resa()
+
+    assert str(refus.value) == MESSAGE_DELAI_DEPASSE
+
+
+def test_client_peut_annuler_avant_le_delai(lieu):
+    """Event dans 10 jours, délai de 7 jours : le client peut encore annuler.
+    / Event in 10 days, 7-day deadline: the customer can still cancel."""
+    concert = creer_evenement_avec_tarif(jours_avant_l_evenement=10, delai_d_annulation_en_jours=7)
+    reservation = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
+
+    assert reservation.message_d_annulation_refusee() == ""
+    reservation.cancel_and_refund_ticket(reservation.tickets.get())
+
+    assert reservation.tickets.get().status == Ticket.CANCELED
+
+
+def test_admin_peut_annuler_apres_le_delai(lieu):
+    """Après le délai, l'admin peut toujours annuler. / After the deadline, the admin still can."""
+    concert = creer_evenement_avec_tarif(jours_avant_l_evenement=3, delai_d_annulation_en_jours=7)
+    reservation = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
+
+    reservation.cancel_and_refund_ticket(reservation.tickets.get(), annulation_par_l_admin=True)
+
+    assert reservation.tickets.get().status == Ticket.CANCELED
+
+
+def test_pass_prend_le_delai_de_son_premier_evenement(lieu):
+    """
+    Pass : le délai du samedi est dépassé, pas celui du dimanche. Annuler depuis le billet
+    du dimanche est refusé : le premier délai compte (le pass est indivisible).
+    / Pass: Saturday's deadline is over; cancelling from Sunday is refused.
+    """
+    le_pass = creer_un_pass_deux_jours()
+    le_pass.samedi.refund_deadline = 30
+    le_pass.samedi.save()
+    _reservation_du_samedi, reservation_du_dimanche = acheter_le_pass_billets_valides(
+        le_pass, creer_utilisateur()
+    )
+    billet_du_dimanche = reservation_du_dimanche.tickets.get()
+
+    assert le_pass.dimanche.delai_d_annulation_depasse() is False
+    assert reservation_du_dimanche.delai_d_annulation_depasse() is True
+    assert billet_du_dimanche.message_d_annulation_refusee() == MESSAGE_DELAI_DEPASSE
+    with pytest.raises(Exception) as refus:
+        reservation_du_dimanche.cancel_and_refund_ticket(billet_du_dimanche)
+    assert str(refus.value) == MESSAGE_DELAI_DEPASSE
+
+
+def test_le_message_du_delai_passe_avant_celui_de_l_option(lieu):
+    """Délai dépassé ET annulation désactivée : c'est le message du délai qui s'affiche.
+    / Deadline over and option on: the deadline message is shown."""
+    concert = creer_evenement_avec_tarif(jours_avant_l_evenement=3, delai_d_annulation_en_jours=7)
+    concert.evenement.annulation_par_le_client_desactivee = True
+    concert.evenement.save()
+    reservation = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
+
+    assert reservation.message_d_annulation_refusee() == MESSAGE_DELAI_DEPASSE

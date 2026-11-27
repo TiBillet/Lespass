@@ -614,9 +614,11 @@ def test_annuler_un_billet_stripe_rembourse_un_billet(
 
     billet_a_annuler.refresh_from_db()
     assert billet_a_annuler.status == Ticket.CANCELED
+    # Le mail reçoit aussi ce que l'annulation a vraiment rendu (1000 centimes).
+    # / The mail also gets what was actually refunded (1000 cents).
     assert arguments_des_taches(
         taches_de_l_annulation, "send_ticket_cancellation_user"
-    ) == [(str(billet_a_annuler.uuid),)]
+    ) == [(str(billet_a_annuler.uuid), 1000)]
 
     assert charges_utiles_des_avoirs_envoyees_a_laboutik(taches_de_l_annulation) == [
         {

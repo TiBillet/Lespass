@@ -59,10 +59,13 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `Administration/admin/prices.py` | Le choix du produit d'un code promo exclut les passes |
 | `BaseBillet/models.py` (annulation) | `cancel_and_refund_ticket` et `cancel_and_refund_resa` annulent tout le pass ; l'annulation d'origine devient `_annuler_et_rembourser_un_seul_billet` / `_annuler_et_rembourser_la_reservation_seule` ; `verifier_qu_aucun_billet_du_pass_n_est_scanne` refuse avant tout remboursement ; `Reservation.contient_des_billets_de_pass()` |
 | `BaseBillet/models.py` (remboursement d'un pass) | Un pass payé par Stripe est remboursé en UN seul appel (`lignes_stripe_des_billets_du_pass`, `rembourser_les_lignes_stripe`) : les lignes de tous ses billets sont réunies, une ligne manquante fait refuser avant tout remboursement, et Stripe rend tout ou rien. Les annulations privées reçoivent `remboursement_stripe_deja_fait` ; les réservations du pass sont verrouillées dans l'ordre (`verrouiller_les_reservations`) |
+| `BaseBillet/models.py` (délai d'annulation) | Le délai de remboursement (`Event.refund_deadline`) est appliqué : après lui, le client ne peut plus annuler lui-même (« Le délai d'annulation est dépassé : contactez l'organisateur. »), l'admin le peut toujours. `Event.delai_d_annulation_depasse`, `Reservation`/`Ticket.delai_d_annulation_depasse` (pour un pass : le délai de n'importe lequel de ses événements, donc le premier) et `message_d_annulation_refusee` (délai, ou annulation désactivée). `can_refund` s'appuie dessus. Avant, ce délai ne servait qu'à un texte : le client était remboursé même après lui |
+| `BaseBillet/tasks.py`, `BaseBillet/views.py`, `Administration/admin_tenant.py` (mail d'annulation) | Les mails d'annulation reçoivent ce que l'annulation a vraiment rendu (`montant_rembourse_en_centimes`, différence de ce qu'ont payé, avant et après, toutes les réservations touchées : `reservations_concernees_par_l_annulation`, `montant_paye_par_les_reservations` ; pour un pass, le montant de tout le pass). S'il est positif, le mail annonce le remboursement et ce montant, même après le délai (annulation par l'admin). Sinon, texte et montant selon la date, comme avant. `Reservation.texte_d_annulation_remboursee()` (texte existant, sans nouvelle traduction) |
+| `tests/pytest/fabriques_panier.py`, `fabriques_reservation.py` | Événements de test créés avec un délai d'annulation de 0 jour (paramètre `delai_d_annulation_en_jours`) : les tests d'annulation par le client portent sur des événements proches |
 | `pages/templates/pages/{classic,V2}/vues/compte/reservations.html`, `.../partials/ticket_accordion.html` | La confirmation d'annulation prévient que tout le pass sera annulé |
 | `BaseBillet/models.py` (`pass_est_vendable`) | Paramètre `vente_au_comptoir` : au comptoir, refus seulement si un événement du pass est terminé (au lieu de commencé) |
 | `laboutik/views.py` | `_deplier_l_article_pass` vérifie aussi le stock de pass (message clair au caissier) ; `_extraire_articles_du_panier` déplie un pass (`_deplier_l_article_pass`) en un article par événement au prix de sa ligne ; `_creer_billets_depuis_panier` pose `pass_vendu` et le prix de la ligne sur chaque billet, et rattache chaque ligne de vente à sa réservation (liste de lignes par produit, au même prix unitaire) |
-| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 77 tests |
+| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 87 tests |
 | `tests/pytest/test_pass_multi_evenements_caisse.py` | Nouveau : 8 tests (schéma `test_pass_caisse`) |
 
 ### Pas encore fait / Not done yet
@@ -81,6 +84,10 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 - API v2 : hors périmètre.
 
 ---
+
+**Déploiement :** les tâches `send_reservation_cancellation_user` et `send_ticket_cancellation_user`
+reçoivent un argument de plus. Django et les workers Celery doivent être redéployés ensemble ;
+en dev, redémarrer le worker (`docker restart lespass_celery`), sinon le mail échoue (TypeError).
 
 ## Comment tester (a la main) / Manual test
 
@@ -114,7 +121,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 ### Test 2 — tests automatiques
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements.py -q`
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements_caisse.py -q`
-- Attendu : 77 passed et 8 passed.
+- Attendu : 87 passed et 8 passed.
 
 ### Test 3 — achat par le panier
 1. Partir du pass du Test 1 (samedi + dimanche).
@@ -158,6 +165,16 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
    panier affiche 30 €.
 3. Payer : les lignes de vente valent 14,50 € (samedi) et 15,50 € (dimanche).
 4. Admin : un pass gratuit avec « Prix libre » coché est refusé.
+
+### Test 7 — délai d'annulation
+1. Un événement dans 3 jours, délai de remboursement 7 jours (fiche événement), un billet réservé.
+2. « Mes réservations » : à la place du bouton, « Le délai d'annulation est dépassé : contactez
+   l'organisateur. ».
+3. Admin : annuler ce billet reste possible.
+4. Pass dont le premier jour a dépassé son délai : le billet du dernier jour n'est plus annulable
+   par le client non plus.
+5. Après le délai, l'admin annule un billet payé et le rembourse : le mail reçu par le client
+   annonce le remboursement et son montant (et non « délai dépassé »).
 
 ### Verifs DB
 - Après un achat : `Ticket.objects.filter(pass_vendu=<uuid>)` renvoie un billet par événement du pass.

@@ -58,6 +58,10 @@ def creer_evenement_et_produit(
                 "@type": "Event",
                 "name": f"Refund Event {rid}",
                 "startDate": start_date,
+                # Délai d'annulation à 0 jour : l'event est demain, et ces tests annulent
+                # comme le client (le délai par défaut, 7 jours, serait déjà dépassé).
+                # / Zero-day cancellation deadline: the event is tomorrow.
+                "offers": {"returnPolicy": {"merchantReturnDays": 0}},
             }
         ),
         content_type="application/json",
