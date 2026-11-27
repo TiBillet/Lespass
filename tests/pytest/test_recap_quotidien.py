@@ -2265,3 +2265,65 @@ class TestPageDesReglagesDesEnvois(RecapQuotidienTestCase):
         for resultat in reponse.json()["results"]:
             identifiants_proposes.append(resultat["id"])
         assert identifiants_proposes == [str(personne_du_lieu.pk)]
+
+    def _enregistrer_les_reglages_avec_l_email(self, email_a_ajouter):
+        """
+        Poste le formulaire des réglages avec un e-mail dans le champ d'ajout.
+        `sender_mail_connect` est remplacé : on vérifie qu'aucun mail ne part.
+        / Posts the settings form with an e-mail in the add field. The mail sender
+        is mocked to check that no mail is sent.
+        """
+        with patch("AuthBillet.utils.sender_mail_connect") as envoi_du_mail:
+            reponse = self.client_de_l_admin.post(
+                reverse("staff_admin:comptabilite_configurationdesrapports_changelist"),
+                {
+                    "envoyer_le_recap_quotidien": "on",
+                    "ajouter_un_destinataire_par_email": email_a_ajouter,
+                },
+            )
+        return reponse, envoi_du_mail
+
+    def test_un_email_inconnu_cree_le_compte_et_l_ajoute_sans_mail(self):
+        ConfigurationDesRapports.get_solo().destinataires.clear()
+
+        reponse, envoi_du_mail = self._enregistrer_les_reglages_avec_l_email(
+            "Nouvelle-Compta@Example.org"
+        )
+
+        assert reponse.status_code == 302
+        envoi_du_mail.assert_not_called()
+        compte_cree = TibilletUser.objects.get(email="nouvelle-compta@example.org")
+        assert compte_cree.is_active is False
+        assert self.tenant in compte_cree.client_achat.all()
+        assert destinataires_du_recap() == ["nouvelle-compta@example.org"]
+
+    def test_un_email_d_un_autre_lieu_est_rattache_au_lieu_et_ajoute(self):
+        ConfigurationDesRapports.get_solo().destinataires.clear()
+        TibilletUser.objects.create(
+            email="compta-ailleurs@example.org",
+            username="compta-ailleurs@example.org",
+        )
+
+        reponse, envoi_du_mail = self._enregistrer_les_reglages_avec_l_email(
+            "compta-ailleurs@example.org"
+        )
+
+        assert reponse.status_code == 302
+        envoi_du_mail.assert_not_called()
+        assert destinataires_du_recap() == ["compta-ailleurs@example.org"]
+
+    def test_une_adresse_en_erreur_n_est_pas_ajoutee(self):
+        ConfigurationDesRapports.get_solo().destinataires.clear()
+        compte_en_erreur = TibilletUser.objects.create(
+            email="rebond@example.org",
+            username="rebond@example.org",
+            email_error=True,
+        )
+        compte_en_erreur.client_achat.add(self.tenant)
+
+        reponse, _envoi_du_mail = self._enregistrer_les_reglages_avec_l_email(
+            "rebond@example.org"
+        )
+
+        assert reponse.status_code == 302
+        assert destinataires_du_recap() == []

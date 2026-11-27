@@ -15,11 +15,14 @@ FLUX :
   `comptabilite/views/rapport_temps_reel.html` → `_sections_rapport.html`.
 / Flow: closure page and real-time report both go through sections_pour_affichage.
 """
+from django import forms
 from django.contrib import admin, messages
+from django.forms import ModelForm
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
+from unfold.widgets import UnfoldAdminEmailInputWidget
 
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
@@ -28,6 +31,7 @@ from Administration.admin.base import ModelAdmin
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
+from AuthBillet.utils import get_or_create_user
 
 from comptabilite.fec import generer_fec_cloture
 from comptabilite.models import ClotureCaisse, ConfigurationDesRapports
@@ -426,6 +430,42 @@ class ClotureCaisseAdmin(ModelAdmin):
         return euros_a_la_francaise(obj.total_general)
 
 
+class ConfigurationDesRapportsForm(ModelForm):
+    """
+    Le formulaire des réglages des envois, avec un champ en plus : un e-mail à
+    ajouter aux destinataires. Il sert pour une personne qui n'a pas encore de compte
+    au lieu : l'autocomplétion de `destinataires` ne la trouve pas.
+    / The mail settings form, plus one field: an e-mail to add to the recipients,
+    for someone the autocomplete cannot find.
+
+    LOCALISATION : comptabilite/admin.py
+
+    Le champ n'est pas un champ du modèle : il est lu par
+    `ConfigurationDesRapportsAdmin.save_related`.
+    / Not a model field: read by ConfigurationDesRapportsAdmin.save_related.
+    """
+
+    ajouter_un_destinataire_par_email = forms.EmailField(
+        required=False,
+        widget=UnfoldAdminEmailInputWidget(),
+        label=_("Ajouter un destinataire par e-mail"),
+        help_text=_(
+            "Pour une personne introuvable dans la recherche. Son compte est créé "
+            "s'il n'existe pas. Aucun mail de confirmation ne lui est envoyé."
+        ),
+    )
+
+    # Liste vide INDISPENSABLE : les champs viennent de `fields` de l'admin, au moment
+    # de la requête. Avec "__all__", Django construirait le champ `destinataires` dès
+    # l'import du module. Son queryset (manager de HumanUser) lit
+    # `connection.tenant.pk`, absent hors requête : le serveur ne démarre plus.
+    # / Empty list REQUIRED: fields come from the admin at request time. "__all__"
+    # would build `destinataires` at import, when no tenant is set.
+    class Meta:
+        model = ConfigurationDesRapports
+        fields = []
+
+
 @admin.register(ConfigurationDesRapports, site=staff_admin_site)
 class ConfigurationDesRapportsAdmin(SingletonModelAdmin, ModelAdmin):
     """
@@ -446,6 +486,7 @@ class ConfigurationDesRapportsAdmin(SingletonModelAdmin, ModelAdmin):
     # / Set to None so the Unfold template is used.
     change_form_template = None
 
+    form = ConfigurationDesRapportsForm
     compressed_fields = True
     warn_unsaved_form = True
 
@@ -455,6 +496,7 @@ class ConfigurationDesRapportsAdmin(SingletonModelAdmin, ModelAdmin):
         "envoyer_le_rapport_mensuel",
         "envoyer_le_rapport_annuel",
         "destinataires",
+        "ajouter_un_destinataire_par_email",
     )
 
     # La recherche passe par HumanUserAdmin (Administration/admin_tenant.py) et ses
@@ -462,6 +504,45 @@ class ConfigurationDesRapportsAdmin(SingletonModelAdmin, ModelAdmin):
     # les pk postés contre HumanUser.objects, filtré sur le lieu.
     # / Search goes through HumanUserAdmin: only this venue's people.
     autocomplete_fields = ["destinataires"]
+
+    def save_related(self, request, form, formsets, change):
+        """
+        Enregistre la liste des destinataires, puis ajoute la personne de l'e-mail
+        saisi, si un e-mail a été saisi.
+        / Saves the recipient list, then adds the person of the typed e-mail.
+
+        L'ajout se fait APRÈS `super().save_related()` : celui-ci remplace la liste
+        par celle du champ `destinataires`. Un ajout fait avant serait effacé.
+        / The add runs AFTER super(): it replaces the list with the field's one.
+
+        `get_or_create_user` retrouve le compte ou le crée, et le rattache au lieu.
+        `send_mail=False` : aucun mail de confirmation n'est envoyé.
+        Il rend None si l'adresse est marquée en erreur (mails qui reviennent).
+        / Finds or creates the account, linked to the venue, without any mail.
+        Returns None if the address is flagged as failing.
+        """
+        super().save_related(request, form, formsets, change)
+
+        email_a_ajouter = form.cleaned_data.get("ajouter_un_destinataire_par_email")
+        if not email_a_ajouter:
+            return
+
+        utilisateur_a_ajouter = get_or_create_user(email_a_ajouter, send_mail=False)
+        if utilisateur_a_ajouter is None:
+            messages.error(
+                request,
+                _(
+                    "L'adresse %(email)s est en erreur : les mails n'y arrivent pas. "
+                    "Elle n'a pas été ajoutée."
+                )
+                % {"email": email_a_ajouter},
+            )
+            return
+
+        # `.add()` attend une instance HumanUser ; get_or_create_user rend un
+        # TibilletUser. On passe donc la clé primaire.
+        # / .add() needs a HumanUser instance: pass the primary key.
+        form.instance.destinataires.add(utilisateur_a_ajouter.pk)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
