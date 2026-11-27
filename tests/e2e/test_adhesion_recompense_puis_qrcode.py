@@ -275,6 +275,27 @@ def _lire_la_ligne_de_l_adhesion(django_shell, email):
     return _lire_json_marque(sortie, "VENTE_JSON=")
 
 
+def _attendre_la_trace_du_versement_sur_la_ligne(django_shell, email, secondes=20):
+    """Lit la ligne de l'adhesion jusqu'a ce qu'elle porte la trace du versement.
+    Rend la derniere lecture, trace ou non : la verification dit ensuite ce qui manque.
+
+    La tache Celery `refill_from_lespass_to_user_wallet_from_price_solded`
+    (BaseBillet/tasks.py) credite d'abord le Fedow, relie la transaction, et
+    n'ecrit `metadata["fedow_reward"]` sur la ligne qu'APRES. Voir le solde
+    credite ne garantit donc pas que la trace soit deja ecrite : on interroge
+    en boucle, comme `_attendre_le_versement`.
+    / The Celery task credits Fedow first and writes the line trace AFTER:
+    a credited balance does not mean the trace is written yet. Poll.
+    """
+    vente = _lire_la_ligne_de_l_adhesion(django_shell, email)
+    for _tentative in range(secondes // 2):
+        if vente["recompense_transaction"]:
+            return vente
+        time.sleep(2)
+        vente = _lire_la_ligne_de_l_adhesion(django_shell, email)
+    return vente
+
+
 def _verifier_la_ligne_de_l_adhesion(vente, tarif, moyen_attendu):
     """La ligne de l'adhesion est validee, au bon moyen, et porte la trace du versement.
 
@@ -780,7 +801,7 @@ def test_adhesion_en_ligne_payee_par_stripe_credite_mon_espace_puis_se_depense_p
     # « Stripe CB » (SN). Les echeances suivantes portent « Recurrent » (SR), voir
     # test_renouvellement_adhesion_recurrente.py.
     # / The FIRST instalment is paid on the Checkout (SN); renewals are SR.
-    vente = _lire_la_ligne_de_l_adhesion(django_shell, email)
+    vente = _attendre_la_trace_du_versement_sur_la_ligne(django_shell, email)
     _verifier_la_ligne_de_l_adhesion(vente, tarif, moyen_attendu="SN")
 
     # --- 6. « Mon espace » montre la recompense, qui se depense par QR code ---
@@ -864,7 +885,7 @@ def test_adhesion_au_comptoir_saisie_dans_l_admin_credite_mon_espace_puis_se_dep
     )
 
     # --- 5. La ligne de l'adhesion : validee, payee en especes, versement trace ---
-    vente = _lire_la_ligne_de_l_adhesion(django_shell, email)
+    vente = _attendre_la_trace_du_versement_sur_la_ligne(django_shell, email)
     _verifier_la_ligne_de_l_adhesion(vente, tarif, moyen_attendu="CA")
 
     # --- 6. « Mon espace » montre la recompense, qui se depense par QR code ---
