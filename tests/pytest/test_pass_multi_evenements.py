@@ -91,6 +91,7 @@ def lieu(tenant, mock_stripe):
     """
     Le lieu `lespass`, avec Stripe (compte Connect compris) et Celery simulés. Sans compte
     Connect simulé, le premier prix Stripe appellerait le vrai Stripe.
+    Rend un objet avec `tenant` et `taches_demandees` (les tâches Celery demandées).
     / The `lespass` venue, with Stripe (Connect included) and Celery faked.
     """
     with tenant_context(tenant):
@@ -99,8 +100,8 @@ def lieu(tenant, mock_stripe):
                 "BaseBillet.models.Configuration.get_stripe_connect_account",
                 return_value="acct_test_pass",
             ):
-                with taches_celery_enregistrees():
-                    yield tenant
+                with taches_celery_enregistrees() as taches_demandees:
+                    yield SimpleNamespace(tenant=tenant, taches_demandees=taches_demandees)
 
 
 def creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00", stock_de_passes=None):
@@ -1866,3 +1867,103 @@ def test_le_message_du_delai_passe_avant_celui_de_l_option(lieu):
     reservation = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
 
     assert reservation.message_d_annulation_refusee() == MESSAGE_DELAI_DEPASSE
+
+
+# --------------------------------------------------------------------------
+# Le mail d'annulation dit ce qui a vraiment été remboursé
+# / The cancellation mail tells what was actually refunded
+# --------------------------------------------------------------------------
+
+def contexte_du_mail(tache, *arguments):
+    """
+    Lance la tâche de mail et rend le contexte du mail, sans l'envoyer. La tâche active la
+    langue du lieu : les textes attendus se lisent donc juste après, dans la même langue.
+    / Runs the mail task and returns its context; the task activates the venue language.
+    """
+    with patch("BaseBillet.tasks.CeleryMailerClass") as faux_mail:
+        tache(*arguments)
+    return faux_mail.call_args.kwargs["context"]
+
+
+def test_mail_d_une_annulation_remboursee_apres_le_delai_annonce_le_remboursement(lieu):
+    """
+    L'admin rembourse 10 € après le délai : le mail de la réservation annonce le
+    remboursement et ce montant, et non « délai dépassé ».
+    / Admin refunds 10 after the deadline: the mail announces the refund and the amount.
+    """
+    from BaseBillet.tasks import send_reservation_cancellation_user
+
+    concert = creer_evenement_avec_tarif(jours_avant_l_evenement=3, delai_d_annulation_en_jours=7)
+    reservation = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
+
+    contexte = contexte_du_mail(send_reservation_cancellation_user, str(reservation.uuid), 1000)
+
+    assert str(contexte["cancel_text"]) == str(reservation.texte_d_annulation_remboursee())
+    assert contexte["refund_amount"] == Decimal("10")
+
+
+def test_mail_sans_montant_rembourse_garde_le_texte_selon_la_date(lieu):
+    """Sans montant rendu, après le délai : le mail dit toujours « délai dépassé ».
+    / Without a refunded amount, after the deadline: the mail still says deadline passed."""
+    from BaseBillet.tasks import send_ticket_cancellation_user
+
+    concert = creer_evenement_avec_tarif(jours_avant_l_evenement=3, delai_d_annulation_en_jours=7)
+    reservation = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
+
+    contexte = contexte_du_mail(send_ticket_cancellation_user, str(reservation.tickets.get().uuid), 0)
+
+    assert str(contexte["cancel_text"]) == str(reservation.cancel_text())
+    assert reservation.can_refund() is False
+
+
+def test_annulation_par_le_client_transmet_le_montant_rembourse_au_mail(lieu, mock_stripe):
+    """
+    Le client annule le billet du samedi d'un pass payé par Stripe (12 € + 13 €) : tout le
+    pass est remboursé, et le mail du billet reçoit les 25 € rendus.
+    / The customer cancels a Stripe-paid pass ticket: the mail gets the whole 25 refunded.
+    """
+    from test_caracterisation_annulations import client_de_mon_compte, rembourser_comme_stripe
+
+    le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
+    acheteur = creer_utilisateur()
+    commande, _paiement = acheter_le_pass_par_stripe(le_pass, acheteur, mock_stripe)
+    billet_du_samedi = commande.reservations.get(event=le_pass.samedi).tickets.get()
+
+    with patch("stripe.Refund.create", side_effect=rembourser_comme_stripe):
+        client_de_mon_compte(lieu, acheteur).post(
+            f"/my_account/{billet_du_samedi.uuid}/cancel_ticket/", HTTP_HX_REQUEST="true"
+        )
+
+    mails_de_billet = []
+    for nom_de_la_tache, arguments in lieu.taches_demandees:
+        if nom_de_la_tache == "send_ticket_cancellation_user":
+            mails_de_billet.append(arguments)
+    assert mails_de_billet == [(str(billet_du_samedi.uuid), 2500)]
+
+
+def test_reservations_concernees_par_l_annulation_d_un_pass(lieu):
+    """
+    Annuler un billet de pass, ou une réservation qui en contient, touche les réservations
+    des deux jours. Un billet normal ne touche que la sienne.
+    / A pass cancellation touches both days' reservations; a normal ticket only its own.
+    """
+    from BaseBillet.models import reservations_concernees_par_l_annulation
+
+    le_pass = creer_un_pass_deux_jours()
+    reservation_du_samedi, reservation_du_dimanche = acheter_le_pass_billets_valides(
+        le_pass, creer_utilisateur()
+    )
+    concert = creer_evenement_avec_tarif()
+    reservation_normale = reserver_un_billet(concert.evenement, concert.produit, concert.tarif)
+
+    par_le_billet = reservations_concernees_par_l_annulation(
+        reservation_du_dimanche, reservation_du_dimanche.tickets.get()
+    )
+    par_la_reservation = reservations_concernees_par_l_annulation(reservation_du_samedi)
+    billet_normal = reservations_concernees_par_l_annulation(
+        reservation_normale, reservation_normale.tickets.get()
+    )
+
+    assert {r.pk for r in par_le_billet} == {reservation_du_samedi.pk, reservation_du_dimanche.pk}
+    assert {r.pk for r in par_la_reservation} == {reservation_du_samedi.pk, reservation_du_dimanche.pk}
+    assert [r.pk for r in billet_normal] == [reservation_normale.pk]
