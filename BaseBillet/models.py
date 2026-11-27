@@ -3444,47 +3444,124 @@ class PriceSold(models.Model):
 #     if not self.id_price_stripe :
 #         logger.info(f"PriceSold : {self.price.name} - Stripe : {self.get_id_price_stripe()}")
 
-def verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_du_pass):
+def billet_d_un_tarif_accompagne(billet):
+    """Vrai si le billet est d'un tarif « Ne peut pas être vendu seul ».
+    / True if the ticket has an accompanied-only price."""
+    return billet.pricesold_id is not None and billet.pricesold.price.vendu_seulement_accompagne
+
+
+def billets_annules_ensemble(billets_de_depart):
     """
-    Refuse d'annuler un pass dont un billet est scanné : le pass est indivisible.
-    À appeler avant tout remboursement.
-    / Refuses to cancel a pass with a scanned ticket. Call before any refund.
+    Tous les billets à annuler avec ceux de départ (eux compris, encore actifs) :
+    - les autres billets de leurs passes : le pass est indivisible ;
+    - les billets « Ne peut pas être vendu seul » d'une réservation qui n'aurait plus aucun
+      billet actif d'un tarif non coché. Une réservation, c'est l'achat sur un événement :
+      le panier en crée une par événement, la réservation directe ne vise qu'un événement.
+    On recommence tant qu'on en trouve : un billet accompagné peut être un pass.
+    / Every ticket to cancel with the starting ones: their passes' tickets, and the
+    accompanied-only tickets left alone in a reservation. Repeated until stable.
+
+    LOCALISATION : BaseBillet/models.py
+
+    :return: liste de Ticket, dans l'ordre des réservations (verrouillage sans blocage)
+    """
+    billets_par_identifiant = {}
+    for billet in billets_de_depart:
+        if billet.status != Ticket.CANCELED:
+            billets_par_identifiant[billet.pk] = billet
+
+    nombre_de_billets_avant = -1
+    while nombre_de_billets_avant != len(billets_par_identifiant):
+        nombre_de_billets_avant = len(billets_par_identifiant)
+
+        identifiants_des_passes = set()
+        for billet in billets_par_identifiant.values():
+            if billet.pass_vendu is not None:
+                identifiants_des_passes.add(billet.pass_vendu)
+        billets_des_passes = (
+            Ticket.objects.filter(pass_vendu__in=identifiants_des_passes)
+            .exclude(status=Ticket.CANCELED)
+            .select_related("reservation", "pricesold__price")
+        )
+        for billet_du_pass in billets_des_passes:
+            billets_par_identifiant.setdefault(billet_du_pass.pk, billet_du_pass)
+
+        reservations_touchees = set()
+        for billet in billets_par_identifiant.values():
+            reservations_touchees.add(billet.reservation_id)
+        for identifiant_de_la_reservation in reservations_touchees:
+            billets_qui_resteraient = []
+            billets_actifs_de_la_reservation = (
+                Ticket.objects.filter(reservation_id=identifiant_de_la_reservation)
+                .exclude(status=Ticket.CANCELED)
+                .select_related("reservation", "pricesold__price")
+            )
+            for billet in billets_actifs_de_la_reservation:
+                if billet.pk not in billets_par_identifiant:
+                    billets_qui_resteraient.append(billet)
+            il_reste_un_accompagnant = False
+            for billet in billets_qui_resteraient:
+                if not billet_d_un_tarif_accompagne(billet):
+                    il_reste_un_accompagnant = True
+            if not il_reste_un_accompagnant:
+                for billet_reste_seul in billets_qui_resteraient:
+                    billets_par_identifiant.setdefault(billet_reste_seul.pk, billet_reste_seul)
+
+    billets_a_annuler = list(billets_par_identifiant.values())
+    billets_a_annuler.sort(key=lambda billet: (str(billet.reservation_id), str(billet.pk)))
+    return billets_a_annuler
+
+
+def verifier_qu_aucun_billet_lie_n_est_scanne(billets_lies):
+    """
+    Refuse l'annulation si un billet à annuler avec elle est déjà scanné : un billet d'un
+    pass (indivisible), ou un billet accompagné qui resterait seul. À appeler avant tout
+    remboursement.
+    / Refuses if a linked ticket is scanned (pass or accompanied). Call before any refund.
 
     LOCALISATION : BaseBillet/models.py
     """
-    for billet_du_pass in billets_du_pass:
-        if billet_du_pass.status == Ticket.SCANNED:
+    for billet_lie in billets_lies:
+        if billet_lie.status != Ticket.SCANNED:
+            continue
+        if billet_lie.pass_vendu is not None:
             raise Exception(
                 _("Un billet de ce pass a déjà été scanné : le pass ne peut plus être annulé.")
             )
+        raise Exception(
+            _(
+                "Un billet « %(tarif)s » de cet achat a déjà été scanné : il ne peut pas rester "
+                "sans accompagnant, l'annulation est refusée."
+            )
+            % {"tarif": billet_lie.pricesold.price.name}
+        )
 
 
-def lignes_stripe_des_billets_du_pass(billets_du_pass):
+def lignes_stripe_des_billets(billets):
     """
-    Les lignes Stripe à rembourser pour ces billets de pass, chacune avec sa quantité à
-    rendre (`to_refund_qty`, un billet = 1). Un billet payé par Stripe sans ligne trouvée
-    fait refuser l'annulation, AVANT tout remboursement.
-    / The Stripe lines to refund for these pass tickets (one ticket = 1); a Stripe-paid
-    ticket without a line refuses the cancellation before any refund.
+    Les lignes Stripe à rembourser pour ces billets (pass, billets annulés en cascade),
+    chacune avec sa quantité à rendre (`to_refund_qty`, un billet = 1). Un billet payé par
+    Stripe sans ligne trouvée fait refuser l'annulation, AVANT tout remboursement.
+    / The Stripe lines to refund for these tickets (one ticket = 1); a Stripe-paid ticket
+    without a line refuses the cancellation before any refund.
 
     LOCALISATION : BaseBillet/models.py
     """
     lignes_par_identifiant = {}
-    for billet_du_pass in billets_du_pass:
-        reservation = billet_du_pass.reservation
+    quantites_prevues_par_ligne = {}
+    for billet in billets:
+        reservation = billet.reservation
         if reservation._montant_paye_par_stripe() <= 0:
             continue
         ligne_payee_par_stripe = reservation.lignearticles.filter(paiement_stripe__isnull=False).first()
         ligne = reservation._ligne_stripe_du_billet_avec_une_quantite_a_rendre(
-            ligne_payee_par_stripe.paiement_stripe, billet_du_pass
+            ligne_payee_par_stripe.paiement_stripe, billet, quantites_prevues_par_ligne
         )
         if ligne is None:
             raise Exception(_("Ticket does not have a matching LigneArticle."))
-        if ligne.pk in lignes_par_identifiant:
-            lignes_par_identifiant[ligne.pk].to_refund_qty += 1
-        else:
-            ligne.to_refund_qty = 1
-            lignes_par_identifiant[ligne.pk] = ligne
+        lignes_par_identifiant.setdefault(ligne.pk, ligne)
+        quantites_prevues_par_ligne[ligne.pk] = quantites_prevues_par_ligne.get(ligne.pk, 0) + 1
+        lignes_par_identifiant[ligne.pk].to_refund_qty = quantites_prevues_par_ligne[ligne.pk]
     return list(lignes_par_identifiant.values())
 
 
@@ -3511,32 +3588,21 @@ def rembourser_les_lignes_stripe(lignes):
 def reservations_concernees_par_l_annulation(reservation, ticket=None):
     """
     Les réservations que touche l'annulation d'un billet (`ticket`) ou de toute la
-    réservation : elle-même, plus celles des autres billets de ses passes, annulés avec
-    elle (le pass est indivisible). À lire AVANT d'annuler : après, les billets ne sont
-    plus actifs. Sert à mesurer ce que l'annulation a rendu, pour le mail.
-    / The reservations a cancellation touches (its passes' ones too). Read before cancelling.
+    réservation : elle-même, plus celles des billets annulés avec elle (billets_annules_ensemble :
+    passes, billets accompagnés restés seuls). À lire AVANT d'annuler : après, les billets ne
+    sont plus actifs. Sert à mesurer ce que l'annulation a rendu, pour le mail.
+    / The reservations a cancellation touches. Read before cancelling.
 
     LOCALISATION : BaseBillet/models.py
     """
     if ticket is not None:
-        if ticket.pass_vendu is None:
-            return [reservation]
-        identifiants_des_passes = [ticket.pass_vendu]
+        billets_de_depart = [ticket]
     else:
-        identifiants_des_passes = list(
-            reservation.tickets.filter(pass_vendu__isnull=False)
-            .exclude(status=Ticket.CANCELED)
-            .values_list("pass_vendu", flat=True)
-        )
+        billets_de_depart = list(reservation.tickets.exclude(status=Ticket.CANCELED))
 
     reservations_par_identifiant = {reservation.pk: reservation}
-    billets_des_passes = (
-        Ticket.objects.filter(pass_vendu__in=identifiants_des_passes)
-        .exclude(status=Ticket.CANCELED)
-        .select_related("reservation")
-    )
-    for billet_du_pass in billets_des_passes:
-        reservations_par_identifiant.setdefault(billet_du_pass.reservation_id, billet_du_pass.reservation)
+    for billet in billets_annules_ensemble(billets_de_depart):
+        reservations_par_identifiant.setdefault(billet.reservation_id, billet.reservation)
     return list(reservations_par_identifiant.values())
 
 
@@ -3896,30 +3962,37 @@ class Reservation(models.Model):
                 billets_deja_repartis + quantite_a_rendre
             )
 
-    def _ligne_stripe_du_billet_avec_une_quantite_a_rendre(self, paiement, ticket):
+    def _ligne_stripe_du_billet_avec_une_quantite_a_rendre(
+        self, paiement, ticket, quantites_deja_prevues_par_ligne=None
+    ):
         """
         La ligne de ce paiement, du tarif vendu du billet, qui a ENCORE une quantité à
         rendre ; None s'il n'y en a pas. Le même tarif vendu peut être sur plusieurs
         lignes (panier, prix libre) : la première ligne trouvée peut être déjà toute
-        rendue.
+        rendue. `quantites_deja_prevues_par_ligne` ({pk: quantité}) : ce que d'autres
+        billets du même remboursement prennent déjà sur chaque ligne.
         / This payment's line of the ticket's PriceSold that still has something to give
-        back; None if none.
+        back (minus what other tickets of the same refund already take); None if none.
         """
+        if quantites_deja_prevues_par_ligne is None:
+            quantites_deja_prevues_par_ligne = {}
         lignes_du_tarif_vendu = paiement.lignearticles.filter(
             pricesold=ticket.pricesold,
             status__in=[LigneArticle.PAID, LigneArticle.VALID],
         ).order_by("datetime", "pk")
         for ligne in lignes_du_tarif_vendu:
-            if self._quantite_pas_encore_rendue(ligne) > 0:
+            quantite_deja_prevue = quantites_deja_prevues_par_ligne.get(ligne.pk, 0)
+            if self._quantite_pas_encore_rendue(ligne) - quantite_deja_prevue > 0:
                 return ligne
         return None
 
     @atomic
     def cancel_and_refund_resa(self, annulation_par_l_admin=False, moyen_rembourse=None):
         """
-        Annule la réservation, puis les billets du même pass sur les autres réservations
-        (le pass est indivisible). Rien n'est annulé si l'un d'eux est scanné.
-        / Cancels the reservation, then the same-pass tickets of other reservations.
+        Annule la réservation, puis les billets liés des autres réservations
+        (billets_annules_ensemble : billets du même pass, billets « Ne peut pas être vendu
+        seul » restés sans accompagnant). Rien n'est annulé si l'un d'eux est scanné.
+        / Cancels the reservation, then the linked tickets of other reservations.
 
         LOCALISATION : BaseBillet/models.py
 
@@ -3931,38 +4004,30 @@ class Reservation(models.Model):
             if message_de_refus:
                 raise Exception(message_de_refus)
 
-        identifiants_des_passes_de_la_reservation = (
-            self.tickets.filter(pass_vendu__isnull=False)
-            .exclude(status=Ticket.CANCELED)
-            .values("pass_vendu")
-        )
-        billets_de_pass_des_autres_reservations = list(
-            Ticket.objects.filter(pass_vendu__in=identifiants_des_passes_de_la_reservation)
-            .exclude(reservation_id=self.pk)
-            .exclude(status=Ticket.CANCELED)
-            .select_related("reservation")
-            .order_by("reservation_id", "uuid")
-        )
-        verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_de_pass_des_autres_reservations)
-
-        if not billets_de_pass_des_autres_reservations:
+        billets_actifs_de_la_reservation = list(self.tickets.exclude(status=Ticket.CANCELED))
+        billets_lies = self._billets_lies_hors_de_la_reservation(billets_actifs_de_la_reservation)
+        if not billets_lies:
             return self._annuler_et_rembourser_la_reservation_seule(
                 annulation_par_l_admin=annulation_par_l_admin,
                 moyen_rembourse=moyen_rembourse,
             )
 
-        # Pass : un seul remboursement Stripe couvre cette réservation et les billets du
-        # pass sur les autres événements. Ensuite, chacun est annulé sans être
-        # remboursé une seconde fois.
-        # / Pass: one Stripe refund for this reservation and the linked tickets, then each
-        # is cancelled without a second refund.
+        # Verrouiller, puis relire : une autre annulation a pu changer les billets liés.
+        # / Lock, then read again: another cancellation may have changed the linked tickets.
         identifiants_des_reservations = [self.pk]
-        for billet_lie in billets_de_pass_des_autres_reservations:
+        for billet_lie in billets_lies:
             identifiants_des_reservations.append(billet_lie.reservation_id)
         verrouiller_les_reservations(identifiants_des_reservations)
+        billets_actifs_de_la_reservation = list(self.tickets.exclude(status=Ticket.CANCELED))
+        billets_lies = self._billets_lies_hors_de_la_reservation(billets_actifs_de_la_reservation)
+        verifier_qu_aucun_billet_lie_n_est_scanne(billets_lies)
 
+        # Un seul remboursement Stripe couvre cette réservation et les billets liés.
+        # Ensuite, chacun est annulé sans être remboursé une seconde fois.
+        # / One Stripe refund for this reservation and the linked tickets, then each is
+        # cancelled without a second refund.
         lignes_stripe_a_rembourser = self._lignes_stripe_de_toute_la_reservation()
-        lignes_stripe_a_rembourser += lignes_stripe_des_billets_du_pass(billets_de_pass_des_autres_reservations)
+        lignes_stripe_a_rembourser += lignes_stripe_des_billets(billets_lies)
         rembourser_les_lignes_stripe(lignes_stripe_a_rembourser)
         reservations_remboursees_par_stripe = set()
         for ligne in lignes_stripe_a_rembourser:
@@ -3973,7 +4038,7 @@ class Reservation(models.Model):
             moyen_rembourse=moyen_rembourse,
             remboursement_stripe_deja_fait=self.pk in reservations_remboursees_par_stripe,
         )
-        for billet_lie in billets_de_pass_des_autres_reservations:
+        for billet_lie in billets_lies:
             billet_lie.reservation._annuler_et_rembourser_un_seul_billet(
                 billet_lie,
                 annulation_par_l_admin=annulation_par_l_admin,
@@ -3981,6 +4046,15 @@ class Reservation(models.Model):
                 remboursement_stripe_deja_fait=billet_lie.reservation_id in reservations_remboursees_par_stripe,
             )
         return message_pour_la_personne
+
+    def _billets_lies_hors_de_la_reservation(self, billets_de_la_reservation):
+        """Les billets annulés avec ceux-ci (billets_annules_ensemble), hors de cette réservation.
+        / The tickets cancelled with these ones, outside this reservation."""
+        billets_lies = []
+        for billet in billets_annules_ensemble(billets_de_la_reservation):
+            if billet.reservation_id != self.pk:
+                billets_lies.append(billet)
+        return billets_lies
 
     def _lignes_stripe_de_toute_la_reservation(self):
         """
@@ -4204,15 +4278,17 @@ class Reservation(models.Model):
     @atomic
     def cancel_and_refund_ticket(self, ticket, annulation_par_l_admin=False, moyen_rembourse=None):
         """
-        Annule et rembourse un billet. Un billet de pass annule tout le pass, chaque billet
-        sur sa réservation, au prix de sa ligne. Rien n'est annulé si un billet est scanné.
-        / Cancels a ticket; a pass ticket cancels the whole pass.
+        Annule et rembourse un billet, et les billets liés (billets_annules_ensemble) : tout
+        son pass, et les billets « Ne peut pas être vendu seul » de l'achat qui resteraient
+        sans accompagnant. Chaque billet sur sa réservation, au prix de sa ligne. Rien n'est
+        annulé si un billet lié est scanné.
+        / Cancels a ticket and its linked tickets (its pass, accompanied tickets left alone).
 
         LOCALISATION : BaseBillet/models.py
 
-        Pour un pass, un seul remboursement Stripe couvre tous ses billets (tout ou rien).
-        Les réservations sont verrouillées dans l'ordre : deux annulations simultanées
-        ne se bloquent pas.
+        Un seul remboursement Stripe couvre tous les billets (tout ou rien). Les
+        réservations sont verrouillées dans l'ordre : deux annulations simultanées ne se
+        bloquent pas.
         Appelée par BaseBillet/views.py (cancel_ticket) et l'action admin « Cancel and refund ».
         Paramètres et message : ceux de _annuler_et_rembourser_un_seul_billet.
         """
@@ -4221,8 +4297,9 @@ class Reservation(models.Model):
             if message_de_refus:
                 raise Exception(message_de_refus)
 
-        billet_hors_pass = ticket.pass_vendu is None
-        if billet_hors_pass:
+        billets_a_annuler = billets_annules_ensemble([ticket])
+        billet_sans_lien = len(billets_a_annuler) <= 1
+        if billet_sans_lien:
             return self._annuler_et_rembourser_un_seul_billet(
                 ticket,
                 annulation_par_l_admin=annulation_par_l_admin,
@@ -4231,38 +4308,47 @@ class Reservation(models.Model):
 
         if ticket.reservation_id != self.pk:
             raise Exception(_("Ticket does not belong to this reservation."))
+
+        # Verrouiller, puis relire : une autre annulation a pu changer les billets liés.
+        # / Lock, then read again: another cancellation may have changed the linked tickets.
+        identifiants_des_reservations = []
+        for billet in billets_a_annuler:
+            identifiants_des_reservations.append(billet.reservation_id)
+        verrouiller_les_reservations(identifiants_des_reservations)
+        ticket.refresh_from_db()
         if ticket.status == Ticket.CANCELED:
             raise Exception(_("This ticket has already been canceled."))
+        billets_a_annuler = billets_annules_ensemble([ticket])
+        billets_lies = []
+        for billet in billets_a_annuler:
+            if billet.pk != ticket.pk:
+                billets_lies.append(billet)
+        # Un billet seul scanné reste annulable (règle d'avant) ; un pass, non, même par le
+        # billet cliqué : il est indivisible.
+        # / A lone scanned ticket stays cancellable; a pass doesn't, even the clicked ticket.
+        if ticket.pass_vendu is not None:
+            verifier_qu_aucun_billet_lie_n_est_scanne(billets_a_annuler)
+        else:
+            verifier_qu_aucun_billet_lie_n_est_scanne(billets_lies)
 
-        verrouiller_les_reservations(
-            Ticket.objects.filter(pass_vendu=ticket.pass_vendu).values_list("reservation_id", flat=True)
-        )
-        billets_du_pass_encore_actifs = list(
-            Ticket.objects.filter(pass_vendu=ticket.pass_vendu)
-            .exclude(status=Ticket.CANCELED)
-            .select_related("reservation")
-            .order_by("reservation_id", "uuid")
-        )
-        verifier_qu_aucun_billet_du_pass_n_est_scanne(billets_du_pass_encore_actifs)
-
-        # Un seul remboursement Stripe pour tout le pass, puis chaque billet est annulé
-        # sans être remboursé une seconde fois.
-        # / One Stripe refund for the whole pass, then each ticket is cancelled.
-        lignes_stripe_du_pass = lignes_stripe_des_billets_du_pass(billets_du_pass_encore_actifs)
-        rembourser_les_lignes_stripe(lignes_stripe_du_pass)
+        # Un seul remboursement Stripe pour tous les billets, puis chacun est annulé sans
+        # être remboursé une seconde fois.
+        # / One Stripe refund for all the tickets, then each is cancelled.
+        lignes_stripe_a_rembourser = lignes_stripe_des_billets(billets_a_annuler)
+        rembourser_les_lignes_stripe(lignes_stripe_a_rembourser)
         reservations_remboursees_par_stripe = set()
-        for ligne in lignes_stripe_du_pass:
+        for ligne in lignes_stripe_a_rembourser:
             reservations_remboursees_par_stripe.add(ligne.reservation_id)
 
         message_pour_la_personne = None
-        for billet_du_pass in billets_du_pass_encore_actifs:
-            message_du_billet = billet_du_pass.reservation._annuler_et_rembourser_un_seul_billet(
-                billet_du_pass,
+        for billet in billets_a_annuler:
+            message_du_billet = billet.reservation._annuler_et_rembourser_un_seul_billet(
+                billet,
                 annulation_par_l_admin=annulation_par_l_admin,
                 moyen_rembourse=moyen_rembourse,
-                remboursement_stripe_deja_fait=billet_du_pass.reservation_id in reservations_remboursees_par_stripe,
+                remboursement_stripe_deja_fait=billet.reservation_id in reservations_remboursees_par_stripe,
             )
-            if billet_du_pass.pk == ticket.pk:
+            if billet.pk == ticket.pk:
                 message_pour_la_personne = message_du_billet
         return message_pour_la_personne
 
