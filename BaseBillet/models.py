@@ -2162,6 +2162,19 @@ class Price(models.Model):
         ),
     )
 
+    # Un tarif « accompagné » (exemple : moins de 12 ans) s'achète seulement avec au moins
+    # un billet d'un tarif non coché, pour le même événement, dans le même achat. Contrôlé
+    # au panier et en réservation directe (services_panier.tarif_vendu_seul_dans_l_achat).
+    # / An "accompanied" price needs at least one non-accompanied ticket for the same event.
+    vendu_seulement_accompagne = models.BooleanField(
+        default=False,
+        verbose_name=_("Ne peut pas être vendu seul"),
+        help_text=_(
+            "Ce tarif s'achète seulement avec au moins un billet d'un autre tarif, pour le "
+            "même événement, dans le même achat. Exemple : un tarif enfant."
+        ),
+    )
+
     def out_of_stock(self, event=None, quantite_demandee=1):
         """
         Vrai si le stock du tarif ne peut pas accueillir `quantite_demandee` de plus. Avec la

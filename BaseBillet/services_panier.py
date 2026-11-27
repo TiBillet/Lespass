@@ -307,6 +307,61 @@ def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_it
             ) % {'n': remains})
 
 
+def tarif_vendu_seul_dans_l_achat(lignes_d_achat):
+    """
+    Cherche un tarif « Ne peut pas être vendu seul » sans accompagnant : sur son événement,
+    aucun billet d'un tarif non coché dans le même achat.
+    / Looks for an accompanied-only price with no non-accompanied ticket on its event.
+
+    LOCALISATION : BaseBillet/services_panier.py
+
+    :param lignes_d_achat: liste de (Event, Price), un couple par tarif acheté et par
+        événement (un pass donne un couple pour chacun de ses événements)
+    :return: (Price, Event) du premier tarif vendu seul, ou None
+    """
+    evenements_avec_un_accompagnant = set()
+    for evenement, tarif in lignes_d_achat:
+        if not tarif.vendu_seulement_accompagne:
+            evenements_avec_un_accompagnant.add(evenement.pk)
+
+    for evenement, tarif in lignes_d_achat:
+        if tarif.vendu_seulement_accompagne and evenement.pk not in evenements_avec_un_accompagnant:
+            return tarif, evenement
+    return None
+
+
+def message_de_tarif_vendu_seul(tarif, evenement):
+    """Le refus d'un tarif « Ne peut pas être vendu seul » acheté sans accompagnant.
+    / Refusal of an accompanied-only price bought alone."""
+    return _(
+        "Le tarif « %(tarif)s » ne peut pas être acheté seul : ajoutez un billet d'un autre "
+        "tarif pour « %(evenement)s »."
+    ) % {'tarif': tarif.name, 'evenement': evenement.name}
+
+
+def lignes_d_achat_du_panier(items_du_panier):
+    """
+    Les couples (Event, Price) des billets du panier. Un pass donne un couple pour chacun de
+    ses événements : il accompagne (ou doit être accompagné) sur chacun d'eux.
+    / The cart tickets as (Event, Price) pairs; a pass gives one pair per event.
+
+    LOCALISATION : BaseBillet/services_panier.py
+    """
+    from BaseBillet.models import Event, Price
+
+    lignes_d_achat = []
+    for item in items_du_panier:
+        if item.get('type') != 'ticket':
+            continue
+        tarif = Price.objects.select_related('product').get(uuid=item['price_uuid'])
+        if tarif.product.est_un_pass:
+            for ligne_du_pass in tarif.product.lignes_du_pass():
+                lignes_d_achat.append((ligne_du_pass.evenement, tarif))
+        else:
+            lignes_d_achat.append((Event.objects.get(uuid=item['event_uuid']), tarif))
+    return lignes_d_achat
+
+
 def message_de_stock_insuffisant(price, stock_restant, quantite_deja_au_panier):
     """
     Le refus d'un ajout au panier quand le stock du tarif ne suffit pas, avec le nom du

@@ -780,6 +780,7 @@ class TicketPriceInline(BasePriceInline):
         ("prix", "free_price"),
         ("stock", "max_per_user"),
         "adhesions_obligatoires",
+        "vendu_seulement_accompagne",
         ("publish", "order"),
         # Trigger billet : recompense le wallet de l'acheteur au scan du billet
         # (champ reward_on_ticket_scanned, consomme dans signals.py:check_reward
@@ -1985,6 +1986,7 @@ class PassPriceInline(TicketPriceInline):
         ("prix", "free_price"),
         ("stock", "max_per_user"),
         "adhesions_obligatoires",
+        "vendu_seulement_accompagne",
         "publish",
         "reward_on_ticket_scanned",
         ("fedow_reward_asset", "fedow_reward_amount"),

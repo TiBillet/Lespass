@@ -102,6 +102,19 @@ class CommandeService:
             if len(errors) > 0:
                 return errors, False
 
+            # Un tarif « Ne peut pas être vendu seul » exige, sur son événement, au moins un
+            # billet d'un tarif non coché dans ce panier. Contrôlé ici, au paiement, et non à
+            # l'ajout : on peut ajouter l'enfant avant l'adulte.
+            # / Accompanied-only prices need a non-accompanied ticket on the same event.
+            from BaseBillet.services_panier import (
+                lignes_d_achat_du_panier,
+                message_de_tarif_vendu_seul,
+                tarif_vendu_seul_dans_l_achat,
+            )
+            tarif_vendu_seul = tarif_vendu_seul_dans_l_achat(lignes_d_achat_du_panier(panier.items()))
+            if tarif_vendu_seul is not None:
+                raise CommandeServiceError(message_de_tarif_vendu_seul(*tarif_vendu_seul))
+
             # Resolution des prenom/nom finaux pour la Commande pivot :
             # - priorite aux valeurs stockees sur le premier item membership qui en a
             #   (collectees par membership/form.html),

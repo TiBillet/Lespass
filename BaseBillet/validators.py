@@ -888,6 +888,25 @@ class ReservationValidator(serializers.Serializer):
                     % {'produit': product.name}
                 )
 
+        # Un tarif « Ne peut pas être vendu seul » exige au moins un billet d'un tarif non
+        # coché dans le même envoi. Seulement pour la réservation directe du site : ni l'admin
+        # (`admin_created`), ni l'API v2 ou la caisse (autre origine de vente).
+        # / Accompanied-only prices need a non-accompanied ticket; site direct booking only.
+        reservation_directe_du_site = (
+            not hasattr(self, 'admin_created')
+            and self.context.get('sale_origin', SaleOrigin.LESPASS) == SaleOrigin.LESPASS
+        )
+        if reservation_directe_du_site:
+            from BaseBillet.services_panier import message_de_tarif_vendu_seul, tarif_vendu_seul_dans_l_achat
+
+            lignes_d_achat = []
+            for tarifs_demandes in products_dict.values():
+                for tarif_demande in tarifs_demandes:
+                    lignes_d_achat.append((event, tarif_demande))
+            tarif_vendu_seul = tarif_vendu_seul_dans_l_achat(lignes_d_achat)
+            if tarif_vendu_seul is not None:
+                raise serializers.ValidationError(message_de_tarif_vendu_seul(*tarif_vendu_seul))
+
         # Validate promotional code is linked to a selected product
         if hasattr(self, 'promo_code'):
             promo_code = self.promo_code
