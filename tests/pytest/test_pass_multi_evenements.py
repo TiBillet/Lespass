@@ -881,11 +881,11 @@ def test_page_d_un_pass_n_a_pas_les_champs_d_adhesion_ni_de_prix_saisi(lieu, adm
 
     for champ_absent in [
         "short_description", "long_description", "validate_button_text", "legal_link",
-        "prices-0-prix", "prices-0-order",
+        "prices-0-prix", "prices-0-order", "max_per_user",
     ]:
         assert f'name="{champ_absent}"' not in contenu, champ_absent
     for champ_present in [
-        "name", "max_per_user", "img", "prices-0-free_price", "prices-0-stock", "prices-0-adhesions_obligatoires",
+        "name", "img", "prices-0-max_per_user", "prices-0-free_price", "prices-0-stock", "prices-0-adhesions_obligatoires",
         "prices-0-reward_on_ticket_scanned",
     ]:
         assert f'name="{champ_present}"' in contenu, champ_present
@@ -1569,3 +1569,28 @@ def test_formulaire_refuse_un_pass_gratuit_a_prix_libre(lieu):
 
     assert not formulaire.is_valid()
     assert "Un pass gratuit ne peut pas être à prix libre." in formulaire.non_field_errors()
+
+
+def test_enregistrer_un_pass_vide_le_maximum_par_personne_du_produit(lieu):
+    """
+    Le maximum par personne d'un pass vit sur son tarif. Un ancien maximum resté sur le
+    produit, qui ne s'affiche plus, est vidé à l'enregistrement.
+    / The pass max per person lives on its price; a hidden product one is cleared on save.
+    """
+    from django.test import RequestFactory
+
+    from Administration.admin.products import PassProductAdmin
+    from Administration.admin.site import staff_admin_site
+    from AuthBillet.models import TibilletUser
+    from BaseBillet.models import PassProduct
+
+    le_pass = creer_un_pass_deux_jours()
+    Product.objects.filter(pk=le_pass.produit_pass.pk).update(max_per_user=3)
+    produit_pass = PassProduct.objects.get(pk=le_pass.produit_pass.pk)
+    requete = RequestFactory().post("/admin/")
+    requete.user = TibilletUser.objects.filter(is_superuser=True).first()
+
+    PassProductAdmin(PassProduct, staff_admin_site).save_model(requete, produit_pass, None, True)
+
+    produit_pass.refresh_from_db()
+    assert produit_pass.max_per_user is None

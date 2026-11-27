@@ -1992,11 +1992,6 @@ class PassProductForm(ProductAdminCustomForm):
         label=_("Product type"),
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if "max_per_user" in self.fields:
-            self.fields["max_per_user"].label = _("Maximum de pass par personne")
-
     def clean(self):
         # Les événements d'abord, avant super().clean() qui vérifie déjà un tarif : le
         # formulaire s'arrête au premier refus. On lit l'inline envoyé, pas la base : il
@@ -2107,8 +2102,10 @@ class PassProductAdmin(ProductAdmin):
     list_filter = ["publish", ProductArchiveFilter]
 
     # Sans les champs réservés aux adhésions : descriptions, texte du bouton d'adhésion,
-    # lien vers les mentions légales. L'image sert à la tuile de caisse et à Stripe.
-    # / Without the membership-only fields. The image is used by the POS tile and Stripe.
+    # lien vers les mentions légales. Sans le maximum par personne du produit : celui du
+    # tarif unique dit la même chose. L'image sert à la tuile de caisse et à Stripe.
+    # / Without membership-only fields nor the product max per person (the price one says
+    # the same). The image is used by the POS tile and Stripe.
     fieldsets = (
         (
             _("General"),
@@ -2119,7 +2116,6 @@ class PassProductAdmin(ProductAdmin):
                     "tva",
                     "img",
                     "poids",
-                    "max_per_user",
                     "publish",
                     "archive",
                 ),
@@ -2129,8 +2125,11 @@ class PassProductAdmin(ProductAdmin):
 
     def save_model(self, request, obj, form, change):
         # Le formulaire n'a pas de case : un produit enregistré ici est toujours un pass.
-        # / No checkbox in the form: a product saved here is always a pass.
+        # Le maximum par personne vit sur le tarif : on vide celui du produit, qui ne
+        # s'affiche plus et limiterait sans qu'on le voie.
+        # / Always a pass. The max per person lives on the price: clear the hidden product one.
         obj.est_un_pass = True
+        obj.max_per_user = None
         super().save_model(request, obj, form, change)
 
     def save_related(self, request, form, formsets, change):
