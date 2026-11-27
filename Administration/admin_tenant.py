@@ -16,6 +16,7 @@ from Administration.admin.benevolat import (  # noqa: F401
 )
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
 from Administration.admin.mixins import ExportCsvLisibleParExcelMixin, HelpDisplayMixin
+from Administration.utils import clean_html, normaliser_html_editeur, texte_brut_vers_html
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 
@@ -4342,6 +4343,21 @@ class EventResource(resources.ModelResource):
         # Afficher un diff des changements avant import
         # Show a diff of changes before import
         report_skipped = True
+
+    def before_save_instance(self, instance, row, **kwargs):
+        """
+        Nettoie la description longue avant l'enregistrement.
+        / Sanitizes the long description before saving.
+
+        L'import ne passe pas par EventAdmin.save_model, donc pas par
+        sanitize_textfields. La description est rendue en HTML (|safe) sur la
+        page de l'évènement : même conversion (texte brut d'un tableur), même
+        nettoyage contre le XSS et même rangement que dans l'admin.
+        """
+        if instance.long_description:
+            instance.long_description = normaliser_html_editeur(
+                clean_html(texte_brut_vers_html(instance.long_description))
+            )
 
 class EventDateFilter(admin.SimpleListFilter):
     """

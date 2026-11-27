@@ -11,6 +11,8 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
+
+from Administration.utils import clean_html, normaliser_html_editeur, texte_brut_vers_html
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, \
     PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode, \
     MembershipProduct, PaymentMethod
@@ -108,6 +110,14 @@ class ProductCreateSerializer(serializers.ModelSerializer):
                 tarifs_non_archives.append(tarif)
         representation["prices"] = tarifs_non_archives
         return representation
+
+    def validate_long_description(self, value):
+        # Rendue en HTML (|safe) : adhésions, page Badgeuse. Même conversion et
+        # même nettoyage que l'admin et l'API v2, contre le XSS.
+        # / Rendered as HTML: same conversion and sanitizing as admin and API v2.
+        if not value:
+            return value
+        return normaliser_html_editeur(clean_html(texte_brut_vers_html(value)))
 
     def validate_option_generale_radio(self, value):
         self.option_generale_radio = []
@@ -373,6 +383,14 @@ class EventCreateSerializer(serializers.Serializer):
         if value:
             self.file_name, self.file_img = get_img_from_url(value)
         return value
+
+    def validate_long_description(self, value):
+        # Rendue en HTML (|safe) sur la page de l'évènement : même conversion
+        # et même nettoyage que l'admin et l'API v2, contre le XSS.
+        # / Rendered as HTML on the event page: same sanitizing as admin and API v2.
+        if not value:
+            return value
+        return normaliser_html_editeur(clean_html(texte_brut_vers_html(value)))
 
     def validate(self, attrs):
         # import ipdb; ipdb.set_trace()
@@ -1372,6 +1390,14 @@ class EventWriteSerializer(serializers.Serializer):
         if updated:
             self._postal_address.save()
         return value
+
+    def validate_description(self, value):
+        # Devient Event.long_description, rendue en HTML (|safe) : même
+        # conversion et même nettoyage que l'admin et l'API v2, contre le XSS.
+        # / Becomes Event.long_description, rendered as HTML: same sanitizing.
+        if not value:
+            return value
+        return normaliser_html_editeur(clean_html(texte_brut_vers_html(value)))
 
     def validate_superEvent(self, value: str):
         if not value:

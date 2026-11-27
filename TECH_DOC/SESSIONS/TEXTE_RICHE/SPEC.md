@@ -497,23 +497,10 @@ style (couleur, puces, marges), comme pour les intros V2.
 
 Autres points connus, laissés de côté :
 
-- **Écritures sans `clean_html`** pour `Event.long_description` :
-  - API historique : `ApiBillet/serializers.py` (`EventCreateSerializer` ligne
-    ~394, appelé par `ApiBillet/views.py` ~346 ; `EventWriteSerializer` lignes
-    ~1423 et ~1444, appelé par `ApiBillet/views.py` ~322 et ~332) ;
-  - import CSV de l'admin : `EventResource` (`Administration/admin_tenant.py`,
-    champ `long_description`). django-import-export ne passe pas par
-    `save_model`, donc pas par `sanitize_textfields`.
+- **Écritures sans `clean_html`** (API historique `ApiBillet/` pour les events et
+  les produits, import CSV des events, onboarding pour `Configuration.long_description`) :
+  **fermées le 2026-11-27**, avec la chaîne de l'admin. Voir le CHANGELOG.
 
-  Ces chemins ne reçoivent ni la partie C ni la partie D. Un CSV avec des
-  sauts de ligne garde le défaut C7. À brancher sur `texte_brut_vers_html` +
-  `clean_html` + `normaliser_html_editeur` dans un chantier suivant (c'est
-  aussi une question de sécurité pour l'API historique, qui accepte du HTML
-  non nettoyé).
-
-- Onboarding (`onboard/templates/onboard/steps/04_descriptions.html`) : même
-  textarea en texte brut que C7, pour `Configuration.long_description`.
-  `texte_brut_vers_html` s'y branchera.
 - Tableaux de mail mis à plat par Trix (C4) : Trix ne gère pas les tableaux.
   Accepté.
 - Images collées depuis un mail : chargées depuis le site d'origine (lien

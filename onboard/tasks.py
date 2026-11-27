@@ -536,8 +536,20 @@ def create_tenant_from_draft(self, wc_uuid):
                 # par BaseBillet/validators.py:992 SI le user a saisi qqch.
                 # / Long description: override the default welcome text if
                 # the user actually wrote something.
+                # Le textarea de l'onboarding envoie du texte brut. La
+                # description est rendue en HTML (|safe) sur l'accueil du lieu :
+                # conversion, nettoyage contre le XSS et rangement, comme dans
+                # l'admin. / Plain text, rendered as HTML: convert, sanitize, tidy.
                 if wc.long_description:
-                    config.long_description = wc.long_description
+                    from Administration.utils import (
+                        clean_html,
+                        normaliser_html_editeur,
+                        texte_brut_vers_html,
+                    )
+
+                    config.long_description = normaliser_html_editeur(
+                        clean_html(texte_brut_vers_html(wc.long_description))
+                    )
                     config_fields_modifies.append("long_description")
 
                 # Logo : `wc.logo` est un FieldFile (StdImageField) qui

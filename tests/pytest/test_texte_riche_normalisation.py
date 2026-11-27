@@ -13,6 +13,9 @@ Code testé / Tested code :
 - BaseBillet/views.py : _creer_event_depuis_brouillon (wizard public)
 - Administration/utils.py : texte_brut_vers_html (wizard et API v2)
 - Administration/management/commands/normaliser_textes_riches.py (réparation)
+- ApiBillet/serializers.py : ProductCreateSerializer, EventCreateSerializer,
+  EventWriteSerializer (API historique)
+- Administration/admin_tenant.py : EventResource.before_save_instance (import CSV)
 
 L'éditeur de l'admin (Trix) écrit chaque bloc dans un <div>. Le copier-coller
 et les anciens enregistrements laissent des <br> en début et en fin de texte,
@@ -420,4 +423,48 @@ def test_api_v2_description_de_produit_nettoyee():
         '<p>Badge.</p><img src="x" onerror="alert(1)"><script>alert(2)</script>'
     )
     assert description_validee == '<p>Badge.</p><img src="x">'
+
+
+# ---------------------------------------------------------------------------
+# API historique et import CSV : même nettoyage que l'admin
+# / Legacy API and CSV import: same sanitizing as the admin
+# ---------------------------------------------------------------------------
+
+DESCRIPTION_AVEC_SCRIPT = '<p>Texte.</p><img src="x" onerror="alert(1)"><script>alert(2)</script>'
+DESCRIPTION_SANS_SCRIPT = '<p>Texte.</p><img src="x">'
+
+
+@pytest.mark.parametrize(
+    "nom_du_serializer, nom_de_la_methode",
+    [
+        ("ProductCreateSerializer", "validate_long_description"),
+        ("EventCreateSerializer", "validate_long_description"),
+        ("EventWriteSerializer", "validate_description"),
+    ],
+)
+def test_api_historique_description_nettoyee(nom_du_serializer, nom_de_la_methode):
+    from ApiBillet import serializers as serializers_api_historique
+
+    classe_du_serializer = getattr(serializers_api_historique, nom_du_serializer)
+    methode_de_validation = getattr(classe_du_serializer(), nom_de_la_methode)
+    assert methode_de_validation(DESCRIPTION_AVEC_SCRIPT) == DESCRIPTION_SANS_SCRIPT
+    assert methode_de_validation("Ligne 1\nLigne 2") == "<div>Ligne 1<br>\nLigne 2</div>"
+
+
+def test_import_csv_des_events_nettoie_la_description():
+    """
+    L'import CSV ne passe pas par save_model : EventResource nettoie lui-même
+    la description avant l'enregistrement.
+    / CSV import skips save_model: EventResource sanitizes the description itself.
+    """
+    from Administration.admin_tenant import EventResource
+    from BaseBillet.models import Event
+
+    evenement_importe = Event(name="Import", long_description=DESCRIPTION_AVEC_SCRIPT)
+    EventResource().before_save_instance(evenement_importe, row={})
+    assert evenement_importe.long_description == DESCRIPTION_SANS_SCRIPT
+
+    evenement_en_texte_brut = Event(name="Import", long_description="Ligne 1\r\nLigne 2")
+    EventResource().before_save_instance(evenement_en_texte_brut, row={})
+    assert evenement_en_texte_brut.long_description == "<div>Ligne 1<br>\nLigne 2</div>"
 

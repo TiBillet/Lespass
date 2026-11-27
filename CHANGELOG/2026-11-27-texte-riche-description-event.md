@@ -273,9 +273,29 @@ Texte riche de test (paragraphes, ligne vide, liste) sur chaque source :
 
 Vérifié : 38 tests verts, chaque correction vue échouer sous mutation, 425 tests voisins verts.
 
-**Écritures non nettoyées qui restent, hors périmètre (préexistantes) :**
-- API historique `ApiBillet/serializers.py` : `Event.long_description` et `Product.long_description` (clé API d'admin) ;
-- import CSV des events dans l'admin (`EventResource`) ;
-- onboarding : `Configuration.long_description` (`onboard/tasks.py:540`), écrit sans
-  nettoyage par quiconque crée un lieu, rendu en `|safe` sur l'accueil de ce lieu.
+---
+
+# Fermeture des écritures non nettoyées (2026-11-27)
+
+Trois chemins écrivaient du HTML sans `clean_html` dans des champs rendus en
+`|safe` (faille XSS préexistante). Ils passent maintenant par la même chaîne que
+l'admin : `normaliser_html_editeur(clean_html(texte_brut_vers_html(...)))`.
+/ Three write paths skipped sanitizing; they now use the admin's chain.
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `onboard/tasks.py` | `create_tenant_from_draft` : `Configuration.long_description` saisie à l'onboarding (n'importe qui peut créer un lieu) |
+| `ApiBillet/serializers.py` | `ProductCreateSerializer.validate_long_description`, `EventCreateSerializer.validate_long_description`, `EventWriteSerializer.validate_description` (API historique, clé d'admin) |
+| `Administration/admin_tenant.py` | `EventResource.before_save_instance` : import CSV des events (ne passe pas par `save_model`) |
+| `tests/pytest/test_texte_riche_normalisation.py` | 4 tests (3 serializers de l'API historique, import CSV) |
+
+Vérifié : 42 tests verts, chaque branchement vu échouer sous mutation (sauf
+l'onboarding, voir ci-dessous), 810 tests voisins verts (API historique, import,
+onboarding).
+
+**Non testé automatiquement :** le branchement de l'onboarding. Le tester demande de
+créer un schéma de lieu complet (`create_tenant_from_draft`), qui n'a aucun test
+aujourd'hui. Test manuel : créer un lieu par l'onboarding avec une description sur
+plusieurs lignes contenant `<script>alert(1)</script>` ; l'accueil du lieu affiche
+les sauts de ligne et aucun script ne s'exécute.
 
