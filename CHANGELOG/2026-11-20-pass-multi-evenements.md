@@ -50,6 +50,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `BaseBillet/services_pass.py` (`repartir_le_montant_du_pass`), `services_commande.py`, `services_panier.py`, `context_processors.py`, `validators.py`, `laboutik/views.py` | Pass à prix libre : le montant payé est réparti, chaque événement reçoit son prix dans le pass (le minimum), puis le reste est partagé à parts égales entre tous les événements (le dernier prend l'arrondi). Panier (total, affichage, paiement) et caisse |
 | `BaseBillet/models.py` (`Price.stock_restant`) | Nombre de places libres du tarif (`None` = illimité) ; `out_of_stock` s'appuie dessus, même résultat qu'avant |
 | `BaseBillet/services_panier.py` (`message_de_stock_insuffisant`) | Le refus d'ajout au panier pour stock insuffisant donne le nom du tarif et ce qu'il reste (« Il ne reste que 3 billets au tarif « Plein tarif ». », en pass pour un pass), ou dit que le tarif est épuisé, ou que les dernières places sont déjà dans le panier. Remplace « Ce tarif est épuisé. » pour les billets |
+| `Administration/admin/products.py` (`_duplicate_product`) | « Dupliquer » un pass copie aussi ses événements et leur prix, puis le rattache à ses événements (copie non publiée). Pour tous les produits, un tarif copié garde ses « Abonnements requis » (relation M2M qui n'était pas copiée) |
 | `Administration/admin/dashboard.py` | Entrée « Pass » dans le menu Billetterie, rangée dans « Configurer » avec sa description |
 | `Administration/management/commands/demo_data_v2.py` | Fixture E2E « E2E Test — Pass deux événements » (la page « Pass » a un objet à ouvrir) |
 | `Administration/admin/products.py` (`EvenementDuPassInline.get_extra`) | Lignes d'événement vierges jusqu'à 2 : un nouveau pass en propose 2 |
@@ -60,7 +61,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 | `pages/templates/pages/{classic,V2}/vues/compte/reservations.html`, `.../partials/ticket_accordion.html` | La confirmation d'annulation prévient que tout le pass sera annulé |
 | `BaseBillet/models.py` (`pass_est_vendable`) | Paramètre `vente_au_comptoir` : au comptoir, refus seulement si un événement du pass est terminé (au lieu de commencé) |
 | `laboutik/views.py` | `_deplier_l_article_pass` vérifie aussi le stock de pass (message clair au caissier) ; `_extraire_articles_du_panier` déplie un pass (`_deplier_l_article_pass`) en un article par événement au prix de sa ligne ; `_creer_billets_depuis_panier` pose `pass_vendu` et le prix de la ligne sur chaque billet, et rattache chaque ligne de vente à sa réservation (liste de lignes par produit, au même prix unitaire) |
-| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 72 tests |
+| `tests/pytest/test_pass_multi_evenements.py` | Nouveau : 74 tests |
 | `tests/pytest/test_pass_multi_evenements_caisse.py` | Nouveau : 8 tests (schéma `test_pass_caisse`) |
 
 ### Pas encore fait / Not done yet
@@ -105,6 +106,8 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
    garder qu'un seul événement (ou un événement sans prix) : enregistrement refusé avec un message.
    S'il manque à la fois des événements et un tarif, le message sur les événements vient d'abord.
 8. Code promo : le produit pass n'est pas proposé dans la liste des produits.
+8ter. Dans la liste des Pass, « Dupliquer » un pass : la copie (non publiée, « [DUPLICATA] ») a les
+   mêmes événements, les mêmes prix et les mêmes réglages de tarif.
 8bis. Sur un produit billet (« Produits billetterie »), supprimer son seul tarif à la corbeille puis
    enregistrer : refusé avec « Merci d'ajouter au moins un tarif à ce produit. ».
 9. Mettre une adhésion dans « Abonnements requis » du tarif : sur le site, le pass est refusé au
@@ -113,7 +116,7 @@ tickets, so scan, gauge, PDF, mails and reports are unchanged.
 ### Test 2 — tests automatiques
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements.py -q`
 - `docker exec lespass_django poetry run pytest tests/pytest/test_pass_multi_evenements_caisse.py -q`
-- Attendu : 72 passed et 8 passed.
+- Attendu : 74 passed et 8 passed.
 
 ### Test 3 — achat par le panier
 1. Partir du pass du Test 1 (samedi + dimanche).

@@ -1543,6 +1543,11 @@ class ProductAdmin(ModelAdmin):
             )
             nouveau_tarif.save()
 
+            # Les adhésions obligatoires (« Abonnements requis ») : une relation M2M que la
+            # copie par pk=None ne reprend pas.
+            # / Required memberships: an M2M relation that the pk=None copy does not carry.
+            nouveau_tarif.adhesions_obligatoires.set(tarif_original.adhesions_obligatoires.all())
+
         # 4. DUPLICATION DES FORMULAIRES DYNAMIQUES (ProductFormField)
         # 4. DUPLICATION OF DYNAMIC FORM FIELDS (ProductFormField)
 
@@ -1566,6 +1571,21 @@ class ProductAdmin(ModelAdmin):
             nouveau_formulaire_fb.pk = None
             nouveau_formulaire_fb.product = nouveau_produit
             nouveau_formulaire_fb.save()
+
+        # 6. PASS : SES ÉVÉNEMENTS ET LEUR PRIX (EvenementDuPass)
+        # 6. PASS: ITS EVENTS AND THEIR PRICE
+
+        # Puis la même synchronisation qu'à l'enregistrement d'un pass : prix du tarif et
+        # rattachement aux événements (la copie n'est pas publiée, elle n'est pas vendue).
+        # / Then the same sync as when saving a pass (the copy is unpublished).
+        if produit_source.est_un_pass:
+            for ligne_originale in produit_source.evenements_du_pass.all():
+                EvenementDuPass.objects.create(
+                    produit=nouveau_produit,
+                    evenement=ligne_originale.evenement,
+                    prix=ligne_originale.prix,
+                )
+            synchroniser_le_produit_pass(nouveau_produit)
 
         # Retourne le produit nouvellement créé
         # Returns the newly created product

@@ -1594,3 +1594,60 @@ def test_enregistrer_un_pass_vide_le_maximum_par_personne_du_produit(lieu):
 
     produit_pass.refresh_from_db()
     assert produit_pass.max_per_user is None
+
+
+# --------------------------------------------------------------------------
+# La duplication d'un pass
+# / Duplicating a pass
+# --------------------------------------------------------------------------
+
+
+def dupliquer_comme_l_admin(produit):
+    """Duplique un produit comme le bouton « Dupliquer » de l'admin.
+    / Duplicates a product like the admin "Duplicate" button."""
+    from Administration.admin.site import staff_admin_site
+
+    return staff_admin_site._registry[Product]._duplicate_product(produit)
+
+
+def test_dupliquer_un_pass_copie_ses_evenements_et_leur_prix(lieu):
+    """
+    La copie d'un pass est un pass, avec les mêmes événements et les mêmes prix, rattaché à
+    ces événements et non publié. Le pass d'origine ne change pas.
+    / The copy is a pass with the same events and prices, attached to them, unpublished.
+    """
+    le_pass = creer_un_pass_deux_jours(prix_samedi="12.00", prix_dimanche="13.00")
+
+    copie = dupliquer_comme_l_admin(le_pass.produit_pass)
+
+    assert copie.pk != le_pass.produit_pass.pk
+    assert copie.est_un_pass is True
+    assert copie.publish is False
+    lignes_de_la_copie = []
+    for ligne in copie.lignes_du_pass():
+        lignes_de_la_copie.append((ligne.evenement, ligne.prix))
+    assert lignes_de_la_copie == [(le_pass.samedi, Decimal("12.00")), (le_pass.dimanche, Decimal("13.00"))]
+    assert le_pass.samedi.products.filter(pk=copie.pk).exists()
+    assert le_pass.dimanche.products.filter(pk=copie.pk).exists()
+    assert copie.prices.get(archived=False).prix == Decimal("25.00")
+    assert le_pass.produit_pass.evenements_du_pass.count() == 2
+
+
+def test_dupliquer_un_pass_copie_les_reglages_de_son_tarif(lieu):
+    """
+    Le tarif copié garde son prix libre, son nombre maximum de pass et ses abonnements requis.
+    / The copied price keeps its free price, its stock and its required memberships.
+    """
+    from fabriques_panier import creer_adhesion
+
+    le_pass = creer_un_pass_deux_jours(stock_de_passes=50)
+    adhesion = creer_adhesion()
+    Price.objects.filter(pk=le_pass.tarif_pass.pk).update(free_price=True)
+    le_pass.tarif_pass.adhesions_obligatoires.add(adhesion.produit)
+
+    copie = dupliquer_comme_l_admin(le_pass.produit_pass)
+
+    tarif_copie = copie.prices.get(archived=False)
+    assert tarif_copie.free_price is True
+    assert tarif_copie.stock == 50
+    assert list(tarif_copie.adhesions_obligatoires.all()) == [adhesion.produit]
