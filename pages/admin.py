@@ -53,12 +53,11 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.template.loader import render_to_string
-from solo.admin import SingletonModelAdmin
 
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
-from Administration.admin.base import ModelAdmin
+from Administration.admin.base import ModelAdmin, SingletonAdmin
 from unfold.admin import TabularInline
 from unfold.contrib.filters.admin import (
     AutocompleteSelectFilter,
@@ -437,7 +436,7 @@ class SousPagesSection(TableSection):
 
 
 @admin.register(ConfigurationSite, site=staff_admin_site)
-class ConfigurationSiteAdmin(SingletonModelAdmin, ModelAdmin):
+class ConfigurationSiteAdmin(SingletonAdmin):
     """
     Admin du singleton de configuration du site (app pages).
     / Admin of the site configuration singleton (pages app).

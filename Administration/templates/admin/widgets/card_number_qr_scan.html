@@ -1,0 +1,188 @@
+{% load i18n static %}
+<!--
+CHAMP « NUMÉRO DE CARTE » + LECTURE DU QR CODE À LA CAMÉRA
+/ Card number field + camera QR code reader
+
+LOCALISATION : Administration/templates/admin/widgets/card_number_qr_scan.html
+Widget : Administration/admin_tenant.py, classe CardNumberQrScanWidget
+Utilisé dans : /admin/BaseBillet/membership/add/ (MembershipAddForm.card_number)
+
+Le QR code d'une carte contient une adresse : https://lieu.tld/qr/<uuid>/
+(ou https://lieu.tld/<uuid>/ pour les anciennes cartes).
+Le numéro imprimé sur la carte = les 8 premiers caractères de l'UUID, en majuscules.
+
+FLUX DU CLIC SUR « FLASHER » :
+1. Affiche la vidéo, puis crée le scanner (au premier clic seulement), puis allume la caméra.
+2. Un QR code de carte est lu : remplit le champ, émet « input », éteint la caméra.
+3. Un autre QR code est lu : message d'erreur, la caméra continue de lire.
+4. Caméra impossible (refus, pas de caméra, page hors HTTPS) : message d'erreur.
+
+Aucune requête serveur. Le serveur vérifie la carte à l'enregistrement du formulaire.
+Lib : BaseBillet/static/commun/js/qr-scanner.min.js (+ son worker, dans le même dossier).
+-->
+<div id="{{ widget.attrs.id }}-qr-scan"
+     data-testid="membership-card-qr-scan"
+     data-texte-numero-rempli="{% translate 'Numéro de carte rempli :' %}"
+     data-texte-pas-une-carte="{% translate "Ce QR code n'est pas celui d'une carte." %}"
+     data-texte-camera-indisponible="{% translate 'Caméra indisponible ou accès refusé.' %}">
+
+    {% include "unfold/widgets/text.html" %}
+
+    <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+        <button type="button"
+                id="{{ widget.attrs.id }}-qr-start"
+                data-testid="membership-card-qr-start"
+                aria-controls="{{ widget.attrs.id }}-qr-cadre"
+                style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; background-color: var(--color-primary-600); color: white;">
+            <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 18px;">qr_code_scanner</span>
+            {% translate "Flasher le QR code de la carte" %}
+        </button>
+        <button type="button"
+                id="{{ widget.attrs.id }}-qr-stop"
+                data-testid="membership-card-qr-stop"
+                style="display: none; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; border: 1px solid #9ca3af; cursor: pointer; font-size: 14px; background-color: transparent; color: inherit;">
+            <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 18px;">videocam_off</span>
+            {% translate "Arrêter la caméra" %}
+        </button>
+    </div>
+
+    <!-- Le cadre est caché par style="display:none", JAMAIS la vidéo par l'attribut
+         hidden : si la vidéo porte hidden à la création du scanner, la lib la rend
+         invisible pour de bon (opacité 0, largeur 0, hauteur 0 en style inline).
+         Le cadre reçoit aussi le calque de visée que la lib ajoute à côté de la vidéo.
+         / The frame is hidden with display:none, NEVER the video with "hidden".
+         The frame also holds the scan region overlay the lib adds next to the video. -->
+    <div id="{{ widget.attrs.id }}-qr-cadre"
+         style="display: none; position: relative; width: 100%; max-width: 320px; margin-top: 8px;">
+        <video id="{{ widget.attrs.id }}-qr-video"
+               data-testid="membership-card-qr-video"
+               playsinline muted
+               style="display: block; width: 100%; border-radius: 6px;"></video>
+    </div>
+
+    <p id="{{ widget.attrs.id }}-qr-message"
+       data-testid="membership-card-qr-message"
+       aria-live="polite"
+       style="margin-top: 6px; font-size: 14px;"></p>
+</div>
+
+<script type="module">
+    import QrScanner from "{% static 'commun/js/qr-scanner.min.js' %}";
+
+    // Les éléments du widget. Leurs ids dérivent de l'id du champ (id_card_number).
+    // / Widget elements. Their ids derive from the field id.
+    const champ_numero_de_carte = document.getElementById("{{ widget.attrs.id }}");
+    const conteneur_du_scanner = document.getElementById("{{ widget.attrs.id }}-qr-scan");
+    const bouton_flasher = document.getElementById("{{ widget.attrs.id }}-qr-start");
+    const bouton_arreter = document.getElementById("{{ widget.attrs.id }}-qr-stop");
+    const video_de_la_camera = document.getElementById("{{ widget.attrs.id }}-qr-video");
+    const cadre_de_la_video = document.getElementById("{{ widget.attrs.id }}-qr-cadre");
+    const zone_de_message = document.getElementById("{{ widget.attrs.id }}-qr-message");
+
+    // Le chemin de l'adresse doit être /qr/<uuid>/ ou /<uuid>/ (barre finale facultative).
+    // Le groupe 1 capture les 8 premiers caractères de l'UUID : c'est le numéro imprimé.
+    // / The URL path must be /qr/<uuid>/ or /<uuid>/. Group 1 = the printed number.
+    const motif_chemin_de_carte = /^\/(?:qr\/)?([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i;
+
+    // Le scanner est créé au premier clic : pas de demande d'accès caméra au chargement.
+    // / The scanner is created on first click: no camera prompt on page load.
+    let scanner_qr_code = null;
+
+    // Dernier texte refusé : évite de répéter le même message en boucle.
+    // / Last rejected text: avoids repeating the same message in a loop.
+    let dernier_texte_refuse = null;
+
+    function afficher_la_camera(est_affichee) {
+        if (est_affichee) {
+            cadre_de_la_video.style.display = "block";
+            bouton_arreter.style.display = "inline-flex";
+            bouton_flasher.disabled = true;
+            bouton_flasher.style.opacity = "0.5";
+        } else {
+            cadre_de_la_video.style.display = "none";
+            bouton_arreter.style.display = "none";
+            bouton_flasher.disabled = false;
+            bouton_flasher.style.opacity = "1";
+        }
+    }
+
+    function eteindre_la_camera() {
+        if (scanner_qr_code) {
+            scanner_qr_code.stop();
+        }
+        afficher_la_camera(false);
+    }
+
+    function extraire_le_numero_de_carte(texte_lu) {
+        // Renvoie le numéro imprimé (8 caractères, majuscules), ou null si ce n'est
+        // pas le QR code d'une carte.
+        // / Returns the printed number, or null if it is not a card QR code.
+        let adresse_lue;
+        try {
+            adresse_lue = new URL(texte_lu);
+        } catch (erreur_pas_une_adresse) {
+            return null;
+        }
+        const correspondance = adresse_lue.pathname.match(motif_chemin_de_carte);
+        if (!correspondance) {
+            return null;
+        }
+        return correspondance[1].toUpperCase();
+    }
+
+    function quand_un_qr_code_est_lu(resultat_du_scan) {
+        const texte_lu = resultat_du_scan.data;
+        const numero_de_carte = extraire_le_numero_de_carte(texte_lu);
+
+        if (numero_de_carte === null) {
+            // Pas une carte : on le dit une fois, la caméra continue de lire.
+            // / Not a card: say it once, the camera keeps reading.
+            if (texte_lu !== dernier_texte_refuse) {
+                dernier_texte_refuse = texte_lu;
+                zone_de_message.textContent = conteneur_du_scanner.dataset.textePasUneCarte;
+            }
+            return;
+        }
+
+        champ_numero_de_carte.value = numero_de_carte;
+
+        // Unfold (warn_unsaved_form) écoute l'événement « input » pour savoir que le
+        // formulaire a changé. Changer .value en JS n'émet rien : on l'émet à la main.
+        // / Unfold listens to "input" to detect changes; setting .value emits nothing.
+        champ_numero_de_carte.dispatchEvent(new Event("input", {bubbles: true}));
+
+        eteindre_la_camera();
+        zone_de_message.textContent = conteneur_du_scanner.dataset.texteNumeroRempli + " " + numero_de_carte;
+    }
+
+    bouton_flasher.addEventListener("click", function () {
+        zone_de_message.textContent = "";
+        dernier_texte_refuse = null;
+
+        // Ordre imposé : afficher la vidéo AVANT de créer le scanner (voir le
+        // commentaire sur la balise <video>), puis allumer la caméra.
+        // / Required order: show the video BEFORE creating the scanner, then start.
+        afficher_la_camera(true);
+
+        if (scanner_qr_code === null) {
+            // Le 3e argument doit être un objet : sinon la lib passe en ancienne API
+            // et renvoie une chaîne au lieu de { data }.
+            // / The 3rd argument must be an object, otherwise the lib uses its old API.
+            scanner_qr_code = new QrScanner(video_de_la_camera, quand_un_qr_code_est_lu, {
+                returnDetailedScanResult: true,
+                highlightScanRegion: true,
+            });
+        }
+
+        scanner_qr_code.start().catch(function (erreur_camera) {
+            // Refus d'accès, pas de caméra, ou page hors HTTPS. La lib rejette avec
+            // une chaîne (« Camera not found. »). La saisie à la main reste possible.
+            // / Access denied, no camera or no HTTPS. Manual input stays possible.
+            console.warn("Scan QR carte : caméra indisponible", erreur_camera);
+            afficher_la_camera(false);
+            zone_de_message.textContent = conteneur_du_scanner.dataset.texteCameraIndisponible;
+        });
+    });
+
+    bouton_arreter.addEventListener("click", eteindre_la_camera);
+</script>

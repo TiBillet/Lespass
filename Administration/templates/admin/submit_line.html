@@ -1,0 +1,99 @@
+{% load i18n admin_urls unfold %}
+{% comment %}
+BARRE DES BOUTONS D'ENREGISTREMENT DE L'ADMIN
+/ Admin save buttons row
+
+LOCALISATION : Administration/templates/admin/submit_line.html
+
+Copie de unfold/templates/admin/submit_line.html (django-unfold 0.89.0), avec une
+seule modification : le {% with %} autour du bouton « _continue » (voir plus bas).
+Ce gabarit passe avant celui d'Unfold : `Administration/templates` est dans
+TEMPLATES["DIRS"] (TiBillet/settings.py), lu avant les gabarits des applications.
+
+À LA MISE À JOUR D'UNFOLD : comparer ce fichier avec le nouveau gabarit d'Unfold.
+Si Unfold (ou le passage à Django 5) rend `can_change` visible dans le bouton,
+supprimer ce fichier.
+/ Copy of Unfold 0.89.0's submit_line.html with one change (the {% with %}).
+Compare it with Unfold's template on each Unfold upgrade; delete it once fixed upstream.
+{% endcomment %}
+
+<div {% if not is_popup %}id="submit-row"{% endif %} class="relative lg:sticky lg:bottom-0 z-40">
+    <div class="backdrop-blur-xs bg-white/80 rounded-b-default pb-4 px-4 dark:bg-base-900/80 lg:border-t lg:border-base-200 relative lg:scrollable-top lg:py-0 dark:border-base-800">
+        <div class="flex flex-col-reverse gap-3 items-center mx-auto lg:flex-row-reverse container lg:h-[64px]">
+            {% block submit-row %}
+                {% if show_save %}
+                    {% component "unfold/components/button.html" with submit=1 form=opts.model_name|add:"_form" name="_save" class="w-full lg:w-auto" %}
+                        {% trans "Save" %}
+                    {% endcomponent %}
+                {% endif %}
+
+                {% for action in actions_submit_line %}
+                    {% component "unfold/components/button.html" with submit=1 form=opts.model_name|add:"_form" name=action.attrs.name|default:action.action_name variant="default" class="w-full lg:w-auto" attrs=action.attrs %}
+                        {% if action.icon %}
+                            <span class="material-symbols-outlined">
+                                {{ action.icon }}
+                            </span>
+                        {% endif %}
+
+                        {{ action.description }}
+                    {% endcomponent %}
+                {% endfor %}
+
+                {% if show_save_and_continue %}
+                    {% comment %}
+                    SEULE DIFFÉRENCE avec le gabarit d'Unfold : le {% with %}.
+                    INDISPENSABLE avec Unfold 0.89 et Django 4.2 : sans lui, `can_change` est
+                    perdu à l'intérieur du {% component %} (`_flatten_context` dans
+                    unfold/templatetags/unfold.py ignore la couche de contexte venue de
+                    `submit_row`). Le bouton afficherait alors « Enregistrer et afficher »
+                    au lieu de « Enregistrer et continuer les modifications ».
+                    Le {% with %} remet `can_change` dans une couche simple, qu'Unfold lit.
+                    / ONLY CHANGE from Unfold's template: the {% with %}. Without it,
+                    `can_change` is lost inside {% component %} (Unfold 0.89 + Django 4.2).
+                    {% endcomment %}
+                    {% with can_change=can_change %}
+                        {% component "unfold/components/button.html" with submit=1 form=opts.model_name|add:"_form" name="_continue" variant="default" class="w-full lg:w-auto" %}
+                            {% if can_change %}
+                                {% trans "Save and continue editing" %}
+                            {% else %}
+                                {% trans "Save and view" %}
+                            {% endif %}
+                        {% endcomponent %}
+                    {% endwith %}
+                {% endif %}
+
+                {% if show_save_and_add_another %}
+                    {% component "unfold/components/button.html" with submit=1 form=opts.model_name|add:"_form" name="_addanother" variant="default" class="w-full lg:w-auto" %}
+                        {% trans "Save and add another" %}
+                    {% endcomponent %}
+                {% endif %}
+
+                {% if show_save_as_new %}
+                    {% component "unfold/components/button.html" with submit=1 form=opts.model_name|add:"_form" name="_saveasnew" variant="default" class="w-full lg:w-auto" %}
+                        {% trans "Save as new" %}
+                    {% endcomponent %}
+                {% endif %}
+
+                <div class="flex flex-col gap-3 mr-auto w-full lg:flex-row lg:w-auto">
+                    {% if show_close or adminform.model_admin.change_form_show_cancel_button %}
+                        {% url opts|admin_urlname:'changelist' as changelist_url %}
+                        {% add_preserved_filters changelist_url as link %}
+
+                        {% component "unfold/components/button.html" with href=link variant="default" class="w-full lg:w-auto"%}
+                            {% trans "Close" %}
+                        {% endcomponent %}
+                    {% endif %}
+
+                    {% if show_delete_link and original %}
+                        {% url opts|admin_urlname:'delete' original.pk|admin_urlquote as delete_url %}
+                        {% add_preserved_filters delete_url as link %}
+
+                        {% component "unfold/components/button.html" with href=delete_url variant="danger" class="mr-auto w-full lg:w-auto" %}
+                            {% trans "Delete" %} {{ opts.verbose_name }}
+                        {% endcomponent %}
+                    {% endif %}
+                </div>
+            {% endblock %}
+        </div>
+    </div>
+</div>

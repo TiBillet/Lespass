@@ -26,8 +26,11 @@ placeholder se comporterait bizarrement, personne ne saurait ou regarder.
 / Rejected: mutating classes at register() time is invisible magic.
 """
 
+from django.contrib import messages
 from django.contrib.admin.utils import label_for_field
+from django.http import HttpResponseRedirect
 from django.utils.translation import gettext_lazy as _
+from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin as UnfoldModelAdmin
 
 # Au-dela, le placeholder est tronque par le CSS d'Unfold (champ en `lg:w-96`,
@@ -180,3 +183,44 @@ class ModelAdmin(UnfoldModelAdmin):
         return str(
             _("Rechercher : %(champs)s") % {"champs": ", ".join(retenus) + suite}
         )
+
+
+class SingletonAdmin(SingletonModelAdmin, ModelAdmin):
+    """
+    La base des pages de configuration : les modèles qui n'ont qu'une seule ligne
+    (django-solo), comme « Paramètres » ou « Envoi des rapports ».
+    / Base for configuration pages: single-row models (django-solo).
+
+    LOCALISATION : Administration/admin/base.py
+
+    Sur ces pages, il n'y a qu'un seul bouton : « Enregistrer ». Il enregistre et
+    RESTE sur la page, avec un message en français.
+    / One "Save" button only: it saves and STAYS on the page.
+
+    Deux méthodes de django-solo sont remplacées :
+    - `response_change` : celle de solo renvoie au tableau de bord (« ../../ »)
+      avec un message en anglais (solo n'a pas de traduction française) ;
+    - `change_view` : on cache le bouton « Enregistrer et continuer » (`_continue`).
+      Il ferait la même chose que « Enregistrer ».
+    / Replaces solo's response_change (redirects to the dashboard, English message)
+    and hides the now redundant "_continue" button.
+
+    L'ordre des parents compte : SingletonModelAdmin AVANT ModelAdmin. Le
+    `change_view` de solo crée la ligne si elle manque (`get_or_create`).
+    / Parent order matters: solo first, its change_view creates the missing row.
+    """
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        # `show_save_and_continue` est lu par le gabarit des boutons
+        # (`submit_row` de Django, puis admin/submit_line.html).
+        # / Read by Django's submit_row, then admin/submit_line.html.
+        if extra_context is None:
+            extra_context = {}
+        extra_context["show_save_and_continue"] = False
+        return super().change_view(request, object_id, form_url, extra_context)
+
+    def response_change(self, request, obj):
+        # Après l'enregistrement, on revient sur la même page.
+        # / After saving, come back to the same page.
+        self.message_user(request, _("Modifications enregistrées."), messages.SUCCESS)
+        return HttpResponseRedirect(request.path)

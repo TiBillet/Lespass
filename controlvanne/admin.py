@@ -28,10 +28,9 @@ from django.utils.translation import gettext_lazy as _
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
-from Administration.admin.base import ModelAdmin
+from Administration.admin.base import ModelAdmin, SingletonAdmin
 from unfold.contrib.filters.admin import RelatedDropdownFilter
 from unfold.decorators import display
-from solo.admin import SingletonModelAdmin
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
@@ -871,7 +870,7 @@ class SessionCalibrationAdmin(ModelAdmin):
 
 
 @admin.register(ConfigurationTireuse, site=staff_admin_site)
-class ConfigurationTireuseAdmin(SingletonModelAdmin, ModelAdmin):
+class ConfigurationTireuseAdmin(SingletonAdmin):
     """
     Admin singleton : un seul objet possible (django-solo).
     SingletonModelAdmin affiche le formulaire directement à l'URL de liste,

@@ -21,13 +21,12 @@ from django.forms import ModelForm
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from solo.admin import SingletonModelAdmin
 from unfold.widgets import UnfoldAdminEmailInputWidget
 
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
-from Administration.admin.base import ModelAdmin
+from Administration.admin.base import ModelAdmin, SingletonAdmin
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
@@ -467,7 +466,7 @@ class ConfigurationDesRapportsForm(ModelForm):
 
 
 @admin.register(ConfigurationDesRapports, site=staff_admin_site)
-class ConfigurationDesRapportsAdmin(SingletonModelAdmin, ModelAdmin):
+class ConfigurationDesRapportsAdmin(SingletonAdmin):
     """
     Les réglages des envois du lieu : un booléen par mail (récap du matin, rapports
     hebdomadaire, mensuel, annuel) et la liste des destinataires.

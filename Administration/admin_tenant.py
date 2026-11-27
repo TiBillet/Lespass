@@ -14,10 +14,6 @@ from Administration.admin.resources import (  # noqa: F401
 from Administration.admin.benevolat import (  # noqa: F401
     TacheBenevoleAdmin, PlanningBenevoleAdmin, InscriptionBenevoleAdmin
 )
-from Administration.admin import (
-    products,
-    prices
-)
 from Administration.admin.help_messages_dictionnary import HELP_MESSAGES_DICT
 from Administration.admin.mixins import ExportCsvLisibleParExcelMixin, HelpDisplayMixin
 
@@ -103,13 +99,12 @@ from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
 from rest_framework_api_key.models import APIKey
-from solo.admin import SingletonModelAdmin
 from django.core.cache import cache
 from root_billet.models import RootConfiguration
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
-from Administration.admin.base import ModelAdmin
+from Administration.admin.base import ModelAdmin, SingletonAdmin
 from unfold.admin import TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.filters.admin import (
@@ -499,7 +494,7 @@ class WebhookAdmin(ModelAdmin):
 
 
 @admin.register(Configuration, site=staff_admin_site)
-class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+class ConfigurationAdmin(SingletonAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
@@ -1648,6 +1643,24 @@ def lier_la_carte_a_l_adherent_chez_fedow(fedow_api, utilisateur, numero_carte):
         )
 
 
+class CardNumberQrScanWidget(UnfoldAdminTextInputWidget):
+    """
+    Champ texte Unfold « Numéro de carte », avec un bouton qui lit le QR code
+    de la carte à la caméra.
+    / Unfold text input for the card number, plus a camera QR code reader button.
+
+    LOCALISATION : Administration/admin_tenant.py
+
+    Le gabarit affiche le champ Unfold d'origine, puis le bouton, la vidéo et le
+    script. Tout se passe dans le navigateur : aucune requête serveur au scan.
+    Le serveur vérifie la carte à l'enregistrement (MembershipAddForm.clean_card_number).
+
+    Utilisé par : MembershipAddForm.card_number
+    Gabarit : Administration/templates/admin/widgets/card_number_qr_scan.html
+    """
+    template_name = "admin/widgets/card_number_qr_scan.html"
+
+
 class MembershipAddForm(ModelForm):
     '''
     Formulaire d'ajout d'adhésion sur l'interface d'administration.
@@ -1695,7 +1708,7 @@ class MembershipAddForm(ModelForm):
         max_length=8,
         label=_("Card number"),
         # validators=[validate_hex8],
-        widget=UnfoldAdminTextInputWidget(),
+        widget=CardNumberQrScanWidget(),
     )
 
     class Meta:
@@ -6529,7 +6542,7 @@ class TenantAdmin(ModelAdmin):
 
 
 @admin.register(RootConfiguration, site=staff_admin_site)
-class RootConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+class RootConfigurationAdmin(SingletonAdmin):
     """
     Config ROOT — ici on n'expose QUE la whitelist des domaines d'integration
     iframe (bloc IFRAME de l'app pages). JAMAIS les cles Stripe/Fedow. Reserve au
@@ -6573,7 +6586,7 @@ class RootConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 ### Connect
 
 @admin.register(FederationConfiguration, site=staff_admin_site)
-class FederationConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+class FederationConfigurationAdmin(SingletonAdmin):
     compressed_fields = True
     warn_unsaved_form = True
 
@@ -6704,7 +6717,7 @@ class GhostConfigAddform(ModelForm):
 
 
 @admin.register(GhostConfig, site=staff_admin_site)
-class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
+class GhostConfigAdmin(SingletonAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
@@ -6838,7 +6851,7 @@ class FormbricksConfigAddform(ModelForm):
 
 
 @admin.register(FormbricksConfig, site=staff_admin_site)
-class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
+class FormbricksConfigAdmin(SingletonAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
@@ -6966,7 +6979,7 @@ class BrevoConfigAddform(ModelForm):
 
 
 @admin.register(BrevoConfig, site=staff_admin_site)
-class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
+class BrevoConfigAdmin(SingletonAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
@@ -7383,7 +7396,7 @@ class AssetAdmin(ModelAdmin):
 
 
 @admin.register(CrowdConfig, site=staff_admin_site)
-class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
+class CrowdConfigAdmin(SingletonAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 

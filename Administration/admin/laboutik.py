@@ -18,11 +18,10 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from solo.admin import SingletonModelAdmin
 # ModelAdmin vient de Administration/admin/base.py : c'est le ModelAdmin
 # d'Unfold plus le placeholder de recherche tire de search_fields.
 # / Project ModelAdmin: Unfold's, plus the search placeholder.
-from Administration.admin.base import ModelAdmin
+from Administration.admin.base import ModelAdmin, SingletonAdmin
 from unfold.admin import TabularInline
 from unfold.contrib.filters.admin import RelatedDropdownFilter
 from unfold.decorators import display, action
@@ -67,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 
 @admin.register(LaboutikConfiguration, site=staff_admin_site)
-class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+class LaboutikConfigurationAdmin(SingletonAdmin):
     """Admin singleton pour la configuration globale de l'interface caisse.
     Singleton admin for the global POS interface configuration.
     LOCALISATION : Administration/admin/laboutik.py"""
