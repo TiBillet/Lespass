@@ -83,7 +83,7 @@
 
         </header>
 
-        <p class="lead">{{ initiative.description |safe |default:"" }}</p>
+        <div class="lead">{{ initiative.description |safe |default:"" }}</div>
 
         {# 1) Votes #}
         {% if initiative.vote %}

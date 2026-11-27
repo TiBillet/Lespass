@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from unfold.sites import UnfoldAdminSite
 
-from Administration.utils import clean_html
+from Administration.utils import clean_html, normaliser_html_editeur
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 def sanitize_textfields(instance: models.Model) -> None:
     """Sanitize all TextField values on a model instance in-place using clean_html.
     Only string values are sanitized; None and non-string values are ignored.
+
+    Nettoie chaque TextField (clean_html, contre le XSS), puis range le HTML
+    (normaliser_html_editeur : lignes vides de début et de fin, blocs vides,
+    listes coupées). Le texte se répare donc au premier enregistrement.
+    / Sanitizes each TextField, then tidies the HTML.
     """
     # pass
     for field in instance._meta.get_fields():
@@ -24,7 +29,8 @@ def sanitize_textfields(instance: models.Model) -> None:
             if hasattr(instance, field_name):
                 value = getattr(instance, field_name)
                 if isinstance(value, str) and value:
-                    setattr(instance, field_name, clean_html(value))
+                    html_nettoye = clean_html(value)
+                    setattr(instance, field_name, normaliser_html_editeur(html_nettoye))
 
 
 class StaffAdminSite(UnfoldAdminSite):

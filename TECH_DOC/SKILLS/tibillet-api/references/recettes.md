@@ -160,6 +160,11 @@ curl -sk -X PATCH "https://$H/api/v2/events/<uuid-ou-slug>/" -H "Authorization: 
 # Image : un second PATCH en multipart
 curl -sk -X PATCH "https://$H/api/v2/events/<uuid>/" -H "Authorization: $K" -F img=@affiche.jpg
 ```
+`description` accepte du HTML ou du texte brut. Un texte sans balise est converti
+en HTML (sauts de ligne en `<br>`, URL cliquables). Le serveur nettoie (nh3) et range
+le HTML (lignes vides de début et de fin retirées, listes coupées recollées) : la
+valeur relue peut donc différer de la valeur envoyée.
+
 Changer `name` ou `startDate` change le slug, donc l'URL publique. `@type` est ignoré au
 PATCH : la catégorie change par `additionalType` (libellé, ex. « Concert »).
 

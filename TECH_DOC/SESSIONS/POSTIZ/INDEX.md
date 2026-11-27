@@ -7,6 +7,9 @@
 **Statut :** **exploration seule.** Pas de spec, pas de plan, pas de code, pas de branche.
 **Date :** 2026-07-13
 
+> **2026-11-27 — piste écartée.** Lespass publiera lui-même sur Instagram et Mastodon, sans
+> Postiz. Voir [RESEAUX_SOCIAUX](../RESEAUX_SOCIAUX/INDEX.md) (SPEC §4 pour les raisons).
+
 ---
 
 ## Documents

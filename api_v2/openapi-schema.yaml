@@ -2625,6 +2625,13 @@ components:
           type: string
         description:
           type: string
+          description: |
+            Description longue (HTML). Un texte sans balise est converti en HTML :
+            sauts de ligne en <br>, URL et adresses mail cliquables. Le HTML est
+            nettoyé par le serveur (nh3), puis rangé (lignes vides de début et de
+            fin, listes coupées recollées).
+            / Long description (HTML). Plain text is converted (line breaks, links).
+            Sanitized (nh3) and tidied by the server.
         startDate:
           type: string
           format: date-time
@@ -2759,7 +2766,10 @@ components:
         description:
           type: string
           nullable: true
-          description: HTML, sanitized by the server (nh3).
+          description: |
+            HTML, ou texte sans balise converti en HTML (sauts de ligne, liens).
+            Nettoyé (nh3) et rangé par le serveur, comme à la création.
+            / HTML, or plain text converted to HTML. Sanitized and tidied by the server.
         eventStatus:
           type: string
           enum: ["https://schema.org/EventScheduled", "https://schema.org/EventCancelled"]
@@ -2821,6 +2831,11 @@ components:
         description:
           type: string
           nullable: true
+          description: |
+            Description longue (HTML). Un texte sans balise est converti en HTML
+            (sauts de ligne, liens). Nettoyée (nh3) et rangée par le serveur,
+            comme la description d'un évènement.
+            / Long description (HTML). Plain text is converted. Sanitized and tidied.
         category:
           type: string
           description: Human-readable category or internal code

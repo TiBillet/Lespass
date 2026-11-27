@@ -17,7 +17,7 @@
             <div>
                 <h1 class="mb-2">{{ crowd_config.title }}</h1>
                 <h4 class="text-muted mb-2">{{ crowd_config.short_description | default:"" }}</h4>
-                <p class="text-muted mb-2">{{ crowd_config.description | safe | default:"" }}</p>
+                <div class="text-muted mb-2">{{ crowd_config.description | safe | default:"" }}</div>
 
                 {% include "crowds/partial/summary.html" %}
 

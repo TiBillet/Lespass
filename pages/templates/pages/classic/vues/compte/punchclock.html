@@ -29,9 +29,11 @@
                 </p>
                 {% endif %}
                 {% if badge.long_description %}
-                <p class="card-text">
-                    {{ badge.long_description }}
-                </p>
+                {# Texte riche de l'admin : |safe, dans un <div> (il contient des blocs). #}
+                {# / Admin rich text: |safe, in a <div> (it holds blocks). #}
+                <div class="card-text">
+                    {{ badge.long_description|safe }}
+                </div>
                 {% endif %}
             </div>
             <div id="badge-{{ badge.pk }}" class="card-footer pt-3">

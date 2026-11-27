@@ -50,7 +50,7 @@
                                     <p class="card-text">{{ product.short_description }}</p>
                                 {% endif %}
                                 {% if product.long_description %}
-                                    <p class="card-text">{{ product.long_description | safe }}</p>
+                                    <div class="card-text">{{ product.long_description | safe }}</div>
                                 {% endif %}
                             </div>
                             <div class="card-footer">

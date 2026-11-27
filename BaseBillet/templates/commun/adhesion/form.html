@@ -17,7 +17,7 @@
             <p>{{ product.short_description }}</p>
         {% endif %}
         {% if product.long_description %}
-            <p>{{ product.long_description | safe }}</p>
+            <div>{{ product.long_description | safe }}</div>
         {% endif %}
 
         <div id="target_formbricks"></div>

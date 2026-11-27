@@ -78,6 +78,7 @@ from BaseBillet.services_vente import (
     ouvrir_vente,
 )
 from Administration.utils import clean_html as admin_clean_html
+from Administration.utils import normaliser_html_editeur, texte_brut_vers_html
 from Customers.models import Client, Domain, lieu_en_moteur_legacy
 from TiBillet import settings
 from TiBillet.maptiler import cle_maptiler_a_exposer
@@ -6738,7 +6739,12 @@ def _creer_event_depuis_brouillon(draft, postal_address, user, est_staff):
     event = Event(
         name=(draft.get("name") or "").strip(),
         datetime=parse_datetime(draft["datetime"]),
-        long_description=admin_clean_html(draft.get("long_description") or ""),
+        # Le textarea du wizard envoie du texte brut : converti en HTML
+        # (sauts de ligne, liens), puis nettoyé et rangé comme dans l'admin.
+        # / Wizard textarea sends plain text: converted, sanitized, tidied.
+        long_description=normaliser_html_editeur(
+            admin_clean_html(texte_brut_vers_html(draft.get("long_description") or ""))
+        ),
         postal_address=postal_address,
         created_by=user if user.is_authenticated else None,
         published=est_staff,

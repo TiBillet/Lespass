@@ -11,9 +11,9 @@ Maquette : TEMP-tibillet-lespass-main/evenement.html
 
 Structure :
 1. Lien retour vers l'agenda.
-2. Bandeau .event-hero : couverture + tags, date, titre, résumé, fiches
-   pratiques (Quand / Où / Organisé par), bouton de réservation.
-   La galerie d'images (Event.carrousel) se place juste sous le titre.
+2. Bandeau .event-hero : couverture + tags, date, titre, description courte,
+   galerie d'images (Event.carrousel), description longue, fiches pratiques
+   (Quand / Où / Organisé par), bouton de réservation.
 3. « Infos pratiques » : adresse, accès, carte.
 4. Bénévoles (si l'événement a des actions enfants).
 5. L'hôte : le lieu qui organise.
@@ -222,6 +222,13 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
             </div>
             <h1 class="page-title">{{ event.name }}</h1>
 
+            {% block evenement_description %}
+            {# Ordre : description courte, galerie d'images, description longue. #}
+            {# / Order: short description, image gallery, long description. #}
+            {% if event.short_description %}
+                <p class="page-intro" data-testid="evenement-description-courte">{{ event.short_description }}</p>
+            {% endif %}
+
             {# Galerie d'images de l'événement (Event.carrousel, rempli dans l'admin). #}
             {# / Event image gallery (Event.carrousel). #}
             {% if event.carrousel.all %}
@@ -230,12 +237,14 @@ data-testid="booking-open-panel" (dans reservation_declencheur.html).
                 </section>
             {% endif %}
 
-            {% block evenement_description %}
-            {% if event.short_description %}
-                <p class="page-intro">{{ event.short_description }}</p>
-            {% endif %}
             {% if event.long_description %}
-                <p class="page-intro">{{ event.long_description|safe }}</p>
+                {# <div> et non <p> : le HTML saisi dans l'admin contient des blocs #}
+                {# (paragraphes, listes, titres). Un bloc dans un <p> ferme le <p> : #}
+                {# la suite du texte sortirait du style de .event-prose. #}
+                {# / <div>, not <p>: admin HTML holds block elements, which close a <p>. #}
+                <div class="event-prose" data-testid="evenement-description-longue">
+                    {{ event.long_description|safe }}
+                </div>
             {% endif %}
             {% endblock evenement_description %}
 

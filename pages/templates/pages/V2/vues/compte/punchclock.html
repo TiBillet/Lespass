@@ -33,7 +33,9 @@ A CONSERVER : #badge-<pk> (cible HTMX future du pointage).
                         <p class="offer-card__desc">{{ badge.short_description }}</p>
                     {% endif %}
                     {% if badge.long_description %}
-                        <p class="offer-card__desc">{{ badge.long_description }}</p>
+                        {# Texte riche de l'admin : |safe, dans un <div> (il contient des blocs). #}
+                        {# / Admin rich text: |safe, in a <div> (it holds blocks). #}
+                        <div class="offer-card__desc">{{ badge.long_description|safe }}</div>
                     {% endif %}
                     <div id="badge-{{ badge.pk }}" class="compte-carte__pied">
                         <p class="compte-champ__aide">

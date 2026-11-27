@@ -32,7 +32,12 @@ from laboutik.plan_comptable import (
     taux_de_tva_du_produit,
 )
 from fedow_connect.utils import dround
-from Administration.utils import clean_html, url_a_schema_dangereux
+from Administration.utils import (
+    clean_html,
+    normaliser_html_editeur,
+    texte_brut_vers_html,
+    url_a_schema_dangereux,
+)
 from django.db.models.fields.files import FieldFile
 
 # Image validation utilities
@@ -702,12 +707,14 @@ class EventCreateSerializer(serializers.Serializer):
         return attrs
 
     def validate_description(self, value):
-        # Description longue affichée en HTML sur la page de l'évènement : on la
-        # nettoie comme l'admin (Administration/admin/site.py), contre le XSS.
-        # / Long description is rendered as HTML: sanitize it like the admin does.
+        # Description longue affichée en HTML sur la page de l'évènement. Un
+        # texte brut est d'abord converti en HTML (sauts de ligne, liens). Puis
+        # on nettoie comme l'admin (Administration/admin/site.py), contre le XSS,
+        # et on range le HTML (lignes vides, listes coupées).
+        # / Plain text becomes HTML, then sanitize and tidy it like the admin.
         if not value:
             return value
-        return clean_html(value)
+        return normaliser_html_editeur(clean_html(texte_brut_vers_html(value)))
 
     def create(self, validated_data: Dict[str, Any]) -> Event:
         # Extract top-level fields
@@ -969,11 +976,11 @@ class EventPatchSerializer(serializers.Serializer):
     additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
 
     def validate_description(self, value):
-        # Même nettoyage qu'à la création et dans l'admin.
-        # / Same sanitizing as on creation and in the admin.
+        # Même conversion et même nettoyage qu'à la création.
+        # / Same conversion and sanitizing as on creation.
         if not value:
             return value
-        return clean_html(value)
+        return normaliser_html_editeur(clean_html(texte_brut_vers_html(value)))
 
     def validate_eventStatus(self, value):
         # Renvoie True (publié) ou False (non publié).
@@ -1596,6 +1603,15 @@ class ProductCreateSerializer(serializers.Serializer):
     offers = serializers.ListField(child=serializers.DictField(), required=True)
     additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
     isRelatedTo = serializers.JSONField(required=False)
+
+    def validate_description(self, value):
+        # Description longue affichée en HTML (|safe) : formulaire d'adhésion,
+        # cartes d'adhésion, page Badgeuse. Même conversion et même nettoyage
+        # que pour les events, contre le XSS.
+        # / Long description rendered as HTML: same conversion and sanitizing as events.
+        if not value:
+            return value
+        return normaliser_html_editeur(clean_html(texte_brut_vers_html(value)))
 
     def _normalize_category(self, raw: Optional[str]) -> str:
         if not raw:

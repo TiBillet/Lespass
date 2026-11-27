@@ -1003,6 +1003,10 @@ UNFOLD = {
         # de nginx et formulaire perdu).
         # / Rejects a file too heavy for nginx before sending (otherwise: nginx 413).
         lambda request: static("js/admin_limite_upload.js"),
+
+        # Éditeur de texte (Trix) : empêche la fusion des paragraphes <p> voisins.
+        # / Text editor (Trix): stops neighbouring <p> paragraphs from merging.
+        lambda request: static("js/trix_paragraphes.js"),
     ],
 }
 

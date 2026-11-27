@@ -16,7 +16,9 @@
             </h2>
             <div id="schedule" class="accordion-collapse collapse show" data-bs-parent="#infoAccordion">
                 <div class="accordion-body px-0">
-                    <p>{{ event.long_description | safe }}</p>
+                    {# <div> et non <p> : le HTML saisi dans l'admin contient des blocs, #}
+                    {# qui fermeraient un <p>. / <div>, not <p>: admin HTML holds blocks. #}
+                    <div>{{ event.long_description | safe }}</div>
 
                     {% if event.carrousel.all %}
                         <div class="my-5">

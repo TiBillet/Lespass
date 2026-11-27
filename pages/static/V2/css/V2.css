@@ -2616,9 +2616,14 @@ img { max-width: 100%; display: block; }
   text-align: center;
   max-width: 100%;
 }
-/* Texte long saisi par le lieu (HTML riche) : largeur de lecture. */
-/* / Long rich text from the venue: reading width. */
-.event-prose { max-width: 70ch; color: var(--color-text); line-height: 1.65; margin-top: var(--space-4); overflow-wrap: anywhere; }
+/* En-tête d'un évènement : les deux descriptions prennent toute la largeur,
+   comme la galerie et les fiches pratiques (.page-intro est limité à 62ch
+   ailleurs sur le site).
+   / Event header: both descriptions use the full width. */
+.event-hero__body > .page-intro { max-width: none; }
+
+/* Texte long saisi par le lieu (HTML riche). / Long rich text from the venue. */
+.event-prose { color: var(--color-text); line-height: 1.65; margin-top: var(--space-4); overflow-wrap: anywhere; }
 .event-prose p { margin: 0 0 var(--space-3); }
 .event-prose img { border-radius: var(--radius-m); }
 /* Le lieu colle ce qu'il veut dans ce texte riche : vidéo intégrée, tableau,
@@ -2632,6 +2637,14 @@ img { max-width: 100%; display: block; }
 .event-prose pre { overflow-x: auto; }
 .event-prose ul { list-style: disc; padding-inline-start: 1.25rem; margin: 0 0 var(--space-3); }
 .event-prose ol { padding-inline-start: 1.25rem; margin: 0 0 var(--space-3); }
+/* Les titres du texte restent petits : le seul gros titre de la page est le
+   nom de l'évènement. Le titre de l'éditeur (bouton « H ») produit un <h1>.
+   / Headings in the text stay small: the event name is the only big title. */
+.event-prose :is(h1, h2, h3, h4, h5, h6) { font-size: var(--text-lg); line-height: 1.3; margin: var(--space-4) 0 var(--space-2); }
+.event-prose blockquote { margin: 0 0 var(--space-3); padding-inline-start: var(--space-3); border-inline-start: 3px solid var(--color-border); color: var(--color-text-muted); }
+/* Le dernier bloc n'ajoute pas de marge avant les fiches pratiques.
+   / The last block adds no margin before the practical info. */
+.event-prose > :last-child { margin-bottom: 0; }
 .event-carrousel, .event-carte { margin-top: var(--space-5); }
 .info-card address { font-style: normal; margin: 0; }
 .event-hote { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin-top: var(--space-4); }
